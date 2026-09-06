@@ -1,0 +1,45 @@
+name: Hoogvliet import proof of concept
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-import-poc
+  cancel-in-progress: false
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      MAX_PRODUCTS: "10"
+      MAX_PER_TERM: "2"
+      SEARCH_TERMS: "gehakt,kip,cola,honig,sinas"
+      HEADLESS: "1"
+
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@v4
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: Technische controles
+        run: npm test
+
+      - name: Maximaal 10 producten importeren
+        run: npm run import
