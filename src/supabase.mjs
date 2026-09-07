@@ -210,6 +210,104 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
   throw new SupabaseRequestError(`Supabase ${table}: onverwacht einde van request.`);
 }
 
+async function getJSON(baseValue, table, secret, query, rangeStart, rangeEnd) {
+  const url = restURL(baseValue, table);
+  const host = url.host;
+  for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
+  const headers = requestHeaders(secret);
+  delete headers["Content-Type"];
+  delete headers["Content-Profile"];
+  delete headers.Prefer;
+  headers.Range = `${rangeStart}-${rangeEnd}`;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    let response;
+    let responseBody;
+    try {
+      response = await fetch(url, {
+        method: "GET",
+        headers,
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      responseBody = await response.text();
+    } catch (error) {
+      const safeError = networkError(error, table, host, secret);
+      if (attempt < MAX_ATTEMPTS) {
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+      throw new SupabaseRequestError(
+        `${safeError.message} Pogingen: ${MAX_ATTEMPTS}.`,
+        {
+          retryable: true,
+          code: safeError.code,
+          phase: table,
+          host,
+          kind: safeError.kind,
+        },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!response.ok) {
+      const detail = responseError(responseBody, secret);
+      const safeError = new SupabaseRequestError(
+        `Supabase read mislukt | fase=${table} | host=${host} | soort=http | HTTP ${response.status}`
+          + `${detail.code ? ` | code=${detail.code}` : ""}`
+          + `${detail.body ? ` | response=${detail.body}` : ""}`,
+        {
+          retryable: RETRYABLE_STATUS.has(response.status),
+          status: response.status,
+          code: detail.code,
+          phase: table,
+          host,
+          kind: "http",
+        },
+      );
+      if (safeError.retryable && attempt < MAX_ATTEMPTS) {
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+      throw safeError;
+    }
+
+    try {
+      return responseBody ? JSON.parse(responseBody) : [];
+    } catch {
+      throw new SupabaseRequestError(
+        `Supabase read mislukt | fase=${table} | host=${host} | soort=response | succesvolle reactie bevatte ongeldige JSON.`,
+        { phase: table, host, kind: "response" },
+      );
+    }
+  }
+  throw new SupabaseRequestError(`Supabase ${table}: onverwacht einde van read-request.`);
+}
+
+export async function fetchExistingSKUs(config) {
+  const pageSize = 1000;
+  const existingSKUs = new Set();
+  for (let offset = 0; offset < 20_000; offset += pageSize) {
+    const rows = await getJSON(
+      config.supabaseURL,
+      "products",
+      config.supabaseSecret,
+      { select: "sku", supermarket: "eq.Hoogvliet", order: "sku.asc" },
+      offset,
+      offset + pageSize - 1,
+    );
+    if (!Array.isArray(rows)) throw new Error("Supabase gaf geen geldige SKU-lijst terug.");
+    for (const row of rows) {
+      if (typeof row?.sku === "string" && row.sku) existingSKUs.add(row.sku);
+    }
+    if (rows.length < pageSize) return existingSKUs;
+  }
+  throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-SKU's.");
+}
+
 function productPayload(product) {
   const payload = {
     supermarket: product.supermarket,

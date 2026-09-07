@@ -1,6 +1,35 @@
-const DEFAULT_TERMS = ["gehakt", "kip", "cola", "honig", "sinas"];
+export const catalogBatches = Object.freeze({
+  core: Object.freeze([
+    "gehakt", "rundergehakt", "kip", "kipfilet", "varkensvlees", "worst",
+    "hamburger", "shoarma", "vis", "zalm", "tonijn", "pasta", "spaghetti",
+    "macaroni", "lasagne", "rijst", "brood", "bolletjes", "croissant", "melk",
+    "yoghurt", "kwark", "kaas", "boter", "margarine", "room",
+  ]),
+  fresh: Object.freeze([
+    "aardappelen", "groente", "groenten", "tomaat", "paprika", "ui",
+    "komkommer", "wortel", "sla", "broccoli", "bloemkool", "appel", "banaan",
+    "sinaasappel", "fruit", "cola", "sinas", "frisdrank", "water", "sap",
+    "limonade", "chips", "koek", "chocolade", "snoep", "nootjes",
+  ]),
+  world: Object.freeze([
+    "noodles", "wraps", "taco", "tortilla", "nasi", "bami", "curry", "knorr",
+    "honig", "maaltijdmix", "pastasaus", "tomatensaus", "saus", "mayonaise",
+    "ketchup", "pizza", "patat", "friet", "kroket", "frikandel", "kipnuggets",
+    "diepvries", "snacks",
+  ]),
+  pantry: Object.freeze([
+    "soep", "bonen", "tomatenblokjes", "mais", "kruiden", "bloem", "suiker",
+    "olie", "koffie", "thee", "ontbijtgranen", "havermout", "beschuit",
+    "crackers", "beleg", "pindakaas", "jam", "hagelslag", "eieren", "meel",
+    "bakproducten", "conserven", "peulvruchten", "azijn", "zout", "peper",
+  ]),
+});
+
+const DEFAULT_BATCH = "core";
 const DEFAULT_MAX_PRODUCTS = 10;
 const SAFE_PRODUCT_LIMIT = 200;
+const DEFAULT_MAX_NEW_PRODUCTS = 50;
+const SAFE_NEW_PRODUCT_LIMIT = 150;
 const DEFAULT_MAX_PER_TERM = 2;
 const SAFE_PER_TERM_LIMIT = 10;
 
@@ -11,8 +40,15 @@ function positiveInteger(value, fallback) {
 
 export function loadConfig(env = process.env) {
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
-  const searchTerms = (env.SEARCH_TERMS ?? DEFAULT_TERMS.join(","))
-    .split(",")
+  const catalogBatch = (env.CATALOG_BATCH ?? DEFAULT_BATCH).trim().toLowerCase();
+  if (!Object.hasOwn(catalogBatches, catalogBatch)) {
+    throw new Error(`Ongeldige CATALOG_BATCH '${catalogBatch}'. Kies: ${Object.keys(catalogBatches).join(", ")}.`);
+  }
+
+  const hasSearchOverride = env.SEARCH_TERMS != null;
+  const searchTerms = (hasSearchOverride
+    ? String(env.SEARCH_TERMS).split(",")
+    : catalogBatches[catalogBatch])
     .map((value) => value.trim())
     .filter(Boolean);
 
@@ -24,11 +60,18 @@ export function loadConfig(env = process.env) {
     positiveInteger(env.MAX_PRODUCTS, DEFAULT_MAX_PRODUCTS),
     SAFE_PRODUCT_LIMIT,
   );
+  const maxNewProducts = Math.min(
+    positiveInteger(env.MAX_NEW_PRODUCTS, DEFAULT_MAX_NEW_PRODUCTS),
+    maxProducts,
+    SAFE_NEW_PRODUCT_LIMIT,
+  );
 
   const config = {
     dryRun,
     headless: env.HEADLESS !== "0",
+    catalogBatch: hasSearchOverride ? "custom" : catalogBatch,
     maxProducts,
+    maxNewProducts,
     maxPerTerm: Math.min(
       positiveInteger(env.MAX_PER_TERM, DEFAULT_MAX_PER_TERM),
       maxProducts,
@@ -48,7 +91,10 @@ export function loadConfig(env = process.env) {
 }
 
 export const limits = Object.freeze({
+  defaultBatch: DEFAULT_BATCH,
   defaultMaxProducts: DEFAULT_MAX_PRODUCTS,
   safeProductLimit: SAFE_PRODUCT_LIMIT,
+  defaultMaxNewProducts: DEFAULT_MAX_NEW_PRODUCTS,
+  safeNewProductLimit: SAFE_NEW_PRODUCT_LIMIT,
   safePerTermLimit: SAFE_PER_TERM_LIMIT,
 });

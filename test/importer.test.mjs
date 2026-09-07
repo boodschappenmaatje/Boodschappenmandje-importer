@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadConfig, limits } from "../src/config.mjs";
+import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
+  catalogLimitReached,
   claimCandidateSKU,
   isValidProductURL,
   isValidSKU,
   parseOfferPeriod,
   parsePriceText,
+  prioritizeCandidates,
+  recordCatalogProduct,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
 import { formatBatchSummary, formatTermCoverage, safeLogger } from "../src/importer.mjs";
-import { requestHeaders, restURL, upsertProducts } from "../src/supabase.mjs";
+import { fetchExistingSKUs, requestHeaders, restURL, upsertProducts } from "../src/supabase.mjs";
 
 function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
   return {
@@ -29,6 +32,36 @@ test("MAX_PRODUCTS is configureerbaar met een veilige standaard en bovengrens", 
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" }).maxProducts, 200);
   assert.equal(limits.defaultMaxProducts, 10);
   assert.equal(limits.safeProductLimit, 200);
+});
+
+test("catalogusbatches zijn selecteerbaar en SEARCH_TERMS blijft een override", () => {
+  const fresh = loadConfig({ DRY_RUN: "1", CATALOG_BATCH: "fresh" });
+  assert.equal(fresh.catalogBatch, "fresh");
+  assert.deepEqual(fresh.searchTerms, [...catalogBatches.fresh]);
+
+  const custom = loadConfig({
+    DRY_RUN: "1", CATALOG_BATCH: "core", SEARCH_TERMS: "cola, melk",
+  });
+  assert.equal(custom.catalogBatch, "custom");
+  assert.deepEqual(custom.searchTerms, ["cola", "melk"]);
+});
+
+test("een ongeldige catalogusbatch faalt veilig", () => {
+  assert.throws(
+    () => loadConfig({ DRY_RUN: "1", CATALOG_BATCH: "onbekend" }),
+    /Ongeldige CATALOG_BATCH/,
+  );
+});
+
+test("MAX_NEW_PRODUCTS heeft een aparte veilige grens", () => {
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "180" }).maxNewProducts, 50);
+  assert.equal(loadConfig({
+    DRY_RUN: "1", MAX_PRODUCTS: "180", MAX_NEW_PRODUCTS: "100",
+  }).maxNewProducts, 100);
+  assert.equal(loadConfig({
+    DRY_RUN: "1", MAX_PRODUCTS: "180", MAX_NEW_PRODUCTS: "999",
+  }).maxNewProducts, 150);
+  assert.equal(limits.safeNewProductLimit, 150);
 });
 
 test("MAX_PER_TERM ondersteunt catalogusdekking maar houdt een harde bovengrens", () => {
@@ -65,6 +98,29 @@ test("veel overlappende zoekresultaten worden centraal op SKU gededupliceerd", (
   assert.deepEqual(claimed, ["111111111", "222222222", "333333333", "444444444", "555555555"]);
   assert.equal(stats.uniqueSKUs, 5);
   assert.equal(stats.duplicateSKUsSkipped, 4);
+});
+
+test("nieuwe kandidaten krijgen prioriteit boven reeds bestaande SKU's", () => {
+  const existing = new Set(["111111111", "333333333"]);
+  const result = prioritizeCandidates([
+    { sku: "111111111" }, { sku: "222222222" }, { sku: "333333333" }, { sku: "444444444" },
+  ], existing);
+  assert.deepEqual(result.map(({ sku }) => sku), ["222222222", "444444444", "111111111", "333333333"]);
+});
+
+test("bestaande SKU telt niet mee voor MAX_NEW_PRODUCTS en nieuwe SKU wel", () => {
+  const existing = new Set(["111111111"]);
+  const stats = { existingProducts: 0, newProducts: 0 };
+  const termStats = { existing: 0, new: 0 };
+
+  assert.equal(recordCatalogProduct("111111111", existing, stats, termStats), "existing");
+  assert.deepEqual(stats, { existingProducts: 1, newProducts: 0 });
+  assert.equal(catalogLimitReached(stats, { maxProducts: 180, maxNewProducts: 1 }, 1), false);
+
+  assert.equal(recordCatalogProduct("222222222", existing, stats, termStats), "new");
+  assert.deepEqual(stats, { existingProducts: 1, newProducts: 1 });
+  assert.equal(catalogLimitReached(stats, { maxProducts: 180, maxNewProducts: 1 }, 2), true);
+  assert.deepEqual(termStats, { existing: 1, new: 1 });
 });
 
 test("server-side geheim is verplicht buiten dry-run", () => {
@@ -179,6 +235,32 @@ test("moderne secret key wordt niet foutief als Bearer-JWT verzonden", () => {
 
   const legacy = requestHeaders("eyJlegacy-service-role", "return=representation");
   assert.equal(legacy.Authorization, "Bearer eyJlegacy-service-role");
+});
+
+test("bestaande Hoogvliet-SKU's worden licht uit Supabase gelezen", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), options };
+    return new Response(JSON.stringify([{ sku: "111111111" }, { sku: "222222222" }]), { status: 200 });
+  };
+
+  let result;
+  try {
+    result = await fetchExistingSKUs({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.deepEqual([...result], ["111111111", "222222222"]);
+  assert.match(request.url, /\/rest\/v1\/products\?/);
+  assert.match(request.url, /select=sku/);
+  assert.match(request.url, /supermarket=eq\.Hoogvliet/);
+  assert.equal(request.options.method, "GET");
+  assert.equal(request.options.headers.Range, "0-999");
 });
 
 test("een tijdelijke fetch-fout wordt opnieuw geprobeerd", async () => {
@@ -339,10 +421,12 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
   try {
     const logger = safeLogger([secret]);
     logger.info(`${secret} ${formatBatchSummary({
+      catalogBatch: "core",
       searchedTerms: 2, configuredSearchTerms: 3, candidatesFound: 8,
-      uniqueSKUs: 7,
+      uniqueSKUs: 7, newProducts: 5, existingProducts: 2,
       validatedProducts: 4, duplicateSKUsSkipped: 1, invalidProductsSkipped: 2,
-      productErrors: 1, searchErrors: 0, writtenProducts: 4, writeErrors: 0,
+      productErrors: 1, searchErrors: 0, writtenProducts: 4,
+      newProductsWritten: 3, existingProductsUpdated: 1, writeErrors: 0,
       durationMs: 1500,
     })}`);
   } finally {
@@ -352,19 +436,23 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
   assert.doesNotMatch(captured[0], new RegExp(secret));
   assert.match(captured[0], /\[REDACTED\]/);
   assert.match(captured[0], /unieke_SKUs=7/);
+  assert.match(captured[0], /nieuwe_SKUs=5/);
+  assert.match(captured[0], /bestaande_SKUs=2/);
+  assert.match(captured[0], /nieuw_geschreven=3/);
+  assert.match(captured[0], /bestaand_bijgewerkt=1/);
   assert.match(captured[0], /overgeslagen=3/);
   assert.match(captured[0], /geschreven=4/);
 });
 
 test("catalogusdekking wordt compact per zoekterm gerapporteerd", () => {
   const lines = formatTermCoverage({
-    kip: { validated: 3, unique: 4 },
-    pasta: { validated: 2, unique: 3 },
-    melk: { validated: 3, unique: 3 },
+    kip: { new: 3, existing: 1 },
+    pasta: { new: 2, existing: 1 },
+    melk: { new: 1, existing: 2 },
   }, 2);
 
   assert.equal(lines.length, 2);
-  assert.match(lines[0], /kip: 3 gevalideerd\/4 uniek/);
-  assert.match(lines[0], /pasta: 2 gevalideerd\/3 uniek/);
-  assert.match(lines[1], /melk: 3 gevalideerd\/3 uniek/);
+  assert.match(lines[0], /kip: 3 nieuw, 1 bestaand/);
+  assert.match(lines[0], /pasta: 2 nieuw, 1 bestaand/);
+  assert.match(lines[1], /melk: 1 nieuw, 2 bestaand/);
 });

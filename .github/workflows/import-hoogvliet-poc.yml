@@ -2,6 +2,17 @@ name: Hoogvliet import proof of concept
 
 on:
   workflow_dispatch:
+    inputs:
+      catalog_batch:
+        description: Catalogusbatch
+        required: true
+        default: core
+        type: choice
+        options:
+          - core
+          - fresh
+          - world
+          - pantry
 
 permissions:
   contents: read
@@ -18,9 +29,10 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      MAX_PRODUCTS: "150"
-      MAX_PER_TERM: "3"
-      SEARCH_TERMS: "gehakt,aardappelen,pasta,pastasaus,brood,melk,cola,chips,pizza,soep,kip,groente,rijst,knorr,kaas,yoghurt,water,koek,patat,bonen,rundergehakt,tomaat,spaghetti,honig,bolletjes,kwark,sinas,chocolade,friet,tomatenblokjes,kipfilet,paprika,macaroni,saus,croissant,boter,frisdrank,snoep,kroket,mais,worst,ui,lasagne,mayonaise,beschuit,margarine,sap,nootjes,frikandel,tonijn,hamburger,komkommer,nasi,ketchup,crackers,room,koffie,snacks,kipnuggets,kruiden,shoarma,wortel,bami,curry,ontbijtgranen,thee,diepvries,bloem,vis,sla,noodles,taco,havermout,limonade,suiker,zalm,broccoli,wraps,maaltijdmix,olie,bloemkool,appel,tortilla,banaan,sinaasappel,fruit"
+      CATALOG_BATCH: ${{ inputs.catalog_batch }}
+      MAX_PRODUCTS: "180"
+      MAX_NEW_PRODUCTS: "100"
+      MAX_PER_TERM: "6"
       HEADLESS: "1"
 
     steps:
@@ -87,5 +99,5 @@ jobs:
       - name: Technische controles
         run: npm test
 
-      - name: Maximaal 150 producten importeren
+      - name: Catalogusbatch importeren
         run: npm run import

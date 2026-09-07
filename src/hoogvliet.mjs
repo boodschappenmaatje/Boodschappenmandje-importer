@@ -288,10 +288,32 @@ export function claimCandidateSKU(candidate, seenSKUs, stats, termStats = null) 
   return true;
 }
 
+export function prioritizeCandidates(candidates, existingSKUs) {
+  return [...candidates].sort((left, right) => (
+    Number(existingSKUs.has(left.sku)) - Number(existingSKUs.has(right.sku))
+  ));
+}
+
+export function recordCatalogProduct(sku, existingSKUs, stats, termStats = null) {
+  if (existingSKUs.has(sku)) {
+    stats.existingProducts += 1;
+    if (termStats) termStats.existing += 1;
+    return "existing";
+  }
+  stats.newProducts += 1;
+  if (termStats) termStats.new += 1;
+  return "new";
+}
+
+export function catalogLimitReached(stats, config, totalProducts) {
+  return totalProducts >= config.maxProducts || stats.newProducts >= config.maxNewProducts;
+}
+
 export async function collectProducts(config, logger = console, options = {}) {
   const startedAt = Date.now();
   const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
   const persistBatchSize = Math.max(1, Math.min(options.persistBatchSize ?? 10, 25));
+  const existingSKUs = options.existingSKUs instanceof Set ? options.existingSKUs : new Set();
   const browser = await chromium.launch({ headless: config.headless });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const searchPage = await context.newPage();
@@ -304,6 +326,8 @@ export async function collectProducts(config, logger = console, options = {}) {
     searchedTerms: 0,
     candidatesFound: 0,
     uniqueSKUs: 0,
+    existingProducts: 0,
+    newProducts: 0,
     validatedProducts: 0,
     duplicateSKUsSkipped: 0,
     invalidProductsSkipped: 0,
@@ -318,7 +342,7 @@ export async function collectProducts(config, logger = console, options = {}) {
     await acceptCookiesIfShown(searchPage);
 
     for (const term of config.searchTerms) {
-      if (chosen.length >= config.maxProducts) break;
+      if (catalogLimitReached(stats, config, chosen.length)) break;
       logger.info(`Zoeken: ${term}`);
       stats.searchedTerms += 1;
       const termStats = {
@@ -326,13 +350,15 @@ export async function collectProducts(config, logger = console, options = {}) {
         unique: 0,
         duplicates: 0,
         validated: 0,
+        existing: 0,
+        new: 0,
         skipped: 0,
         errors: 0,
       };
       stats.termCoverage[term] = termStats;
       let candidates;
       try {
-        candidates = await findCandidates(searchPage, term);
+        candidates = prioritizeCandidates(await findCandidates(searchPage, term), existingSKUs);
         stats.candidatesFound += candidates.length;
         termStats.candidates = candidates.length;
       } catch (error) {
@@ -345,7 +371,7 @@ export async function collectProducts(config, logger = console, options = {}) {
       let acceptedForTerm = 0;
 
       for (const candidate of candidates) {
-        if (chosen.length >= config.maxProducts || acceptedForTerm >= config.maxPerTerm) break;
+        if (catalogLimitReached(stats, config, chosen.length) || acceptedForTerm >= config.maxPerTerm) break;
         if (!claimCandidateSKU(candidate, attemptedSKUs, stats, termStats)) continue;
         let product;
         try {
@@ -367,6 +393,7 @@ export async function collectProducts(config, logger = console, options = {}) {
         acceptedForTerm += 1;
         stats.validatedProducts += 1;
         termStats.validated += 1;
+        recordCatalogProduct(product.sku, existingSKUs, stats, termStats);
         logger.info(`Gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
         if (onBatch && pendingPersistence.length >= persistBatchSize) {
           await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
