@@ -14,6 +14,7 @@ jobs:
   import:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -31,6 +32,51 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      - name: Test Supabase verbinding
+        run: |
+          node -e "
+            const base = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_SECRET_KEY;
+
+            if (!base) {
+              console.error('SUPABASE_URL ontbreekt');
+              process.exit(1);
+            }
+
+            if (!key) {
+              console.error('SUPABASE_SECRET_KEY ontbreekt');
+              process.exit(1);
+            }
+
+            const url = base.replace(/\/+$/, '') + '/rest/v1/';
+
+            fetch(url, {
+              headers: {
+                apikey: key,
+                Accept: 'application/json'
+              }
+            })
+            .then(async (response) => {
+              const body = await response.text();
+
+              console.log('Supabase host:', new URL(url).host);
+              console.log('Supabase HTTP status:', response.status);
+              console.log('Supabase response:', body.slice(0, 500));
+
+              if (!response.ok) {
+                process.exit(1);
+              }
+            })
+            .catch((error) => {
+              console.error('Supabase netwerkfout');
+              console.error('name:', error?.name ?? '-');
+              console.error('message:', error?.message ?? '-');
+              console.error('cause.code:', error?.cause?.code ?? '-');
+              console.error('cause.message:', error?.cause?.message ?? '-');
+              process.exit(1);
+            });
+          "
 
       - name: Dependencies installeren
         run: npm ci
