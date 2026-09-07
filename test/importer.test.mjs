@@ -1,13 +1,43 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadConfig, limits } from "../src/config.mjs";
-import { isValidProductURL, isValidSKU, parseOfferPeriod, parsePriceText, weightInGrams } from "../src/hoogvliet.mjs";
+import {
+  claimCandidateSKU,
+  isValidProductURL,
+  isValidSKU,
+  parseOfferPeriod,
+  parsePriceText,
+  weightInGrams,
+} from "../src/hoogvliet.mjs";
+import { formatBatchSummary, safeLogger } from "../src/importer.mjs";
 import { requestHeaders, restURL, upsertProducts } from "../src/supabase.mjs";
 
-test("de proof of concept kan nooit meer dan 10 producten importeren", () => {
-  const config = loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" });
-  assert.equal(config.maxProducts, 10);
-  assert.equal(limits.absoluteProductLimit, 10);
+function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
+  return {
+    supermarket: "Hoogvliet", sku, name, brand: null,
+    category: null, packageText: "500 gram", weightGrams: 500, imageURL: null,
+    sourceURL: `https://www.hoogvliet.com/product/${sku}`, isAvailable: null,
+    price, oldPrice: null, isOffer: false, offerText: null,
+    validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
+  };
+}
+
+test("MAX_PRODUCTS is configureerbaar met een veilige standaard en bovengrens", () => {
+  assert.equal(loadConfig({ DRY_RUN: "1" }).maxProducts, 10);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "30" }).maxProducts, 30);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" }).maxProducts, 50);
+  assert.equal(limits.defaultMaxProducts, 10);
+  assert.equal(limits.safeProductLimit, 50);
+});
+
+test("dezelfde SKU uit twee zoektermen wordt maar eenmaal geclaimd", () => {
+  const stats = { duplicateSKUsSkipped: 0 };
+  const seen = new Set();
+  const candidate = { sku: "123456789" };
+  assert.equal(claimCandidateSKU(candidate, seen, stats), true);
+  assert.equal(claimCandidateSKU(candidate, seen, stats), false);
+  assert.equal(seen.size, 1);
+  assert.equal(stats.duplicateSKUsSkipped, 1);
 });
 
 test("server-side geheim is verplicht buiten dry-run", () => {
@@ -22,7 +52,7 @@ test("SKU- en product-URL-validatie zijn strikt", () => {
 });
 
 test("prijzen worden alleen uit expliciete bedragen gelezen", () => {
-  assert.equal(parsePriceText("â¬ 5,52"), 5.52);
+  assert.equal(parsePriceText("€ 5,52"), 5.52);
   assert.equal(parsePriceText("geen prijs"), null);
 });
 
@@ -53,13 +83,7 @@ test("Supabase-upserts gebruiken de twee bedoelde unieke sleutels", async () => 
   };
 
   try {
-    const product = {
-      supermarket: "Hoogvliet", sku: "123456789", name: "Echt product", brand: null,
-      category: null, packageText: "500 gram", weightGrams: 500, imageURL: null,
-      sourceURL: "https://www.hoogvliet.com/product/echt-product", isAvailable: null,
-      price: 5.52, oldPrice: null, isOffer: false, offerText: null,
-      validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
-    };
+    const product = testProduct();
     await upsertProducts({
       supabaseURL: "https://voorbeeld.supabase.co",
       supabaseSecret: ["sb", "secret", "test"].join("_"),
@@ -117,13 +141,7 @@ test("een tijdelijke fetch-fout wordt opnieuw geprobeerd", async () => {
     await upsertProducts({
       supabaseURL: "https://voorbeeld.supabase.co",
       supabaseSecret: ["sb", "secret", "test"].join("_"),
-    }, [{
-      supermarket: "Hoogvliet", sku: "123456789", name: "Echt product", brand: null,
-      category: null, packageText: "500 gram", weightGrams: 500, imageURL: null,
-      sourceURL: "https://www.hoogvliet.com/product/echt-product", isAvailable: null,
-      price: 5.52, oldPrice: null, isOffer: false, offerText: null,
-      validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
-    }]);
+    }, [testProduct()]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -140,12 +158,7 @@ test("HTTP-fout toont status en foutcode maar redigeert de secret", async () => 
 
   let message = "";
   try {
-    await upsertProducts({ supabaseURL: "https://voorbeeld.supabase.co", supabaseSecret: secret }, [{
-      supermarket: "Hoogvliet", sku: "123456789", name: "Echt product",
-      packageText: "500 gram", sourceURL: "https://www.hoogvliet.com/product/echt-product",
-      price: 5.52, oldPrice: null, isOffer: false, offerText: null,
-      validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
-    }]);
+    await upsertProducts({ supabaseURL: "https://voorbeeld.supabase.co", supabaseSecret: secret }, [testProduct()]);
   } catch (error) {
     message = error.message;
   } finally {
@@ -173,12 +186,7 @@ test("netwerkfout toont veilige DNS-diagnostiek met fase en host", async () => {
 
   let message = "";
   try {
-    await upsertProducts({ supabaseURL: "https://voorbeeld.supabase.co", supabaseSecret: secret }, [{
-      supermarket: "Hoogvliet", sku: "123456789", name: "Echt product",
-      packageText: "500 gram", sourceURL: "https://www.hoogvliet.com/product/echt-product",
-      price: 5.52, oldPrice: null, isOffer: false, offerText: null,
-      validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
-    }]);
+    await upsertProducts({ supabaseURL: "https://voorbeeld.supabase.co", supabaseSecret: secret }, [testProduct()]);
   } catch (error) {
     message = error.message;
   } finally {
@@ -194,4 +202,97 @@ test("netwerkfout toont veilige DNS-diagnostiek met fase en host", async () => {
   assert.match(message, /Pogingen: 3/);
   assert.doesNotMatch(message, new RegExp(secret));
   assert.match(message, /\[REDACTED\]/);
+});
+
+test("deduplicatie vóór Supabase verwerkt dezelfde SKU maar één keer", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    const isPrice = String(url).includes("/product_prices?");
+    return new Response(JSON.stringify(isPrice
+      ? [{ product_id: "product-uuid", price: 5.52 }]
+      : [{ id: "product-uuid", sku: "123456789", name: "Echt product" }]), { status: 200 });
+  };
+
+  let result;
+  try {
+    result = await upsertProducts({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    }, [testProduct(), testProduct()]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 2);
+  assert.equal(result.imported.length, 1);
+  assert.equal(result.duplicateSKUsSkipped, 1);
+});
+
+test("één productspecifieke fout blokkeert een volgend geldig product niet", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    const payload = JSON.parse(options.body)[0];
+    if (payload.sku === "111111111") {
+      return new Response(JSON.stringify({ code: "22003", message: "ongeldige productwaarde" }), { status: 400 });
+    }
+    const isPrice = String(url).includes("/product_prices?");
+    return new Response(JSON.stringify(isPrice
+      ? [{ product_id: "good-uuid", price: 3.25 }]
+      : [{ id: "good-uuid", sku: "222222222", name: "Geldig product" }]), { status: 200 });
+  };
+
+  let result;
+  try {
+    result = await upsertProducts({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    }, [testProduct("111111111", "Ongeldig"), testProduct("222222222", "Geldig product", 3.25)]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(result.imported.length, 1);
+  assert.equal(result.imported[0].sku, "222222222");
+  assert.equal(result.errors.length, 1);
+  assert.equal(result.errors[0].sku, "111111111");
+});
+
+test("een structurele Supabase-authenticatiefout laat de run falen", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ code: "PGRST301", message: "unauthorized" }), { status: 401 });
+  try {
+    await assert.rejects(
+      upsertProducts({
+        supabaseURL: "https://voorbeeld.supabase.co",
+        supabaseSecret: ["sb", "secret", "test"].join("_"),
+      }, [testProduct()]),
+      /HTTP 401/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
+  const originalLog = console.log;
+  const captured = [];
+  const secret = ["sb", "secret", "batch-geheim"].join("_");
+  console.log = (message) => captured.push(String(message));
+  try {
+    const logger = safeLogger([secret]);
+    logger.info(`${secret} ${formatBatchSummary({
+      searchedTerms: 2, configuredSearchTerms: 3, candidatesFound: 8,
+      validatedProducts: 4, duplicateSKUsSkipped: 1, invalidProductsSkipped: 2,
+      productErrors: 1, searchErrors: 0, writtenProducts: 4, writeErrors: 0,
+      durationMs: 1500,
+    })}`);
+  } finally {
+    console.log = originalLog;
+  }
+  assert.equal(captured.length, 1);
+  assert.doesNotMatch(captured[0], new RegExp(secret));
+  assert.match(captured[0], /\[REDACTED\]/);
+  assert.match(captured[0], /geschreven=4/);
 });

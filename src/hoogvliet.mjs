@@ -276,13 +276,34 @@ async function validateCandidate(page, candidate) {
   };
 }
 
+export function claimCandidateSKU(candidate, seenSKUs, stats) {
+  if (seenSKUs.has(candidate.sku)) {
+    stats.duplicateSKUsSkipped += 1;
+    return false;
+  }
+  seenSKUs.add(candidate.sku);
+  return true;
+}
+
 export async function collectProducts(config, logger = console) {
+  const startedAt = Date.now();
   const browser = await chromium.launch({ headless: config.headless });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const searchPage = await context.newPage();
   const detailPage = await context.newPage();
   const chosen = [];
-  const seenSKUs = new Set();
+  const attemptedSKUs = new Set();
+  const stats = {
+    configuredSearchTerms: config.searchTerms.length,
+    searchedTerms: 0,
+    candidatesFound: 0,
+    validatedProducts: 0,
+    duplicateSKUsSkipped: 0,
+    invalidProductsSkipped: 0,
+    productErrors: 0,
+    searchErrors: 0,
+    durationMs: 0,
+  };
 
   try {
     await searchPage.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
@@ -291,17 +312,38 @@ export async function collectProducts(config, logger = console) {
     for (const term of config.searchTerms) {
       if (chosen.length >= config.maxProducts) break;
       logger.info(`Zoeken: ${term}`);
-      const candidates = await findCandidates(searchPage, term);
+      stats.searchedTerms += 1;
+      let candidates;
+      try {
+        candidates = await findCandidates(searchPage, term);
+        stats.candidatesFound += candidates.length;
+      } catch (error) {
+        if (error instanceof SourceBlockedError) throw error;
+        stats.searchErrors += 1;
+        logger.error(`Zoekterm overgeslagen (${term}): ${error instanceof Error ? error.message : "onbekende fout"}`);
+        continue;
+      }
       let acceptedForTerm = 0;
 
       for (const candidate of candidates) {
         if (chosen.length >= config.maxProducts || acceptedForTerm >= config.maxPerTerm) break;
-        if (seenSKUs.has(candidate.sku)) continue;
-        const product = await validateCandidate(detailPage, candidate);
-        if (!product) continue;
-        seenSKUs.add(product.sku);
+        if (!claimCandidateSKU(candidate, attemptedSKUs, stats)) continue;
+        let product;
+        try {
+          product = await validateCandidate(detailPage, candidate);
+        } catch (error) {
+          if (error instanceof SourceBlockedError) throw error;
+          stats.productErrors += 1;
+          logger.error(`Product overgeslagen (${candidate.sku}): ${error instanceof Error ? error.message : "onbekende fout"}`);
+          continue;
+        }
+        if (!product) {
+          stats.invalidProductsSkipped += 1;
+          continue;
+        }
         chosen.push(product);
         acceptedForTerm += 1;
+        stats.validatedProducts += 1;
         logger.info(`Gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
         await detailPage.waitForTimeout(250);
       }
@@ -314,5 +356,6 @@ export async function collectProducts(config, logger = console) {
   if (chosen.length === 0) {
     throw new Error("De Hoogvliet-bron leverde geen volledig valideerbare producten op.");
   }
-  return chosen;
+  stats.durationMs = Date.now() - startedAt;
+  return { products: chosen, stats };
 }

@@ -1,5 +1,7 @@
 const DEFAULT_TERMS = ["gehakt", "kip", "cola", "honig", "sinas"];
-const ABSOLUTE_PRODUCT_LIMIT = 10;
+const DEFAULT_MAX_PRODUCTS = 10;
+const SAFE_PRODUCT_LIMIT = 50;
+const DEFAULT_MAX_PER_TERM = 2;
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -18,15 +20,15 @@ export function loadConfig(env = process.env) {
   }
 
   const maxProducts = Math.min(
-    positiveInteger(env.MAX_PRODUCTS, ABSOLUTE_PRODUCT_LIMIT),
-    ABSOLUTE_PRODUCT_LIMIT,
+    positiveInteger(env.MAX_PRODUCTS, DEFAULT_MAX_PRODUCTS),
+    SAFE_PRODUCT_LIMIT,
   );
 
   const config = {
     dryRun,
     headless: env.HEADLESS !== "0",
     maxProducts,
-    maxPerTerm: Math.min(positiveInteger(env.MAX_PER_TERM, 2), maxProducts),
+    maxPerTerm: Math.min(positiveInteger(env.MAX_PER_TERM, DEFAULT_MAX_PER_TERM), maxProducts),
     searchTerms,
     supabaseURL: env.SUPABASE_URL?.trim(),
     supabaseSecret: env.SUPABASE_SECRET_KEY?.trim(),
@@ -40,4 +42,7 @@ export function loadConfig(env = process.env) {
   return config;
 }
 
-export const limits = Object.freeze({ absoluteProductLimit: ABSOLUTE_PRODUCT_LIMIT });
+export const limits = Object.freeze({
+  defaultMaxProducts: DEFAULT_MAX_PRODUCTS,
+  safeProductLimit: SAFE_PRODUCT_LIMIT,
+});

@@ -243,35 +243,57 @@ function pricePayload(productID, product) {
 
 export async function upsertProducts(config, products) {
   const imported = [];
+  const errors = [];
+  const seenSKUs = new Set();
+  const uniqueProducts = products.filter((product) => {
+    if (seenSKUs.has(product.sku)) return false;
+    seenSKUs.add(product.sku);
+    return true;
+  });
 
-  for (const product of products) {
-    const rows = await postJSON(
-      config.supabaseURL,
-      "products",
-      config.supabaseSecret,
-      [productPayload(product)],
-      "resolution=merge-duplicates,return=representation",
-      { on_conflict: "supermarket,sku", select: "id,sku,name" },
-    );
-    const stored = rows[0];
-    if (!stored?.id || stored.sku !== product.sku) {
-      throw new Error(`Supabase gaf geen veilig gekoppeld product_id terug voor SKU ${product.sku}.`);
-    }
+  for (const product of uniqueProducts) {
+    try {
+      const rows = await postJSON(
+        config.supabaseURL,
+        "products",
+        config.supabaseSecret,
+        [productPayload(product)],
+        "resolution=merge-duplicates,return=representation",
+        { on_conflict: "supermarket,sku", select: "id,sku,name" },
+      );
+      const stored = rows[0];
+      if (!stored?.id || stored.sku !== product.sku) {
+        throw new Error(`Supabase gaf geen veilig gekoppeld product_id terug voor SKU ${product.sku}.`);
+      }
 
-    const priceRows = await postJSON(
-      config.supabaseURL,
-      "product_prices",
-      config.supabaseSecret,
-      [pricePayload(stored.id, product)],
-      "resolution=merge-duplicates,return=representation",
-      { on_conflict: "product_id", select: "product_id,price,is_offer,updated_at" },
-    );
-    const storedPrice = priceRows[0];
-    if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
-      throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
+      const priceRows = await postJSON(
+        config.supabaseURL,
+        "product_prices",
+        config.supabaseSecret,
+        [pricePayload(stored.id, product)],
+        "resolution=merge-duplicates,return=representation",
+        { on_conflict: "product_id", select: "product_id,price,is_offer,updated_at" },
+      );
+      const storedPrice = priceRows[0];
+      if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
+        throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
+      }
+      imported.push({ sku: product.sku, name: product.name, price: product.price });
+    } catch (error) {
+      const structural = error instanceof SupabaseRequestError
+        && (error.kind === "network" || error.kind === "dns" || error.kind === "tls"
+          || error.kind === "timeout" || error.kind === "connection-reset"
+          || error.kind === "connection-refused" || error.kind === "response"
+          || error.status === 401 || error.status === 403 || error.status === 404
+          || error.status === 408 || error.status === 425 || error.status === 429
+          || (error.status ?? 0) >= 500);
+      if (structural) throw error;
+      errors.push({ sku: product.sku, message: error instanceof Error ? error.message : "onbekende fout" });
     }
-    imported.push({ sku: product.sku, name: product.name, price: product.price });
   }
 
-  return imported;
+  if (imported.length === 0 && uniqueProducts.length > 0) {
+    throw new Error(`Geen enkel product kon naar Supabase worden geschreven. Eerste fout: ${errors[0]?.message ?? "onbekend"}`);
+  }
+  return { imported, errors, duplicateSKUsSkipped: products.length - uniqueProducts.length };
 }
