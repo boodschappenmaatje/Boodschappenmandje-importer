@@ -71,8 +71,14 @@ test("Supabase-upserts gebruiken de twee bedoelde unieke sleutels", async () => 
   assert.equal(requests.length, 2);
   assert.match(requests[0].url, /on_conflict=supermarket%2Csku/);
   assert.match(requests[1].url, /on_conflict=product_id/);
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[1].options.method, "POST");
+  assert.equal(requests[0].options.headers["Content-Type"], "application/json");
+  assert.equal(requests[0].options.headers.Prefer, "resolution=merge-duplicates,return=representation");
+  assert.equal(requests[1].options.headers.Prefer, "resolution=merge-duplicates,return=representation");
   assert.equal(requests[0].options.headers.Authorization, undefined);
   assert.equal(JSON.parse(requests[0].options.body)[0].brand, undefined);
+  assert.equal(JSON.parse(requests[1].options.body)[0].product_id, "product-uuid");
 });
 
 test("Supabase basis-URL wordt exact met de twee REST-paden gecombineerd", () => {
@@ -148,6 +154,44 @@ test("HTTP-fout toont status en foutcode maar redigeert de secret", async () => 
 
   assert.match(message, /HTTP 401/);
   assert.match(message, /PGRST301/);
+  assert.match(message, /fase=products/);
+  assert.match(message, /host=voorbeeld\.supabase\.co/);
+  assert.match(message, /soort=http/);
+  assert.doesNotMatch(message, new RegExp(secret));
+  assert.match(message, /\[REDACTED\]/);
+});
+
+test("netwerkfout toont veilige DNS-diagnostiek met fase en host", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const secret = ["sb", "secret", "niet-loggen"].join("_");
+  globalThis.setTimeout = (callback, delay, ...args) => originalSetTimeout(callback, Math.min(delay, 1), ...args);
+  globalThis.fetch = async () => {
+    const cause = Object.assign(new Error(`getaddrinfo ENOTFOUND ${secret}`), { code: "ENOTFOUND" });
+    throw new TypeError("fetch failed", { cause });
+  };
+
+  let message = "";
+  try {
+    await upsertProducts({ supabaseURL: "https://voorbeeld.supabase.co", supabaseSecret: secret }, [{
+      supermarket: "Hoogvliet", sku: "123456789", name: "Echt product",
+      packageText: "500 gram", sourceURL: "https://www.hoogvliet.com/product/echt-product",
+      price: 5.52, oldPrice: null, isOffer: false, offerText: null,
+      validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
+    }]);
+  } catch (error) {
+    message = error.message;
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+  }
+
+  assert.match(message, /fase=products/);
+  assert.match(message, /host=voorbeeld\.supabase\.co/);
+  assert.match(message, /soort=dns/);
+  assert.match(message, /error\.name=TypeError/);
+  assert.match(message, /cause\.code=ENOTFOUND/);
+  assert.match(message, /Pogingen: 3/);
   assert.doesNotMatch(message, new RegExp(secret));
   assert.match(message, /\[REDACTED\]/);
 });
