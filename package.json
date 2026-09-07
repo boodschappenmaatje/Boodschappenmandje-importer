@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Beperkte server-side proof-of-conceptimporter voor BoodschappenMaatje.",
+  "description": "Gecontroleerde server-side Hoogvliet-catalogusimporter voor BoodschappenMaatje.",
   "scripts": {
     "import": "node src/importer.mjs",
     "test": "node --test",

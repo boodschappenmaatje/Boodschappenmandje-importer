@@ -9,7 +9,7 @@ import {
   parsePriceText,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
-import { formatBatchSummary, safeLogger } from "../src/importer.mjs";
+import { formatBatchSummary, formatTermCoverage, safeLogger } from "../src/importer.mjs";
 import { requestHeaders, restURL, upsertProducts } from "../src/supabase.mjs";
 
 function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
@@ -25,9 +25,18 @@ function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
 test("MAX_PRODUCTS is configureerbaar met een veilige standaard en bovengrens", () => {
   assert.equal(loadConfig({ DRY_RUN: "1" }).maxProducts, 10);
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "30" }).maxProducts, 30);
-  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" }).maxProducts, 50);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150" }).maxProducts, 150);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" }).maxProducts, 200);
   assert.equal(limits.defaultMaxProducts, 10);
-  assert.equal(limits.safeProductLimit, 50);
+  assert.equal(limits.safeProductLimit, 200);
+});
+
+test("MAX_PER_TERM ondersteunt catalogusdekking maar houdt een harde bovengrens", () => {
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150" }).maxPerTerm, 2);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150", MAX_PER_TERM: "7" }).maxPerTerm, 7);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150", MAX_PER_TERM: "999" }).maxPerTerm, 10);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "4", MAX_PER_TERM: "7" }).maxPerTerm, 4);
+  assert.equal(limits.safePerTermLimit, 10);
 });
 
 test("dezelfde SKU uit twee zoektermen wordt maar eenmaal geclaimd", () => {
@@ -37,7 +46,25 @@ test("dezelfde SKU uit twee zoektermen wordt maar eenmaal geclaimd", () => {
   assert.equal(claimCandidateSKU(candidate, seen, stats), true);
   assert.equal(claimCandidateSKU(candidate, seen, stats), false);
   assert.equal(seen.size, 1);
+  assert.equal(stats.uniqueSKUs, 1);
   assert.equal(stats.duplicateSKUsSkipped, 1);
+});
+
+test("veel overlappende zoekresultaten worden centraal op SKU gededupliceerd", () => {
+  const stats = { duplicateSKUsSkipped: 0, uniqueSKUs: 0 };
+  const seen = new Set();
+  const terms = [
+    ["111111111", "222222222", "333333333"],
+    ["222222222", "333333333", "444444444"],
+    ["111111111", "444444444", "555555555"],
+  ];
+
+  const claimed = terms.flatMap((skus) => skus)
+    .filter((sku) => claimCandidateSKU({ sku }, seen, stats));
+
+  assert.deepEqual(claimed, ["111111111", "222222222", "333333333", "444444444", "555555555"]);
+  assert.equal(stats.uniqueSKUs, 5);
+  assert.equal(stats.duplicateSKUsSkipped, 4);
 });
 
 test("server-side geheim is verplicht buiten dry-run", () => {
@@ -103,6 +130,35 @@ test("Supabase-upserts gebruiken de twee bedoelde unieke sleutels", async () => 
   assert.equal(requests[0].options.headers.Authorization, undefined);
   assert.equal(JSON.parse(requests[0].options.body)[0].brand, undefined);
   assert.equal(JSON.parse(requests[1].options.body)[0].product_id, "product-uuid");
+});
+
+test("een bestaande SKU kan in een volgende run veilig opnieuw worden ge-upsert", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    const isPrice = String(url).includes("/product_prices?");
+    return new Response(JSON.stringify(isPrice
+      ? [{ product_id: "bestaand-product", price: 5.52 }]
+      : [{ id: "bestaand-product", sku: "123456789", name: "Echt product" }]), { status: 200 });
+  };
+
+  try {
+    const config = {
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    };
+    const first = await upsertProducts(config, [testProduct()]);
+    const second = await upsertProducts(config, [testProduct()]);
+    assert.equal(first.imported.length, 1);
+    assert.equal(second.imported.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requests.length, 4);
+  assert.equal(requests.filter(({ url }) => /on_conflict=supermarket%2Csku/.test(url)).length, 2);
+  assert.equal(requests.filter(({ url }) => /on_conflict=product_id/.test(url)).length, 2);
 });
 
 test("Supabase basis-URL wordt exact met de twee REST-paden gecombineerd", () => {
@@ -284,6 +340,7 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
     const logger = safeLogger([secret]);
     logger.info(`${secret} ${formatBatchSummary({
       searchedTerms: 2, configuredSearchTerms: 3, candidatesFound: 8,
+      uniqueSKUs: 7,
       validatedProducts: 4, duplicateSKUsSkipped: 1, invalidProductsSkipped: 2,
       productErrors: 1, searchErrors: 0, writtenProducts: 4, writeErrors: 0,
       durationMs: 1500,
@@ -294,5 +351,20 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
   assert.equal(captured.length, 1);
   assert.doesNotMatch(captured[0], new RegExp(secret));
   assert.match(captured[0], /\[REDACTED\]/);
+  assert.match(captured[0], /unieke_SKUs=7/);
+  assert.match(captured[0], /overgeslagen=3/);
   assert.match(captured[0], /geschreven=4/);
+});
+
+test("catalogusdekking wordt compact per zoekterm gerapporteerd", () => {
+  const lines = formatTermCoverage({
+    kip: { validated: 3, unique: 4 },
+    pasta: { validated: 2, unique: 3 },
+    melk: { validated: 3, unique: 3 },
+  }, 2);
+
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /kip: 3 gevalideerd\/4 uniek/);
+  assert.match(lines[0], /pasta: 2 gevalideerd\/3 uniek/);
+  assert.match(lines[1], /melk: 3 gevalideerd\/3 uniek/);
 });

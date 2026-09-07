@@ -1,6 +1,6 @@
-# BoodschappenMaatje — Hoogvliet-importer proof of concept
+# BoodschappenMaatje — gecontroleerde Hoogvliet-catalogusimport
 
-Dit is een **server-side proof of concept**. De importer gebruikt Playwright/Chromium om maximaal tien echte producten via dezelfde Hoogvliet-webshoproute en DOM-velden te lezen die de bestaande app gebruikt. Daarna schrijft hij via veilige upserts naar de bestaande Supabase-tabellen `products` en `product_prices`.
+Dit is een server-side Playwright/Chromium-importer. De handmatige GitHub Action voert een gecontroleerde catalogustest uit met maximaal 150 echte producten via dezelfde bewezen Hoogvliet-webshoproute en DOM-velden. Geldige producten worden tussentijds via veilige upserts naar de bestaande Supabase-tabellen `products` en `product_prices` geschreven.
 
 De iOS-app en SQLite-laag maken geen onderdeel uit van dit pakket en worden niet gewijzigd.
 
@@ -36,14 +36,17 @@ De workflow leest ze uitsluitend als environmentvariabelen. De waarden worden ni
 3. Kies **Hoogvliet import proof of concept**.
 4. Kies **Run workflow**.
 5. Kies nogmaals **Run workflow** ter bevestiging.
-6. Open de run en controleer de stap **Maximaal 10 producten importeren**.
+6. Open de run en controleer de stap **Maximaal 150 producten importeren**.
 
 Een succesvolle run vermeldt per geïmporteerd product alleen SKU, naam en prijs. Secrets worden niet getoond. De workflow heeft bewust geen dagelijks schema.
 
 ## Veiligheids- en betrouwbaarheidsregels
 
-- Harde limiet: maximaal 10 producten, ook als `MAX_PRODUCTS` hoger wordt ingesteld.
-- Standaard maximaal twee producten per zoekterm: `gehakt`, `kip`, `cola`, `honig`, `sinas`.
+- Workflowtest: `MAX_PRODUCTS=150`, `MAX_PER_TERM=3` en 86 breed gespreide zoektermen.
+- Harde technische limieten: maximaal 200 producten per run en maximaal 10 gevalideerde producten per zoekterm, ook bij foutieve environmentconfiguratie.
+- SKU-deduplicatie gebeurt vóór het openen van een productdetailpagina. Eenzelfde SKU wordt binnen één run dus niet opnieuw gevalideerd of geschreven.
+- Geldige producten worden per 10 naar Supabase geschreven. Een onderbroken run behoudt daardoor reeds opgeslagen batches; opnieuw uitvoeren blijft veilig door de bestaande idempotente upserts.
+- Eén browsercontext en één detailpagina worden hergebruikt. De bestaande gecontroleerde vertraging blijft actief om onnodige belasting te voorkomen.
 - SKU moet exact negen cijfers zijn.
 - Product-URL moet `https://www.hoogvliet.com/product/...` zijn.
 - De SKU op de productpagina moet overeenkomen met de SKU uit het zoekresultaat.
@@ -66,7 +69,7 @@ De tweede constraint past bij de bestaande één-op-éénrelatie tussen `product
 
 ## Tweede run controleren
 
-Start dezelfde workflow nogmaals. Door `on_conflict=supermarket,sku` worden bestaande producten bijgewerkt en niet gedupliceerd. `product_prices` wordt via het teruggegeven `product_id` bijgewerkt.
+Start dezelfde workflow nogmaals. Door `on_conflict=supermarket,sku` worden bestaande producten bijgewerkt en niet gedupliceerd. `product_prices` wordt via het teruggegeven `product_id` bijgewerkt. De eindlog toont totalen en compacte dekking per zoekterm zonder secrets.
 
 Controleer daarna in Supabase dat iedere SKU eenmaal voorkomt en dat iedere prijs bij het juiste `product_id` staat. Open vervolgens de bestaande BoodschappenMaatje-app en kies **Prijzen verversen**; de reeds gebouwde Fase-2-sync haalt deze records naar SQLite.
 

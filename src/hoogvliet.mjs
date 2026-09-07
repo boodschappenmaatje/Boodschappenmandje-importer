@@ -276,32 +276,40 @@ async function validateCandidate(page, candidate) {
   };
 }
 
-export function claimCandidateSKU(candidate, seenSKUs, stats) {
+export function claimCandidateSKU(candidate, seenSKUs, stats, termStats = null) {
   if (seenSKUs.has(candidate.sku)) {
     stats.duplicateSKUsSkipped += 1;
+    if (termStats) termStats.duplicates += 1;
     return false;
   }
   seenSKUs.add(candidate.sku);
+  stats.uniqueSKUs = (stats.uniqueSKUs ?? 0) + 1;
+  if (termStats) termStats.unique += 1;
   return true;
 }
 
-export async function collectProducts(config, logger = console) {
+export async function collectProducts(config, logger = console, options = {}) {
   const startedAt = Date.now();
+  const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
+  const persistBatchSize = Math.max(1, Math.min(options.persistBatchSize ?? 10, 25));
   const browser = await chromium.launch({ headless: config.headless });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const searchPage = await context.newPage();
   const detailPage = await context.newPage();
   const chosen = [];
+  const pendingPersistence = [];
   const attemptedSKUs = new Set();
   const stats = {
     configuredSearchTerms: config.searchTerms.length,
     searchedTerms: 0,
     candidatesFound: 0,
+    uniqueSKUs: 0,
     validatedProducts: 0,
     duplicateSKUsSkipped: 0,
     invalidProductsSkipped: 0,
     productErrors: 0,
     searchErrors: 0,
+    termCoverage: {},
     durationMs: 0,
   };
 
@@ -313,13 +321,24 @@ export async function collectProducts(config, logger = console) {
       if (chosen.length >= config.maxProducts) break;
       logger.info(`Zoeken: ${term}`);
       stats.searchedTerms += 1;
+      const termStats = {
+        candidates: 0,
+        unique: 0,
+        duplicates: 0,
+        validated: 0,
+        skipped: 0,
+        errors: 0,
+      };
+      stats.termCoverage[term] = termStats;
       let candidates;
       try {
         candidates = await findCandidates(searchPage, term);
         stats.candidatesFound += candidates.length;
+        termStats.candidates = candidates.length;
       } catch (error) {
         if (error instanceof SourceBlockedError) throw error;
         stats.searchErrors += 1;
+        termStats.errors += 1;
         logger.error(`Zoekterm overgeslagen (${term}): ${error instanceof Error ? error.message : "onbekende fout"}`);
         continue;
       }
@@ -327,26 +346,36 @@ export async function collectProducts(config, logger = console) {
 
       for (const candidate of candidates) {
         if (chosen.length >= config.maxProducts || acceptedForTerm >= config.maxPerTerm) break;
-        if (!claimCandidateSKU(candidate, attemptedSKUs, stats)) continue;
+        if (!claimCandidateSKU(candidate, attemptedSKUs, stats, termStats)) continue;
         let product;
         try {
           product = await validateCandidate(detailPage, candidate);
         } catch (error) {
           if (error instanceof SourceBlockedError) throw error;
           stats.productErrors += 1;
+          termStats.errors += 1;
           logger.error(`Product overgeslagen (${candidate.sku}): ${error instanceof Error ? error.message : "onbekende fout"}`);
           continue;
         }
         if (!product) {
           stats.invalidProductsSkipped += 1;
+          termStats.skipped += 1;
           continue;
         }
         chosen.push(product);
+        pendingPersistence.push(product);
         acceptedForTerm += 1;
         stats.validatedProducts += 1;
+        termStats.validated += 1;
         logger.info(`Gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
+        if (onBatch && pendingPersistence.length >= persistBatchSize) {
+          await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
+        }
         await detailPage.waitForTimeout(250);
       }
+    }
+    if (onBatch && pendingPersistence.length > 0) {
+      await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
     }
   } finally {
     await context.close();

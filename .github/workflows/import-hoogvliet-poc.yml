@@ -18,9 +18,9 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      MAX_PRODUCTS: "30"
-      MAX_PER_TERM: "2"
-      SEARCH_TERMS: "gehakt,kip,pasta,rijst,aardappelen,groenten,brood,kaas,melk,yoghurt,frisdrank,koffie,saus,soep,snacks"
+      MAX_PRODUCTS: "150"
+      MAX_PER_TERM: "3"
+      SEARCH_TERMS: "gehakt,aardappelen,pasta,pastasaus,brood,melk,cola,chips,pizza,soep,kip,groente,rijst,knorr,kaas,yoghurt,water,koek,patat,bonen,rundergehakt,tomaat,spaghetti,honig,bolletjes,kwark,sinas,chocolade,friet,tomatenblokjes,kipfilet,paprika,macaroni,saus,croissant,boter,frisdrank,snoep,kroket,mais,worst,ui,lasagne,mayonaise,beschuit,margarine,sap,nootjes,frikandel,tonijn,hamburger,komkommer,nasi,ketchup,crackers,room,koffie,snacks,kipnuggets,kruiden,shoarma,wortel,bami,curry,ontbijtgranen,thee,diepvries,bloem,vis,sla,noodles,taco,havermout,limonade,suiker,zalm,broccoli,wraps,maaltijdmix,olie,bloemkool,appel,tortilla,banaan,sinaasappel,fruit"
       HEADLESS: "1"
 
     steps:
@@ -87,5 +87,5 @@ jobs:
       - name: Technische controles
         run: npm test
 
-      - name: Maximaal 30 producten importeren
+      - name: Maximaal 150 producten importeren
         run: npm run import
