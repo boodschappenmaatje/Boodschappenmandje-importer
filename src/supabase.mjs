@@ -7,12 +7,22 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 setDefaultResultOrder("ipv4first");
 
 export class SupabaseRequestError extends Error {
-  constructor(message, { retryable = false, status = null, code = null } = {}) {
+  constructor(message, {
+    retryable = false,
+    status = null,
+    code = null,
+    phase = null,
+    host = null,
+    kind = null,
+  } = {}) {
     super(message);
     this.name = "SupabaseRequestError";
     this.retryable = retryable;
     this.status = status;
     this.code = code;
+    this.phase = phase;
+    this.host = host;
+    this.kind = kind;
   }
 }
 
@@ -68,24 +78,56 @@ function responseError(body, secret) {
     const object = JSON.parse(safeBody);
     return {
       code: typeof object.code === "string" ? object.code : null,
-      message: [object.message, object.details, object.hint]
-        .filter((part) => typeof part === "string" && part.trim())
-        .join(" | ")
-        .slice(0, 600),
+      body: JSON.stringify(object).slice(0, 800),
     };
   } catch {
-    return { code: null, message: safeBody.slice(0, 600) };
+    return { code: null, body: safeBody.slice(0, 800) };
   }
 }
 
-function networkError(error, table, secret) {
+function errorCode(error) {
+  return error?.code ?? error?.errno ?? null;
+}
+
+function networkKind(error, code, message) {
+  const value = `${error?.name ?? ""} ${code ?? ""} ${message ?? ""}`.toUpperCase();
+  if (/ABORT|TIMEOUT|TIMEDOUT/.test(value)) return "timeout";
+  if (/ENOTFOUND|EAI_AGAIN|DNS/.test(value)) return "dns";
+  if (/CERT|TLS|SSL|SELF_SIGNED|UNABLE_TO_VERIFY/.test(value)) return "tls";
+  if (/ECONNRESET|UND_ERR_SOCKET/.test(value)) return "connection-reset";
+  if (/ECONNREFUSED/.test(value)) return "connection-refused";
+  return "network";
+}
+
+function nestedCauseDetails(error, secret) {
   const cause = error?.cause;
-  const code = cause?.code ?? cause?.errno ?? error?.code ?? error?.name ?? "NETWORK_ERROR";
-  const reason = redact(cause?.message ?? error?.message ?? "onbekende netwerkfout", secret);
-  const timedOut = error?.name === "AbortError" || code === "ABORT_ERR";
+  const nested = Array.isArray(cause?.errors) ? cause.errors.slice(0, 3) : [];
+  return nested.map((item) => {
+    const code = errorCode(item);
+    const message = redact(item?.message ?? "onbekende fout", secret).slice(0, 180);
+    return `${item?.name ?? "Error"}${code ? `/${code}` : ""}: ${message}`;
+  });
+}
+
+function networkError(error, table, host, secret) {
+  const cause = error?.cause;
+  const code = errorCode(cause) ?? errorCode(error) ?? "NETWORK_ERROR";
+  const reason = redact(cause?.message ?? error?.message ?? "onbekende netwerkfout", secret).slice(0, 300);
+  const kind = networkKind(error, code, reason);
+  const nested = nestedCauseDetails(error, secret);
+  const details = [
+    `fase=${table}`,
+    `host=${host}`,
+    `soort=${kind}`,
+    `error.name=${error?.name ?? "Error"}`,
+    `error.code=${errorCode(error) ?? "-"}`,
+    `cause.code=${errorCode(cause) ?? "-"}`,
+    `cause.message=${reason}`,
+    nested.length ? `nested=${nested.join(" ; ")}` : null,
+  ].filter(Boolean).join(" | ");
   return new SupabaseRequestError(
-    `Supabase ${table}: ${timedOut ? `timeout na ${REQUEST_TIMEOUT_MS / 1000}s` : `netwerkfout ${code}`} (${reason.slice(0, 300)}).`,
-    { retryable: true, code: String(code) },
+    `Supabase write mislukt | ${details}`,
+    { retryable: true, code: String(code), phase: table, host, kind },
   );
 }
 
@@ -95,6 +137,7 @@ async function waitBeforeRetry(attempt) {
 
 async function postJSON(baseValue, table, secret, payload, prefer, query) {
   const url = restURL(baseValue, table);
+  const host = url.host;
   for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
   const body = JSON.stringify(payload);
 
@@ -113,14 +156,20 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
       });
       responseBody = await response.text();
     } catch (error) {
-      const safeError = networkError(error, table, secret);
+      const safeError = networkError(error, table, host, secret);
       if (attempt < MAX_ATTEMPTS) {
         await waitBeforeRetry(attempt);
         continue;
       }
       throw new SupabaseRequestError(
         `${safeError.message} Pogingen: ${MAX_ATTEMPTS}.`,
-        { retryable: true, code: safeError.code },
+        {
+          retryable: true,
+          code: safeError.code,
+          phase: table,
+          host,
+          kind: safeError.kind,
+        },
       );
     } finally {
       clearTimeout(timer);
@@ -128,10 +177,18 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
 
     if (!response.ok) {
       const detail = responseError(responseBody, secret);
-      const suffix = detail.message ? `: ${detail.message}` : "";
       const safeError = new SupabaseRequestError(
-        `Supabase ${table}: HTTP ${response.status}${detail.code ? ` (${detail.code})` : ""}${suffix}`,
-        { retryable: RETRYABLE_STATUS.has(response.status), status: response.status, code: detail.code },
+        `Supabase write mislukt | fase=${table} | host=${host} | soort=http | HTTP ${response.status}`
+          + `${detail.code ? ` | code=${detail.code}` : ""}`
+          + `${detail.body ? ` | response=${detail.body}` : ""}`,
+        {
+          retryable: RETRYABLE_STATUS.has(response.status),
+          status: response.status,
+          code: detail.code,
+          phase: table,
+          host,
+          kind: "http",
+        },
       );
       if (safeError.retryable && attempt < MAX_ATTEMPTS) {
         await waitBeforeRetry(attempt);
@@ -144,7 +201,10 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
     try {
       return JSON.parse(responseBody);
     } catch {
-      throw new SupabaseRequestError(`Supabase ${table}: succesvolle reactie bevatte ongeldige JSON.`);
+      throw new SupabaseRequestError(
+        `Supabase write mislukt | fase=${table} | host=${host} | soort=response | succesvolle reactie bevatte ongeldige JSON.`,
+        { phase: table, host, kind: "response" },
+      );
     }
   }
   throw new SupabaseRequestError(`Supabase ${table}: onverwacht einde van request.`);
