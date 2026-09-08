@@ -35,7 +35,7 @@ export const catalogBatches = Object.freeze({
 
 const DEFAULT_BATCH = "core";
 const DEFAULT_UPDATE_MODE = "catalog";
-const UPDATE_MODES = new Set(["catalog", "prices"]);
+const UPDATE_MODES = new Set(["catalog", "prices", "classify"]);
 const DEFAULT_MAX_PRODUCTS = 10;
 const SAFE_PRODUCT_LIMIT = 500;
 const DEFAULT_MAX_NEW_PRODUCTS = 50;
@@ -56,7 +56,7 @@ export function loadConfig(env = process.env) {
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
   const updateMode = (env.UPDATE_MODE ?? DEFAULT_UPDATE_MODE).trim().toLowerCase();
   if (!UPDATE_MODES.has(updateMode)) {
-    throw new Error(`Ongeldige UPDATE_MODE '${updateMode}'. Kies: catalog of prices.`);
+    throw new Error(`Ongeldige UPDATE_MODE '${updateMode}'. Kies: catalog, prices of classify.`);
   }
   const catalogBatch = (env.CATALOG_BATCH ?? DEFAULT_BATCH).trim().toLowerCase();
   if (!Object.hasOwn(catalogBatches, catalogBatch)) {

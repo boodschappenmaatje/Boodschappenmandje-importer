@@ -52,6 +52,14 @@ Een succesvolle run vermeldt per geïmporteerd product alleen SKU, naam en prijs
 
 `SEARCH_TERMS` blijft beschikbaar als expliciete override. Een onbekende `CATALOG_BATCH` stopt veilig met een duidelijke fout.
 
+## Producttype-classificatie
+
+`src/product-type.mjs` bepaalt centraal een generiek `product_type` uit productnaam, merk, bestaande Hoogvliet-categorie en—alleen als fallback—de gebruikte zoekterm. Merk, Zero/Max en verpakkingsformaat worden geen zelfstandig producttype. Onzekere producten blijven behouden als `Onbekend`.
+
+Voer eenmaal `supabase/migrations/20260908_add_product_type.sql` uit in de Supabase SQL Editor. De kolom is nullable en breekt bestaande clients niet. Zolang de kolom nog ontbreekt, blijven catalogus- en prijsimports zonder `product_type` functioneren.
+
+Kies daarna in de handmatige GitHub Action **Soort update → classify** om bestaande producten met dezelfde centrale regels bij te werken. Nieuwe catalogusproducten en toekomstige prijsvalidaties krijgen hun producttype vervolgens automatisch. De classify-run wijzigt geen `product_prices`.
+
 ## Veiligheids- en betrouwbaarheidsregels
 
 - Workflowinstellingen: `MAX_PRODUCTS=180`, `MAX_NEW_PRODUCTS=100`, `MAX_PER_TERM=20` en `MAX_PAGES_PER_TERM=4`.

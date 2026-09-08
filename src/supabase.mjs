@@ -321,7 +321,8 @@ export async function fetchExistingProducts(config) {
       "products",
       config.supabaseSecret,
       {
-        select: "sku,name,brand,category,package_text,image_url,source_url,is_available",
+        select: "sku,name,brand,category,package_text,weight_grams,image_url,source_url,is_available"
+          + (config.productTypeSupported ? ",product_type" : ""),
         supermarket: "eq.Hoogvliet",
         order: "sku.asc",
       },
@@ -336,9 +337,11 @@ export async function fetchExistingProducts(config) {
         brand: row?.brand ?? null,
         category: row?.category ?? null,
         packageText: row?.package_text ?? null,
+        weightGrams: row?.weight_grams ?? null,
         imageURL: row?.image_url ?? null,
         sourceURL: row?.source_url,
         available: row?.is_available ?? null,
+        productType: row?.product_type ?? null,
       });
     }
     if (rows.length < pageSize) return products;
@@ -346,9 +349,28 @@ export async function fetchExistingProducts(config) {
   throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-producten.");
 }
 
-function productPayload(product) {
+export async function hasProductTypeColumn(config) {
+  try {
+    await getJSON(
+      config.supabaseURL,
+      "products",
+      config.supabaseSecret,
+      { select: "product_type", limit: "1" },
+      0,
+      0,
+    );
+    return true;
+  } catch (error) {
+    if (error instanceof SupabaseRequestError
+      && error.status === 400
+      && /product_type|PGRST204/i.test(error.message)) return false;
+    throw error;
+  }
+}
+
+function productPayload(product, includeProductType = true) {
   const payload = {
-    supermarket: product.supermarket,
+    supermarket: product.supermarket ?? "Hoogvliet",
     sku: product.sku,
     name: product.name,
     package_text: product.packageText,
@@ -360,7 +382,38 @@ function productPayload(product) {
   if (product.weightGrams != null) payload.weight_grams = product.weightGrams;
   if (product.imageURL != null) payload.image_url = product.imageURL;
   if (product.isAvailable != null) payload.is_available = product.isAvailable;
+  if (includeProductType && product.productType != null) payload.product_type = product.productType;
   return payload;
+}
+
+export async function upsertProductClassifications(config, products) {
+  if (!config.productTypeSupported) {
+    throw new Error("Supabase-kolom products.product_type ontbreekt; voer eerst de meegeleverde migratie uit.");
+  }
+  const seenSKUs = new Set();
+  const uniqueProducts = products.filter((product) => {
+    if (!product?.sku || seenSKUs.has(product.sku)) return false;
+    seenSKUs.add(product.sku);
+    return true;
+  });
+  let written = 0;
+  const batchSize = 100;
+  for (let offset = 0; offset < uniqueProducts.length; offset += batchSize) {
+    const batch = uniqueProducts.slice(offset, offset + batchSize);
+    const rows = await postJSON(
+      config.supabaseURL,
+      "products",
+      config.supabaseSecret,
+      batch.map((product) => productPayload(product, true)),
+      "resolution=merge-duplicates,return=representation",
+      { on_conflict: "supermarket,sku", select: "id,sku,product_type" },
+    );
+    if (!Array.isArray(rows) || rows.length !== batch.length) {
+      throw new Error("Supabase bevestigde niet alle producttype-updates.");
+    }
+    written += rows.length;
+  }
+  return { written, duplicateSKUsSkipped: products.length - uniqueProducts.length };
 }
 
 function pricePayload(productID, product) {
@@ -393,7 +446,7 @@ export async function upsertProducts(config, products) {
         config.supabaseURL,
         "products",
         config.supabaseSecret,
-        [productPayload(product)],
+        [productPayload(product, config.productTypeSupported !== false)],
         "resolution=merge-duplicates,return=representation",
         { on_conflict: "supermarket,sku", select: "id,sku,name" },
       );

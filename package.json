@@ -7,7 +7,7 @@
   "scripts": {
     "import": "node src/importer.mjs",
     "test": "node --test",
-    "check": "node --check src/importer.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs"
+    "check": "node --check src/importer.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs && node --check src/product-type.mjs"
   },
   "engines": {
     "node": ">=22"

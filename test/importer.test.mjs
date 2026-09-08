@@ -3,6 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
+  classifyProductType, productTypeCoverage, UNKNOWN_PRODUCT_TYPE,
+} from "../src/product-type.mjs";
+import {
   collectCandidatePages,
   catalogLimitReached,
   claimCandidateSKU,
@@ -18,10 +21,11 @@ import {
   weightInGrams,
 } from "../src/hoogvliet.mjs";
 import {
-  formatBatchSummary, formatPriceRefreshSummary, formatTermCoverage, safeLogger,
+  formatBatchSummary, formatClassificationSummary, formatPriceRefreshSummary, formatTermCoverage, safeLogger,
 } from "../src/importer.mjs";
 import {
-  fetchExistingProducts, fetchExistingSKUs, requestHeaders, restURL, upsertProducts,
+  fetchExistingProducts, fetchExistingSKUs, hasProductTypeColumn, requestHeaders, restURL,
+  upsertProductClassifications, upsertProducts,
 } from "../src/supabase.mjs";
 
 function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
@@ -29,6 +33,7 @@ function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
     supermarket: "Hoogvliet", sku, name, brand: null,
     category: null, packageText: "500 gram", weightGrams: 500, imageURL: null,
     sourceURL: `https://www.hoogvliet.com/product/${sku}`, isAvailable: null,
+    productType: "Gehakt",
     price, oldPrice: null, isOffer: false, offerText: null,
     validFrom: null, validUntil: null, fetchedAt: "2026-09-06T20:00:00Z",
   };
@@ -93,6 +98,57 @@ test("paginering en catalogusfocus zijn configureerbaar en hard begrensd", () =>
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PAGES_PER_TERM: "999" }).maxPagesPerTerm, 8);
   assert.equal(limits.defaultMaxPagesPerTerm, 1);
   assert.equal(limits.safePagesPerTermLimit, 8);
+});
+
+test("drankmerken en varianten krijgen het generieke producttype Cola", () => {
+  const products = [
+    { sku: "111111111", name: "Coca-Cola Original taste", brand: "Coca-Cola", category: "Frisdrank" },
+    { sku: "222222222", name: "Coca-Cola Zero 6-pack", brand: "Coca-Cola", category: "Frisdrank" },
+    { sku: "333333333", name: "Pepsi Max", brand: "Pepsi", category: "Frisdrank" },
+    { sku: "444444444", name: "Hoogvliet Cola Zero", brand: "Hoogvliet", category: "Frisdrank" },
+  ];
+  assert.deepEqual(products.map(classifyProductType), ["Cola", "Cola", "Cola", "Cola"]);
+  assert.equal(new Set(products.map(({ sku }) => sku)).size, 4);
+  assert.notEqual(classifyProductType(products[0]), products[0].brand);
+});
+
+test("belangrijke supermarktproducten worden centraal en niet op SKU geclassificeerd", () => {
+  const examples = new Map([
+    ["Hoogvliet Rundergehakt 500 gram", "Gehakt"],
+    ["Kipfilet naturel", "Kipfilet"],
+    ["Halfvolle melk", "Melk"],
+    ["Griekse yoghurt", "Yoghurt"],
+    ["Paprika chips", "Chips"],
+    ["Vastkokende aardappelen", "Aardappelen"],
+    ["Volkoren pasta penne", "Pasta"],
+    ["Basmati rijst", "Rijst"],
+    ["Italiaanse pastasaus", "Pastasaus"],
+  ]);
+  for (const [name, expected] of examples) {
+    assert.equal(classifyProductType({ name }), expected, name);
+  }
+});
+
+test("onbekende producten blijven meetbaar aanwezig met veilige fallback", () => {
+  const products = [{ name: "Volstrekt nieuw artikel" }, { name: "Halfvolle melk" }];
+  assert.equal(classifyProductType(products[0]), UNKNOWN_PRODUCT_TYPE);
+  assert.deepEqual(productTypeCoverage(products), {
+    total: 2, classified: 1, unknown: 1, percentage: 50,
+    counts: new Map([[UNKNOWN_PRODUCT_TYPE, 1], ["Melk", 1]]),
+  });
+});
+
+test("korte letterreeksen en samengestelde woorden veroorzaken geen duidelijke misclassificatie", () => {
+  assert.equal(classifyProductType({ name: "Chocoladereep" }), "Chocolade");
+  assert.equal(classifyProductType({ name: "Indische spekkoek" }), "Koek");
+  assert.equal(classifyProductType({ name: "Naturel roomkaas" }), "Kaas");
+  assert.notEqual(classifyProductType({ name: "Uitdeelzak snoep" }), "Ui");
+  assert.notEqual(classifyProductType({ name: "Verse vlaai" }), "Vla");
+});
+
+test("zoekcontext is alleen een veilige fallback voor toekomstige producten", () => {
+  assert.equal(classifyProductType({ name: "Nieuw merk Original", searchTerm: "cola" }), "Cola");
+  assert.equal(classifyProductType({ name: "Nieuw merk Original" }), UNKNOWN_PRODUCT_TYPE);
 });
 
 test("zoekrelevantie behoudt productvarianten maar weigert toevallige middenwoordmatches", () => {
@@ -251,6 +307,7 @@ test("Supabase-upserts gebruiken de twee bedoelde unieke sleutels", async () => 
   assert.equal(requests[1].options.headers.Prefer, "resolution=merge-duplicates,return=representation");
   assert.equal(requests[0].options.headers.Authorization, undefined);
   assert.equal(JSON.parse(requests[0].options.body)[0].brand, undefined);
+  assert.equal(JSON.parse(requests[0].options.body)[0].product_type, "Gehakt");
   assert.equal(JSON.parse(requests[1].options.body)[0].product_id, "product-uuid");
 });
 
@@ -327,6 +384,92 @@ test("bestaande Hoogvliet-SKU's worden licht uit Supabase gelezen", async () => 
   assert.match(request.url, /supermarket=eq\.Hoogvliet/);
   assert.equal(request.options.method, "GET");
   assert.equal(request.options.headers.Range, "0-999");
+});
+
+test("producttype-kolom wordt veilig gedetecteerd zonder schema te gokken", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    return new Response(JSON.stringify([]), { status: 200 });
+  };
+  try {
+    assert.equal(await hasProductTypeColumn({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    }), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.match(requests[0], /select=product_type/);
+});
+
+test("ontbrekende producttype-kolom breekt bestaande imports niet", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    code: "PGRST204", message: "Could not find the 'product_type' column",
+  }), { status: 400 });
+  try {
+    assert.equal(await hasProductTypeColumn({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    }), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("bestaande product-upsert laat producttype weg zolang de migratie ontbreekt", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    const isPrice = String(url).includes("/product_prices?");
+    return new Response(JSON.stringify(isPrice
+      ? [{ product_id: "product-uuid", price: 5.52 }]
+      : [{ id: "product-uuid", sku: "123456789", name: "Echt product" }]), { status: 200 });
+  };
+  try {
+    await upsertProducts({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+      productTypeSupported: false,
+    }, [testProduct()]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(JSON.parse(requests[0].options.body)[0].product_type, undefined);
+  assert.equal(requests.filter(({ url }) => url.includes("/product_prices?")).length, 1);
+});
+
+test("backfill werkt alleen products bij en raakt gekoppelde prijzen niet aan", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), options });
+    const payload = JSON.parse(options.body);
+    return new Response(JSON.stringify(payload.map((product, index) => ({
+      id: `id-${index}`, sku: product.sku, product_type: product.product_type,
+    }))), { status: 200 });
+  };
+  let result;
+  try {
+    result = await upsertProductClassifications({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+      productTypeSupported: true,
+    }, [
+      { sku: "111111111", name: "Coca-Cola", productType: "Cola", packageText: "1,5 liter", sourceURL: "https://www.hoogvliet.com/product/cola" },
+      { sku: "222222222", name: "Pepsi Max", productType: "Cola", packageText: "1,5 liter", sourceURL: "https://www.hoogvliet.com/product/pepsi" },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(result.written, 2);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/rest\/v1\/products\?/);
+  assert.doesNotMatch(requests[0].url, /product_prices/);
+  assert.deepEqual(JSON.parse(requests[0].options.body).map(({ product_type }) => product_type), ["Cola", "Cola"]);
 });
 
 test("een tijdelijke fetch-fout wordt opnieuw geprobeerd", async () => {
@@ -535,6 +678,7 @@ test("prijsmodus en begrensde prijsdeelbatch zijn configureerbaar", () => {
     /Ongeldige PRICE_SHARD_INDEX/,
   );
   assert.throws(() => loadConfig({ DRY_RUN: "1", UPDATE_MODE: "onbekend" }), /Ongeldige UPDATE_MODE/);
+  assert.equal(loadConfig({ DRY_RUN: "1", UPDATE_MODE: "classify" }).updateMode, "classify");
 });
 
 test("prijsdeelbatches verdelen SKU's stabiel zonder overlap", () => {
@@ -571,8 +715,9 @@ test("bestaande productbronmetadata wordt zonder cacheprijs voor prijsvalidatie 
   assert.equal(products.length, 1);
   assert.deepEqual(products[0], {
     sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
-    packageText: "500 gram", imageURL: "https://voorbeeld.nl/product.jpg",
+    packageText: "500 gram", weightGrams: null, imageURL: "https://voorbeeld.nl/product.jpg",
     sourceURL: "https://www.hoogvliet.com/product/bestaand-product", available: true,
+    productType: null,
   });
   assert.match(request.url, /select=sku%2Cname%2Cbrand%2Ccategory%2Cpackage_text/);
   assert.doesNotMatch(request.url, /product_prices/);
@@ -589,6 +734,18 @@ test("prijsupdate-statistieken zijn compact en bevatten geen credentials", () =>
   assert.doesNotMatch(summary, /SUPABASE|secret|apikey|Authorization/i);
 });
 
+test("classificatiestatistieken tonen dekking en fallback compact", () => {
+  const coverage = productTypeCoverage([
+    { name: "Coca-Cola Original" }, { name: "Pepsi Max" }, { name: "Mysterieproduct" },
+  ]);
+  const summary = formatClassificationSummary(coverage, 3);
+  assert.match(summary, /onderzocht=3/);
+  assert.match(summary, /geclassificeerd=2/);
+  assert.match(summary, /onbekend=1/);
+  assert.match(summary, /dekking=66\.7%/);
+  assert.match(summary, /Cola=2/);
+});
+
 test("workflow behoudt handmatig starten en plant veilige automatische updates", async () => {
   const workflow = await readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8");
   assert.match(workflow, /workflow_dispatch:/);
@@ -601,5 +758,13 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /MAX_PER_TERM=20/);
   assert.match(workflow, /MAX_PAGES_PER_TERM=4/);
   assert.match(workflow, /CATALOG_NEW_ONLY=1/);
+  assert.match(workflow, /- classify/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+});
+
+test("Supabase-migratie voegt alleen de optionele producttype-kolom en index toe", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260908_add_product_type.sql", import.meta.url), "utf8");
+  assert.match(migration, /add column if not exists product_type text/i);
+  assert.match(migration, /products_supermarket_product_type_idx/i);
+  assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from/i);
 });

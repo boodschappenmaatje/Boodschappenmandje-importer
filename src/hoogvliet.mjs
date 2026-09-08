@@ -1,4 +1,5 @@
 import { chromium } from "playwright";
+import { classifyProductType } from "./product-type.mjs";
 
 const BASE_URL = "https://www.hoogvliet.com";
 const SEARCH_PATH = "/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch";
@@ -335,7 +336,7 @@ async function validateCandidate(page, candidate) {
   const currentPrice = simpleOffer ? (details.offerPrice ?? details.displayPrice) : regularPrice;
   if (!(Number.isFinite(currentPrice) && currentPrice > 0)) return null;
 
-  return {
+  const product = {
     supermarket: "Hoogvliet",
     sku: details.sku,
     name,
@@ -356,6 +357,8 @@ async function validateCandidate(page, candidate) {
     validUntil: simpleOffer ? period.validUntil : null,
     fetchedAt: new Date().toISOString(),
   };
+  product.productType = classifyProductType({ ...product, searchTerm: candidate.searchTerm });
+  return product;
 }
 
 export function claimCandidateSKU(candidate, seenSKUs, stats, termStats = null) {
@@ -553,6 +556,7 @@ export async function collectProducts(config, logger = console, options = {}) {
         if (!claimCandidateSKU(candidate, attemptedSKUs, stats, termStats)) continue;
         let product;
         try {
+          candidate.searchTerm = term;
           product = await validateCandidate(detailPage, candidate);
         } catch (error) {
           if (error instanceof SourceBlockedError) throw error;

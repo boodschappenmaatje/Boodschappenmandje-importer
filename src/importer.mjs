@@ -1,12 +1,19 @@
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.mjs";
+import { classifyProductType, productTypeCoverage } from "./product-type.mjs";
 import {
   collectProducts,
   refreshExistingProducts,
   selectPriceShard,
   SourceBlockedError,
 } from "./hoogvliet.mjs";
-import { fetchExistingProducts, fetchExistingSKUs, upsertProducts } from "./supabase.mjs";
+import {
+  fetchExistingProducts,
+  fetchExistingSKUs,
+  hasProductTypeColumn,
+  upsertProductClassifications,
+  upsertProducts,
+} from "./supabase.mjs";
 
 export function safeLogger(secrets = []) {
   const redact = (message) => secrets
@@ -79,6 +86,38 @@ export function formatPriceRefreshSummary(stats) {
   ].join(" | ");
 }
 
+export function formatClassificationSummary(coverage, written) {
+  const commonTypes = [...coverage.counts.entries()]
+    .filter(([type]) => type !== "Onbekend")
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 12)
+    .map(([type, count]) => `${type}=${count}`)
+    .join(", ");
+  return [
+    "Producttype-statistieken",
+    `onderzocht=${coverage.total}`,
+    `geclassificeerd=${coverage.classified}`,
+    `onbekend=${coverage.unknown}`,
+    `dekking=${coverage.percentage.toFixed(1)}%`,
+    `geschreven=${written}`,
+    `typen=${commonTypes || "-"}`,
+  ].join(" | ");
+}
+
+async function runProductTypeBackfill(config, logger) {
+  if (!config.productTypeSupported) {
+    throw new Error("Supabase-kolom products.product_type ontbreekt; voer eerst supabase/migrations/20260908_add_product_type.sql uit.");
+  }
+  const products = await fetchExistingProducts(config);
+  const classifiedProducts = products.map((product) => ({
+    ...product,
+    productType: classifyProductType(product),
+  }));
+  const coverage = productTypeCoverage(classifiedProducts);
+  const result = await upsertProductClassifications(config, classifiedProducts);
+  logger.info(formatClassificationSummary(coverage, result.written));
+}
+
 async function runPriceRefresh(config, logger, startedAt) {
   const existingProducts = await fetchExistingProducts(config);
   const selected = selectPriceShard(
@@ -127,6 +166,14 @@ export async function main() {
   const startedAt = Date.now();
   const config = loadConfig();
   const logger = safeLogger([config.supabaseSecret]);
+  config.productTypeSupported = config.dryRun ? true : await hasProductTypeColumn(config);
+  if (!config.productTypeSupported) {
+    logger.info("Producttype-opslag nog niet actief: products.product_type ontbreekt; bestaande imports blijven veilig werken.");
+  }
+  if (config.updateMode === "classify") {
+    await runProductTypeBackfill(config, logger);
+    return;
+  }
   if (config.updateMode === "prices") {
     await runPriceRefresh(config, logger, startedAt);
     return;
