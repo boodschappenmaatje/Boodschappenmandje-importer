@@ -1,4 +1,5 @@
 import { setDefaultResultOrder } from "node:dns";
+import { UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 
 const REQUEST_TIMEOUT_MS = 25_000;
 const MAX_ATTEMPTS = 3;
@@ -386,6 +387,24 @@ function productPayload(product, includeProductType = true) {
   return payload;
 }
 
+function productClassificationPayload(product) {
+  return productPayload({
+    ...product,
+    productType: product.productType ?? UNKNOWN_PRODUCT_TYPE,
+  }, true);
+}
+
+function groupPayloadsByKeys(payloads) {
+  const groups = new Map();
+  for (const payload of payloads) {
+    const signature = Object.keys(payload).sort().join(",");
+    const group = groups.get(signature) ?? [];
+    group.push(payload);
+    groups.set(signature, group);
+  }
+  return [...groups.values()];
+}
+
 export async function upsertProductClassifications(config, products) {
   if (!config.productTypeSupported) {
     throw new Error("Supabase-kolom products.product_type ontbreekt; voer eerst de meegeleverde migratie uit.");
@@ -398,20 +417,25 @@ export async function upsertProductClassifications(config, products) {
   });
   let written = 0;
   const batchSize = 100;
-  for (let offset = 0; offset < uniqueProducts.length; offset += batchSize) {
-    const batch = uniqueProducts.slice(offset, offset + batchSize);
-    const rows = await postJSON(
-      config.supabaseURL,
-      "products",
-      config.supabaseSecret,
-      batch.map((product) => productPayload(product, true)),
-      "resolution=merge-duplicates,return=representation",
-      { on_conflict: "supermarket,sku", select: "id,sku,product_type" },
-    );
-    if (!Array.isArray(rows) || rows.length !== batch.length) {
-      throw new Error("Supabase bevestigde niet alle producttype-updates.");
+  const payloadGroups = groupPayloadsByKeys(
+    uniqueProducts.map(productClassificationPayload),
+  );
+  for (const payloadGroup of payloadGroups) {
+    for (let offset = 0; offset < payloadGroup.length; offset += batchSize) {
+      const batch = payloadGroup.slice(offset, offset + batchSize);
+      const rows = await postJSON(
+        config.supabaseURL,
+        "products",
+        config.supabaseSecret,
+        batch,
+        "resolution=merge-duplicates,return=representation",
+        { on_conflict: "supermarket,sku", select: "id,sku,product_type" },
+      );
+      if (!Array.isArray(rows) || rows.length !== batch.length) {
+        throw new Error("Supabase bevestigde niet alle producttype-updates.");
+      }
+      written += rows.length;
     }
-    written += rows.length;
   }
   return { written, duplicateSKUsSkipped: products.length - uniqueProducts.length };
 }
