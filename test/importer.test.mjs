@@ -9,6 +9,9 @@ import {
   collectCandidatePages,
   catalogLimitReached,
   claimCandidateSKU,
+  filterDiscoveryCandidates,
+  isReliableCatalogProduct,
+  isSafeEmptyDiscovery,
   isRelevantCandidate,
   isValidProductURL,
   isValidSKU,
@@ -243,6 +246,45 @@ test("bestaande SKU telt niet mee voor MAX_NEW_PRODUCTS en nieuwe SKU wel", () =
   assert.deepEqual(stats, { existingProducts: 1, newProducts: 1 });
   assert.equal(catalogLimitReached(stats, { maxProducts: 180, maxNewProducts: 1 }, 2), true);
   assert.deepEqual(termStats, { existing: 1, new: 1 });
+});
+
+test("automatische discovery selecteert alleen nieuwe SKU's en een identieke tweede run is een veilige no-op", () => {
+  const candidates = [
+    { sku: "111111111" }, { sku: "222222222" }, { sku: "333333333" },
+  ];
+  const observed = new Set();
+  const first = filterDiscoveryCandidates(candidates, new Set(["111111111"]), observed);
+  assert.deepEqual(first.candidates.map(({ sku }) => sku), ["222222222", "333333333"]);
+  assert.equal(first.existingOccurrences, 1);
+  assert.equal(first.uniqueExistingSKUs, 1);
+
+  const second = filterDiscoveryCandidates(
+    candidates,
+    new Set(candidates.map(({ sku }) => sku)),
+    observed,
+  );
+  assert.deepEqual(second.candidates, []);
+  assert.equal(second.uniqueExistingSKUs, 3);
+  assert.equal(isSafeEmptyDiscovery(
+    { catalogNewOnly: true },
+    { existingSKUsDiscovered: second.uniqueExistingSKUs },
+    0,
+  ), true);
+  assert.equal(isSafeEmptyDiscovery(
+    { catalogNewOnly: true },
+    { existingSKUsDiscovered: second.uniqueExistingSKUs },
+    1,
+  ), false, "een mislukte validatie van een werkelijk nieuwe SKU mag niet stil groen worden");
+});
+
+test("alleen een volledig betrouwbaar nieuw product bereikt de opslagketen", () => {
+  const valid = testProduct("987654321", "Nieuw Hoogvliet-product", 2.49);
+  assert.equal(isReliableCatalogProduct(valid), true);
+  assert.equal(isReliableCatalogProduct({ ...valid, sku: null }), false);
+  assert.equal(isReliableCatalogProduct({ ...valid, price: null }), false);
+  assert.equal(isReliableCatalogProduct({ ...valid, price: 0 }), false);
+  assert.equal(isReliableCatalogProduct({ ...valid, packageText: null }), false);
+  assert.equal(isReliableCatalogProduct({ ...valid, sourceURL: "https://example.com/product/987654321" }), false);
 });
 
 test("server-side geheim is verplicht buiten dry-run", () => {
@@ -682,6 +724,8 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
       catalogBatch: "core",
       searchedTerms: 2, configuredSearchTerms: 3, candidatesFound: 8,
       uniqueSKUs: 7, newProducts: 5, existingProducts: 2,
+      uniqueSKUsDiscovered: 7, newSKUsDiscovered: 5,
+      existingSKUsDiscovered: 2, unknownProductTypes: 1,
       validatedProducts: 4, duplicateSKUsSkipped: 1, invalidProductsSkipped: 2,
       productErrors: 1, searchErrors: 0, writtenProducts: 4,
       newProductsWritten: 3, existingProductsUpdated: 1, writeErrors: 0,
@@ -694,8 +738,11 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
   assert.doesNotMatch(captured[0], new RegExp(secret));
   assert.match(captured[0], /\[REDACTED\]/);
   assert.match(captured[0], /unieke_SKUs=7/);
+  assert.match(captured[0], /nieuw_gevonden=5/);
   assert.match(captured[0], /nieuwe_SKUs=5/);
   assert.match(captured[0], /bestaande_SKUs=2/);
+  assert.match(captured[0], /bestaand_gevonden=2/);
+  assert.match(captured[0], /onbekend_type=1/);
   assert.match(captured[0], /nieuw_geschreven=3/);
   assert.match(captured[0], /bestaand_bijgewerkt=1/);
   assert.match(captured[0], /overgeslagen=3/);
@@ -807,6 +854,7 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /MAX_PER_TERM=20/);
   assert.match(workflow, /MAX_PAGES_PER_TERM=4/);
   assert.match(workflow, /CATALOG_NEW_ONLY=1/);
+  assert.match(workflow, /batches=\(core fresh world pantry\)/);
   assert.match(workflow, /- classify/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });
