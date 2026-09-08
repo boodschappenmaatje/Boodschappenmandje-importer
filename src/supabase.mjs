@@ -308,6 +308,44 @@ export async function fetchExistingSKUs(config) {
   throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-SKU's.");
 }
 
+/// Leest alleen de bestaande Hoogvliet-productidentiteit en bronmetadata die
+/// nodig zijn om dezelfde productpagina opnieuw betrouwbaar te valideren.
+/// Prijzen worden bewust niet uit deze read overgenomen: de actuele prijs moet
+/// opnieuw van de bijbehorende Hoogvliet-productpagina komen.
+export async function fetchExistingProducts(config) {
+  const pageSize = 1000;
+  const products = [];
+  for (let offset = 0; offset < 20_000; offset += pageSize) {
+    const rows = await getJSON(
+      config.supabaseURL,
+      "products",
+      config.supabaseSecret,
+      {
+        select: "sku,name,brand,category,package_text,image_url,source_url,is_available",
+        supermarket: "eq.Hoogvliet",
+        order: "sku.asc",
+      },
+      offset,
+      offset + pageSize - 1,
+    );
+    if (!Array.isArray(rows)) throw new Error("Supabase gaf geen geldige productlijst terug.");
+    for (const row of rows) {
+      products.push({
+        sku: row?.sku,
+        name: row?.name,
+        brand: row?.brand ?? null,
+        category: row?.category ?? null,
+        packageText: row?.package_text ?? null,
+        imageURL: row?.image_url ?? null,
+        sourceURL: row?.source_url,
+        available: row?.is_available ?? null,
+      });
+    }
+    if (rows.length < pageSize) return products;
+  }
+  throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-producten.");
+}
+
 function productPayload(product) {
   const payload = {
     supermarket: product.supermarket,
