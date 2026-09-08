@@ -109,6 +109,7 @@ jobs:
             echo "CATALOG_BATCH=$catalog_batch"
             echo "PRICE_SHARD_COUNT=7"
             echo "PRICE_SHARD_INDEX=$price_shard"
+            echo "PRICE_CYCLE_INDEX=$((10#$(date -u +%V) - 1))"
             echo "MAX_PRODUCTS=$max_products"
             echo "MAX_NEW_PRODUCTS=100"
             echo "MAX_PER_TERM=20"
