@@ -1,0 +1,1333 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "swiftDefinitions": 140,
+    "legacyDefinitions": 34,
+    "expandedDefinitions": 106,
+    "rawRecipeMentions": 403,
+    "uniqueRecipeIngredientIDs": 114,
+    "unusedSubstitutionCandidateDefinitions": 26
+  },
+  "ingredients": [
+    {
+      "sourceKey": "spaghetti",
+      "name": "spaghetti",
+      "defaultUnit": "grams",
+      "aliases": [
+        "spaghetti"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "macaroni",
+      "name": "macaroni",
+      "defaultUnit": "grams",
+      "aliases": [
+        "macaroni"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "rice",
+      "name": "basmatirijst",
+      "defaultUnit": "grams",
+      "aliases": [
+        "basmatirijst",
+        "rijst"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "noodles",
+      "name": "woknoedels",
+      "defaultUnit": "grams",
+      "aliases": [
+        "woknoedels",
+        "noedels"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "wraps",
+      "name": "tortillawraps",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "tortilla wraps",
+        "wraps"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "groundBeef",
+      "name": "rundergehakt",
+      "defaultUnit": "grams",
+      "aliases": [
+        "rundergehakt"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "chicken",
+      "name": "kipfilet",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kipfilet"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "tartare",
+      "name": "rundertartaar",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "rundertartaar"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "fishSchnitzel",
+      "name": "visschnitzel",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "visschnitzel"
+      ],
+      "category": "Vis"
+    },
+    {
+      "sourceKey": "smokedSausage",
+      "name": "rookworst",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Gelderse rookworst",
+        "rookworst"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "tomatoSauce",
+      "name": "tomatenblokjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "tomatenblokjes"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "kidneyBeans",
+      "name": "kidneybonen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kidneybonen"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "chickpeas",
+      "name": "kikkererwten",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kikkererwten"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "lentils",
+      "name": "rode linzen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "rode linzen"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "corn",
+      "name": "maïskorrels",
+      "defaultUnit": "grams",
+      "aliases": [
+        "maiskorrels",
+        "mais",
+        "maïs"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "salsa",
+      "name": "salsadip",
+      "defaultUnit": "grams",
+      "aliases": [
+        "salsa dip",
+        "salsa"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "coconutMilk",
+      "name": "kokosmelk",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "kokosmelk"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "currySauce",
+      "name": "milde currysaus",
+      "defaultUnit": "grams",
+      "aliases": [
+        "korma currysaus",
+        "milde currysaus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "soySauce",
+      "name": "sojasaus",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "sojasaus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "pesto",
+      "name": "groene pesto",
+      "defaultUnit": "grams",
+      "aliases": [
+        "groene pesto",
+        "pesto"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "potatoes",
+      "name": "vastkokende aardappelen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "vastkokende aardappelen",
+        "aardappel",
+        "aardappelen"
+      ],
+      "category": "Aardappel & zetmeel"
+    },
+    {
+      "sourceKey": "onion",
+      "name": "uien",
+      "defaultUnit": "grams",
+      "aliases": [
+        "uien",
+        "ui"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "carrot",
+      "name": "winterpeen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "winterpeen"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "greenBeans",
+      "name": "sperziebonen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "sperziebonen"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "cauliflower",
+      "name": "bloemkool",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "bloemkool"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "stirFryVegetables",
+      "name": "roerbakgroenten",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Hollandse roerbakgroenten",
+        "roerbakgroenten"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "spinach",
+      "name": "spinazie",
+      "defaultUnit": "grams",
+      "aliases": [
+        "spinazie"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "peas",
+      "name": "doperwten",
+      "defaultUnit": "grams",
+      "aliases": [
+        "doperwten"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "fries",
+      "name": "ovenfriet",
+      "defaultUnit": "grams",
+      "aliases": [
+        "airfryer friet",
+        "ovenfriet"
+      ],
+      "category": "Aardappel & zetmeel"
+    },
+    {
+      "sourceKey": "pizza",
+      "name": "pizza margherita",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "pizza margherita"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "gratedCheese",
+      "name": "geraspte kaas",
+      "defaultUnit": "grams",
+      "aliases": [
+        "geraspte kaas"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "eggs",
+      "name": "eieren",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "vrije uitloop eieren",
+        "eieren",
+        "ei"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "bread",
+      "name": "volkorenbrood",
+      "defaultUnit": "loaves",
+      "aliases": [
+        "volkorenbrood"
+      ],
+      "category": "Brood"
+    },
+    {
+      "sourceKey": "soup",
+      "name": "groentesoep",
+      "defaultUnit": "litres",
+      "aliases": [
+        "groentesoep"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "andijvie",
+      "name": "andijvie",
+      "defaultUnit": "grams",
+      "aliases": [
+        "andijvie"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "zuurkool",
+      "name": "zuurkool",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zuurkool"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "boerenkool",
+      "name": "boerenkool",
+      "defaultUnit": "grams",
+      "aliases": [
+        "boerenkool"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "prei",
+      "name": "prei",
+      "defaultUnit": "grams",
+      "aliases": [
+        "prei"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "broccoli",
+      "name": "broccoli",
+      "defaultUnit": "grams",
+      "aliases": [
+        "broccoli"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "rodeKool",
+      "name": "rode kool",
+      "defaultUnit": "grams",
+      "aliases": [
+        "rode kool"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "appelmoes",
+      "name": "appelmoes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "appelmoes"
+      ],
+      "category": "Fruit"
+    },
+    {
+      "sourceKey": "kipSchnitzel",
+      "name": "kipschnitzel",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kipschnitzel"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "gehaktballen",
+      "name": "gehaktballen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "rundergehaktballen",
+        "runder gehaktbal",
+        "gehaktballen",
+        "gehaktbal"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "jus",
+      "name": "jus",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "jus kant en klaar",
+        "jus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "krieltjes",
+      "name": "krieltjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "voorgekookte krieltjes",
+        "verse krieltjes",
+        "krieltjes"
+      ],
+      "category": "Aardappel & zetmeel"
+    },
+    {
+      "sourceKey": "zoeteAardappel",
+      "name": "zoete aardappel",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zoete aardappel"
+      ],
+      "category": "Aardappel & zetmeel"
+    },
+    {
+      "sourceKey": "vegetarischGehakt",
+      "name": "vegetarisch gehakt",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Vivera plantaardig kruimgehakt",
+        "plantaardig gehakt",
+        "vegetarisch gehakt"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "aubergine",
+      "name": "aubergine",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "aubergine"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "courgette",
+      "name": "courgette",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "courgette"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "paprika",
+      "name": "paprika",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "rode paprika",
+        "paprika"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "champignons",
+      "name": "champignons",
+      "defaultUnit": "grams",
+      "aliases": [
+        "champignons"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "cherrytomaten",
+      "name": "cherrytomaten",
+      "defaultUnit": "grams",
+      "aliases": [
+        "cherrytomaten",
+        "cherrytomaat"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "tomaten",
+      "name": "tomaten",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "tomaten",
+        "trostomaten",
+        "tomaat"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "slagroom",
+      "name": "kookroom",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "kookroom",
+        "slagroom"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "melk",
+      "name": "halfvolle melk",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "halfvolle melk",
+        "melk"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "volleMelk",
+      "name": "volle melk",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "volle melk"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "magereMelk",
+      "name": "magere melk",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "magere melk"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "lactosevrijeMelk",
+      "name": "lactosevrije melk",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "lactosevrije halfvolle melk",
+        "lactosevrije melk"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "plantaardigeKookroom",
+      "name": "plantaardige kookroom",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "plantaardige kookroom"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "boter",
+      "name": "boter",
+      "defaultUnit": "grams",
+      "aliases": [
+        "roomboter ongezouten",
+        "boter"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "aardappelpuree",
+      "name": "verse aardappelpuree",
+      "defaultUnit": "grams",
+      "aliases": [
+        "verse aardappelpuree",
+        "aardappelpuree"
+      ],
+      "category": "Aardappel & zetmeel"
+    },
+    {
+      "sourceKey": "penne",
+      "name": "penne",
+      "defaultUnit": "grams",
+      "aliases": [
+        "penne"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "tagliatelle",
+      "name": "tagliatelle",
+      "defaultUnit": "grams",
+      "aliases": [
+        "tagliatelle"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "fusilli",
+      "name": "fusilli",
+      "defaultUnit": "grams",
+      "aliases": [
+        "fusilli"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "tortellini",
+      "name": "tortellini",
+      "defaultUnit": "grams",
+      "aliases": [
+        "tortellini kaas",
+        "tortellini"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "gnocchi",
+      "name": "gnocchi",
+      "defaultUnit": "grams",
+      "aliases": [
+        "gnocchi"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "volkorenPasta",
+      "name": "volkoren pasta",
+      "defaultUnit": "grams",
+      "aliases": [
+        "volkoren pasta"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "zilvervliesRijst",
+      "name": "zilvervliesrijst",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zilvervliesrijst"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "jasmijnRijst",
+      "name": "jasmijnrijst",
+      "defaultUnit": "grams",
+      "aliases": [
+        "jasmijnrijst"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "lasagnebladen",
+      "name": "lasagnebladen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "lasagnebladen"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "tonijn",
+      "name": "tonijn in blik",
+      "defaultUnit": "grams",
+      "aliases": [
+        "tonijnstukken in water",
+        "tonijn naturel",
+        "tonijn in water",
+        "tonijn blik"
+      ],
+      "category": "Vis"
+    },
+    {
+      "sourceKey": "zalm",
+      "name": "zalmfilet",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zalmfilet"
+      ],
+      "category": "Vis"
+    },
+    {
+      "sourceKey": "spekjes",
+      "name": "spekreepjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "spekreepjes"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "passata",
+      "name": "tomatenpassata",
+      "defaultUnit": "grams",
+      "aliases": [
+        "passata",
+        "gezeefde tomaten"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "pastasaus",
+      "name": "pastasaus",
+      "defaultUnit": "grams",
+      "aliases": [
+        "vegetarische pastasaus tomaat",
+        "pastasaus tomaat",
+        "pastasaus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "mozzarella",
+      "name": "mozzarella",
+      "defaultUnit": "grams",
+      "aliases": [
+        "mozzarella"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "feta",
+      "name": "feta",
+      "defaultUnit": "grams",
+      "aliases": [
+        "feta"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "hamburgers",
+      "name": "runderhamburgers",
+      "defaultUnit": "grams",
+      "aliases": [
+        "runderhamburgers",
+        "hamburgers rund"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "chickenThigh",
+      "name": "kipdijfilet",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kipdijfilet",
+        "kipdij"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "chickenBurger",
+      "name": "kipburger",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "kipburger"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "mixedMincedMeat",
+      "name": "gemengd gehakt",
+      "defaultUnit": "grams",
+      "aliases": [
+        "gemengd gehakt"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "halfAndHalfMincedMeat",
+      "name": "half-om-half gehakt",
+      "defaultUnit": "grams",
+      "aliases": [
+        "half om half gehakt",
+        "half-om-half gehakt"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "boomstammetje",
+      "name": "boomstammetje",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "boomstammetjes",
+        "boomstammetje"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "porkSchnitzel",
+      "name": "varkensschnitzel",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "varkensschnitzel"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "slavink",
+      "name": "slavink",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "slavink",
+        "slavinken"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "braadworst",
+      "name": "braadworst",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "braadworst"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "beefSausage",
+      "name": "runderbraadworst",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "runderbraadworst",
+        "runder worst"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "vegetarianSchnitzel",
+      "name": "plantaardige schnitzel",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "plantaardige schnitzel"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "vegetarianSausage",
+      "name": "plantaardige worst",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "plantaardige braadworst",
+        "plantaardige worst"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "vegetarianChickenPieces",
+      "name": "plantaardige kipstukjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "plantaardige kipstukjes",
+        "vegetarische kipstukjes"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "hamburgerbroodjes",
+      "name": "hamburgerbroodjes",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "hamburgerbroodjes"
+      ],
+      "category": "Brood"
+    },
+    {
+      "sourceKey": "cheddar",
+      "name": "cheddarplakken",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "cheddar plakken"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "kipnuggets",
+      "name": "kipnuggets",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kipnuggets"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "knakworst",
+      "name": "knakworst",
+      "defaultUnit": "grams",
+      "aliases": [
+        "knakworst"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "hotdogbroodjes",
+      "name": "hotdogbroodjes",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "hotdog broodjes",
+        "hotdogbroodjes"
+      ],
+      "category": "Brood"
+    },
+    {
+      "sourceKey": "pannenkoekenmix",
+      "name": "pannenkoekenmix",
+      "defaultUnit": "grams",
+      "aliases": [
+        "pannenkoekenmix"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "casinoBrood",
+      "name": "casinobrood",
+      "defaultUnit": "loaves",
+      "aliases": [
+        "casino wit heel",
+        "casinobrood"
+      ],
+      "category": "Brood"
+    },
+    {
+      "sourceKey": "ham",
+      "name": "achterham",
+      "defaultUnit": "grams",
+      "aliases": [
+        "achterham"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "kipshoarma",
+      "name": "kipshoarma",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kipshoarma"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "pitabroodjes",
+      "name": "pitabroodjes",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "pitabroodjes"
+      ],
+      "category": "Brood"
+    },
+    {
+      "sourceKey": "sla",
+      "name": "ijsbergsla",
+      "defaultUnit": "grams",
+      "aliases": [
+        "ijsbergsla"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "knoflooksaus",
+      "name": "knoflooksaus",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "knoflooksaus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "komkommer",
+      "name": "komkommer",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "komkommer"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "snackKeuze",
+      "name": "snack naar keuze",
+      "defaultUnit": "grams",
+      "aliases": [
+        "frikandel",
+        "kroket",
+        "kaassouffle"
+      ],
+      "category": "Snacks"
+    },
+    {
+      "sourceKey": "tacoschelpen",
+      "name": "tacoschelpen",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "taco shells",
+        "tacoschelpen"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "nachos",
+      "name": "tortillachips",
+      "defaultUnit": "grams",
+      "aliases": [
+        "nacho chips",
+        "tortillachips"
+      ],
+      "category": "Snacks"
+    },
+    {
+      "sourceKey": "zureRoom",
+      "name": "zure room",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zure room"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "guacamole",
+      "name": "guacamole",
+      "defaultUnit": "grams",
+      "aliases": [
+        "guacamole"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "kipsate",
+      "name": "kipsaté",
+      "defaultUnit": "grams",
+      "aliases": [
+        "kipsate",
+        "kip sate"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "satesaus",
+      "name": "satésaus",
+      "defaultUnit": "grams",
+      "aliases": [
+        "satesaus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "vissticks",
+      "name": "vissticks",
+      "defaultUnit": "grams",
+      "aliases": [
+        "vissticks"
+      ],
+      "category": "Vis"
+    },
+    {
+      "sourceKey": "pizzadeeg",
+      "name": "pizzadeeg met tomatensaus",
+      "defaultUnit": "grams",
+      "aliases": [
+        "pizzadeeg met tomatensaus",
+        "pizzadeeg"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "couscous",
+      "name": "couscous",
+      "defaultUnit": "grams",
+      "aliases": [
+        "couscous"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "quinoa",
+      "name": "quinoa",
+      "defaultUnit": "grams",
+      "aliases": [
+        "quinoa"
+      ],
+      "category": "Pasta, rijst & granen"
+    },
+    {
+      "sourceKey": "falafel",
+      "name": "falafel",
+      "defaultUnit": "grams",
+      "aliases": [
+        "falafel"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "vegetarischeBurger",
+      "name": "vegetarische burger",
+      "defaultUnit": "grams",
+      "aliases": [
+        "vegetarische burger"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "tofu",
+      "name": "tofu",
+      "defaultUnit": "grams",
+      "aliases": [
+        "tofu"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "runderreepjes",
+      "name": "runderreepjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "runderreepjes",
+        "biefstukreepjes"
+      ],
+      "category": "Vlees"
+    },
+    {
+      "sourceKey": "zoetzureSaus",
+      "name": "zoetzure saus",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zoetzure saus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "teriyakisaus",
+      "name": "teriyakisaus",
+      "defaultUnit": "millilitres",
+      "aliases": [
+        "teriyakisaus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "tikkaMasalaSaus",
+      "name": "tikka masala saus",
+      "defaultUnit": "grams",
+      "aliases": [
+        "tikka masala saus"
+      ],
+      "category": "Sauzen & smaakmakers"
+    },
+    {
+      "sourceKey": "mango",
+      "name": "mango",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "mango"
+      ],
+      "category": "Fruit"
+    },
+    {
+      "sourceKey": "zwarteBonen",
+      "name": "zwarte bonen",
+      "defaultUnit": "grams",
+      "aliases": [
+        "zwarte bonen"
+      ],
+      "category": "Vegetarische proteïne"
+    },
+    {
+      "sourceKey": "peultjes",
+      "name": "peultjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "peultjes"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "spruitjes",
+      "name": "spruitjes",
+      "defaultUnit": "grams",
+      "aliases": [
+        "spruitjes"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "witlof",
+      "name": "witlof",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "witlof"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "rodeBiet",
+      "name": "rode bieten",
+      "defaultUnit": "grams",
+      "aliases": [
+        "rode bieten",
+        "gekookte bieten"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "appel",
+      "name": "appel",
+      "defaultUnit": "pieces",
+      "aliases": [
+        "appel elstar",
+        "appels"
+      ],
+      "category": "Fruit"
+    },
+    {
+      "sourceKey": "cremeFraiche",
+      "name": "crème fraîche",
+      "defaultUnit": "grams",
+      "aliases": [
+        "creme fraiche"
+      ],
+      "category": "Zuivel & eieren"
+    },
+    {
+      "sourceKey": "italiaanseGroente",
+      "name": "Italiaanse roerbakgroenten",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Italiaanse roerbakgroenten",
+        "Italiaanse roerbak"
+      ],
+      "category": "Groente"
+    },
+    {
+      "sourceKey": "knorrBurritos",
+      "name": "Knorr Wereldgerechten Mexicaanse Burrito's",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Mexicaanse Burrito's"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrKipSiam",
+      "name": "Knorr Wereldgerechten Thaise Kip Siam",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Thaise Kip Siam"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrHokkienMie",
+      "name": "Knorr Wereldgerechten Hokkien Mie",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Hokkien Mie"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrRoti",
+      "name": "Knorr Wereldgerechten Surinaamse Roti",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Surinaamse Roti"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrKofta",
+      "name": "Knorr Wereldgerechten Griekse Kofta",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Griekse Kofta"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrMadras",
+      "name": "Knorr Wereldgerechten Indiase Kip Madras",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Indiase Kip Madras"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrTeriyaki",
+      "name": "Knorr Wereldgerechten Japanse Teriyaki",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Japanse Teriyaki"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "knorrLasagne",
+      "name": "Knorr Wereldgerechten Italiaanse Lasagne Bolognese",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Knorr Wereldgerechten Italiaanse Lasagne Bolognese"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "honigMacaroniMix",
+      "name": "Honig Basis voor macaroni en spaghetti",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Honig Basis voor macaroni en spaghetti"
+      ],
+      "category": "Maaltijdcomponenten"
+    },
+    {
+      "sourceKey": "honigNasiMix",
+      "name": "Honig Basis voor nasi speciaal",
+      "defaultUnit": "grams",
+      "aliases": [
+        "Honig Basis voor nasi speciaal"
+      ],
+      "category": "Maaltijdcomponenten"
+    }
+  ]
+}

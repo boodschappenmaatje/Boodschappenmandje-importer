@@ -6,8 +6,10 @@
   "description": "Gecontroleerde server-side Hoogvliet-catalogusimporter voor BoodschappenMaatje.",
   "scripts": {
     "import": "node src/importer.mjs",
+    "build:ingredient-seed": "node scripts/build-ingredient-seed.mjs",
+    "check:ingredient-seed": "node scripts/build-ingredient-seed.mjs --check",
     "test": "node --test",
-    "check": "node --check src/importer.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs && node --check src/product-type.mjs"
+    "check": "node --check src/importer.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs && node --check src/product-type.mjs && node --check src/ingredient-library.mjs && node --check scripts/build-ingredient-seed.mjs && npm run check:ingredient-seed"
   },
   "engines": {
     "node": ">=22"
