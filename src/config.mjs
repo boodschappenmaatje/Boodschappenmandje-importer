@@ -1,27 +1,35 @@
 export const catalogBatches = Object.freeze({
   core: Object.freeze([
     "gehakt", "rundergehakt", "kip", "kipfilet", "varkensvlees", "worst",
-    "hamburger", "shoarma", "vis", "zalm", "tonijn", "pasta", "spaghetti",
-    "macaroni", "lasagne", "rijst", "brood", "bolletjes", "croissant", "melk",
-    "yoghurt", "kwark", "kaas", "boter", "margarine", "room",
+    "hamburger", "shoarma", "biefstuk", "schnitzel", "rookworst", "braadworst",
+    "gehaktbal", "vis", "zalm", "tonijn", "garnalen", "vissticks", "pasta",
+    "spaghetti", "macaroni", "lasagne", "penne", "fusilli", "rijst", "brood",
+    "volkorenbrood", "witbrood", "bolletjes", "croissant", "melk", "yoghurt",
+    "kwark", "kaas", "boter", "margarine", "room",
   ]),
   fresh: Object.freeze([
     "aardappelen", "groente", "groenten", "tomaat", "paprika", "ui",
-    "komkommer", "wortel", "sla", "broccoli", "bloemkool", "appel", "banaan",
-    "sinaasappel", "fruit", "cola", "sinas", "frisdrank", "water", "sap",
-    "limonade", "chips", "koek", "chocolade", "snoep", "nootjes",
+    "komkommer", "wortel", "sla", "broccoli", "bloemkool", "courgette", "prei",
+    "spinazie", "andijvie", "sperziebonen", "champignons", "knoflook", "avocado",
+    "appel", "banaan", "peer", "druiven", "mandarijn", "sinaasappel", "citroen",
+    "fruit", "cola", "sinas", "frisdrank", "water", "sap", "vruchtensap",
+    "limonade", "energiedrank", "chips", "koek", "chocolade", "snoep", "nootjes",
   ]),
   world: Object.freeze([
     "noodles", "wraps", "taco", "tortilla", "nasi", "bami", "curry", "knorr",
     "honig", "maaltijdmix", "pastasaus", "tomatensaus", "saus", "mayonaise",
-    "ketchup", "pizza", "patat", "friet", "kroket", "frikandel", "kipnuggets",
-    "diepvries", "snacks",
+    "ketchup", "woksaus", "sojasaus", "sambal", "pesto", "couscous", "bulgur",
+    "naan", "roti", "pizza", "patat", "friet", "kroket", "frikandel",
+    "kipnuggets", "ijs", "diepvriesgroente", "diepvries", "snacks",
   ]),
   pantry: Object.freeze([
     "soep", "bonen", "tomatenblokjes", "mais", "kruiden", "bloem", "suiker",
     "olie", "koffie", "thee", "ontbijtgranen", "havermout", "beschuit",
     "crackers", "beleg", "pindakaas", "jam", "hagelslag", "eieren", "meel",
     "bakproducten", "conserven", "peulvruchten", "azijn", "zout", "peper",
+    "toiletpapier", "keukenpapier", "wasmiddel", "vaatwastabletten", "afwasmiddel",
+    "allesreiniger", "vuilniszakken", "shampoo", "tandpasta", "luiers",
+    "kattenvoer", "hondenvoer",
   ]),
 });
 
@@ -29,11 +37,13 @@ const DEFAULT_BATCH = "core";
 const DEFAULT_UPDATE_MODE = "catalog";
 const UPDATE_MODES = new Set(["catalog", "prices"]);
 const DEFAULT_MAX_PRODUCTS = 10;
-const SAFE_PRODUCT_LIMIT = 200;
+const SAFE_PRODUCT_LIMIT = 500;
 const DEFAULT_MAX_NEW_PRODUCTS = 50;
-const SAFE_NEW_PRODUCT_LIMIT = 150;
+const SAFE_NEW_PRODUCT_LIMIT = 300;
 const DEFAULT_MAX_PER_TERM = 2;
-const SAFE_PER_TERM_LIMIT = 10;
+const SAFE_PER_TERM_LIMIT = 40;
+const DEFAULT_MAX_PAGES_PER_TERM = 1;
+const SAFE_PAGES_PER_TERM_LIMIT = 8;
 const DEFAULT_PRICE_SHARD_COUNT = 7;
 const SAFE_PRICE_SHARD_COUNT = 31;
 
@@ -96,6 +106,11 @@ export function loadConfig(env = process.env) {
       maxProducts,
       SAFE_PER_TERM_LIMIT,
     ),
+    maxPagesPerTerm: Math.min(
+      positiveInteger(env.MAX_PAGES_PER_TERM, DEFAULT_MAX_PAGES_PER_TERM),
+      SAFE_PAGES_PER_TERM_LIMIT,
+    ),
+    catalogNewOnly: env.CATALOG_NEW_ONLY === "1" || env.CATALOG_NEW_ONLY === "true",
     searchTerms,
     priceShardCount,
     priceShardIndex,
@@ -119,6 +134,8 @@ export const limits = Object.freeze({
   defaultMaxNewProducts: DEFAULT_MAX_NEW_PRODUCTS,
   safeNewProductLimit: SAFE_NEW_PRODUCT_LIMIT,
   safePerTermLimit: SAFE_PER_TERM_LIMIT,
+  defaultMaxPagesPerTerm: DEFAULT_MAX_PAGES_PER_TERM,
+  safePagesPerTermLimit: SAFE_PAGES_PER_TERM_LIMIT,
   defaultPriceShardCount: DEFAULT_PRICE_SHARD_COUNT,
   safePriceShardCount: SAFE_PRICE_SHARD_COUNT,
 });

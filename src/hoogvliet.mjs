@@ -91,10 +91,12 @@ function absoluteURL(value) {
   }
 }
 
-function searchURL(term) {
+const SEARCH_PAGE_SIZE = 40;
+
+export function searchURL(term, pageNumber = 0) {
   const url = new URL(SEARCH_PATH, BASE_URL);
-  url.searchParams.set("PageNumber", "0");
-  url.searchParams.set("PageSize", "40");
+  url.searchParams.set("PageNumber", String(pageNumber));
+  url.searchParams.set("PageSize", String(SEARCH_PAGE_SIZE));
   url.searchParams.set("SelectedSearchResult", "SFProductSearch");
   url.searchParams.set("SearchTerm", term);
   url.searchParams.set("SelectedItem", "");
@@ -158,8 +160,8 @@ async function extractSearchCandidates(page) {
   });
 }
 
-async function searchOnce(page, term) {
-  await page.goto(searchURL(term), { waitUntil: "domcontentloaded", timeout: 35_000 });
+async function searchOnce(page, term, pageNumber = 0) {
+  await page.goto(searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
   await page.waitForFunction(
     () => document.querySelectorAll(".product-tile").length > 0 || document.querySelector(".pagination-total"),
     { timeout: 12_000 },
@@ -181,23 +183,103 @@ async function searchUsingVisibleForm(page, term) {
   return extractSearchCandidates(page);
 }
 
-async function findCandidates(page, term) {
-  let candidates = await searchOnce(page, term);
-  if (candidates.length === 0) candidates = await searchUsingVisibleForm(page, term);
+export function normalizedSearchTokens(value) {
+  if (typeof value !== "string") return [];
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .match(/[a-z0-9]+/g) ?? [];
+}
 
-  const seen = new Set();
-  return candidates.filter((candidate) => {
-    candidate.name = clean(candidate.name);
-    candidate.brand = clean(candidate.brand);
-    candidate.category = clean(candidate.category);
-    candidate.packageText = clean(candidate.packageText);
-    candidate.sourceURL = absoluteURL(candidate.sourceURL);
-    candidate.imageURL = absoluteURL(candidate.imageURL);
-    if (!isValidSKU(candidate.sku) || !candidate.name || !isValidProductURL(candidate.sourceURL)) return false;
-    if (seen.has(candidate.sku)) return false;
-    seen.add(candidate.sku);
-    return true;
-  });
+function tokenMatches(queryToken, productToken) {
+  if (queryToken === productToken || productToken.startsWith(queryToken)) return true;
+  return productToken.length >= 4 && queryToken.startsWith(productToken);
+}
+
+export function isRelevantCandidate(candidate, term) {
+  const queryTokens = normalizedSearchTokens(term);
+  if (queryTokens.length === 0) return false;
+  const productTokens = normalizedSearchTokens(
+    [candidate?.name, candidate?.brand, candidate?.category].filter(Boolean).join(" "),
+  );
+  return queryTokens.every((queryToken) => (
+    productTokens.some((productToken) => tokenMatches(queryToken, productToken))
+  ));
+}
+
+function normalizeCandidate(candidate) {
+  const normalized = {
+    ...candidate,
+    name: clean(candidate?.name),
+    brand: clean(candidate?.brand),
+    category: clean(candidate?.category),
+    packageText: clean(candidate?.packageText),
+    sourceURL: absoluteURL(candidate?.sourceURL),
+    imageURL: absoluteURL(candidate?.imageURL),
+  };
+  return isValidSKU(normalized.sku) && normalized.name && isValidProductURL(normalized.sourceURL)
+    ? normalized
+    : null;
+}
+
+export async function collectCandidatePages(fetchPage, term, maxPages) {
+  const candidates = [];
+  const seenSKUs = new Set();
+  const seenPageSignatures = new Set();
+  let rawCandidates = 0;
+  let irrelevantCandidates = 0;
+  let duplicateCandidates = 0;
+  let pagesFetched = 0;
+  let repeatedPageStopped = false;
+
+  for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
+    const pageCandidates = await fetchPage(pageNumber);
+    pagesFetched += 1;
+    if (!Array.isArray(pageCandidates) || pageCandidates.length === 0) break;
+    rawCandidates += pageCandidates.length;
+
+    const signature = pageCandidates.map((candidate) => candidate?.sku ?? "-").join("|");
+    if (seenPageSignatures.has(signature)) {
+      repeatedPageStopped = true;
+      break;
+    }
+    seenPageSignatures.add(signature);
+
+    for (const rawCandidate of pageCandidates) {
+      const candidate = normalizeCandidate(rawCandidate);
+      if (!candidate) continue;
+      if (!isRelevantCandidate(candidate, term)) {
+        irrelevantCandidates += 1;
+        continue;
+      }
+      if (seenSKUs.has(candidate.sku)) {
+        duplicateCandidates += 1;
+        continue;
+      }
+      seenSKUs.add(candidate.sku);
+      candidates.push(candidate);
+    }
+  }
+
+  return {
+    candidates,
+    pagesFetched,
+    rawCandidates,
+    irrelevantCandidates,
+    duplicateCandidates,
+    repeatedPageStopped,
+  };
+}
+
+async function findCandidates(page, term, maxPages) {
+  return collectCandidatePages(async (pageNumber) => {
+    let candidates = await searchOnce(page, term, pageNumber);
+    if (pageNumber === 0 && candidates.length === 0) {
+      candidates = await searchUsingVisibleForm(page, term);
+    }
+    return candidates;
+  }, term, maxPages);
 }
 
 async function extractProductDetails(page) {
@@ -394,7 +476,12 @@ export async function collectProducts(config, logger = console, options = {}) {
   const stats = {
     configuredSearchTerms: config.searchTerms.length,
     searchedTerms: 0,
+    pagesFetched: 0,
+    rawCandidatesFound: 0,
     candidatesFound: 0,
+    irrelevantCandidatesSkipped: 0,
+    repeatedPagesStopped: 0,
+    existingCandidatesSkipped: 0,
     uniqueSKUs: 0,
     existingProducts: 0,
     newProducts: 0,
@@ -417,6 +504,10 @@ export async function collectProducts(config, logger = console, options = {}) {
       stats.searchedTerms += 1;
       const termStats = {
         candidates: 0,
+        rawCandidates: 0,
+        pages: 0,
+        irrelevant: 0,
+        existingSkipped: 0,
         unique: 0,
         duplicates: 0,
         validated: 0,
@@ -428,9 +519,26 @@ export async function collectProducts(config, logger = console, options = {}) {
       stats.termCoverage[term] = termStats;
       let candidates;
       try {
-        candidates = prioritizeCandidates(await findCandidates(searchPage, term), existingSKUs);
+        const pageResult = await findCandidates(searchPage, term, config.maxPagesPerTerm);
+        candidates = prioritizeCandidates(pageResult.candidates, existingSKUs);
+        stats.pagesFetched += pageResult.pagesFetched;
+        stats.rawCandidatesFound += pageResult.rawCandidates;
+        stats.irrelevantCandidatesSkipped += pageResult.irrelevantCandidates;
+        stats.duplicateSKUsSkipped += pageResult.duplicateCandidates;
+        if (pageResult.repeatedPageStopped) stats.repeatedPagesStopped += 1;
         stats.candidatesFound += candidates.length;
         termStats.candidates = candidates.length;
+        termStats.rawCandidates = pageResult.rawCandidates;
+        termStats.pages = pageResult.pagesFetched;
+        termStats.irrelevant = pageResult.irrelevantCandidates;
+        termStats.duplicates += pageResult.duplicateCandidates;
+        if (config.catalogNewOnly) {
+          const before = candidates.length;
+          candidates = candidates.filter((candidate) => !existingSKUs.has(candidate.sku));
+          const existingSkipped = before - candidates.length;
+          stats.existingCandidatesSkipped += existingSkipped;
+          termStats.existingSkipped = existingSkipped;
+        }
       } catch (error) {
         if (error instanceof SourceBlockedError) throw error;
         stats.searchErrors += 1;
