@@ -472,6 +472,55 @@ test("backfill werkt alleen products bij en raakt gekoppelde prijzen niet aan", 
   assert.deepEqual(JSON.parse(requests[0].options.body).map(({ product_type }) => product_type), ["Cola", "Cola"]);
 });
 
+test("classificatie-upsert maakt gemengde metadata per request PostgREST-uniform", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    const payload = JSON.parse(options.body);
+    const signatures = payload.map((row) => Object.keys(row).sort().join(","));
+    assert.equal(new Set(signatures).size, 1, "alle object keys binnen een bulkrequest moeten gelijk zijn");
+    requests.push({ url: String(url), payload });
+    return new Response(JSON.stringify(payload.map((product, index) => ({
+      id: `id-${requests.length}-${index}`,
+      sku: product.sku,
+      product_type: product.product_type,
+    }))), { status: 200 });
+  };
+
+  let result;
+  try {
+    result = await upsertProductClassifications({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+      productTypeSupported: true,
+    }, [
+      {
+        sku: "111111111", name: "Coca-Cola", brand: "Coca-Cola", category: "Frisdrank",
+        packageText: "1,5 liter", imageURL: "https://example.com/cola.jpg", isAvailable: true,
+        productType: "Cola", sourceURL: "https://www.hoogvliet.com/product/cola",
+      },
+      {
+        sku: "222222222", name: "Pepsi Max", packageText: "1,5 liter",
+        productType: "Cola", sourceURL: "https://www.hoogvliet.com/product/pepsi",
+      },
+      {
+        sku: "333333333", name: "Onbekend artikel", category: "Overig", packageText: "1 stuk",
+        productType: null, sourceURL: "https://www.hoogvliet.com/product/onbekend",
+      },
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(result.written, 3);
+  assert.ok(requests.length > 1, "verschillende sleutelsets horen in afzonderlijke requests");
+  assert.ok(requests.every(({ url }) => url.includes("/rest/v1/products?")));
+  assert.ok(requests.every(({ url }) => !url.includes("product_prices")));
+  const writtenProducts = requests.flatMap(({ payload }) => payload);
+  assert.equal(writtenProducts.find(({ sku }) => sku === "333333333")?.product_type, UNKNOWN_PRODUCT_TYPE);
+  assert.equal(writtenProducts.find(({ sku }) => sku === "222222222")?.brand, undefined);
+});
+
 test("een tijdelijke fetch-fout wordt opnieuw geprobeerd", async () => {
   const originalFetch = globalThis.fetch;
   let attempts = 0;
