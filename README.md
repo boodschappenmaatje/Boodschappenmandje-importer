@@ -43,6 +43,25 @@ Beide bestanden zijn veilig opnieuw uitvoerbaar. De UUID van een bestaand recept
 
 `data/recipes.json` is de onderhoudbare bron. Gebruik na een bewuste wijziging `npm run build:recipe-seed`; `npm run check` bewaakt dat de SQL-seed exact bij de bron hoort.
 
+## Recept-ingrediëntrelaties (stap 5.2)
+
+De 100 bestaande Swift-recepten bevatten samen 403 geordende `IngredientNeed`-regels en gebruiken 114 van de 140 centrale Ingredient-ID's. De Swift-bron slaat iedere hoeveelheid expliciet op als `amountPerPerson`; er zijn geen vrije-teksthoeveelheden en er is geen standaardportiegrootte in het receptmodel. `recipe_ingredients.amount_per_person` bewaart daarom exact die bestaande betekenis, zonder verzonnen porties of conversies.
+
+De relatie gebruikt uitsluitend UUID-foreign keys naar `recipes.id` en `ingredients.id`. `position` bewaart de nulgebaseerde oorspronkelijke receptvolgorde. Bron-eenheden worden alleen veilig genormaliseerd: `grams → g`, `millilitres → ml`, `pieces → piece`, `litres → l` en `loaves → loaf`. De laag bevat geen product, SKU, supermarkt, prijs of recepttags.
+
+De huidige bron koppelt alle 403 regels exact via de bestaande stabiele Ingredient-ID; er zijn geen fuzzy matches of ongekoppelde regels nodig. De matcher ondersteunt daarnaast gecontroleerd canonieke naamnormalisatie en de bestaande aliases, zodat latere veilige schrijfvarianten niet tot een tweede systeem leiden.
+
+### Eenmalig uitvoeren in Supabase
+
+Nadat stap 5 en 5.1 live zijn uitgevoerd, voer je in de Supabase SQL Editor exact in deze volgorde uit:
+
+1. `supabase/migrations/20260908_create_recipe_ingredients.sql`
+2. `supabase/seeds/20260908_recipe_ingredients.sql`
+
+De seed controleert vooraf of alle stabiele recept- en Ingredient-ID's bestaan, en stopt bij een verweesde bronregel. De upsert gebruikt `(recipe_id, position)`, maakt bij een tweede uitvoering geen duplicaten en verwijdert geen bestaande data. RLS staat aan; `anon` en `authenticated` krijgen alleen leesrecht.
+
+`data/recipe-ingredients.json` is uit de twee bestaande Swift-catalogi geëxtraheerd met `npm run extract:recipe-ingredients`. Na een bewuste bronwijziging genereert `npm run build:recipe-ingredient-seed` de SQL opnieuw; `npm run check` bewaakt dat bron en seed gelijk blijven.
+
 ## Automatische productontdekking
 
 De bestaande wekelijkse catalogusrun is tevens de veilige discovery-run. GitHub Actions rouleert `core`, `fresh`, `world` en `pantry`. Voor iedere run wordt eerst één lichte lijst met bestaande Hoogvliet-SKU's uit Supabase geladen. Alleen onbekende SKU's gaan door de volledige productpagina-, prijs- en producttypevalidatie; bekende SKU's worden door de dagelijkse prijsruns actueel gehouden.
