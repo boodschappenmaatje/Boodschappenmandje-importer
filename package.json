@@ -8,8 +8,10 @@
     "import": "node src/importer.mjs",
     "build:ingredient-seed": "node scripts/build-ingredient-seed.mjs",
     "check:ingredient-seed": "node scripts/build-ingredient-seed.mjs --check",
+    "build:recipe-seed": "node scripts/build-recipe-seed.mjs",
+    "check:recipe-seed": "node scripts/build-recipe-seed.mjs --check",
     "test": "node --test",
-    "check": "node --check src/importer.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs && node --check src/product-type.mjs && node --check src/ingredient-library.mjs && node --check scripts/build-ingredient-seed.mjs && npm run check:ingredient-seed"
+    "check": "node --check src/importer.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs && node --check src/product-type.mjs && node --check src/ingredient-library.mjs && node --check src/recipe-library.mjs && node --check scripts/build-ingredient-seed.mjs && node --check scripts/build-recipe-seed.mjs && npm run check:ingredient-seed && npm run check:recipe-seed"
   },
   "engines": {
     "node": ">=22"
