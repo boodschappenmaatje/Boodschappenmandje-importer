@@ -4,6 +4,28 @@ Dit is een server-side Playwright/Chromium-importer. De handmatige GitHub Action
 
 De iOS-app en SQLite-laag maken geen onderdeel uit van dit pakket en worden niet gewijzigd.
 
+## Centrale ingrediëntenbibliotheek (stap 5)
+
+De eerste ingrediëntenbasis is rechtstreeks geïnventariseerd uit de bestaande Swift `IngredientLibrary`: 140 centrale definities, 403 receptvermeldingen en 114 unieke Ingredient-ID's die door de huidige 100 recepten worden gebruikt. De overige 26 definities zijn bestaande, bewust beschikbare vervangingskandidaten. Recepthoeveelheden en concrete SKU-/prijsdata maken nadrukkelijk geen deel uit van deze laag.
+
+De Supabase-structuur bestaat uit:
+
+- `ingredients`: stabiele UUID, bestaande Swift `source_key`, canonieke naam, genormaliseerde naam, standaardeenheid en generieke categorie;
+- `ingredient_aliases`: expliciete veilige schrijfvarianten die via `ingredient_id` naar hetzelfde centrale ingrediënt verwijzen.
+
+Normalisatie maakt hoofdletters, diakritische tekens, interpunctie en overtollige spaties gelijk, maar singulariseert of synonymiseert niet automatisch. Daardoor worden bijvoorbeeld `kipsaté`/`kipsate`, `maïskorrels`/`maiskorrels` en `half-om-half`/`half om half` veilig herkend, terwijl `kipfilet` en `kipdijfilet` of `basmatirijst` en `jasmijnrijst` afzonderlijk blijven.
+
+### Eenmalig uitvoeren in Supabase
+
+Voer na deze commit in de Supabase SQL Editor exact in deze volgorde uit:
+
+1. `supabase/migrations/20260908_create_ingredients.sql`
+2. `supabase/seeds/20260908_ingredients.sql`
+
+Beide bestanden zijn veilig opnieuw uitvoerbaar. De seed upsert op de bestaande Swift Ingredient-ID, verwijdert niets en weigert een alias stil naar een ander ingrediënt om te koppelen. RLS staat aan; `anon` en `authenticated` krijgen alleen leesrecht. De bestaande `products` en `product_prices` worden niet aangepast.
+
+`data/ingredients.json` is de onderhoudbare bron voor de seed. Na een bewuste wijziging wordt het SQL-bestand opnieuw gegenereerd met `npm run build:ingredient-seed`; `npm run check` controleert dat JSON en SQL exact overeenkomen.
+
 ## Automatische productontdekking
 
 De bestaande wekelijkse catalogusrun is tevens de veilige discovery-run. GitHub Actions rouleert `core`, `fresh`, `world` en `pantry`. Voor iedere run wordt eerst één lichte lijst met bestaande Hoogvliet-SKU's uit Supabase geladen. Alleen onbekende SKU's gaan door de volledige productpagina-, prijs- en producttypevalidatie; bekende SKU's worden door de dagelijkse prijsruns actueel gehouden.
