@@ -39,24 +39,26 @@ De workflow leest ze uitsluitend als environmentvariabelen. De waarden worden ni
 6. Kies nogmaals **Run workflow** ter bevestiging.
 7. Open de run en controleer de stap **Catalogusbatch importeren**.
 
-Een succesvolle run vermeldt per geïmporteerd product alleen SKU, naam en prijs. Secrets worden niet getoond. De workflow heeft bewust geen dagelijks schema.
+Een succesvolle run vermeldt per geïmporteerd product alleen SKU, naam en prijs. Secrets worden niet getoond. De workflow ververst dagelijks één begrensd prijsdeel en draait wekelijks één roulerende catalogusbatch; handmatig starten blijft beschikbaar.
 
 ## Catalogusbatches
 
 | Batch | Zoektermen |
 |---|---|
-| `core` | gehakt, rundergehakt, kip, kipfilet, varkensvlees, worst, hamburger, shoarma, vis, zalm, tonijn, pasta, spaghetti, macaroni, lasagne, rijst, brood, bolletjes, croissant, melk, yoghurt, kwark, kaas, boter, margarine, room |
-| `fresh` | aardappelen, groente, groenten, tomaat, paprika, ui, komkommer, wortel, sla, broccoli, bloemkool, appel, banaan, sinaasappel, fruit, cola, sinas, frisdrank, water, sap, limonade, chips, koek, chocolade, snoep, nootjes |
-| `world` | noodles, wraps, taco, tortilla, nasi, bami, curry, knorr, honig, maaltijdmix, pastasaus, tomatensaus, saus, mayonaise, ketchup, pizza, patat, friet, kroket, frikandel, kipnuggets, diepvries, snacks |
-| `pantry` | soep, bonen, tomatenblokjes, mais, kruiden, bloem, suiker, olie, koffie, thee, ontbijtgranen, havermout, beschuit, crackers, beleg, pindakaas, jam, hagelslag, eieren, meel, bakproducten, conserven, peulvruchten, azijn, zout, peper |
+| `core` | 37 termen voor vlees/vis, pasta/rijst, brood en zuivel, inclusief onder meer biefstuk, schnitzel, rookworst, garnalen, penne, fusilli en volkorenbrood |
+| `fresh` | 40 termen voor aardappelen, groente, fruit, dranken en snacks, inclusief onder meer spinazie, andijvie, sperziebonen, druiven, cola, vruchtensap en energiedrank |
+| `world` | 33 termen voor wereldkeuken, sauzen en diepvries/gemak, inclusief onder meer woksaus, sojasaus, pesto, couscous, roti en diepvriesgroente |
+| `pantry` | 38 termen voor voorraad, ontbijt, beleg en huishoudelijke boodschappen, inclusief toiletpapier, wasmiddel, vaatwastabletten, tandpasta en dierenvoer |
 
 `SEARCH_TERMS` blijft beschikbaar als expliciete override. Een onbekende `CATALOG_BATCH` stopt veilig met een duidelijke fout.
 
 ## Veiligheids- en betrouwbaarheidsregels
 
-- Workflowinstellingen: `MAX_PRODUCTS=180`, `MAX_NEW_PRODUCTS=100` en `MAX_PER_TERM=6`.
-- Harde technische limieten: maximaal 200 producten totaal, maximaal 150 nieuwe producten en maximaal 10 gevalideerde producten per zoekterm, ook bij foutieve environmentconfiguratie.
-- Voor de scrape wordt uitsluitend de bestaande Hoogvliet-SKU-lijst licht uit Supabase gelezen. Onbekende SKU's krijgen binnen iedere zoekterm voorrang; bestaande SKU's mogen nog steeds opnieuw gevalideerd en bijgewerkt worden, maar tellen niet mee voor `MAX_NEW_PRODUCTS`.
+- Workflowinstellingen: `MAX_PRODUCTS=180`, `MAX_NEW_PRODUCTS=100`, `MAX_PER_TERM=20` en `MAX_PAGES_PER_TERM=4`.
+- Harde technische limieten: maximaal 500 producten totaal, maximaal 300 nieuwe producten, maximaal 40 gevalideerde producten en maximaal 8 resultaatpagina's per zoekterm, ook bij foutieve environmentconfiguratie.
+- Iedere resultaatpagina wordt op SKU gededupliceerd. Een lege pagina, een herhaalde paginasignatuur of de ingestelde paginalimiet stopt de paginering veilig.
+- Zoekresultaten moeten via naam, merk of broncategorie woord-/prefixrelevant zijn. Zo blijft een geldige merkvariant behouden, terwijl een toevallige middenwoordmatch wordt geweigerd.
+- Voor de scrape wordt uitsluitend de bestaande Hoogvliet-SKU-lijst licht uit Supabase gelezen. Catalogusruns richten zich op onbekende SKU's; de dagelijkse prijsdeelruns houden reeds bekende producten en prijzen actueel.
 - SKU-deduplicatie gebeurt vóór het openen van een productdetailpagina. Eenzelfde SKU wordt binnen één run dus niet opnieuw gevalideerd of geschreven.
 - Geldige producten worden per 10 naar Supabase geschreven. Een onderbroken run behoudt daardoor reeds opgeslagen batches; opnieuw uitvoeren blijft veilig door de bestaande idempotente upserts.
 - Eén browsercontext en één detailpagina worden hergebruikt. De bestaande gecontroleerde vertraging blijft actief om onnodige belasting te voorkomen.
