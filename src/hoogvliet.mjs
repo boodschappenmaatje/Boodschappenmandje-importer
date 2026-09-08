@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { classifyProductType } from "./product-type.mjs";
+import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 
 const BASE_URL = "https://www.hoogvliet.com";
 const SEARCH_PATH = "/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch";
@@ -42,6 +42,15 @@ export function isValidProductURL(value) {
   } catch {
     return false;
   }
+}
+
+export function isReliableCatalogProduct(product) {
+  return isValidSKU(product?.sku)
+    && Boolean(clean(product?.name))
+    && Boolean(clean(product?.packageText))
+    && isValidProductURL(product?.sourceURL)
+    && Number.isFinite(product?.price)
+    && product.price > 0;
 }
 
 export function parseOfferPeriod(value, referenceDate = new Date()) {
@@ -358,7 +367,7 @@ async function validateCandidate(page, candidate) {
     fetchedAt: new Date().toISOString(),
   };
   product.productType = classifyProductType({ ...product, searchTerm: candidate.searchTerm });
-  return product;
+  return isReliableCatalogProduct(product) ? product : null;
 }
 
 export function claimCandidateSKU(candidate, seenSKUs, stats, termStats = null) {
@@ -392,6 +401,32 @@ export function recordCatalogProduct(sku, existingSKUs, stats, termStats = null)
 
 export function catalogLimitReached(stats, config, totalProducts) {
   return totalProducts >= config.maxProducts || stats.newProducts >= config.maxNewProducts;
+}
+
+export function filterDiscoveryCandidates(candidates, existingSKUs, observedExistingSKUs) {
+  const newCandidates = [];
+  let existingOccurrences = 0;
+  for (const candidate of candidates) {
+    if (existingSKUs.has(candidate.sku)) {
+      existingOccurrences += 1;
+      observedExistingSKUs.add(candidate.sku);
+    } else {
+      newCandidates.push(candidate);
+    }
+  }
+  return {
+    candidates: newCandidates,
+    existingOccurrences,
+    uniqueExistingSKUs: observedExistingSKUs.size,
+  };
+}
+
+export function isSafeEmptyDiscovery(config, stats, attemptedSKUCount) {
+  return Boolean(
+    config.catalogNewOnly
+      && attemptedSKUCount === 0
+      && (stats.existingSKUsDiscovered ?? 0) > 0,
+  );
 }
 
 export function selectPriceShard(products, shardIndex, shardCount, maxProducts) {
@@ -476,6 +511,9 @@ export async function collectProducts(config, logger = console, options = {}) {
   const chosen = [];
   const pendingPersistence = [];
   const attemptedSKUs = new Set();
+  const observedExistingSKUs = new Set();
+  const observedCatalogSKUs = new Set();
+  const observedNewSKUs = new Set();
   const stats = {
     configuredSearchTerms: config.searchTerms.length,
     searchedTerms: 0,
@@ -485,9 +523,13 @@ export async function collectProducts(config, logger = console, options = {}) {
     irrelevantCandidatesSkipped: 0,
     repeatedPagesStopped: 0,
     existingCandidatesSkipped: 0,
+    existingSKUsDiscovered: 0,
+    uniqueSKUsDiscovered: 0,
+    newSKUsDiscovered: 0,
     uniqueSKUs: 0,
     existingProducts: 0,
     newProducts: 0,
+    unknownProductTypes: 0,
     validatedProducts: 0,
     duplicateSKUsSkipped: 0,
     invalidProductsSkipped: 0,
@@ -530,17 +572,27 @@ export async function collectProducts(config, logger = console, options = {}) {
         stats.duplicateSKUsSkipped += pageResult.duplicateCandidates;
         if (pageResult.repeatedPageStopped) stats.repeatedPagesStopped += 1;
         stats.candidatesFound += candidates.length;
+        for (const candidate of candidates) {
+          observedCatalogSKUs.add(candidate.sku);
+          if (!existingSKUs.has(candidate.sku)) observedNewSKUs.add(candidate.sku);
+        }
+        stats.uniqueSKUsDiscovered = observedCatalogSKUs.size;
+        stats.newSKUsDiscovered = observedNewSKUs.size;
         termStats.candidates = candidates.length;
         termStats.rawCandidates = pageResult.rawCandidates;
         termStats.pages = pageResult.pagesFetched;
         termStats.irrelevant = pageResult.irrelevantCandidates;
         termStats.duplicates += pageResult.duplicateCandidates;
         if (config.catalogNewOnly) {
-          const before = candidates.length;
-          candidates = candidates.filter((candidate) => !existingSKUs.has(candidate.sku));
-          const existingSkipped = before - candidates.length;
-          stats.existingCandidatesSkipped += existingSkipped;
-          termStats.existingSkipped = existingSkipped;
+          const discovery = filterDiscoveryCandidates(
+            candidates,
+            existingSKUs,
+            observedExistingSKUs,
+          );
+          candidates = discovery.candidates;
+          stats.existingCandidatesSkipped += discovery.existingOccurrences;
+          stats.existingSKUsDiscovered = discovery.uniqueExistingSKUs;
+          termStats.existingSkipped = discovery.existingOccurrences;
         }
       } catch (error) {
         if (error instanceof SourceBlockedError) throw error;
@@ -574,6 +626,7 @@ export async function collectProducts(config, logger = console, options = {}) {
         pendingPersistence.push(product);
         acceptedForTerm += 1;
         stats.validatedProducts += 1;
+        if (product.productType === UNKNOWN_PRODUCT_TYPE) stats.unknownProductTypes += 1;
         termStats.validated += 1;
         recordCatalogProduct(product.sku, existingSKUs, stats, termStats);
         logger.info(`Gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
@@ -591,7 +644,7 @@ export async function collectProducts(config, logger = console, options = {}) {
     await browser.close();
   }
 
-  if (chosen.length === 0) {
+  if (chosen.length === 0 && !isSafeEmptyDiscovery(config, stats, attemptedSKUs.size)) {
     throw new Error("De Hoogvliet-bron leverde geen volledig valideerbare producten op.");
   }
   stats.durationMs = Date.now() - startedAt;
