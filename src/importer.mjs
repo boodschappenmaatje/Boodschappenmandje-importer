@@ -4,11 +4,12 @@ import { classifyProductType, productTypeCoverage } from "./product-type.mjs";
 import {
   collectProducts,
   refreshExistingProducts,
-  selectPriceShard,
+  selectPriceShardWindow,
   SourceBlockedError,
 } from "./hoogvliet.mjs";
 import {
   fetchExistingProducts,
+  fetchExistingPriceStates,
   fetchExistingSKUs,
   hasProductTypeColumn,
   upsertProductClassifications,
@@ -79,7 +80,18 @@ export function formatPriceRefreshSummary(stats) {
   return [
     "Prijsupdate-statistieken",
     `deelbatch=${stats.priceShardIndex + 1}/${stats.priceShardCount}`,
+    `venster=${(stats.priceWindowIndex ?? 0) + 1}/${stats.priceWindowCount ?? 1}`,
+    `in_shard=${stats.totalInShard ?? stats.selectedProducts}`,
     `geselecteerd=${stats.selectedProducts}`,
+    `gecontroleerd=${stats.checkedProducts ?? stats.selectedProducts}`,
+    `gevonden=${stats.foundProducts ?? stats.validatedProducts}`,
+    `gewijzigd=${stats.changedPrices ?? 0}`,
+    `ongewijzigd=${stats.unchangedPrices ?? 0}`,
+    `acties=${stats.activeOffers ?? 0}`,
+    `actie_gestart=${stats.offersStarted ?? 0}`,
+    `actie_beëindigd=${stats.offersEnded ?? 0}`,
+    `niet_gevonden=${stats.notFoundProducts ?? 0}`,
+    `ongeldige_prijs=${stats.invalidPrices ?? 0}`,
     `gevalideerd=${stats.validatedProducts}`,
     `overgeslagen=${stats.invalidProductsSkipped}`,
     `productfouten=${stats.productErrors}`,
@@ -123,12 +135,19 @@ async function runProductTypeBackfill(config, logger) {
 
 async function runPriceRefresh(config, logger, startedAt) {
   const existingProducts = await fetchExistingProducts(config);
-  const selected = selectPriceShard(
-    existingProducts,
+  const existingPrices = await fetchExistingPriceStates(config);
+  const productsWithPriceState = existingProducts.map((product) => ({
+    ...product,
+    previousPrice: existingPrices.get(product.id) ?? null,
+  }));
+  const priceWindow = selectPriceShardWindow(
+    productsWithPriceState,
     config.priceShardIndex,
     config.priceShardCount,
     config.maxProducts,
+    config.priceCycleIndex,
   );
+  const selected = priceWindow.products;
   if (selected.length === 0) {
     throw new Error(
       `Prijsdeelbatch ${config.priceShardIndex + 1}/${config.priceShardCount} bevat geen valide productpagina's.`,
@@ -136,7 +155,8 @@ async function runPriceRefresh(config, logger, startedAt) {
   }
   logger.info(
     `Start prijsupdate ${config.priceShardIndex + 1}/${config.priceShardCount}: `
-      + `${selected.length} van ${existingProducts.length} bestaande producten.`,
+      + `${selected.length} van ${priceWindow.totalInShard} producten in deze shard; `
+      + `venster ${priceWindow.windowIndex + 1}/${priceWindow.windowCount}.`,
   );
 
   const writeResult = { imported: [], errors: [], duplicateSKUsSkipped: 0 };
@@ -159,6 +179,9 @@ async function runPriceRefresh(config, logger, startedAt) {
     ...stats,
     priceShardIndex: config.priceShardIndex,
     priceShardCount: config.priceShardCount,
+    priceWindowIndex: priceWindow.windowIndex,
+    priceWindowCount: priceWindow.windowCount,
+    totalInShard: priceWindow.totalInShard,
     writtenProducts: writeResult.imported.length,
     writeErrors: writeResult.errors.length,
     durationMs: Date.now() - startedAt,
