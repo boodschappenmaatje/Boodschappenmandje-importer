@@ -4,6 +4,12 @@ Dit is een server-side Playwright/Chromium-importer. De handmatige GitHub Action
 
 De iOS-app en SQLite-laag maken geen onderdeel uit van dit pakket en worden niet gewijzigd.
 
+## Automatische productontdekking
+
+De bestaande wekelijkse catalogusrun is tevens de veilige discovery-run. GitHub Actions rouleert `core`, `fresh`, `world` en `pantry`. Voor iedere run wordt eerst één lichte lijst met bestaande Hoogvliet-SKU's uit Supabase geladen. Alleen onbekende SKU's gaan door de volledige productpagina-, prijs- en producttypevalidatie; bekende SKU's worden door de dagelijkse prijsruns actueel gehouden.
+
+Een nieuw product wordt pas toegevoegd als SKU, naam, verpakking, Hoogvliet-product-URL en actuele verkoopprijs betrouwbaar bij hetzelfde product horen. De centrale classificatie uit stap 4.4 vult `product_type`, met `Onbekend` als veilige fallback. Nul nieuwe SKU's is een geldige, succesvolle discovery-run wanneer de gevonden resultaten aantoonbaar al in Supabase bestaan. Er worden nooit producten verwijderd omdat ze tijdens één run niet gevonden zijn.
+
 ## Bestanden uploaden
 
 Upload de volledige inhoud van deze map naar de hoofdmap van je private GitHub-repository. Controleer dat deze paden zichtbaar zijn:
