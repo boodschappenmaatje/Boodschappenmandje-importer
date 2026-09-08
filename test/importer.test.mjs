@@ -9,8 +9,10 @@ import {
   collectCandidatePages,
   catalogLimitReached,
   claimCandidateSKU,
+  describePriceUpdate,
   filterDiscoveryCandidates,
   isReliableCatalogProduct,
+  isOfferPeriodActive,
   isSafeEmptyDiscovery,
   isRelevantCandidate,
   isValidProductURL,
@@ -21,13 +23,15 @@ import {
   recordCatalogProduct,
   searchURL,
   selectPriceShard,
+  selectPriceShardWindow,
+  resolvedProductTypeForRefresh,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
 import {
   formatBatchSummary, formatClassificationSummary, formatPriceRefreshSummary, formatTermCoverage, safeLogger,
 } from "../src/importer.mjs";
 import {
-  fetchExistingProducts, fetchExistingSKUs, hasProductTypeColumn, requestHeaders, restURL,
+  fetchExistingPriceStates, fetchExistingProducts, fetchExistingSKUs, hasProductTypeColumn, requestHeaders, restURL,
   upsertProductClassifications, upsertProducts,
 } from "../src/supabase.mjs";
 
@@ -101,6 +105,16 @@ test("paginering en catalogusfocus zijn configureerbaar en hard begrensd", () =>
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PAGES_PER_TERM: "999" }).maxPagesPerTerm, 8);
   assert.equal(limits.defaultMaxPagesPerTerm, 1);
   assert.equal(limits.safePagesPerTermLimit, 8);
+});
+
+test("prijsvenstercyclus is configureerbaar zonder de zeven SKU-shards te wijzigen", () => {
+  const config = loadConfig({
+    DRY_RUN: "1", PRICE_SHARD_COUNT: "7", PRICE_SHARD_INDEX: "4", PRICE_CYCLE_INDEX: "12",
+  });
+  assert.equal(config.priceShardCount, 7);
+  assert.equal(config.priceShardIndex, 4);
+  assert.equal(config.priceCycleIndex, 12);
+  assert.equal(loadConfig({ DRY_RUN: "1", PRICE_CYCLE_INDEX: "ongeldig" }).priceCycleIndex, 0);
 });
 
 test("drankmerken en varianten krijgen het generieke producttype Cola", () => {
@@ -318,6 +332,39 @@ test("een expliciete Nederlandse aanbiedingsperiode wordt zonder gokwerk gelezen
   assert.equal(parseOfferPeriod("2 voor 5 euro"), null);
 });
 
+test("alleen een aanbieding binnen de echte geldigheidsperiode blijft actief", () => {
+  const period = { validFrom: "2026-09-07", validUntil: "2026-09-13" };
+  assert.equal(isOfferPeriodActive(period, new Date("2026-09-08T12:00:00Z")), true);
+  assert.equal(isOfferPeriodActive(period, new Date("2026-09-14T00:00:00Z")), false);
+  assert.equal(isOfferPeriodActive(null, new Date("2026-09-08T12:00:00Z")), false);
+});
+
+test("prijsvergelijking onderscheidt gewijzigd, ongewijzigd en aanbieding gestart of beëindigd", () => {
+  assert.deepEqual(
+    describePriceUpdate({ price: 2.49, isOffer: false }, { price: 2.49, isOffer: false }),
+    { changed: false, offerStarted: false, offerEnded: false, activeOffer: false },
+  );
+  assert.deepEqual(
+    describePriceUpdate({ price: 2.49, isOffer: false }, { price: 1.99, isOffer: true }),
+    { changed: true, offerStarted: true, offerEnded: false, activeOffer: true },
+  );
+  assert.deepEqual(
+    describePriceUpdate({ price: 1.99, isOffer: true }, { price: 2.49, isOffer: false }),
+    { changed: true, offerStarted: false, offerEnded: true, activeOffer: false },
+  );
+});
+
+test("prijsrefresh beschermt een bestaand betrouwbaar producttype tegen Onbekend", () => {
+  assert.equal(
+    resolvedProductTypeForRefresh({ name: "Bijzonder artikel" }, "Cola", null),
+    "Cola",
+  );
+  assert.equal(
+    resolvedProductTypeForRefresh({ name: "Coca-Cola Zero" }, "Onbekend", null),
+    "Cola",
+  );
+});
+
 test("Supabase-upserts gebruiken de twee bedoelde unieke sleutels", async () => {
   const originalFetch = globalThis.fetch;
   const requests = [];
@@ -348,8 +395,12 @@ test("Supabase-upserts gebruiken de twee bedoelde unieke sleutels", async () => 
   assert.equal(requests[0].options.headers.Prefer, "resolution=merge-duplicates,return=representation");
   assert.equal(requests[1].options.headers.Prefer, "resolution=merge-duplicates,return=representation");
   assert.equal(requests[0].options.headers.Authorization, undefined);
-  assert.equal(JSON.parse(requests[0].options.body)[0].brand, undefined);
-  assert.equal(JSON.parse(requests[0].options.body)[0].product_type, "Gehakt");
+  const storedProductPayload = JSON.parse(requests[0].options.body)[0];
+  assert.equal(storedProductPayload.brand, undefined);
+  assert.equal(storedProductPayload.category, undefined);
+  assert.equal(storedProductPayload.image_url, undefined);
+  assert.equal(storedProductPayload.is_available, undefined);
+  assert.equal(storedProductPayload.product_type, "Gehakt");
   assert.equal(JSON.parse(requests[1].options.body)[0].product_id, "product-uuid");
 });
 
@@ -380,6 +431,65 @@ test("een bestaande SKU kan in een volgende run veilig opnieuw worden ge-upsert"
   assert.equal(requests.length, 4);
   assert.equal(requests.filter(({ url }) => /on_conflict=supermarket%2Csku/.test(url)).length, 2);
   assert.equal(requests.filter(({ url }) => /on_conflict=product_id/.test(url)).length, 2);
+});
+
+test("een gewijzigde prijs wordt via hetzelfde product_id bijgewerkt en maakt geen productduplicaat", async () => {
+  const originalFetch = globalThis.fetch;
+  const pricePayloads = [];
+  globalThis.fetch = async (url, options) => {
+    const payload = JSON.parse(options.body)[0];
+    if (String(url).includes("/product_prices?")) {
+      pricePayloads.push(payload);
+      return new Response(JSON.stringify([payload]), { status: 200 });
+    }
+    return new Response(JSON.stringify([{
+      id: "vast-product-id", sku: payload.sku, name: payload.name,
+    }]), { status: 200 });
+  };
+  try {
+    const config = {
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+      productTypeSupported: true,
+    };
+    await upsertProducts(config, [testProduct("123456789", "Echt product", 5.52)]);
+    await upsertProducts(config, [{
+      ...testProduct("123456789", "Echt product", 1.99),
+      oldPrice: 2.49,
+      isOffer: true,
+      offerText: "Per stuk · Aanbieding is geldig van 7 september t/m 13 september",
+      validFrom: "2026-09-07",
+      validUntil: "2026-09-13",
+    }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.deepEqual(pricePayloads.map(({ product_id }) => product_id), ["vast-product-id", "vast-product-id"]);
+  assert.deepEqual(pricePayloads.map(({ price }) => price), [5.52, 1.99]);
+  assert.equal(pricePayloads[1].old_price, 2.49);
+  assert.equal(pricePayloads[1].is_offer, true);
+  assert.equal(pricePayloads[1].valid_until, "2026-09-13");
+});
+
+test("ongeldige nieuwe prijs start geen write en kan een bestaande geldige prijs niet overschrijven", async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    throw new Error("fetch had niet aangeroepen mogen worden");
+  };
+  try {
+    await assert.rejects(
+      upsertProducts({
+        supabaseURL: "https://voorbeeld.supabase.co",
+        supabaseSecret: ["sb", "secret", "test"].join("_"),
+      }, [testProduct("123456789", "Echt product", Number.NaN)]),
+      /Ongeldige prijs; bestaande Supabase-prijs blijft ongewijzigd/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(requests, 0);
 });
 
 test("Supabase basis-URL wordt exact met de twee REST-paden gecombineerd", () => {
@@ -788,13 +898,30 @@ test("prijsdeelbatches verdelen SKU's stabiel zonder overlap", () => {
   for (const shard of shards) assert.ok(shard.length <= 1);
 });
 
+test("grote SKU-shards rouleren begrensd zodat nieuwe producten later automatisch aan bod komen", () => {
+  const products = Array.from({ length: 205 }, (_, index) => ({
+    sku: String(100000000 + index * 7),
+    sourceURL: `https://www.hoogvliet.com/product/${100000000 + index * 7}`,
+  }));
+  const first = selectPriceShardWindow(products, 2, 7, 100, 0);
+  const second = selectPriceShardWindow(products, 2, 7, 100, 1);
+  const third = selectPriceShardWindow(products, 2, 7, 100, 2);
+  assert.equal(first.totalInShard, 205);
+  assert.equal(first.windowCount, 3);
+  assert.equal(first.products.length, 100);
+  assert.equal(second.products.length, 100);
+  assert.equal(third.products.length, 5);
+  assert.equal(new Set([...first.products, ...second.products, ...third.products].map(({ sku }) => sku)).size, 205);
+  assert.deepEqual(selectPriceShardWindow(products, 2, 7, 100, 3).products, first.products);
+});
+
 test("bestaande productbronmetadata wordt zonder cacheprijs voor prijsvalidatie gelezen", async () => {
   const originalFetch = globalThis.fetch;
   let request;
   globalThis.fetch = async (url, options) => {
     request = { url: String(url), options };
     return new Response(JSON.stringify([{
-      sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
+      id: "product-uuid", sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
       package_text: "500 gram", image_url: "https://voorbeeld.nl/product.jpg",
       source_url: "https://www.hoogvliet.com/product/bestaand-product", is_available: true,
     }]), { status: 200 });
@@ -810,22 +937,71 @@ test("bestaande productbronmetadata wordt zonder cacheprijs voor prijsvalidatie 
   }
   assert.equal(products.length, 1);
   assert.deepEqual(products[0], {
-    sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
+    id: "product-uuid", sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
     packageText: "500 gram", weightGrams: null, imageURL: "https://voorbeeld.nl/product.jpg",
     sourceURL: "https://www.hoogvliet.com/product/bestaand-product", available: true,
     productType: null,
   });
-  assert.match(request.url, /select=sku%2Cname%2Cbrand%2Ccategory%2Cpackage_text/);
+  assert.match(request.url, /select=id%2Csku%2Cname%2Cbrand%2Ccategory%2Cpackage_text/);
   assert.doesNotMatch(request.url, /product_prices/);
+});
+
+test("bestaande prijsstatus wordt uitsluitend via product_id aan het juiste product gekoppeld", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), options };
+    return new Response(JSON.stringify([
+      {
+        product_id: "product-a", price: "2.49", old_price: null, is_offer: false,
+        offer_text: null, valid_from: null, valid_until: null,
+        fetched_at: "2026-09-08T08:00:00Z", updated_at: "2026-09-08T08:00:00Z",
+      },
+      {
+        product_id: "product-b", price: "1.99", old_price: "2.79", is_offer: true,
+        offer_text: "Per stuk", valid_from: "2026-09-07", valid_until: "2026-09-13",
+        fetched_at: "2026-09-08T09:00:00Z", updated_at: "2026-09-08T09:00:00Z",
+      },
+    ]), { status: 200 });
+  };
+  let prices;
+  try {
+    prices = await fetchExistingPriceStates({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(prices.get("product-a")?.price, 2.49);
+  assert.equal(prices.get("product-b")?.price, 1.99);
+  assert.equal(prices.get("product-b")?.isOffer, true);
+  assert.equal(prices.get("verkeerd-product"), undefined);
+  assert.match(request.url, /\/rest\/v1\/product_prices\?/);
+  assert.match(request.url, /select=product_id%2Cprice%2Cold_price/);
 });
 
 test("prijsupdate-statistieken zijn compact en bevatten geen credentials", () => {
   const summary = formatPriceRefreshSummary({
     priceShardIndex: 2, priceShardCount: 7, selectedProducts: 65,
-    validatedProducts: 64, invalidProductsSkipped: 1, productErrors: 0,
+    priceWindowIndex: 1, priceWindowCount: 3, totalInShard: 265,
+    checkedProducts: 65, foundProducts: 62, changedPrices: 8, unchangedPrices: 54,
+    activeOffers: 7, offersStarted: 2, offersEnded: 1, notFoundProducts: 1,
+    invalidPrices: 2, validatedProducts: 62, invalidProductsSkipped: 3, productErrors: 0,
     writtenProducts: 64, writeErrors: 0, durationMs: 125_000,
   });
   assert.match(summary, /deelbatch=3\/7/);
+  assert.match(summary, /venster=2\/3/);
+  assert.match(summary, /in_shard=265/);
+  assert.match(summary, /gecontroleerd=65/);
+  assert.match(summary, /gevonden=62/);
+  assert.match(summary, /gewijzigd=8/);
+  assert.match(summary, /ongewijzigd=54/);
+  assert.match(summary, /acties=7/);
+  assert.match(summary, /actie_gestart=2/);
+  assert.match(summary, /actie_beëindigd=1/);
+  assert.match(summary, /niet_gevonden=1/);
+  assert.match(summary, /ongeldige_prijs=2/);
   assert.match(summary, /geschreven=64/);
   assert.doesNotMatch(summary, /SUPABASE|secret|apikey|Authorization/i);
 });
@@ -855,6 +1031,7 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /MAX_PAGES_PER_TERM=4/);
   assert.match(workflow, /CATALOG_NEW_ONLY=1/);
   assert.match(workflow, /batches=\(core fresh world pantry\)/);
+  assert.match(workflow, /PRICE_CYCLE_INDEX=\$\(\(10#\$\(date -u \+%V\) - 1\)\)/);
   assert.match(workflow, /- classify/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });

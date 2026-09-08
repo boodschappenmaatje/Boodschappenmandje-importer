@@ -85,6 +85,12 @@ export function parseOfferPeriod(value, referenceDate = new Date()) {
   };
 }
 
+export function isOfferPeriodActive(period, referenceDate = new Date()) {
+  if (!period?.validFrom || !period?.validUntil || Number.isNaN(referenceDate.getTime())) return false;
+  const day = referenceDate.toISOString().slice(0, 10);
+  return period.validFrom <= day && day <= period.validUntil;
+}
+
 function clean(value) {
   if (typeof value !== "string") return null;
   const result = value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -326,24 +332,41 @@ async function extractProductDetails(page) {
   });
 }
 
-async function validateCandidate(page, candidate) {
+export function resolvedProductTypeForRefresh(product, existingProductType, searchTerm) {
+  const classified = classifyProductType({ ...product, searchTerm });
+  if (classified !== UNKNOWN_PRODUCT_TYPE) return classified;
+  return typeof existingProductType === "string" && existingProductType.trim()
+    ? existingProductType.trim()
+    : UNKNOWN_PRODUCT_TYPE;
+}
+
+async function validateCandidate(page, candidate, diagnostics = null) {
+  const fail = (reason) => {
+    if (diagnostics) diagnostics.reason = reason;
+    return null;
+  };
   await page.goto(candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 });
   await page.waitForSelector(".product-details", { timeout: 12_000 }).catch(() => {});
   await detectBlocking(page);
   const details = await extractProductDetails(page);
-  if (!details || details.sku !== candidate.sku || !isValidSKU(details.sku)) return null;
+  if (!details) return fail("notFound");
+  if (details.sku !== candidate.sku || !isValidSKU(details.sku)) return fail("invalidProduct");
 
   const name = clean(details.name);
   const packageText = clean(details.packageText);
-  if (!name || !packageText) return null;
+  if (!name || !packageText) return fail("invalidProduct");
 
   const promotionText = clean(details.promotionText);
   const offerText = clean(details.offerPeriod);
-  const period = parseOfferPeriod(offerText, new Date());
-  const simpleOffer = Boolean(period && promotionText?.toLowerCase().startsWith("per "));
+  const checkedAt = new Date();
+  const period = parseOfferPeriod(offerText, checkedAt);
+  const simpleOffer = Boolean(
+    isOfferPeriodActive(period, checkedAt)
+      && promotionText?.toLowerCase().startsWith("per "),
+  );
   const regularPrice = details.regularPrice ?? (!simpleOffer ? details.displayPrice : null);
   const currentPrice = simpleOffer ? (details.offerPrice ?? details.displayPrice) : regularPrice;
-  if (!(Number.isFinite(currentPrice) && currentPrice > 0)) return null;
+  if (!(Number.isFinite(currentPrice) && currentPrice > 0)) return fail("invalidPrice");
 
   const product = {
     supermarket: "Hoogvliet",
@@ -364,10 +387,14 @@ async function validateCandidate(page, candidate) {
     offerText: simpleOffer ? [promotionText, offerText].filter(Boolean).join(" · ") : null,
     validFrom: simpleOffer ? period.validFrom : null,
     validUntil: simpleOffer ? period.validUntil : null,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: checkedAt.toISOString(),
   };
-  product.productType = classifyProductType({ ...product, searchTerm: candidate.searchTerm });
-  return isReliableCatalogProduct(product) ? product : null;
+  product.productType = resolvedProductTypeForRefresh(
+    product,
+    candidate.productType,
+    candidate.searchTerm,
+  );
+  return isReliableCatalogProduct(product) ? product : fail("invalidProduct");
 }
 
 export function claimCandidateSKU(candidate, seenSKUs, stats, termStats = null) {
@@ -429,15 +456,47 @@ export function isSafeEmptyDiscovery(config, stats, attemptedSKUCount) {
   );
 }
 
-export function selectPriceShard(products, shardIndex, shardCount, maxProducts) {
+export function selectPriceShardWindow(products, shardIndex, shardCount, maxProducts, cycleIndex = 0) {
   if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error("Ongeldig aantal prijsdeelbatches.");
   if (!Number.isInteger(shardIndex) || shardIndex < 0 || shardIndex >= shardCount) {
     throw new Error("Ongeldige prijsdeelbatch.");
   }
-  return products
+  if (!Number.isInteger(maxProducts) || maxProducts < 1) throw new Error("Ongeldige prijsbatchgrootte.");
+  if (!Number.isInteger(cycleIndex) || cycleIndex < 0) throw new Error("Ongeldige prijsvenstercyclus.");
+  const shard = products
     .filter((product) => isValidSKU(product?.sku) && isValidProductURL(product?.sourceURL))
     .filter((product) => Number(product.sku) % shardCount === shardIndex)
-    .slice(0, maxProducts);
+    .sort((left, right) => left.sku.localeCompare(right.sku));
+  const windowCount = Math.max(1, Math.ceil(shard.length / maxProducts));
+  const windowIndex = cycleIndex % windowCount;
+  const start = windowIndex * maxProducts;
+  return {
+    products: shard.slice(start, start + maxProducts),
+    totalInShard: shard.length,
+    windowIndex,
+    windowCount,
+  };
+}
+
+export function selectPriceShard(products, shardIndex, shardCount, maxProducts, cycleIndex = 0) {
+  return selectPriceShardWindow(products, shardIndex, shardCount, maxProducts, cycleIndex).products;
+}
+
+function priceInCents(value) {
+  return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
+}
+
+export function describePriceUpdate(previous, current) {
+  const previousCents = priceInCents(previous?.price);
+  const currentCents = priceInCents(current?.price);
+  const previousOffer = previous?.isOffer === true;
+  const currentOffer = current?.isOffer === true;
+  return {
+    changed: previousCents == null || currentCents !== previousCents,
+    offerStarted: !previousOffer && currentOffer,
+    offerEnded: previousOffer && !currentOffer,
+    activeOffer: currentOffer,
+  };
 }
 
 /// Valideert bestaande Supabase-producten opnieuw via exact dezelfde
@@ -454,6 +513,15 @@ export async function refreshExistingProducts(config, candidates, logger = conso
   const pendingPersistence = [];
   const stats = {
     selectedProducts: candidates.length,
+    checkedProducts: 0,
+    foundProducts: 0,
+    unchangedPrices: 0,
+    changedPrices: 0,
+    activeOffers: 0,
+    offersStarted: 0,
+    offersEnded: 0,
+    notFoundProducts: 0,
+    invalidPrices: 0,
     validatedProducts: 0,
     invalidProductsSkipped: 0,
     productErrors: 0,
@@ -463,8 +531,10 @@ export async function refreshExistingProducts(config, candidates, logger = conso
   try {
     for (const candidate of candidates) {
       let product;
+      const diagnostics = {};
+      stats.checkedProducts += 1;
       try {
-        product = await validateCandidate(detailPage, candidate);
+        product = await validateCandidate(detailPage, candidate, diagnostics);
       } catch (error) {
         if (error instanceof SourceBlockedError) throw error;
         stats.productErrors += 1;
@@ -473,12 +543,27 @@ export async function refreshExistingProducts(config, candidates, logger = conso
       }
       if (!product) {
         stats.invalidProductsSkipped += 1;
+        if (diagnostics.reason === "notFound") stats.notFoundProducts += 1;
+        if (diagnostics.reason === "invalidPrice") stats.invalidPrices += 1;
+        logger.info(`Prijscontrole overgeslagen: ${candidate.sku} | reden=${diagnostics.reason ?? "ongeldig_product"}`);
         continue;
       }
+      const outcome = describePriceUpdate(candidate.previousPrice, product);
+      stats.foundProducts += 1;
+      if (outcome.changed) stats.changedPrices += 1;
+      else stats.unchangedPrices += 1;
+      if (outcome.activeOffer) stats.activeOffers += 1;
+      if (outcome.offerStarted) stats.offersStarted += 1;
+      if (outcome.offerEnded) stats.offersEnded += 1;
       products.push(product);
       pendingPersistence.push(product);
       stats.validatedProducts += 1;
-      logger.info(`Prijs gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
+      logger.info(
+        `Prijs gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)} | `
+          + `${outcome.changed ? "gewijzigd" : "ongewijzigd"}`
+          + `${outcome.offerStarted ? " | actie gestart" : ""}`
+          + `${outcome.offerEnded ? " | actie beëindigd" : ""}`,
+      );
       if (onBatch && pendingPersistence.length >= persistBatchSize) {
         await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
       }
