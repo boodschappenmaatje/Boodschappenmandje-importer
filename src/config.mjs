@@ -52,6 +52,11 @@ function positiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function nonNegativeInteger(value, fallback) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 export function loadConfig(env = process.env) {
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
   const updateMode = (env.UPDATE_MODE ?? DEFAULT_UPDATE_MODE).trim().toLowerCase();
@@ -114,6 +119,7 @@ export function loadConfig(env = process.env) {
     searchTerms,
     priceShardCount,
     priceShardIndex,
+    priceCycleIndex: nonNegativeInteger(env.PRICE_CYCLE_INDEX, 0),
     supabaseURL: env.SUPABASE_URL?.trim(),
     supabaseSecret: env.SUPABASE_SECRET_KEY?.trim(),
   };
