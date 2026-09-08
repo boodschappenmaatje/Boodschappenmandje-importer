@@ -26,6 +26,23 @@ Beide bestanden zijn veilig opnieuw uitvoerbaar. De seed upsert op de bestaande 
 
 `data/ingredients.json` is de onderhoudbare bron voor de seed. Na een bewuste wijziging wordt het SQL-bestand opnieuw gegenereerd met `npm run build:ingredient-seed`; `npm run check` controleert dat JSON en SQL exact overeenkomen.
 
+## Centrale receptenbasis (stap 5.1)
+
+De bestaande Swift-bron bevat exact 100 recepten: 15 legacyrecepten en 85 recepten uit de uitgebreide catalogus. Alle 100 bestaande Recipe-ID's en genormaliseerde namen zijn uniek; er zijn geen lege of synthetisch toegevoegde records.
+
+`recipes` bewaart uitsluitend de bestaande stabiele `source_key`, naam, genormaliseerde naam, SF Symbol, bereidingstijd, vier bestaande harde filtervelden en het bestaande budgetniveau. De Swift-bron bevat geen bereidingsinstructies, standaardporties of vaste receptprijs, dus die data wordt niet verzonnen. Ingrediënten en hoeveelheden volgen relationeel in stap 5.2; de definitieve categorie-/tagstructuur volgt in stap 5.3.
+
+### Eenmalig uitvoeren in Supabase
+
+Nadat de ingrediëntenmigratie en -seed van stap 5 succesvol zijn uitgevoerd, voer je in de Supabase SQL Editor uit:
+
+1. `supabase/migrations/20260908_create_recipes.sql`
+2. `supabase/seeds/20260908_recipes.sql`
+
+Beide bestanden zijn veilig opnieuw uitvoerbaar. De UUID van een bestaand recept blijft bij een volgende seed behouden doordat de upsert de stabiele Swift `source_key` gebruikt. RLS staat aan; `anon` en `authenticated` krijgen alleen leesrecht. Geen product- of ingrediëntentabel wordt gewijzigd.
+
+`data/recipes.json` is de onderhoudbare bron. Gebruik na een bewuste wijziging `npm run build:recipe-seed`; `npm run check` bewaakt dat de SQL-seed exact bij de bron hoort.
+
 ## Automatische productontdekking
 
 De bestaande wekelijkse catalogusrun is tevens de veilige discovery-run. GitHub Actions rouleert `core`, `fresh`, `world` en `pantry`. Voor iedere run wordt eerst één lichte lijst met bestaande Hoogvliet-SKU's uit Supabase geladen. Alleen onbekende SKU's gaan door de volledige productpagina-, prijs- en producttypevalidatie; bekende SKU's worden door de dagelijkse prijsruns actueel gehouden.
