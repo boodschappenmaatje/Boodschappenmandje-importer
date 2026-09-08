@@ -322,7 +322,7 @@ export async function fetchExistingProducts(config) {
       "products",
       config.supabaseSecret,
       {
-        select: "sku,name,brand,category,package_text,weight_grams,image_url,source_url,is_available"
+        select: "id,sku,name,brand,category,package_text,weight_grams,image_url,source_url,is_available"
           + (config.productTypeSupported ? ",product_type" : ""),
         supermarket: "eq.Hoogvliet",
         order: "sku.asc",
@@ -333,6 +333,7 @@ export async function fetchExistingProducts(config) {
     if (!Array.isArray(rows)) throw new Error("Supabase gaf geen geldige productlijst terug.");
     for (const row of rows) {
       products.push({
+        id: row?.id,
         sku: row?.sku,
         name: row?.name,
         brand: row?.brand ?? null,
@@ -348,6 +349,43 @@ export async function fetchExistingProducts(config) {
     if (rows.length < pageSize) return products;
   }
   throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-producten.");
+}
+
+export async function fetchExistingPriceStates(config) {
+  const pageSize = 1000;
+  const prices = new Map();
+  for (let offset = 0; offset < 20_000; offset += pageSize) {
+    const rows = await getJSON(
+      config.supabaseURL,
+      "product_prices",
+      config.supabaseSecret,
+      {
+        select: "product_id,price,old_price,is_offer,offer_text,valid_from,valid_until,fetched_at,updated_at",
+        order: "product_id.asc",
+      },
+      offset,
+      offset + pageSize - 1,
+    );
+    if (!Array.isArray(rows)) throw new Error("Supabase gaf geen geldige prijsstatuslijst terug.");
+    for (const row of rows) {
+      if (typeof row?.product_id !== "string" || !row.product_id) continue;
+      const price = Number(row.price);
+      const oldPrice = row.old_price == null ? null : Number(row.old_price);
+      prices.set(row.product_id, {
+        productID: row.product_id,
+        price: Number.isFinite(price) && price > 0 ? price : null,
+        oldPrice: Number.isFinite(oldPrice) && oldPrice > 0 ? oldPrice : null,
+        isOffer: row.is_offer === true,
+        offerText: row.offer_text ?? null,
+        validFrom: row.valid_from ?? null,
+        validUntil: row.valid_until ?? null,
+        fetchedAt: row.fetched_at ?? null,
+        updatedAt: row.updated_at ?? null,
+      });
+    }
+    if (rows.length < pageSize) return prices;
+  }
+  throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-prijzen.");
 }
 
 export async function hasProductTypeColumn(config) {
@@ -465,6 +503,10 @@ export async function upsertProducts(config, products) {
   });
 
   for (const product of uniqueProducts) {
+    if (!(Number.isFinite(product?.price) && product.price > 0)) {
+      errors.push({ sku: product?.sku ?? "-", message: "Ongeldige prijs; bestaande Supabase-prijs blijft ongewijzigd." });
+      continue;
+    }
     try {
       const rows = await postJSON(
         config.supabaseURL,
