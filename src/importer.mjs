@@ -41,10 +41,13 @@ export function formatBatchSummary(stats) {
     `kandidaten=${stats.candidatesFound}`,
     `irrelevant_overgeslagen=${stats.irrelevantCandidatesSkipped ?? 0}`,
     `bekend_overgeslagen=${stats.existingCandidatesSkipped ?? 0}`,
-    `unieke_SKUs=${stats.uniqueSKUs}`,
+    `bestaand_gevonden=${stats.existingSKUsDiscovered ?? stats.existingProducts ?? 0}`,
+    `unieke_SKUs=${stats.uniqueSKUsDiscovered ?? stats.uniqueSKUs}`,
+    `nieuw_gevonden=${stats.newSKUsDiscovered ?? stats.newProducts}`,
     `nieuwe_SKUs=${stats.newProducts}`,
     `bestaande_SKUs=${stats.existingProducts}`,
     `gevalideerd=${stats.validatedProducts}`,
+    `onbekend_type=${stats.unknownProductTypes ?? 0}`,
     `dubbele_SKUs=${stats.duplicateSKUsSkipped}`,
     `overgeslagen=${skippedProducts}`,
     `ongeldig_overgeslagen=${stats.invalidProductsSkipped}`,
@@ -189,7 +192,7 @@ export async function main() {
       + `maximaal ${config.maxPerTerm} producten en ${config.maxPagesPerTerm} pagina's per zoekterm.`,
   );
   if (config.catalogNewOnly) {
-    logger.info("Catalogusdekking: bekende SKU's worden overgeslagen; dagelijkse prijsupdates houden ze actueel.");
+    logger.info("Automatische productontdekking: bekende SKU's worden overgeslagen; alleen volledig gevalideerde nieuwe SKU's worden toegevoegd. Dagelijkse prijsupdates houden bestaande producten actueel.");
   }
   if (!config.dryRun) logger.info(`Bestaande Supabase-SKU's geladen: ${existingSKUs.size}.`);
   const persistBatch = async (batch) => {
@@ -227,7 +230,11 @@ export async function main() {
     imported, errors, duplicateSKUsSkipped, newProductsWritten, existingProductsUpdated,
   } = writeResult;
   for (const error of errors) logger.error(`Supabase-product overgeslagen (${error.sku}): ${error.message}`);
-  logger.info(`Import geslaagd: ${imported.length} producten en gekoppelde prijzen ge-upsert.`);
+  if (products.length === 0 && stats.existingSKUsDiscovered > 0) {
+    logger.info(`Ontdekking geslaagd: geen nieuwe SKU's; ${stats.existingSKUsDiscovered} bestaande SKU's herkend.`);
+  } else {
+    logger.info(`Import geslaagd: ${imported.length} producten en gekoppelde prijzen ge-upsert.`);
+  }
   for (const product of imported) {
     logger.info(`${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
   }
