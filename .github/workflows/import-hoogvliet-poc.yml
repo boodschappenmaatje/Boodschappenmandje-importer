@@ -110,7 +110,9 @@ jobs:
             echo "PRICE_SHARD_INDEX=$price_shard"
             echo "MAX_PRODUCTS=$max_products"
             echo "MAX_NEW_PRODUCTS=100"
-            echo "MAX_PER_TERM=6"
+            echo "MAX_PER_TERM=20"
+            echo "MAX_PAGES_PER_TERM=4"
+            echo "CATALOG_NEW_ONLY=1"
           } >> "$GITHUB_ENV"
 
           echo "Updateplan: mode=$update_mode, catalogusbatch=$catalog_batch, prijsdeelbatch=$price_shard/6"
