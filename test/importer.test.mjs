@@ -3,14 +3,17 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
+  collectCandidatePages,
   catalogLimitReached,
   claimCandidateSKU,
+  isRelevantCandidate,
   isValidProductURL,
   isValidSKU,
   parseOfferPeriod,
   parsePriceText,
   prioritizeCandidates,
   recordCatalogProduct,
+  searchURL,
   selectPriceShard,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
@@ -35,9 +38,9 @@ test("MAX_PRODUCTS is configureerbaar met een veilige standaard en bovengrens", 
   assert.equal(loadConfig({ DRY_RUN: "1" }).maxProducts, 10);
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "30" }).maxProducts, 30);
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150" }).maxProducts, 150);
-  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" }).maxProducts, 200);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "999" }).maxProducts, 500);
   assert.equal(limits.defaultMaxProducts, 10);
-  assert.equal(limits.safeProductLimit, 200);
+  assert.equal(limits.safeProductLimit, 500);
 });
 
 test("catalogusbatches zijn selecteerbaar en SEARCH_TERMS blijft een override", () => {
@@ -50,6 +53,9 @@ test("catalogusbatches zijn selecteerbaar en SEARCH_TERMS blijft een override", 
   });
   assert.equal(custom.catalogBatch, "custom");
   assert.deepEqual(custom.searchTerms, ["cola", "melk"]);
+  assert.ok(catalogBatches.fresh.includes("cola"));
+  assert.ok(catalogBatches.pantry.includes("toiletpapier"));
+  assert.ok(Object.values(catalogBatches).every((terms) => new Set(terms).size === terms.length));
 });
 
 test("een ongeldige catalogusbatch faalt veilig", () => {
@@ -66,16 +72,70 @@ test("MAX_NEW_PRODUCTS heeft een aparte veilige grens", () => {
   }).maxNewProducts, 100);
   assert.equal(loadConfig({
     DRY_RUN: "1", MAX_PRODUCTS: "180", MAX_NEW_PRODUCTS: "999",
-  }).maxNewProducts, 150);
-  assert.equal(limits.safeNewProductLimit, 150);
+  }).maxNewProducts, 180);
+  assert.equal(limits.safeNewProductLimit, 300);
 });
 
 test("MAX_PER_TERM ondersteunt catalogusdekking maar houdt een harde bovengrens", () => {
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150" }).maxPerTerm, 2);
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150", MAX_PER_TERM: "7" }).maxPerTerm, 7);
-  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150", MAX_PER_TERM: "999" }).maxPerTerm, 10);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "150", MAX_PER_TERM: "999" }).maxPerTerm, 40);
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PRODUCTS: "4", MAX_PER_TERM: "7" }).maxPerTerm, 4);
-  assert.equal(limits.safePerTermLimit, 10);
+  assert.equal(limits.safePerTermLimit, 40);
+});
+
+test("paginering en catalogusfocus zijn configureerbaar en hard begrensd", () => {
+  const config = loadConfig({
+    DRY_RUN: "1", MAX_PAGES_PER_TERM: "4", CATALOG_NEW_ONLY: "1",
+  });
+  assert.equal(config.maxPagesPerTerm, 4);
+  assert.equal(config.catalogNewOnly, true);
+  assert.equal(loadConfig({ DRY_RUN: "1", MAX_PAGES_PER_TERM: "999" }).maxPagesPerTerm, 8);
+  assert.equal(limits.defaultMaxPagesPerTerm, 1);
+  assert.equal(limits.safePagesPerTermLimit, 8);
+});
+
+test("zoekrelevantie behoudt productvarianten maar weigert toevallige middenwoordmatches", () => {
+  assert.equal(isRelevantCandidate({ name: "Coca-Cola Original taste", brand: "Coca-Cola" }, "cola"), true);
+  assert.equal(isRelevantCandidate({ name: "First Choice Cola Zero", brand: "First Choice" }, "cola"), true);
+  assert.equal(isRelevantCandidate({ name: "Chocolade hagelmix", brand: "Hoogvliet" }, "cola"), false);
+  assert.equal(isRelevantCandidate({ name: "Kipfilet voordeelverpakking" }, "kip"), true);
+  assert.equal(isRelevantCandidate({ name: "Fanta Orange", category: "Frisdrank" }, "frisdrank"), true);
+});
+
+test("meerdere resultaatpagina's leveren afzonderlijke SKU-varianten zonder dubbelen", async () => {
+  const candidate = (sku, name) => ({
+    sku, name, brand: " GateTest", category: "Frisdrank", packageText: "1,5 liter",
+    sourceURL: `https://www.hoogvliet.com/product/${sku}`,
+  });
+  const pages = [
+    [candidate("111111111", "Cola Original"), candidate("222222222", "Cola Zero")],
+    [candidate("222222222", "Cola Zero"), candidate("333333333", "Cola 6-pack")],
+    [],
+  ];
+  const result = await collectCandidatePages(async (pageNumber) => pages[pageNumber], "cola", 4);
+
+  assert.equal(result.pagesFetched, 3);
+  assert.deepEqual(result.candidates.map(({ sku }) => sku), ["111111111", "222222222", "333333333"]);
+  assert.equal(result.duplicateCandidates, 1);
+});
+
+test("Hoogvliet-zoek-URL vraagt expliciet een volgend resultaatblok op", () => {
+  const url = new URL(searchURL("cola", 3));
+  assert.equal(url.searchParams.get("SearchTerm"), "cola");
+  assert.equal(url.searchParams.get("PageNumber"), "3");
+  assert.equal(url.searchParams.get("PageSize"), "40");
+});
+
+test("herhaalde resultaatpagina stopt begrensd en voorkomt een paginalus", async () => {
+  const page = [{
+    sku: "111111111", name: "Cola Original", category: "Frisdrank",
+    sourceURL: "https://www.hoogvliet.com/product/111111111",
+  }];
+  const result = await collectCandidatePages(async () => page, "cola", 8);
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.repeatedPageStopped, true);
+  assert.equal(result.candidates.length, 1);
 });
 
 test("dezelfde SKU uit twee zoektermen wordt maar eenmaal geclaimd", () => {
@@ -452,15 +512,15 @@ test("batchstatistieken en logging lekken geen ingestelde secrets", () => {
 
 test("catalogusdekking wordt compact per zoekterm gerapporteerd", () => {
   const lines = formatTermCoverage({
-    kip: { new: 3, existing: 1 },
-    pasta: { new: 2, existing: 1 },
-    melk: { new: 1, existing: 2 },
+    kip: { candidates: 12, pages: 2, new: 3, existing: 1, existingSkipped: 4 },
+    pasta: { candidates: 8, pages: 2, new: 2, existing: 1, existingSkipped: 2 },
+    melk: { candidates: 6, pages: 1, new: 1, existing: 2, existingSkipped: 1 },
   }, 2);
 
   assert.equal(lines.length, 2);
-  assert.match(lines[0], /kip: 3 nieuw, 1 bestaand/);
-  assert.match(lines[0], /pasta: 2 nieuw, 1 bestaand/);
-  assert.match(lines[1], /melk: 1 nieuw, 2 bestaand/);
+  assert.match(lines[0], /kip: 12 relevant\/2 pag\., 3 nieuw, 1 bijgewerkt, 4 bekend overgeslagen/);
+  assert.match(lines[0], /pasta: 8 relevant\/2 pag\., 2 nieuw, 1 bijgewerkt/);
+  assert.match(lines[1], /melk: 6 relevant\/1 pag\., 1 nieuw, 2 bijgewerkt/);
 });
 
 test("prijsmodus en begrensde prijsdeelbatch zijn configureerbaar", () => {
@@ -538,5 +598,8 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
   assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
+  assert.match(workflow, /MAX_PER_TERM=20/);
+  assert.match(workflow, /MAX_PAGES_PER_TERM=4/);
+  assert.match(workflow, /CATALOG_NEW_ONLY=1/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });
