@@ -29,7 +29,11 @@ export function formatBatchSummary(stats) {
     "Batchstatistieken",
     `batch=${stats.catalogBatch}`,
     `zoektermen=${stats.searchedTerms}/${stats.configuredSearchTerms}`,
+    `pagina's=${stats.pagesFetched ?? 0}`,
+    `ruwe_kandidaten=${stats.rawCandidatesFound ?? stats.candidatesFound}`,
     `kandidaten=${stats.candidatesFound}`,
+    `irrelevant_overgeslagen=${stats.irrelevantCandidatesSkipped ?? 0}`,
+    `bekend_overgeslagen=${stats.existingCandidatesSkipped ?? 0}`,
     `unieke_SKUs=${stats.uniqueSKUs}`,
     `nieuwe_SKUs=${stats.newProducts}`,
     `bestaande_SKUs=${stats.existingProducts}`,
@@ -50,7 +54,9 @@ export function formatBatchSummary(stats) {
 
 export function formatTermCoverage(termCoverage, termsPerLine = 8) {
   const entries = Object.entries(termCoverage).map(([term, value]) => (
-    `${term}: ${value.new ?? 0} nieuw, ${value.existing ?? 0} bestaand`
+    `${term}: ${value.candidates ?? 0} relevant/${value.pages ?? 0} pag., `
+      + `${value.new ?? 0} nieuw, ${value.existing ?? 0} bijgewerkt, `
+      + `${value.existingSkipped ?? 0} bekend overgeslagen`
   ));
   const lines = [];
   for (let index = 0; index < entries.length; index += termsPerLine) {
@@ -132,8 +138,12 @@ export async function main() {
   };
   logger.info(
     `Start catalogusbatch '${config.catalogBatch}' met ${config.searchTerms.length} zoektermen; `
-      + `maximum ${config.maxNewProducts} nieuwe en ${config.maxProducts} totaal.`,
+      + `maximum ${config.maxNewProducts} nieuwe en ${config.maxProducts} totaal; `
+      + `maximaal ${config.maxPerTerm} producten en ${config.maxPagesPerTerm} pagina's per zoekterm.`,
   );
+  if (config.catalogNewOnly) {
+    logger.info("Catalogusdekking: bekende SKU's worden overgeslagen; dagelijkse prijsupdates houden ze actueel.");
+  }
   if (!config.dryRun) logger.info(`Bestaande Supabase-SKU's geladen: ${existingSKUs.size}.`);
   const persistBatch = async (batch) => {
     const result = await upsertProducts(config, batch);
