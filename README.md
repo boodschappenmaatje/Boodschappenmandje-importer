@@ -10,6 +10,12 @@ De bestaande wekelijkse catalogusrun is tevens de veilige discovery-run. GitHub 
 
 Een nieuw product wordt pas toegevoegd als SKU, naam, verpakking, Hoogvliet-product-URL en actuele verkoopprijs betrouwbaar bij hetzelfde product horen. De centrale classificatie uit stap 4.4 vult `product_type`, met `Onbekend` als veilige fallback. Nul nieuwe SKU's is een geldige, succesvolle discovery-run wanneer de gevonden resultaten aantoonbaar al in Supabase bestaan. Er worden nooit producten verwijderd omdat ze tijdens één run niet gevonden zijn.
 
+## Automatische prijsupdates
+
+De dagelijkse prijsrun gebruikt de bestaande Hoogvliet-SKU en product-URL als identiteit. Zeven vaste SKU-shards verdelen het werk over de week. Wanneer een shard later meer producten bevat dan de begrensde batchgrootte, roteert iedere nieuwe week automatisch naar het volgende venster; nieuwe catalogusproducten blijven daardoor niet achter de eerste honderd SKU's vastzitten.
+
+Voor vergelijking worden de bestaande prijzen één keer uit Supabase gelezen en uitsluitend via `product_id` gekoppeld. De run rapporteert gewijzigde en ongewijzigde prijzen, actieve/gestarte/beëindigde acties, niet gevonden producten en ongeldige prijzen. Een prijsrecord wordt alleen geschreven na een geslaagde productpagina- en SKU-validatie. Een ontbrekende of ongeldige nieuwe prijs wist nooit de laatst geldige prijs, en een tijdelijk ontbrekend product wordt niet verwijderd. `product_type`, afbeelding, merk en categorie blijven behouden wanneer de prijsbron geen betrouwbare vervanging levert.
+
 ## Bestanden uploaden
 
 Upload de volledige inhoud van deze map naar de hoofdmap van je private GitHub-repository. Controleer dat deze paden zichtbaar zijn:
