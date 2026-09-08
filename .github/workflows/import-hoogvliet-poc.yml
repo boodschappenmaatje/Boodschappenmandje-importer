@@ -3,6 +3,14 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
+      update_mode:
+        description: Soort update
+        required: true
+        default: catalog
+        type: choice
+        options:
+          - catalog
+          - prices
       catalog_batch:
         description: Catalogusbatch
         required: true
@@ -13,12 +21,31 @@ on:
           - fresh
           - world
           - pantry
+      price_shard:
+        description: Prijsdeelbatch (auto gebruikt de huidige weekdag)
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - "0"
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+          - "5"
+          - "6"
+  schedule:
+    # Dagelijks 02:17 UTC: één van zeven vaste prijsdeelbatches.
+    - cron: "17 2 * * *"
+    # Zondag 03:43 UTC: één catalogusbatch; core/fresh/world/pantry rouleren.
+    - cron: "43 3 * * 0"
 
 permissions:
   contents: read
 
 concurrency:
-  group: hoogvliet-import-poc
+  group: hoogvliet-supabase-update
   cancel-in-progress: false
 
 jobs:
@@ -29,10 +56,6 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      CATALOG_BATCH: ${{ inputs.catalog_batch }}
-      MAX_PRODUCTS: "180"
-      MAX_NEW_PRODUCTS: "100"
-      MAX_PER_TERM: "6"
       HEADLESS: "1"
 
     steps:
@@ -44,6 +67,53 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+
+      - name: Updateplan bepalen
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            if [[ "${{ github.event.schedule }}" == "17 2 * * *" ]]; then
+              update_mode="prices"
+              catalog_batch="core"
+              price_shard=$((10#$(date -u +%u) - 1))
+            elif [[ "${{ github.event.schedule }}" == "43 3 * * 0" ]]; then
+              update_mode="catalog"
+              batches=(core fresh world pantry)
+              week=$((10#$(date -u +%V)))
+              catalog_batch="${batches[$((week % ${#batches[@]}))]}"
+              price_shard="0"
+            else
+              echo "Onbekend automatisch updateschema" >&2
+              exit 1
+            fi
+          else
+            update_mode="${{ inputs.update_mode }}"
+            catalog_batch="${{ inputs.catalog_batch }}"
+            price_shard="${{ inputs.price_shard }}"
+            if [[ "$price_shard" == "auto" ]]; then
+              price_shard=$((10#$(date -u +%u) - 1))
+            fi
+          fi
+
+          if [[ "$update_mode" == "prices" ]]; then
+            max_products="100"
+          else
+            max_products="180"
+          fi
+
+          {
+            echo "UPDATE_MODE=$update_mode"
+            echo "CATALOG_BATCH=$catalog_batch"
+            echo "PRICE_SHARD_COUNT=7"
+            echo "PRICE_SHARD_INDEX=$price_shard"
+            echo "MAX_PRODUCTS=$max_products"
+            echo "MAX_NEW_PRODUCTS=100"
+            echo "MAX_PER_TERM=6"
+          } >> "$GITHUB_ENV"
+
+          echo "Updateplan: mode=$update_mode, catalogusbatch=$catalog_batch, prijsdeelbatch=$price_shard/6"
 
       - name: Test Supabase verbinding
         run: |
@@ -99,5 +169,5 @@ jobs:
       - name: Technische controles
         run: npm test
 
-      - name: Catalogusbatch importeren
+      - name: Producten en prijzen bijwerken
         run: npm run import

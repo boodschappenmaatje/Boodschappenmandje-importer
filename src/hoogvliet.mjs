@@ -309,6 +309,76 @@ export function catalogLimitReached(stats, config, totalProducts) {
   return totalProducts >= config.maxProducts || stats.newProducts >= config.maxNewProducts;
 }
 
+export function selectPriceShard(products, shardIndex, shardCount, maxProducts) {
+  if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error("Ongeldig aantal prijsdeelbatches.");
+  if (!Number.isInteger(shardIndex) || shardIndex < 0 || shardIndex >= shardCount) {
+    throw new Error("Ongeldige prijsdeelbatch.");
+  }
+  return products
+    .filter((product) => isValidSKU(product?.sku) && isValidProductURL(product?.sourceURL))
+    .filter((product) => Number(product.sku) % shardCount === shardIndex)
+    .slice(0, maxProducts);
+}
+
+/// Valideert bestaande Supabase-producten opnieuw via exact dezelfde
+/// productpagina- en prijscontrole als de catalogusimport. Hierdoor ontstaat
+/// geen tweede prijsengine en kan een mislukte run bestaande data niet wissen.
+export async function refreshExistingProducts(config, candidates, logger = console, options = {}) {
+  const startedAt = Date.now();
+  const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
+  const persistBatchSize = Math.max(1, Math.min(options.persistBatchSize ?? 10, 25));
+  const browser = await chromium.launch({ headless: config.headless });
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  const detailPage = await context.newPage();
+  const products = [];
+  const pendingPersistence = [];
+  const stats = {
+    selectedProducts: candidates.length,
+    validatedProducts: 0,
+    invalidProductsSkipped: 0,
+    productErrors: 0,
+    durationMs: 0,
+  };
+
+  try {
+    for (const candidate of candidates) {
+      let product;
+      try {
+        product = await validateCandidate(detailPage, candidate);
+      } catch (error) {
+        if (error instanceof SourceBlockedError) throw error;
+        stats.productErrors += 1;
+        logger.error(`Prijsproduct overgeslagen (${candidate.sku}): ${error instanceof Error ? error.message : "onbekende fout"}`);
+        continue;
+      }
+      if (!product) {
+        stats.invalidProductsSkipped += 1;
+        continue;
+      }
+      products.push(product);
+      pendingPersistence.push(product);
+      stats.validatedProducts += 1;
+      logger.info(`Prijs gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
+      if (onBatch && pendingPersistence.length >= persistBatchSize) {
+        await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
+      }
+      await detailPage.waitForTimeout(250);
+    }
+    if (onBatch && pendingPersistence.length > 0) {
+      await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
+    }
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+
+  if (products.length === 0) {
+    throw new Error("Geen enkel bestaand Hoogvliet-product kon opnieuw betrouwbaar worden gevalideerd.");
+  }
+  stats.durationMs = Date.now() - startedAt;
+  return { products, stats };
+}
+
 export async function collectProducts(config, logger = console, options = {}) {
   const startedAt = Date.now();
   const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;

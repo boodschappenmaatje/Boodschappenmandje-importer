@@ -1,7 +1,12 @@
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.mjs";
-import { collectProducts, SourceBlockedError } from "./hoogvliet.mjs";
-import { fetchExistingSKUs, upsertProducts } from "./supabase.mjs";
+import {
+  collectProducts,
+  refreshExistingProducts,
+  selectPriceShard,
+  SourceBlockedError,
+} from "./hoogvliet.mjs";
+import { fetchExistingProducts, fetchExistingSKUs, upsertProducts } from "./supabase.mjs";
 
 export function safeLogger(secrets = []) {
   const redact = (message) => secrets
@@ -54,10 +59,72 @@ export function formatTermCoverage(termCoverage, termsPerLine = 8) {
   return lines;
 }
 
+export function formatPriceRefreshSummary(stats) {
+  return [
+    "Prijsupdate-statistieken",
+    `deelbatch=${stats.priceShardIndex + 1}/${stats.priceShardCount}`,
+    `geselecteerd=${stats.selectedProducts}`,
+    `gevalideerd=${stats.validatedProducts}`,
+    `overgeslagen=${stats.invalidProductsSkipped}`,
+    `productfouten=${stats.productErrors}`,
+    `geschreven=${stats.writtenProducts}`,
+    `schrijffouten=${stats.writeErrors}`,
+    `duur=${(stats.durationMs / 1000).toFixed(1)}s`,
+  ].join(" | ");
+}
+
+async function runPriceRefresh(config, logger, startedAt) {
+  const existingProducts = await fetchExistingProducts(config);
+  const selected = selectPriceShard(
+    existingProducts,
+    config.priceShardIndex,
+    config.priceShardCount,
+    config.maxProducts,
+  );
+  if (selected.length === 0) {
+    throw new Error(
+      `Prijsdeelbatch ${config.priceShardIndex + 1}/${config.priceShardCount} bevat geen valide productpagina's.`,
+    );
+  }
+  logger.info(
+    `Start prijsupdate ${config.priceShardIndex + 1}/${config.priceShardCount}: `
+      + `${selected.length} van ${existingProducts.length} bestaande producten.`,
+  );
+
+  const writeResult = { imported: [], errors: [], duplicateSKUsSkipped: 0 };
+  const persistBatch = async (batch) => {
+    const result = await upsertProducts(config, batch);
+    writeResult.imported.push(...result.imported);
+    writeResult.errors.push(...result.errors);
+    writeResult.duplicateSKUsSkipped += result.duplicateSKUsSkipped;
+    logger.info(`Tussentijds opgeslagen: ${writeResult.imported.length} prijsupdates.`);
+  };
+  const { stats } = await refreshExistingProducts(config, selected, logger, {
+    onBatch: persistBatch,
+    persistBatchSize: 10,
+  });
+  for (const error of writeResult.errors) {
+    logger.error(`Prijsupdate overgeslagen (${error.sku}): ${error.message}`);
+  }
+  logger.info(`Prijsupdate geslaagd: ${writeResult.imported.length} producten bijgewerkt.`);
+  logger.info(formatPriceRefreshSummary({
+    ...stats,
+    priceShardIndex: config.priceShardIndex,
+    priceShardCount: config.priceShardCount,
+    writtenProducts: writeResult.imported.length,
+    writeErrors: writeResult.errors.length,
+    durationMs: Date.now() - startedAt,
+  }));
+}
+
 export async function main() {
   const startedAt = Date.now();
   const config = loadConfig();
   const logger = safeLogger([config.supabaseSecret]);
+  if (config.updateMode === "prices") {
+    await runPriceRefresh(config, logger, startedAt);
+    return;
+  }
   const existingSKUs = config.dryRun ? new Set() : await fetchExistingSKUs(config);
   const writeResult = {
     imported: [], errors: [], duplicateSKUsSkipped: 0,
