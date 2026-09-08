@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
@@ -10,10 +11,15 @@ import {
   parsePriceText,
   prioritizeCandidates,
   recordCatalogProduct,
+  selectPriceShard,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
-import { formatBatchSummary, formatTermCoverage, safeLogger } from "../src/importer.mjs";
-import { fetchExistingSKUs, requestHeaders, restURL, upsertProducts } from "../src/supabase.mjs";
+import {
+  formatBatchSummary, formatPriceRefreshSummary, formatTermCoverage, safeLogger,
+} from "../src/importer.mjs";
+import {
+  fetchExistingProducts, fetchExistingSKUs, requestHeaders, restURL, upsertProducts,
+} from "../src/supabase.mjs";
 
 function testProduct(sku = "123456789", name = "Echt product", price = 5.52) {
   return {
@@ -455,4 +461,82 @@ test("catalogusdekking wordt compact per zoekterm gerapporteerd", () => {
   assert.match(lines[0], /kip: 3 nieuw, 1 bestaand/);
   assert.match(lines[0], /pasta: 2 nieuw, 1 bestaand/);
   assert.match(lines[1], /melk: 1 nieuw, 2 bestaand/);
+});
+
+test("prijsmodus en begrensde prijsdeelbatch zijn configureerbaar", () => {
+  const config = loadConfig({
+    DRY_RUN: "1", UPDATE_MODE: "prices", PRICE_SHARD_COUNT: "7", PRICE_SHARD_INDEX: "6",
+  });
+  assert.equal(config.updateMode, "prices");
+  assert.equal(config.priceShardCount, 7);
+  assert.equal(config.priceShardIndex, 6);
+  assert.throws(
+    () => loadConfig({ DRY_RUN: "1", UPDATE_MODE: "prices", PRICE_SHARD_COUNT: "7", PRICE_SHARD_INDEX: "7" }),
+    /Ongeldige PRICE_SHARD_INDEX/,
+  );
+  assert.throws(() => loadConfig({ DRY_RUN: "1", UPDATE_MODE: "onbekend" }), /Ongeldige UPDATE_MODE/);
+});
+
+test("prijsdeelbatches verdelen SKU's stabiel zonder overlap", () => {
+  const products = [0, 1, 2, 3, 4, 5, 6].map((value) => ({
+    sku: `12345678${value}`,
+    sourceURL: `https://www.hoogvliet.com/product/${value}`,
+  }));
+  const shards = Array.from({ length: 7 }, (_, index) => selectPriceShard(products, index, 7, 100));
+  assert.equal(shards.flat().length, products.length);
+  assert.equal(new Set(shards.flat().map(({ sku }) => sku)).size, products.length);
+  for (const shard of shards) assert.ok(shard.length <= 1);
+});
+
+test("bestaande productbronmetadata wordt zonder cacheprijs voor prijsvalidatie gelezen", async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), options };
+    return new Response(JSON.stringify([{
+      sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
+      package_text: "500 gram", image_url: "https://voorbeeld.nl/product.jpg",
+      source_url: "https://www.hoogvliet.com/product/bestaand-product", is_available: true,
+    }]), { status: 200 });
+  };
+  let products;
+  try {
+    products = await fetchExistingProducts({
+      supabaseURL: "https://voorbeeld.supabase.co",
+      supabaseSecret: ["sb", "secret", "test"].join("_"),
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(products.length, 1);
+  assert.deepEqual(products[0], {
+    sku: "123456789", name: "Bestaand product", brand: "Merk", category: "Categorie",
+    packageText: "500 gram", imageURL: "https://voorbeeld.nl/product.jpg",
+    sourceURL: "https://www.hoogvliet.com/product/bestaand-product", available: true,
+  });
+  assert.match(request.url, /select=sku%2Cname%2Cbrand%2Ccategory%2Cpackage_text/);
+  assert.doesNotMatch(request.url, /product_prices/);
+});
+
+test("prijsupdate-statistieken zijn compact en bevatten geen credentials", () => {
+  const summary = formatPriceRefreshSummary({
+    priceShardIndex: 2, priceShardCount: 7, selectedProducts: 65,
+    validatedProducts: 64, invalidProductsSkipped: 1, productErrors: 0,
+    writtenProducts: 64, writeErrors: 0, durationMs: 125_000,
+  });
+  assert.match(summary, /deelbatch=3\/7/);
+  assert.match(summary, /geschreven=64/);
+  assert.doesNotMatch(summary, /SUPABASE|secret|apikey|Authorization/i);
+});
+
+test("workflow behoudt handmatig starten en plant veilige automatische updates", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8");
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /cron: "17 2 \* \* \*"/);
+  assert.match(workflow, /cron: "43 3 \* \* 0"/);
+  assert.match(workflow, /group: hoogvliet-supabase-update/);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.match(workflow, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
+  assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
+  assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });
