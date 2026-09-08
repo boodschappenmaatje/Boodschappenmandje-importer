@@ -11,6 +11,7 @@ on:
         options:
           - catalog
           - prices
+          - classify
       catalog_batch:
         description: Catalogusbatch
         required: true
