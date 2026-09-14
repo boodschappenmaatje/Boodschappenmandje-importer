@@ -1,0 +1,16 @@
+:root {
+  --color-primary: #0875e1;
+  --color-primary-strong: #075fb6;
+  --color-primary-soft: #e7f3ff;
+  --color-background: #f4f9ff;
+  --color-surface: #ffffff;
+  --color-text: #11243d;
+  --color-muted: #617086;
+  --color-border: #dfeaf5;
+  --color-success: #16845b;
+  --shadow-card: 0 10px 30px rgba(29, 76, 126, 0.09);
+  --radius-small: 14px;
+  --radius-card: 22px;
+  --content-width: 760px;
+  --bottom-nav-height: 74px;
+}
