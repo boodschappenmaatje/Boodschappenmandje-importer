@@ -53,7 +53,9 @@ horen bij een latere PWA-stap.
 npm run check
 ```
 
-Dit voert ESLint, TypeScript, Vitest en een productiebuild uit.
+Dit genereert eerst de Next.js-routetypen en voert daarna ESLint, TypeScript,
+Vitest en een productiebuild uit. Daardoor werkt de controle ook in een verse
+checkout zonder bestaande `.next`-map.
 
 ## Deploymentvoorbereiding
 
