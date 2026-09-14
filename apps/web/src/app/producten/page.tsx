@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PageIntro } from "@/components/PageIntro";
+import { ProductCatalogPreview } from "@/components/ProductCatalogPreview";
 
 export const metadata: Metadata = { title: "Producten" };
 
@@ -8,12 +9,9 @@ export default function ProductsPage() {
   return (
     <>
       <PageIntro eyebrow="Catalogus" title="Producten">
-        Deze route wordt later gekoppeld aan de bestaande Supabase-productcatalogus.
+        Een veilige, read-only selectie uit de bestaande productcatalogus.
       </PageIntro>
-      <section className="placeholder-card">
-        <h2>Veilige voorbereiding</h2>
-        <p>De huidige Hoogvliet-importer blijft de server-side datastroom verzorgen.</p>
-      </section>
+      <ProductCatalogPreview />
     </>
   );
 }
