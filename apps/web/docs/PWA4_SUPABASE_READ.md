@@ -63,3 +63,10 @@ Een publieke REST-client kan live bevestigen dat `select` werkt, maar kan
 de Supabase SQL Editor of Dashboard dat beide tabellen RLS actief tonen en dat
 de genoemde read-only policies aanwezig zijn. Browserwrites blijven in de PWA
 code volledig afwezig.
+
+## Uitgevoerde read-controle
+
+Op 14 september 2026 gaf de bestaande publieke configuratie HTTP 200 voor een
+begrensde `select` op alle zes genoemde tabellen. `products` en
+`product_prices` leverden ieder tien rijen met exact de hierboven vastgelegde
+velden. Er zijn geen inserts, updates, deletes, upserts of RPC's uitgevoerd.
