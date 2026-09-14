@@ -2,7 +2,43 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { mapCatalogRows } from "@/services/catalog/catalog-mapper";
-import type { CatalogPreviewResult } from "@/types/catalog";
+import type { CatalogPageResult } from "@/types/catalog";
+
+export const DEFAULT_CATALOG_PAGE_SIZE = 20;
+export const MAX_CATALOG_PAGE_SIZE = 20;
+
+export interface CatalogPageRequest {
+  page?: number;
+  pageSize?: number;
+  signal?: AbortSignal;
+}
+
+export interface NormalizedCatalogPageRequest {
+  page: number;
+  pageSize: number;
+  rangeStart: number;
+  rangeEnd: number;
+}
+
+export function normalizeCatalogPageRequest(
+  request: CatalogPageRequest = {},
+): NormalizedCatalogPageRequest {
+  const requestedPage = Number.isFinite(request.page) ? Math.trunc(request.page ?? 1) : 1;
+  const requestedPageSize = Number.isFinite(request.pageSize)
+    ? Math.trunc(request.pageSize ?? DEFAULT_CATALOG_PAGE_SIZE)
+    : DEFAULT_CATALOG_PAGE_SIZE;
+  const page = Math.max(1, requestedPage);
+  const pageSize = Math.max(1, Math.min(MAX_CATALOG_PAGE_SIZE, requestedPageSize));
+  const rangeStart = (page - 1) * pageSize;
+
+  return {
+    page,
+    pageSize,
+    rangeStart,
+    // Eén extra record bepaalt of er een volgende pagina is.
+    rangeEnd: rangeStart + pageSize,
+  };
+}
 
 const PRODUCT_FIELDS = [
   "id",
@@ -45,23 +81,23 @@ export class CatalogReadError extends Error {
 }
 
 export interface CatalogRepository {
-  getPreview(limit?: number, signal?: AbortSignal): Promise<CatalogPreviewResult>;
+  getPage(request?: CatalogPageRequest): Promise<CatalogPageResult>;
 }
 
 export class SupabaseCatalogRepository implements CatalogRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async getPreview(
-    limit = 10,
-    signal?: AbortSignal,
-  ): Promise<CatalogPreviewResult> {
-    const safeLimit = Math.max(1, Math.min(10, Math.trunc(limit)));
+  async getPage(request: CatalogPageRequest = {}): Promise<CatalogPageResult> {
+    const { page, pageSize, rangeStart, rangeEnd } =
+      normalizeCatalogPageRequest(request);
+    const { signal } = request;
     let productQuery = this.client
       .from("products")
       .select(PRODUCT_FIELDS)
       .eq("supermarket", "Hoogvliet")
       .order("name", { ascending: true })
-      .limit(safeLimit);
+      .order("id", { ascending: true })
+      .range(rangeStart, rangeEnd);
 
     if (signal) {
       productQuery = productQuery.abortSignal(signal);
@@ -75,10 +111,19 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       throw new CatalogReadError("invalid-response");
     }
     if (productRows.length === 0) {
-      return { products: [], priceStatus: "complete" };
+      return {
+        products: [],
+        priceStatus: "complete",
+        page,
+        pageSize,
+        hasMore: false,
+      };
     }
 
-    const productIds = productRows
+    const hasMore = productRows.length > pageSize;
+    const pageRows = productRows.slice(0, pageSize);
+
+    const productIds = pageRows
       .map((row) =>
         typeof row === "object" && row !== null && "id" in row
           ? (row as { id?: unknown }).id
@@ -101,10 +146,20 @@ export class SupabaseCatalogRepository implements CatalogRepository {
 
     const { data: priceRows, error: priceError } = await priceQuery;
     if (priceError || !Array.isArray(priceRows)) {
-      return mapCatalogRows(productRows, [], "unavailable");
+      return {
+        ...mapCatalogRows(pageRows, [], "unavailable"),
+        page,
+        pageSize,
+        hasMore,
+      };
     }
 
-    return mapCatalogRows(productRows, priceRows);
+    return {
+      ...mapCatalogRows(pageRows, priceRows),
+      page,
+      pageSize,
+      hasMore,
+    };
   }
 }
 

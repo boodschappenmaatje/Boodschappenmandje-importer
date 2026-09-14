@@ -1,5 +1,5 @@
 import type {
-  CatalogPreviewResult,
+  CatalogProductsResult,
   Product,
   ProductPrice,
 } from "@/types/catalog";
@@ -86,8 +86,8 @@ function mapProduct(value: unknown): Omit<Product, "currentPrice"> | null {
 export function mapCatalogRows(
   productRows: unknown,
   priceRows: unknown,
-  priceStatus: CatalogPreviewResult["priceStatus"] = "complete",
-): CatalogPreviewResult {
+  priceStatus: CatalogProductsResult["priceStatus"] = "complete",
+): CatalogProductsResult {
   const prices = new Map<string, ProductPrice>();
   if (Array.isArray(priceRows)) {
     for (const value of priceRows) {

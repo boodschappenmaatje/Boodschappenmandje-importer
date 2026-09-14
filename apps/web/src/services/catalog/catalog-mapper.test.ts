@@ -70,4 +70,27 @@ describe("mapCatalogRows", () => {
     expect(result.products[0]?.currentPrice).toBeNull();
     expect(result.priceStatus).toBe("unavailable");
   });
+
+  it("houdt ontbrekende optionele productvelden leeg zonder gegevens te verzinnen", () => {
+    const result = mapCatalogRows(
+      [
+        {
+          ...product,
+          brand: null,
+          package_text: null,
+          image_url: null,
+          weight_grams: null,
+        },
+      ],
+      [],
+    );
+
+    expect(result.products[0]).toMatchObject({
+      brand: null,
+      packageText: null,
+      imageUrl: null,
+      weightGrams: null,
+      currentPrice: null,
+    });
+  });
 });

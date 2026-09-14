@@ -345,8 +345,9 @@ button {
 
 .product-card {
   display: grid;
-  grid-template-columns: 88px minmax(0, 1fr);
-  gap: 15px;
+  grid-template-columns: 82px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
   min-width: 0;
   padding: 14px;
   border: 1px solid var(--color-border);
@@ -358,8 +359,8 @@ button {
 .product-image {
   display: grid;
   place-items: center;
-  width: 88px;
-  height: 88px;
+  width: 82px;
+  height: 82px;
   border-radius: 18px;
   background-color: var(--color-primary-soft);
   background-position: center;
@@ -408,7 +409,7 @@ button {
 
 .product-price-block {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   margin-top: 10px;
   color: var(--color-muted);
   font-size: 0.72rem;
@@ -422,7 +423,8 @@ button {
 
 .product-price-line strong {
   color: var(--color-text);
-  font-size: 1.03rem;
+  font-size: 1.12rem;
+  letter-spacing: -0.025em;
 }
 
 .product-price-line s {
@@ -441,10 +443,50 @@ button {
   font-weight: 750;
 }
 
+.product-price-updated {
+  color: var(--color-muted);
+  font-size: 0.69rem;
+}
+
+.product-price-updated[data-freshness="stale"] {
+  color: #7a6740;
+}
+
 .product-price-missing {
   margin-top: 10px;
   color: var(--color-muted);
   font-size: 0.75rem;
+}
+
+.catalog-load-more {
+  min-height: 50px;
+  padding: 0 20px;
+  border: 1px solid rgba(8, 117, 225, 0.2);
+  border-radius: var(--radius-small);
+  background: var(--color-primary);
+  box-shadow: 0 8px 20px rgba(8, 117, 225, 0.18);
+  color: white;
+  cursor: pointer;
+  font-weight: 780;
+}
+
+.catalog-load-more:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.catalog-inline-error,
+.catalog-end {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.catalog-inline-error {
+  color: #9a432d;
 }
 
 @keyframes catalog-spin {
@@ -507,6 +549,20 @@ button {
 
   .product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 360px) {
+  .product-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .product-image {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
   }
 }
 

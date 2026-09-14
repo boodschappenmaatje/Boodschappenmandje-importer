@@ -12,6 +12,17 @@ export interface ProductPrice {
   updatedAt: string | null;
 }
 
+export type PriceFreshness = "fresh" | "stale" | "unknown";
+
+export interface ResolvedProductPrice {
+  amount: number;
+  comparisonPrice: number | null;
+  isOffer: boolean;
+  offerText: string | null;
+  updatedAt: string | null;
+  freshness: PriceFreshness;
+}
+
 export interface Product {
   id: UUID;
   supermarket: string;
@@ -73,7 +84,17 @@ export interface RecipeIngredient {
   position: number;
 }
 
-export interface CatalogPreviewResult {
+export interface CatalogProductsResult {
   products: Product[];
   priceStatus: "complete" | "unavailable";
 }
+
+export interface CatalogPageResult extends CatalogProductsResult {
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+// Behouden voor compatibiliteit met de PWA 4-mappertests en eventuele
+// vervolgstappen die alleen het gemapte productresultaat nodig hebben.
+export type CatalogPreviewResult = CatalogProductsResult;

@@ -1,18 +1,34 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/Icon";
 import {
-  CatalogReadError,
+  DEFAULT_CATALOG_PAGE_SIZE,
   createCatalogRepository,
 } from "@/services/catalog/catalog-repository";
-import type { CatalogPreviewResult, Product } from "@/types/catalog";
+import {
+  catalogReadErrorMessage,
+  mergeCatalogProducts,
+  priceUpdatedLabel,
+  safeProductImageUrl,
+} from "@/services/catalog/catalog-presentation";
+import {
+  getPricePerKilogram,
+  resolveCurrentPrice,
+} from "@/services/catalog/price";
+import type { Product } from "@/types/catalog";
 
 type ViewState =
   | { status: "loading" }
-  | { status: "loaded"; result: CatalogPreviewResult }
+  | {
+      status: "loaded";
+      products: Product[];
+      nextPage: number;
+      hasMore: boolean;
+      priceStatus: "complete" | "unavailable";
+    }
   | { status: "error"; message: string };
 
 const euroFormatter = new Intl.NumberFormat("nl-NL", {
@@ -20,54 +36,45 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
   currency: "EUR",
 });
 
-function userMessage(error: unknown): string {
-  if (error instanceof CatalogReadError && error.code === "not-configured") {
-    return "De productcatalogus is nog niet gekoppeld aan deze omgeving.";
-  }
-
-  return "De producten konden nu niet worden geladen. Probeer het later opnieuw.";
-}
-
 function safeImageStyle(imageUrl: string | null): CSSProperties | undefined {
-  if (!imageUrl) {
+  const safeUrl = safeProductImageUrl(imageUrl);
+  if (!safeUrl) {
     return undefined;
   }
-
-  try {
-    const url = new URL(imageUrl);
-    if (url.protocol !== "https:") {
-      return undefined;
-    }
-    return { backgroundImage: `url(${JSON.stringify(url.toString())})` };
-  } catch {
-    return undefined;
-  }
+  return { backgroundImage: `url(${JSON.stringify(safeUrl)})` };
 }
 
 function Price({ product }: { product: Product }) {
-  const price = product.currentPrice;
+  const price = resolveCurrentPrice(product.currentPrice);
   if (!price) {
-    return <span className="product-price-missing">Prijs niet beschikbaar</span>;
+    return (
+      <span className="product-price-missing">
+        Prijs tijdelijk niet beschikbaar
+      </span>
+    );
   }
 
-  const pricePerKilogram =
-    product.weightGrams && product.weightGrams > 0
-      ? (price.price * 1000) / product.weightGrams
-      : null;
+  const pricePerKilogram = getPricePerKilogram(product, price);
+  const updatedLabel = priceUpdatedLabel(price);
 
   return (
     <div className="product-price-block">
+      {price.isOffer ? (
+        <span className="offer-label">{price.offerText ?? "Aanbieding"}</span>
+      ) : null}
       <div className="product-price-line">
-        <strong>{euroFormatter.format(price.price)}</strong>
-        {price.isOffer && price.oldPrice && price.oldPrice > price.price ? (
-          <s>{euroFormatter.format(price.oldPrice)}</s>
+        <strong>{euroFormatter.format(price.amount)}</strong>
+        {price.comparisonPrice ? (
+          <s>{euroFormatter.format(price.comparisonPrice)}</s>
         ) : null}
       </div>
       {pricePerKilogram ? (
         <span>{euroFormatter.format(pricePerKilogram)} / kg</span>
       ) : null}
-      {price.isOffer && price.offerText ? (
-        <span className="offer-label">{price.offerText}</span>
+      {updatedLabel ? (
+        <span className="product-price-updated" data-freshness={price.freshness}>
+          {updatedLabel}
+        </span>
       ) : null}
     </div>
   );
@@ -104,22 +111,35 @@ function ProductCard({ product }: { product: Product }) {
 
 export function ProductCatalogPreview() {
   const [state, setState] = useState<ViewState>({ status: "loading" });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const loadMoreController = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
 
     async function loadProducts() {
       try {
-        const result = await createCatalogRepository().getPreview(
-          10,
-          controller.signal,
-        );
+        const result = await createCatalogRepository().getPage({
+          page: 1,
+          pageSize: DEFAULT_CATALOG_PAGE_SIZE,
+          signal: controller.signal,
+        });
         if (!controller.signal.aborted) {
-          setState({ status: "loaded", result });
+          setState({
+            status: "loaded",
+            products: result.products,
+            nextPage: 2,
+            hasMore: result.hasMore,
+            priceStatus: result.priceStatus,
+          });
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          setState({ status: "error", message: userMessage(error) });
+          setState({
+            status: "error",
+            message: catalogReadErrorMessage(error),
+          });
         }
       }
     }
@@ -152,7 +172,7 @@ export function ProductCatalogPreview() {
     );
   }
 
-  if (state.result.products.length === 0) {
+  if (state.products.length === 0) {
     return (
       <section className="catalog-state" role="status">
         <span className="status-icon"><Icon name="products" /></span>
@@ -164,22 +184,87 @@ export function ProductCatalogPreview() {
     );
   }
 
+  async function loadMore() {
+    if (state.status !== "loaded" || !state.hasMore || isLoadingMore) {
+      return;
+    }
+
+    loadMoreController.current?.abort();
+    const controller = new AbortController();
+    loadMoreController.current = controller;
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+
+    try {
+      const result = await createCatalogRepository().getPage({
+        page: state.nextPage,
+        pageSize: DEFAULT_CATALOG_PAGE_SIZE,
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) {
+        setState((current) =>
+          current.status === "loaded"
+            ? {
+                status: "loaded",
+                products: mergeCatalogProducts(
+                  current.products,
+                  result.products,
+                ),
+                nextPage: result.page + 1,
+                hasMore: result.hasMore,
+                priceStatus:
+                  current.priceStatus === "unavailable" ||
+                  result.priceStatus === "unavailable"
+                    ? "unavailable"
+                    : "complete",
+              }
+            : current,
+        );
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setLoadMoreError(catalogReadErrorMessage(error));
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setIsLoadingMore(false);
+      }
+    }
+  }
+
   return (
     <section className="catalog-preview" aria-labelledby="catalog-heading">
       <div className="section-heading">
-        <h2 id="catalog-heading">Uit de actuele catalogus</h2>
-        <span>Maximaal 10 producten</span>
+        <h2 id="catalog-heading">Hoogvliet-producten</h2>
+        <span>{state.products.length} geladen</span>
       </div>
-      {state.result.priceStatus === "unavailable" ? (
+      {state.priceStatus === "unavailable" ? (
         <p className="catalog-notice" role="status">
           Producten zijn geladen; prijsinformatie is tijdelijk niet beschikbaar.
         </p>
       ) : null}
       <div className="product-grid">
-        {state.result.products.map((product) => (
+        {state.products.map((product) => (
           <ProductCard key={product.id} product={product} />
         ))}
       </div>
+      {loadMoreError ? (
+        <p className="catalog-inline-error" role="status">
+          Meer producten laden lukte niet. Je huidige producten blijven zichtbaar.
+        </p>
+      ) : null}
+      {state.hasMore ? (
+        <button
+          className="catalog-load-more"
+          type="button"
+          disabled={isLoadingMore}
+          onClick={() => void loadMore()}
+        >
+          {isLoadingMore ? "Meer producten laden…" : "Meer producten laden"}
+        </button>
+      ) : (
+        <p className="catalog-end">Alle beschikbare producten zijn geladen.</p>
+      )}
     </section>
   );
 }
