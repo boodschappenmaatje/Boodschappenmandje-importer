@@ -552,6 +552,16 @@ button:focus-visible {
   margin: 13px 0 0;
 }
 
+.catalog-run-warning {
+  margin: 12px 0 0;
+  padding: 11px 12px;
+  border-radius: 13px;
+  background: #fff8e8;
+  color: #6d4c00;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .catalog-status-empty {
   padding: 15px;
   border-radius: 15px;
