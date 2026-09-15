@@ -95,6 +95,30 @@ export interface CatalogPageResult extends CatalogProductsResult {
   hasMore: boolean;
 }
 
+export type CatalogSort =
+  | "relevance"
+  | "price-asc"
+  | "price-desc"
+  | "name-asc";
+
+export interface CatalogQuery {
+  term: string;
+  category: string | null;
+  brand: string | null;
+  offersOnly: boolean;
+  maxPrice: number | null;
+  sort: CatalogSort;
+}
+
+export interface CatalogQueryPageResult extends CatalogPageResult {
+  query: CatalogQuery;
+}
+
+export interface CatalogFilterOptions {
+  categories: string[];
+  brands: string[];
+}
+
 // Behouden voor compatibiliteit met de PWA 4-mappertests en eventuele
 // vervolgstappen die alleen het gemapte productresultaat nodig hebben.
 export type CatalogPreviewResult = CatalogProductsResult;

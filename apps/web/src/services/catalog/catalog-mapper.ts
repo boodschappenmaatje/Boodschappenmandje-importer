@@ -49,6 +49,23 @@ function mapPrice(value: unknown): ProductPrice | null {
   };
 }
 
+function newestPriceForProduct(value: unknown, productId: string): ProductPrice | null {
+  const candidates = Array.isArray(value) ? value : [value];
+  const matching = candidates
+    .map(mapPrice)
+    .filter(
+      (price): price is ProductPrice =>
+        price !== null && price.productId === productId,
+    );
+
+  return matching.sort((left, right) => {
+    const leftDate = Date.parse(left.fetchedAt ?? left.updatedAt ?? "");
+    const rightDate = Date.parse(right.fetchedAt ?? right.updatedAt ?? "");
+    return (Number.isFinite(rightDate) ? rightDate : 0) -
+      (Number.isFinite(leftDate) ? leftDate : 0);
+  })[0] ?? null;
+}
+
 function mapProduct(value: unknown): Omit<Product, "currentPrice"> | null {
   if (!isRecord(value)) {
     return null;
@@ -116,4 +133,56 @@ export function mapCatalogRows(
   }
 
   return { products, priceStatus };
+}
+
+export function mapJoinedCatalogRows(
+  productRows: unknown,
+  priceStatus: CatalogProductsResult["priceStatus"] = "complete",
+): CatalogProductsResult {
+  const products: Product[] = [];
+  if (!Array.isArray(productRows)) {
+    return { products, priceStatus };
+  }
+
+  for (const value of productRows) {
+    const product = mapProduct(value);
+    if (!product || !isRecord(value)) {
+      continue;
+    }
+
+    // Ook bij een relationele PostgREST-query blijft de exacte product-FK
+    // leidend. Een prijs van een andere SKU/productnaam wordt nooit hergebruikt.
+    products.push({
+      ...product,
+      currentPrice: newestPriceForProduct(value.current_price, product.id),
+    });
+  }
+
+  return { products, priceStatus };
+}
+
+export function mapPriceSortedCatalogRows(
+  priceRows: unknown,
+): CatalogProductsResult {
+  if (!Array.isArray(priceRows)) {
+    return { products: [], priceStatus: "complete" };
+  }
+
+  const joinedRows: UnknownRecord[] = [];
+  for (const value of priceRows) {
+    if (!isRecord(value)) continue;
+    const relatedProduct = Array.isArray(value.product)
+      ? value.product[0]
+      : value.product;
+    if (!isRecord(relatedProduct)) continue;
+
+    // De prijs komt uit dezelfde product_prices-rij waarmee Postgres sorteert.
+    // De mapper accepteert hem alleen wanneer product_id exact gelijk is.
+    joinedRows.push({
+      ...relatedProduct,
+      current_price: value,
+    });
+  }
+
+  return mapJoinedCatalogRows(joinedRows);
 }

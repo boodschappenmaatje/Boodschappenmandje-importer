@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mapCatalogRows } from "./catalog-mapper";
+import {
+  mapCatalogRows,
+  mapJoinedCatalogRows,
+  mapPriceSortedCatalogRows,
+} from "./catalog-mapper";
 
 const product = {
   id: "product-a",
@@ -92,5 +96,70 @@ describe("mapCatalogRows", () => {
       weightGrams: null,
       currentPrice: null,
     });
+  });
+});
+
+describe("mapJoinedCatalogRows", () => {
+  it("neemt uit relationele prijsrecords alleen de nieuwste exacte product-FK", () => {
+    const result = mapJoinedCatalogRows([
+      {
+        ...product,
+        current_price: [
+          {
+            product_id: "product-a",
+            price: 2.49,
+            is_offer: false,
+            fetched_at: "2026-09-14T10:00:00Z",
+          },
+          {
+            product_id: "product-a",
+            price: 2.59,
+            is_offer: false,
+            fetched_at: "2026-09-15T10:00:00Z",
+          },
+          {
+            product_id: "product-b",
+            price: 0.01,
+            is_offer: true,
+            fetched_at: "2026-09-16T10:00:00Z",
+          },
+        ],
+      },
+    ]);
+
+    expect(result.products[0]?.currentPrice).toMatchObject({
+      productId: "product-a",
+      price: 2.59,
+    });
+  });
+});
+
+describe("mapPriceSortedCatalogRows", () => {
+  it("behoudt de door de database gesorteerde prijsvolgorde en exacte FK", () => {
+    const result = mapPriceSortedCatalogRows([
+      {
+        product_id: "product-a",
+        price: 1.49,
+        is_offer: false,
+        fetched_at: "2026-09-15T10:00:00Z",
+        product,
+      },
+      {
+        product_id: "product-b",
+        price: 2.49,
+        is_offer: false,
+        fetched_at: "2026-09-15T10:00:00Z",
+        product: { ...product, id: "product-b", sku: "SKU-B" },
+      },
+    ]);
+
+    expect(result.products.map((item) => item.id)).toEqual([
+      "product-a",
+      "product-b",
+    ]);
+    expect(result.products.map((item) => item.currentPrice?.price)).toEqual([
+      1.49,
+      2.49,
+    ]);
   });
 });
