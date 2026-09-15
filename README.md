@@ -68,6 +68,53 @@ De bestaande wekelijkse catalogusrun is tevens de veilige discovery-run. GitHub 
 
 Een nieuw product wordt pas toegevoegd als SKU, naam, verpakking, Hoogvliet-product-URL en actuele verkoopprijs betrouwbaar bij hetzelfde product horen. De centrale classificatie uit stap 4.4 vult `product_type`, met `Onbekend` als veilige fallback. Nul nieuwe SKU's is een geldige, succesvolle discovery-run wanneer de gevonden resultaten aantoonbaar al in Supabase bestaan. Er worden nooit producten verwijderd omdat ze tijdens één run niet gevonden zijn.
 
+## PWA 8.1 — dagelijkse catalogusgroei
+
+De groeimodus gebruikt de bestaande Playwright-validatie en dezelfde idempotente
+`(supermarket, sku)`- en `product_id`-upserts. Dagelijks worden maximaal 400
+productkandidaten verwerkt; `processed` is de som van nieuw, inhoudelijk
+bijgewerkt, ongewijzigd, na validatie overgeslagen en productspecifieke fouten.
+Het aantal nieuwe producten kan dus lager zijn dan 400.
+
+GitHub Actions plant twee UTC-momenten (`04:00` en `05:00`) en laat alleen het
+moment door waarop `Europe/Amsterdam` daadwerkelijk 06:00 aangeeft. Daardoor
+blijft de ochtendrun zonder handmatige cronwijziging correct bij CET en CEST.
+`workflow_dispatch` blijft beschikbaar. Kies voor de verplichte veilige test
+eerst `growth` met limiet 10 en uitgeschakelde cursorverplaatsing, herhaal exact
+die run voor de idempotentiecontrole en gebruik pas daarna limiet 400.
+
+`catalog_discovery_state` roteert de startzoekterm zodat een volgende run niet
+steeds bij dezelfde populaire resultaten begint. `catalog_import_runs` bewaart
+alleen één compacte samenvatting per run. Een unieke partial index voorkomt
+parallelle running-runs; een status ouder dan drie uur wordt gecontroleerd als
+mislukt afgesloten. Producten worden niet verwijderd wanneer ze tijdelijk niet
+gevonden worden. Afbeeldingen blijven URL's en `product_prices` blijft één
+actuele rij per `product_id`, zodat identieke dagelijkse prijsrecords niet
+worden opgestapeld.
+
+De PWA leest uitsluitend de runstatus via een read-only policy. Discovery-state
+en importerwrites blijven server-side. Exact databaseopslaggebruik wordt niet
+naar de browser gebracht zolang dit niet veilig zonder beheercredentials kan;
+er wordt nooit een fictieve MB-waarde getoond.
+
+### Dagelijkse importbewaking
+
+De geplande groeirun controleert zijn eigen eindstatus direct. Daarnaast draait
+`monitor-catalog-import.yml` dagelijks om 08:30 Nederlandse tijd. Ook deze
+workflow gebruikt twee UTC-momenten met een `Europe/Amsterdam`-poort, zodat CET
+en CEST geen handmatige aanpassing vragen. De controle faalt bewust wanneer de
+06:00-run ontbreekt, ouder is dan zes uur, nog loopt, gedeeltelijk is voltooid
+of is mislukt. Zo kan GitHub een Actions-melding/e-mail versturen volgens de
+persoonlijke notificatie-instellingen. `workflow_dispatch` blijft beschikbaar
+voor een handmatige controle of herstelrun.
+
+Catalogusstatus onder **Meer** blijft de gebruikersgerichte controle: groen is
+alleen volledig succes, geel is `running` of `partial` en rood is `failed`.
+Bij een gedeeltelijke run maakt de PWA onderscheid tussen productfouten en
+bron-/zoekroutewaarschuwingen. De laatst geldige catalogus blijft in alle
+gevallen beschikbaar. Bewaking gebruikt uitsluitend de bestaande server-side
+GitHub Secrets; er komt geen beheerkey in de browserbundle.
+
 ## Automatische prijsupdates
 
 De dagelijkse prijsrun gebruikt de bestaande Hoogvliet-SKU en product-URL als identiteit. Zeven vaste SKU-shards verdelen het werk over de week. Wanneer een shard later meer producten bevat dan de begrensde batchgrootte, roteert iedere nieuwe week automatisch naar het volgende venster; nieuwe catalogusproducten blijven daardoor niet achter de eerste honderd SKU's vastzitten.

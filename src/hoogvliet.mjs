@@ -427,7 +427,10 @@ export function recordCatalogProduct(sku, existingSKUs, stats, termStats = null)
 }
 
 export function catalogLimitReached(stats, config, totalProducts) {
-  return totalProducts >= config.maxProducts || stats.newProducts >= config.maxNewProducts;
+  const processedProducts = Number.isFinite(stats.processedProducts)
+    ? stats.processedProducts
+    : totalProducts;
+  return processedProducts >= config.maxProducts || stats.newProducts >= config.maxNewProducts;
 }
 
 export function filterDiscoveryCandidates(candidates, existingSKUs, observedExistingSKUs) {
@@ -612,6 +615,7 @@ export async function collectProducts(config, logger = console, options = {}) {
     uniqueSKUsDiscovered: 0,
     newSKUsDiscovered: 0,
     uniqueSKUs: 0,
+    processedProducts: 0,
     existingProducts: 0,
     newProducts: 0,
     unknownProductTypes: 0,
@@ -650,7 +654,9 @@ export async function collectProducts(config, logger = console, options = {}) {
       let candidates;
       try {
         const pageResult = await findCandidates(searchPage, term, config.maxPagesPerTerm);
-        candidates = prioritizeCandidates(pageResult.candidates, existingSKUs);
+        candidates = config.preferNewProducts === false
+          ? pageResult.candidates
+          : prioritizeCandidates(pageResult.candidates, existingSKUs);
         stats.pagesFetched += pageResult.pagesFetched;
         stats.rawCandidatesFound += pageResult.rawCandidates;
         stats.irrelevantCandidatesSkipped += pageResult.irrelevantCandidates;
@@ -691,6 +697,7 @@ export async function collectProducts(config, logger = console, options = {}) {
       for (const candidate of candidates) {
         if (catalogLimitReached(stats, config, chosen.length) || acceptedForTerm >= config.maxPerTerm) break;
         if (!claimCandidateSKU(candidate, attemptedSKUs, stats, termStats)) continue;
+        stats.processedProducts += 1;
         let product;
         try {
           candidate.searchTerm = term;

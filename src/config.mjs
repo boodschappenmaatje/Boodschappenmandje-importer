@@ -1,4 +1,4 @@
-export const catalogBatches = Object.freeze({
+export const catalogBatches = {
   core: Object.freeze([
     "gehakt", "rundergehakt", "kip", "kipfilet", "varkensvlees", "worst",
     "hamburger", "shoarma", "biefstuk", "schnitzel", "rookworst", "braadworst",
@@ -31,15 +31,28 @@ export const catalogBatches = Object.freeze({
     "allesreiniger", "vuilniszakken", "shampoo", "tandpasta", "luiers",
     "kattenvoer", "hondenvoer",
   ]),
-});
+  growth: Object.freeze([]),
+};
+
+// De groeibatch gebruikt dezelfde bewezen zoektermen. Duplicaten worden één
+// keer verwijderd; de persistente cursor roteert de startpositie per run.
+catalogBatches.growth = Object.freeze([
+  ...new Set([
+    ...catalogBatches.core,
+    ...catalogBatches.fresh,
+    ...catalogBatches.world,
+    ...catalogBatches.pantry,
+  ]),
+]);
+Object.freeze(catalogBatches);
 
 const DEFAULT_BATCH = "core";
 const DEFAULT_UPDATE_MODE = "catalog";
-const UPDATE_MODES = new Set(["catalog", "prices", "classify"]);
+const UPDATE_MODES = new Set(["catalog", "prices", "classify", "growth"]);
 const DEFAULT_MAX_PRODUCTS = 10;
 const SAFE_PRODUCT_LIMIT = 500;
 const DEFAULT_MAX_NEW_PRODUCTS = 50;
-const SAFE_NEW_PRODUCT_LIMIT = 300;
+const SAFE_NEW_PRODUCT_LIMIT = 400;
 const DEFAULT_MAX_PER_TERM = 2;
 const SAFE_PER_TERM_LIMIT = 40;
 const DEFAULT_MAX_PAGES_PER_TERM = 1;
@@ -61,7 +74,7 @@ export function loadConfig(env = process.env) {
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
   const updateMode = (env.UPDATE_MODE ?? DEFAULT_UPDATE_MODE).trim().toLowerCase();
   if (!UPDATE_MODES.has(updateMode)) {
-    throw new Error(`Ongeldige UPDATE_MODE '${updateMode}'. Kies: catalog, prices of classify.`);
+    throw new Error(`Ongeldige UPDATE_MODE '${updateMode}'. Kies: catalog, prices, classify of growth.`);
   }
   const catalogBatch = (env.CATALOG_BATCH ?? DEFAULT_BATCH).trim().toLowerCase();
   if (!Object.hasOwn(catalogBatches, catalogBatch)) {
@@ -120,6 +133,17 @@ export function loadConfig(env = process.env) {
     priceShardCount,
     priceShardIndex,
     priceCycleIndex: nonNegativeInteger(env.PRICE_CYCLE_INDEX, 0),
+    importTrigger: ["schedule", "manual", "test"].includes(env.IMPORT_TRIGGER)
+      ? env.IMPORT_TRIGGER
+      : "manual",
+    discoveryStateKey: (env.DISCOVERY_STATE_KEY ?? "daily-catalog-growth")
+      .trim()
+      .replace(/[^a-z0-9_-]/gi, "-")
+      .slice(0, 80) || "daily-catalog-growth",
+    advanceDiscoveryState: env.ADVANCE_DISCOVERY_STATE !== "0"
+      && env.ADVANCE_DISCOVERY_STATE !== "false",
+    preferNewProducts: env.PREFER_NEW_PRODUCTS !== "0"
+      && env.PREFER_NEW_PRODUCTS !== "false",
     supabaseURL: env.SUPABASE_URL?.trim(),
     supabaseSecret: env.SUPABASE_SECRET_KEY?.trim(),
   };

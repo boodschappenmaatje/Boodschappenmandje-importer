@@ -3,6 +3,16 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
+  catalogGrowthMode,
+  classifyCatalogOutcomes,
+  formatCatalogGrowthSummary,
+  importRunStatus,
+  nextDiscoveryCursor,
+  productChanged,
+  rotateDiscoveryTerms,
+} from "../src/catalog-growth.mjs";
+import { evaluateCatalogMonitor } from "../src/catalog-monitor.mjs";
+import {
   classifyProductType, productTypeCoverage, UNKNOWN_PRODUCT_TYPE,
 } from "../src/product-type.mjs";
 import {
@@ -85,7 +95,7 @@ test("MAX_NEW_PRODUCTS heeft een aparte veilige grens", () => {
   assert.equal(loadConfig({
     DRY_RUN: "1", MAX_PRODUCTS: "180", MAX_NEW_PRODUCTS: "999",
   }).maxNewProducts, 180);
-  assert.equal(limits.safeNewProductLimit, 300);
+  assert.equal(limits.safeNewProductLimit, 400);
 });
 
 test("MAX_PER_TERM ondersteunt catalogusdekking maar houdt een harde bovengrens", () => {
@@ -1023,17 +1033,164 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /cron: "17 2 \* \* \*"/);
   assert.match(workflow, /cron: "43 3 \* \* 0"/);
+  assert.match(workflow, /cron: "0 4 \* \* \*"/);
+  assert.match(workflow, /cron: "0 5 \* \* \*"/);
+  assert.match(workflow, /TZ=Europe\/Amsterdam date \+%H/);
+  assert.match(workflow, /local_hour.*!= "06"/s);
   assert.match(workflow, /group: hoogvliet-supabase-update/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
   assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
-  assert.match(workflow, /MAX_PER_TERM=20/);
-  assert.match(workflow, /MAX_PAGES_PER_TERM=4/);
-  assert.match(workflow, /CATALOG_NEW_ONLY=1/);
+  assert.match(workflow, /MAX_PER_TERM=.*"4".*"20"/);
+  assert.match(workflow, /MAX_PAGES_PER_TERM=.*"8".*"4"/);
+  assert.match(workflow, /CATALOG_NEW_ONLY=.*"0".*"1"/);
   assert.match(workflow, /batches=\(core fresh world pantry\)/);
   assert.match(workflow, /PRICE_CYCLE_INDEX=\$\(\(10#\$\(date -u \+%V\) - 1\)\)/);
   assert.match(workflow, /- classify/);
+  assert.match(workflow, /- growth/);
+  assert.match(workflow, /MAX_PRODUCTS=\$max_products/);
+  assert.match(workflow, /DISCOVERY_STATE_KEY=\$discovery_state_key/);
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
+});
+
+test("dagelijkse bewakingsworkflow controleert de 06:00-run DST-veilig na afloop", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/monitor-catalog-import.yml", import.meta.url), "utf8");
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /cron: "30 6 \* \* \*"/);
+  assert.match(workflow, /cron: "30 7 \* \* \*"/);
+  assert.match(workflow, /TZ=Europe\/Amsterdam date \+%H/);
+  assert.match(workflow, /local_hour.*!= "08"/s);
+  assert.match(workflow, /npm run monitor:catalog/);
+  assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
+  assert.doesNotMatch(workflow, /NEXT_PUBLIC_|continue-on-error:\s*true/);
+});
+
+test("groeiconfiguratie is begrensd op maximaal 400 productverwerkingen", () => {
+  const config = loadConfig({
+    DRY_RUN: "1",
+    UPDATE_MODE: "growth",
+    CATALOG_BATCH: "growth",
+    MAX_PRODUCTS: "400",
+    MAX_NEW_PRODUCTS: "400",
+    IMPORT_TRIGGER: "schedule",
+  });
+  assert.equal(config.maxProducts, 400);
+  assert.equal(config.maxNewProducts, 400);
+  assert.equal(config.importTrigger, "schedule");
+  assert.ok(config.searchTerms.length > 100);
+  assert.equal(new Set(config.searchTerms).size, config.searchTerms.length);
+});
+
+test("discovery-state roteert deterministisch en ondersteunt een identieke testrun", () => {
+  const terms = ["a", "b", "c", "d"];
+  assert.deepEqual(rotateDiscoveryTerms(terms, 2), ["c", "d", "a", "b"]);
+  assert.equal(nextDiscoveryCursor(2, 2, terms.length), 0);
+  assert.deepEqual(rotateDiscoveryTerms(terms, 2), rotateDiscoveryTerms(terms, 2));
+  assert.equal(loadConfig({ DRY_RUN: "1", PREFER_NEW_PRODUCTS: "0" }).preferNewProducts, false);
+});
+
+test("catalogusmodus verschuift pas nabij het indicatieve catalogusdoel", () => {
+  assert.equal(catalogGrowthMode(4_999), "discovery");
+  assert.equal(catalogGrowthMode(9_499), "discovery");
+  assert.equal(catalogGrowthMode(9_500), "balanced");
+  assert.equal(catalogGrowthMode(10_000), "maintenance");
+});
+
+test("bestaande SKU wordt als ongewijzigd of bijgewerkt geteld en nooit als nieuw", () => {
+  const existing = {
+    id: "product-1", sku: "123456789", name: "Cola", brand: "Merk", category: "Frisdrank",
+    packageText: "1,5 liter", weightGrams: null, imageURL: null,
+    sourceURL: "https://www.hoogvliet.com/product/123456789", available: true, productType: "Cola",
+  };
+  const current = {
+    ...testProduct("123456789", "Cola", 2.49), brand: "Merk", category: "Frisdrank",
+    packageText: "1,5 liter", weightGrams: null, sourceURL: existing.sourceURL,
+    isAvailable: true, productType: "Cola",
+  };
+  const previousPrice = { price: 2.49, oldPrice: null, isOffer: false, offerText: null, validFrom: null, validUntil: null };
+  assert.equal(productChanged(existing, previousPrice, current), false);
+  assert.equal(productChanged(existing, previousPrice, { ...current, price: 2.59 }), true);
+
+  const unchanged = classifyCatalogOutcomes({
+    products: [current], importedSKUs: new Set([current.sku]),
+    existingBySKU: new Map([[existing.sku, existing]]),
+    existingPrices: new Map([[existing.id, previousPrice]]),
+    stats: { invalidProductsSkipped: 0, productErrors: 0 },
+  });
+  assert.deepEqual(unchanged, {
+    processedCount: 1, newCount: 0, updatedCount: 0, unchangedCount: 1, skippedCount: 0, errorCount: 0,
+  });
+});
+
+test("nieuwe SKU, partial/failed status en runstatistieken blijven expliciet", () => {
+  const product = testProduct("987654321", "Nieuw product", 3.25);
+  const result = classifyCatalogOutcomes({
+    products: [product], importedSKUs: new Set([product.sku]),
+    existingBySKU: new Map(), existingPrices: new Map(),
+    stats: { invalidProductsSkipped: 1, productErrors: 1 },
+  });
+  assert.deepEqual(result, {
+    processedCount: 3, newCount: 1, updatedCount: 0, unchangedCount: 0, skippedCount: 1, errorCount: 1,
+  });
+  assert.equal(importRunStatus({ errorCount: 0, searchErrors: 0 }), "success");
+  assert.equal(importRunStatus({ errorCount: 1, searchErrors: 0 }), "partial");
+  assert.match(formatCatalogGrowthSummary({
+    ...result, status: "partial", totalUniqueProductsBefore: 10,
+    totalUniqueProductsAfter: 11, durationSeconds: 4.2,
+  }), /verwerkt=3.*nieuw=1.*totaal_voor=10.*totaal_na=11/);
+});
+
+test("dagelijkse bewaking accepteert alleen een recente geslaagde schedule-run", () => {
+  const now = new Date("2026-09-15T06:30:00Z");
+  const baseRun = {
+    started_at: "2026-09-15T04:00:00Z",
+    finished_at: "2026-09-15T04:22:00Z",
+    status: "success",
+    trigger: "schedule",
+    processed_count: 400,
+    error_count: 0,
+    error_summary: null,
+  };
+  assert.deepEqual(
+    evaluateCatalogMonitor([baseRun], { now, maxAgeHours: 6 }),
+    {
+      ok: true, state: "healthy",
+      message: "Dagelijkse catalogusrun geslaagd: 400 verwerkt.",
+      run: baseRun,
+    },
+  );
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "partial", error_summary: "2 zoektermfout(en)" },
+  ], { now }).state, "partial");
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "failed" },
+  ], { now }).state, "failed");
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "running", finished_at: null },
+  ], { now }).state, "running");
+});
+
+test("dagelijkse bewaking meldt een ontbrekende of te oude ochtendrun", () => {
+  const now = new Date("2026-09-15T06:30:00Z");
+  assert.equal(evaluateCatalogMonitor([], { now }).state, "missing");
+  assert.equal(evaluateCatalogMonitor([{
+    started_at: "2026-09-14T04:00:00Z",
+    finished_at: "2026-09-14T04:22:00Z",
+    status: "success",
+  }], { now, maxAgeHours: 6 }).state, "overdue");
+});
+
+test("PWA 8.1-migratie is additief, compact en browser read-only", async () => {
+  const migration = await readFile(new URL("../supabase/migrations/20260915_catalog_growth.sql", import.meta.url), "utf8");
+  assert.match(migration, /create table if not exists public\.catalog_import_runs/i);
+  assert.match(migration, /create table if not exists public\.catalog_discovery_state/i);
+  assert.match(migration, /catalog_import_runs_single_running_idx/i);
+  assert.match(migration, /grant select on public\.catalog_import_runs to anon, authenticated/i);
+  assert.match(migration, /revoke insert, update, delete on public\.catalog_import_runs/i);
+  assert.match(migration, /grant select, insert, update on public\.catalog_import_runs to service_role/i);
+  assert.match(migration, /grant select, insert, update on public\.catalog_discovery_state to service_role/i);
+  assert.match(migration, /products_name_trgm_idx/i);
+  assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from/i);
 });
 
 test("Supabase-migratie voegt alleen de optionele producttype-kolom en index toe", async () => {
