@@ -12,6 +12,7 @@ export interface CatalogImportRun {
   unchangedCount: number;
   skippedCount: number;
   errorCount: number;
+  errorSummary: string | null;
   totalUniqueProductsBefore: number;
   totalUniqueProductsAfter: number | null;
   durationSeconds: number | null;
