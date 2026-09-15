@@ -11,6 +11,7 @@ import {
   productChanged,
   rotateDiscoveryTerms,
 } from "../src/catalog-growth.mjs";
+import { evaluateCatalogMonitor } from "../src/catalog-monitor.mjs";
 import {
   classifyProductType, productTypeCoverage, UNKNOWN_PRODUCT_TYPE,
 } from "../src/product-type.mjs";
@@ -1052,6 +1053,18 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });
 
+test("dagelijkse bewakingsworkflow controleert de 06:00-run DST-veilig na afloop", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/monitor-catalog-import.yml", import.meta.url), "utf8");
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /cron: "30 6 \* \* \*"/);
+  assert.match(workflow, /cron: "30 7 \* \* \*"/);
+  assert.match(workflow, /TZ=Europe\/Amsterdam date \+%H/);
+  assert.match(workflow, /local_hour.*!= "08"/s);
+  assert.match(workflow, /npm run monitor:catalog/);
+  assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
+  assert.doesNotMatch(workflow, /NEXT_PUBLIC_|continue-on-error:\s*true/);
+});
+
 test("groeiconfiguratie is begrensd op maximaal 400 productverwerkingen", () => {
   const config = loadConfig({
     DRY_RUN: "1",
@@ -1127,6 +1140,46 @@ test("nieuwe SKU, partial/failed status en runstatistieken blijven expliciet", (
   }), /verwerkt=3.*nieuw=1.*totaal_voor=10.*totaal_na=11/);
 });
 
+test("dagelijkse bewaking accepteert alleen een recente geslaagde schedule-run", () => {
+  const now = new Date("2026-09-15T06:30:00Z");
+  const baseRun = {
+    started_at: "2026-09-15T04:00:00Z",
+    finished_at: "2026-09-15T04:22:00Z",
+    status: "success",
+    trigger: "schedule",
+    processed_count: 400,
+    error_count: 0,
+    error_summary: null,
+  };
+  assert.deepEqual(
+    evaluateCatalogMonitor([baseRun], { now, maxAgeHours: 6 }),
+    {
+      ok: true, state: "healthy",
+      message: "Dagelijkse catalogusrun geslaagd: 400 verwerkt.",
+      run: baseRun,
+    },
+  );
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "partial", error_summary: "2 zoektermfout(en)" },
+  ], { now }).state, "partial");
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "failed" },
+  ], { now }).state, "failed");
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "running", finished_at: null },
+  ], { now }).state, "running");
+});
+
+test("dagelijkse bewaking meldt een ontbrekende of te oude ochtendrun", () => {
+  const now = new Date("2026-09-15T06:30:00Z");
+  assert.equal(evaluateCatalogMonitor([], { now }).state, "missing");
+  assert.equal(evaluateCatalogMonitor([{
+    started_at: "2026-09-14T04:00:00Z",
+    finished_at: "2026-09-14T04:22:00Z",
+    status: "success",
+  }], { now, maxAgeHours: 6 }).state, "overdue");
+});
+
 test("PWA 8.1-migratie is additief, compact en browser read-only", async () => {
   const migration = await readFile(new URL("../supabase/migrations/20260915_catalog_growth.sql", import.meta.url), "utf8");
   assert.match(migration, /create table if not exists public\.catalog_import_runs/i);
@@ -1134,6 +1187,8 @@ test("PWA 8.1-migratie is additief, compact en browser read-only", async () => {
   assert.match(migration, /catalog_import_runs_single_running_idx/i);
   assert.match(migration, /grant select on public\.catalog_import_runs to anon, authenticated/i);
   assert.match(migration, /revoke insert, update, delete on public\.catalog_import_runs/i);
+  assert.match(migration, /grant select, insert, update on public\.catalog_import_runs to service_role/i);
+  assert.match(migration, /grant select, insert, update on public\.catalog_discovery_state to service_role/i);
   assert.match(migration, /products_name_trgm_idx/i);
   assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from/i);
 });
