@@ -77,8 +77,17 @@ export function CatalogStatusContent({ status }: { status: CatalogStatus }) {
             <div><dt>Bijgewerkt</dt><dd>{run.updatedCount}</dd></div>
             <div><dt>Ongewijzigd</dt><dd>{run.unchangedCount}</dd></div>
             <div><dt>Overgeslagen</dt><dd>{run.skippedCount}</dd></div>
-            <div><dt>Fouten</dt><dd>{run.errorCount}</dd></div>
+            <div><dt>Productfouten</dt><dd>{run.errorCount}</dd></div>
           </dl>
+          {run.errorSummary ? (
+            <p className="catalog-run-warning" role={run.status === "failed" ? "alert" : "status"}>
+              <strong>{run.status === "partial" ? "Bronwaarschuwing:" : "Foutmelding:"}</strong>{" "}
+              {run.errorSummary}.
+              {run.status === "partial" && run.errorCount === 0
+                ? " Alle verwerkte producten waren geldig; de bestaande catalogus blijft beschikbaar."
+                : ""}
+            </p>
+          ) : null}
           <p className="catalog-last-update">
             Laatste update: {formatCatalogUpdateTime(run.finishedAt ?? run.startedAt)}
           </p>
