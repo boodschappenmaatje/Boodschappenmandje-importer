@@ -1,6 +1,11 @@
 name: Hoogvliet import proof of concept
 
 on:
+  # Tijdelijke, strikt branchgebonden validatietrigger voor PWA 8.1. Alleen
+  # commits met het expliciete markerwoord starten de live 10 -> 10 -> 400-reeks.
+  push:
+    branches:
+      - pwa-8-1-catalog-growth
   workflow_dispatch:
     inputs:
       update_mode:
@@ -70,6 +75,7 @@ concurrency:
 
 jobs:
   import:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -237,3 +243,115 @@ jobs:
       - name: Producten en prijzen bijwerken
         if: env.RUN_IMPORT != '0'
         run: npm run import
+
+  pwa81-live-validation:
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[pwa81-live-validation]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      HEADLESS: "1"
+      UPDATE_MODE: growth
+      CATALOG_BATCH: growth
+      MAX_PER_TERM: "4"
+      MAX_PAGES_PER_TERM: "8"
+      CATALOG_NEW_ONLY: "0"
+      IMPORT_TRIGGER: test
+      DISCOVERY_STATE_KEY: pwa-8-1-live-validation
+
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@v4
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: Technische controles
+        run: npm test
+
+      - name: Veilige live validatie 10 → 10 → maximaal 400
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          assert_latest_run() {
+            local phase="$1"
+            local limit="$2"
+            local require_zero_new="$3"
+
+            PHASE="$phase" LIMIT="$limit" REQUIRE_ZERO_NEW="$require_zero_new" node <<'NODE'
+          import fs from 'node:fs';
+
+          const base = new URL(process.env.SUPABASE_URL);
+          base.pathname = '/rest/v1/catalog_import_runs';
+          base.searchParams.set('select', '*');
+          base.searchParams.set('trigger', 'eq.test');
+          base.searchParams.set('order', 'started_at.desc');
+          base.searchParams.set('limit', process.env.PHASE === 'repeat-10' ? '2' : '1');
+
+          const key = process.env.SUPABASE_SECRET_KEY;
+          const headers = { apikey: key, Accept: 'application/json' };
+          if (key.startsWith('eyJ')) headers.Authorization = `Bearer ${key}`;
+
+          const response = await fetch(base, { headers });
+          if (!response.ok) throw new Error(`Importstatus lezen mislukt: HTTP ${response.status}`);
+          const runs = await response.json();
+          const run = runs[0];
+          if (!run) throw new Error('Geen catalog_import_runs-record gevonden.');
+
+          const sum = Number(run.new_count) + Number(run.updated_count)
+            + Number(run.unchanged_count) + Number(run.skipped_count) + Number(run.error_count);
+          const limit = Number(process.env.LIMIT);
+          if (run.status !== 'success') throw new Error(`${process.env.PHASE}: status=${run.status}`);
+          if (Number(run.error_count) !== 0) throw new Error(`${process.env.PHASE}: fouten=${run.error_count}`);
+          if (Number(run.processed_count) < 1 || Number(run.processed_count) > limit) {
+            throw new Error(`${process.env.PHASE}: verwerkt=${run.processed_count}, limiet=${limit}`);
+          }
+          if (Number(run.processed_count) !== sum) {
+            throw new Error(`${process.env.PHASE}: statistieken tellen niet op (${run.processed_count} != ${sum})`);
+          }
+          if (process.env.REQUIRE_ZERO_NEW === '1' && Number(run.new_count) !== 0) {
+            throw new Error(`${process.env.PHASE}: idempotentietest maakte ${run.new_count} nieuwe records`);
+          }
+          if (process.env.PHASE === 'repeat-10') {
+            const first = runs[1];
+            if (!first) throw new Error('Eerste 10-productenrun ontbreekt.');
+            if (Number(run.total_unique_products_before) !== Number(first.total_unique_products_after)
+              || Number(run.total_unique_products_after) !== Number(first.total_unique_products_after)) {
+              throw new Error('Idempotentietest wijzigde het unieke producttotaal kunstmatig.');
+            }
+          }
+
+          const summary = `| ${process.env.PHASE} | ${run.processed_count} | ${run.new_count} | ${run.updated_count} | ${run.unchanged_count} | ${run.skipped_count} | ${run.error_count} | ${run.total_unique_products_before} | ${run.total_unique_products_after} | ${run.duration_seconds}s |`;
+          console.log(`PWA81_RESULT ${process.env.PHASE} ${JSON.stringify(run)}`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+          NODE
+          }
+
+          {
+            echo '## PWA 8.1 live importvalidatie'
+            echo '| Fase | Verwerkt | Nieuw | Bijgewerkt | Ongewijzigd | Overgeslagen | Fouten | Voor | Na | Duur |'
+            echo '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          export MAX_PRODUCTS="10" MAX_NEW_PRODUCTS="10" ADVANCE_DISCOVERY_STATE="0" PREFER_NEW_PRODUCTS="0"
+          npm run import
+          assert_latest_run "first-10" "10" "0"
+
+          npm run import
+          assert_latest_run "repeat-10" "10" "1"
+
+          export MAX_PRODUCTS="400" MAX_NEW_PRODUCTS="400" ADVANCE_DISCOVERY_STATE="1" PREFER_NEW_PRODUCTS="1"
+          npm run import
+          assert_latest_run "max-400" "400" "0"
