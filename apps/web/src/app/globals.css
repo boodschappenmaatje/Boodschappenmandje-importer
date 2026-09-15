@@ -863,6 +863,23 @@ button:focus-visible {
 }
 
 @media (max-width: 360px) {
+  .dashboard-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-action-card[data-wide="true"] {
+    grid-column: auto;
+  }
+
+  .more-item {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .future-label {
+    grid-column: 2;
+    width: fit-content;
+  }
+
   .product-card {
     grid-template-columns: 72px minmax(0, 1fr);
     gap: 12px;
