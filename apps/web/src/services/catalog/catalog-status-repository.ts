@@ -28,6 +28,10 @@ function dateValue(value: unknown): string | null {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null;
 }
 
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 export function catalogProgressPercent(totalUniqueProducts: number): number {
   return Math.min(100, Math.max(0, Math.round((totalUniqueProducts / CATALOG_TARGET) * 100)));
 }
@@ -56,6 +60,7 @@ export function mapCatalogImportRun(row: unknown): CatalogImportRun | null {
     unchangedCount: count(value.unchanged_count),
     skippedCount: count(value.skipped_count),
     errorCount: count(value.error_count),
+    errorSummary: optionalText(value.error_summary),
     totalUniqueProductsBefore: count(value.total_unique_products_before),
     totalUniqueProductsAfter: nullableCount(value.total_unique_products_after),
     durationSeconds: nullableCount(value.duration_seconds),
@@ -79,7 +84,7 @@ export class CatalogStatusRepository {
       .eq("supermarket", "Hoogvliet");
     let runQuery = this.client
       .from("catalog_import_runs")
-      .select("id,started_at,finished_at,status,trigger,processed_count,new_count,updated_count,unchanged_count,skipped_count,error_count,total_unique_products_before,total_unique_products_after,duration_seconds")
+      .select("id,started_at,finished_at,status,trigger,processed_count,new_count,updated_count,unchanged_count,skipped_count,error_count,error_summary,total_unique_products_before,total_unique_products_after,duration_seconds")
       .order("started_at", { ascending: false })
       .limit(1);
     if (signal) {
