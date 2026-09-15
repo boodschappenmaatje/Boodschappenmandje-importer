@@ -97,6 +97,24 @@ en importerwrites blijven server-side. Exact databaseopslaggebruik wordt niet
 naar de browser gebracht zolang dit niet veilig zonder beheercredentials kan;
 er wordt nooit een fictieve MB-waarde getoond.
 
+### Dagelijkse importbewaking
+
+De geplande groeirun controleert zijn eigen eindstatus direct. Daarnaast draait
+`monitor-catalog-import.yml` dagelijks om 08:30 Nederlandse tijd. Ook deze
+workflow gebruikt twee UTC-momenten met een `Europe/Amsterdam`-poort, zodat CET
+en CEST geen handmatige aanpassing vragen. De controle faalt bewust wanneer de
+06:00-run ontbreekt, ouder is dan zes uur, nog loopt, gedeeltelijk is voltooid
+of is mislukt. Zo kan GitHub een Actions-melding/e-mail versturen volgens de
+persoonlijke notificatie-instellingen. `workflow_dispatch` blijft beschikbaar
+voor een handmatige controle of herstelrun.
+
+Catalogusstatus onder **Meer** blijft de gebruikersgerichte controle: groen is
+alleen volledig succes, geel is `running` of `partial` en rood is `failed`.
+Bij een gedeeltelijke run maakt de PWA onderscheid tussen productfouten en
+bron-/zoekroutewaarschuwingen. De laatst geldige catalogus blijft in alle
+gevallen beschikbaar. Bewaking gebruikt uitsluitend de bestaande server-side
+GitHub Secrets; er komt geen beheerkey in de browserbundle.
+
 ## Automatische prijsupdates
 
 De dagelijkse prijsrun gebruikt de bestaande Hoogvliet-SKU en product-URL als identiteit. Zeven vaste SKU-shards verdelen het werk over de week. Wanneer een shard later meer producten bevat dan de begrensde batchgrootte, roteert iedere nieuwe week automatisch naar het volgende venster; nieuwe catalogusproducten blijven daardoor niet achter de eerste honderd SKU's vastzitten.
