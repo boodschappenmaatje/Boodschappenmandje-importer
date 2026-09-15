@@ -5,6 +5,7 @@ import {
   mapCatalogRows,
   mapJoinedCatalogRows,
   mapPriceSortedCatalogRows,
+  mapRankedCatalogRows,
 } from "@/services/catalog/catalog-mapper";
 import { DEFAULT_CATALOG_QUERY } from "@/services/catalog/catalog-search-state";
 import { isOfferActive } from "@/services/catalog/price";
@@ -80,9 +81,19 @@ const SEARCH_FIELDS = [
   "product_type",
 ] as const;
 
+export function normalizeCatalogSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("nl-NL")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function searchTokens(value: string): string[] {
-  return (value.toLocaleLowerCase("nl-NL").match(/[\p{L}\p{N}]+/gu) ?? [])
-    .filter(Boolean);
+  const normalized = normalizeCatalogSearchText(value);
+  return normalized ? normalized.split(" ") : [];
 }
 
 function databaseWordStartPatterns(tokens: string[]): string[] {
@@ -206,42 +217,107 @@ export function normalizeCatalogQueryRequest(
   };
 }
 
-function allQueryTokensMatchField(queryTokens: string[], value: string): boolean {
-  const valueTokens = searchTokens(value);
-  return queryTokens.every((queryToken) =>
-    valueTokens.some((valueToken) => valueToken.startsWith(queryToken)),
-  );
+interface FieldSearchMetrics {
+  matchedTokens: number;
+  tokenScore: number;
+  allTokens: boolean;
+  exactPhrase: boolean;
+  startsWithPhrase: boolean;
+  endsWithPhrase: boolean;
+  positionScore: number;
+  tokenCount: number;
+}
+
+function fieldSearchMetrics(
+  value: string | null,
+  queryTokens: string[],
+  exactTokenPoints: number,
+  prefixTokenPoints: number,
+): FieldSearchMetrics {
+  const valueTokens = searchTokens(value ?? "");
+  const phrase = queryTokens.join(" ");
+  const normalizedValue = valueTokens.join(" ");
+  let matchedTokens = 0;
+  let tokenScore = 0;
+  let positionScore = 0;
+
+  for (const queryToken of queryTokens) {
+    const position = valueTokens.findIndex((valueToken) =>
+      valueToken.startsWith(queryToken),
+    );
+    if (position < 0) continue;
+    matchedTokens += 1;
+    tokenScore += valueTokens[position] === queryToken
+      ? exactTokenPoints
+      : prefixTokenPoints;
+    positionScore += Math.max(0, 280 - position * 45);
+  }
+
+  return {
+    matchedTokens,
+    tokenScore,
+    allTokens: queryTokens.length > 0 && matchedTokens === queryTokens.length,
+    exactPhrase: normalizedValue === phrase,
+    startsWithPhrase:
+      normalizedValue === phrase || normalizedValue.startsWith(`${phrase} `),
+    endsWithPhrase:
+      normalizedValue === phrase || normalizedValue.endsWith(` ${phrase}`),
+    positionScore,
+    tokenCount: valueTokens.length,
+  };
 }
 
 export function productMatchesSearchTokens(product: Product, term: string): boolean {
   const queryTokens = searchTokens(term);
   if (queryTokens.length === 0) return true;
-  return [
+  const searchableFields = [
     product.name,
     product.brand,
     product.category,
     product.productType,
     product.packageText,
-  ]
-    .filter((value): value is string => Boolean(value))
-    .some((value) => allQueryTokensMatchField(queryTokens, value));
+  ].filter((value): value is string => Boolean(value));
+
+  return queryTokens.every((queryToken) =>
+    searchableFields.some((value) =>
+      searchTokens(value).some((valueToken) => valueToken.startsWith(queryToken)),
+    ),
+  );
 }
 
 export function productSearchRelevance(product: Product, term: string): number {
-  const normalizedTerm = searchTokens(term).join(" ");
-  if (!normalizedTerm) return 0;
-  const name = searchTokens(product.name).join(" ");
-  const brand = searchTokens(product.brand ?? "").join(" ");
+  const queryTokens = searchTokens(term);
+  if (queryTokens.length === 0 || !productMatchesSearchTokens(product, term)) return 0;
 
-  if (name === normalizedTerm) return 1000;
-  if (name.startsWith(`${normalizedTerm} `)) return 900;
-  if (allQueryTokensMatchField(searchTokens(term), product.name)) return 800;
-  if (brand === normalizedTerm) return 750;
-  if (allQueryTokensMatchField(searchTokens(term), product.brand ?? "")) return 700;
-  if (allQueryTokensMatchField(searchTokens(term), product.category ?? "")) return 500;
-  if (allQueryTokensMatchField(searchTokens(term), product.productType ?? "")) return 450;
-  if (allQueryTokensMatchField(searchTokens(term), product.packageText ?? "")) return 200;
-  return 0;
+  const name = fieldSearchMetrics(product.name, queryTokens, 260, 190);
+  const productType = fieldSearchMetrics(product.productType, queryTokens, 240, 180);
+  const category = fieldSearchMetrics(product.category, queryTokens, 220, 160);
+  const brand = fieldSearchMetrics(product.brand, queryTokens, 230, 170);
+  const packageText = fieldSearchMetrics(product.packageText, queryTokens, 60, 35);
+
+  return 1200
+    + (name.exactPhrase ? 4000 : 0)
+    + (name.startsWithPhrase && !name.exactPhrase ? 2800 : 0)
+    + (productType.exactPhrase ? 2600 : 0)
+    + (category.endsWithPhrase ? 2400 : 0)
+    + (brand.exactPhrase ? 2400 : 0)
+    + name.tokenScore
+    + productType.tokenScore
+    + category.tokenScore
+    + brand.tokenScore
+    + packageText.tokenScore
+    + name.positionScore
+    + (name.allTokens ? 1300 : 0)
+    + (productType.allTokens ? 1200 : 0)
+    + (category.allTokens ? 1100 : 0)
+    + (brand.allTokens ? 1150 : 0)
+    + (packageText.allTokens ? 150 : 0)
+    + (name.allTokens && productType.allTokens ? 350 : 0)
+    + (productType.allTokens && category.allTokens ? 2500 : 0)
+    + (name.allTokens && category.allTokens ? 700 : 0)
+    + (name.allTokens && name.tokenCount > 0
+      ? Math.round(400 * queryTokens.length / name.tokenCount)
+      : 0);
 }
 
 export function sortProductsForQuery(
@@ -356,6 +432,39 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       searchFilter,
       requiresPriceRelation,
     } = normalized;
+
+    // Iedere zoekende consumer gebruikt dezelfde server-side ranking. De RPC
+    // rangschikt de volledige gefilterde set vóór paginering; Producten en de
+    // compacte lijstzoeker kunnen daardoor niet uiteenlopen.
+    if (query.term) {
+      let rankedQuery = this.client.rpc("search_catalog_products_v2", {
+        p_term: query.term,
+        p_page: page,
+        p_page_size: pageSize,
+        p_category: query.category,
+        p_brand: query.brand,
+        p_offers_only: query.offersOnly,
+        p_max_price: query.maxPrice,
+        p_sort: query.sort,
+        p_now: (request.now ?? new Date()).toISOString().slice(0, 10),
+      });
+      if (request.signal) rankedQuery = rankedQuery.abortSignal(request.signal);
+
+      const { data: rankedRows, error: rankedError } = await rankedQuery;
+      if (rankedError) throw new CatalogReadError("products-unavailable");
+      if (!Array.isArray(rankedRows)) throw new CatalogReadError("invalid-response");
+
+      const hasMore = rankedRows.length > pageSize;
+      const mapped = mapRankedCatalogRows(rankedRows.slice(0, pageSize));
+      return {
+        products: mapped.products,
+        priceStatus: mapped.priceStatus,
+        page,
+        pageSize,
+        hasMore,
+        query,
+      };
+    }
 
     if (query.sort === "price-asc" || query.sort === "price-desc") {
       let priceQuery = this.client

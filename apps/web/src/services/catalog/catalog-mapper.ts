@@ -186,3 +186,22 @@ export function mapPriceSortedCatalogRows(
 
   return mapJoinedCatalogRows(joinedRows);
 }
+
+export function mapRankedCatalogRows(
+  rankedRows: unknown,
+): CatalogProductsResult {
+  if (!Array.isArray(rankedRows)) {
+    return { products: [], priceStatus: "complete" };
+  }
+
+  const joinedRows: UnknownRecord[] = [];
+  for (const value of rankedRows) {
+    if (!isRecord(value) || !isRecord(value.product_data)) continue;
+    joinedRows.push({
+      ...value.product_data,
+      current_price: value.current_price,
+    });
+  }
+
+  return mapJoinedCatalogRows(joinedRows);
+}
