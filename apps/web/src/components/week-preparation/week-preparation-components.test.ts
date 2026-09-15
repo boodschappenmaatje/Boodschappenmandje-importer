@@ -96,6 +96,66 @@ function ready(): WeekPreparation {
   );
 }
 
+function generated(): WeekPreparation {
+  const preparation = ready();
+  return {
+    ...preparation,
+    status: "generated",
+    days: preparation.days.map((day, index) =>
+      index === 0
+        ? {
+            ...day,
+            recipeId: "recipe-spaghetti",
+            recipe: {
+              id: "recipe-spaghetti",
+              sourceKey: "spaghetti-bolognese",
+              name: "Spaghetti bolognese",
+            },
+            status: "recipeSelected" as const,
+          }
+        : day,
+    ),
+    ingredients: [{
+      ingredientId: "ingredient-ground-beef",
+      sourceKey: "groundBeef",
+      name: "rundergehakt",
+      unit: "g",
+      optional: false,
+      servingsBase: 1,
+      requiredQuantity: 700,
+      purchaseQuantity: 2,
+      packageCapacity: 500,
+      usedIn: [{ recipeId: "recipe-spaghetti", recipeName: "Spaghetti bolognese" }],
+      product: {
+        productId: "real-product-id",
+        sku: "871000000001",
+        name: "Hoogvliet rundergehakt",
+        brand: "Hoogvliet",
+        packageText: "500 g",
+        imageUrl: null,
+        supermarket: "Hoogvliet",
+        sourceUrl: "https://www.hoogvliet.com/product/871000000001",
+      },
+      price: {
+        amountCents: 449,
+        isOffer: false,
+        updatedAt: NOW.toISOString(),
+        freshness: "fresh",
+      },
+      productMatchMissing: false,
+      packageCalculationMissing: false,
+    }],
+    generation: {
+      generatedAt: NOW.toISOString(),
+      knownPurchaseCostCents: 898,
+      matchedProductCount: 1,
+      missingProductMatchCount: 0,
+      missingPackageCalculationCount: 0,
+      missingPriceCount: 0,
+    },
+  };
+}
+
 function render(
   component: ReturnType<typeof createElement>,
   preparation: WeekPreparation | null,
@@ -146,15 +206,26 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).not.toContain("100,00 over");
   });
 
-  it("toont een gereed weekoverzicht zonder recepten of maaltijdkosten", () => {
+  it("toont de PWA 11-overgang terwijl gerechten worden klaargezet", () => {
     const html = render(createElement(PrepareWeekPage), ready());
-    expect(html).toContain("Je week is voorbereid");
-    expect(html).toContain("Klaar voor gerechten");
-    expect(html).toContain("Maandag");
-    expect(html).toContain("Zaterdag");
-    expect(html).toContain("alleen ontbrekende producten toegevoegd");
+    expect(html).toContain("Je weekgerechten");
+    expect(html).toContain("Klaar om te kiezen");
+    expect(html).toContain("echte Hoogvliet-producten");
     expect(html).not.toContain("recipeId");
-    expect(html).not.toContain("per avondmaal");
+    expect(html).not.toContain("SKU");
+  });
+
+  it("toont gerecht, hoeveelheden, echte productmatch, kosten en lijstactie", () => {
+    const html = render(createElement(PrepareWeekPage), generated());
+    expect(html).toContain("Spaghetti bolognese");
+    expect(html).toContain("4 personen");
+    expect(html).toContain("700 g nodig");
+    expect(html).toContain("Hoogvliet rundergehakt · 500 g");
+    expect(html).toContain("2 verpakkingen · € 8,98");
+    expect(html).toContain("Nieuwe boodschappen");
+    expect(html).toContain("Maak mijn lijst compleet");
+    expect(html).not.toContain("871000000001");
+    expect(html).not.toContain("real-product-id");
   });
 
   it("maakt Home dynamisch voor geen week, draft en ready", () => {
@@ -168,7 +239,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(draftHtml).toContain("Verder met voorbereiden");
     expect(draftHtml).toContain("Verder met deze week");
     expect(readyHtml).toContain("6 dagen voorbereid");
-    expect(readyHtml).toContain("Klaar voor gerechten");
+    expect(readyHtml).toContain("Klaar om gerechten te kiezen");
     expect(readyHtml).toContain("Bekijk je week");
   });
 

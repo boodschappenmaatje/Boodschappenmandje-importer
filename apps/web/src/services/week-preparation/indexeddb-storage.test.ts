@@ -75,6 +75,75 @@ describe("PWA 10 lokale persistentie", () => {
     });
   });
 
+  it("bewaart gegenereerde gerechten, requirements, usedIn en productreferenties stabiel", async () => {
+    const storage = new MemoryWeekStorage();
+    const base = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-generated",
+    );
+    const generated: WeekPreparation = {
+      ...base,
+      status: "generated",
+      days: [{
+        dayIndex: 0,
+        category: "pasta",
+        freeChoice: false,
+        recipeId: "recipe-spaghetti",
+        recipe: {
+          id: "recipe-spaghetti",
+          sourceKey: "spaghetti-bolognese",
+          name: "Spaghetti bolognese",
+        },
+        status: "recipeSelected",
+      }],
+      ingredients: [{
+        ingredientId: "ingredient-beef",
+        sourceKey: "groundBeef",
+        name: "rundergehakt",
+        unit: "g",
+        optional: false,
+        servingsBase: 1,
+        requiredQuantity: 700,
+        purchaseQuantity: 2,
+        packageCapacity: 500,
+        usedIn: [{
+          recipeId: "recipe-spaghetti",
+          recipeName: "Spaghetti bolognese",
+        }],
+        product: {
+          productId: "catalog-product-id",
+          sku: "871000000001",
+          name: "Hoogvliet rundergehakt",
+          brand: "Hoogvliet",
+          packageText: "500 g",
+          imageUrl: null,
+          supermarket: "Hoogvliet",
+          sourceUrl: "https://www.hoogvliet.com/product/871000000001",
+        },
+        price: {
+          amountCents: 449,
+          isOffer: false,
+          updatedAt: NOW.toISOString(),
+          freshness: "fresh",
+        },
+        productMatchMissing: false,
+        packageCalculationMissing: false,
+      }],
+      generation: {
+        generatedAt: NOW.toISOString(),
+        knownPurchaseCostCents: 898,
+        matchedProductCount: 1,
+        missingProductMatchCount: 0,
+        missingPackageCalculationCount: 0,
+        missingPriceCount: 0,
+      },
+    };
+    await storage.save(generated);
+    await expect(storage.load()).resolves.toEqual(generated);
+  });
+
   it("vervangt alleen de voorbereiding bij een nieuwe week", async () => {
     const storage = new MemoryWeekStorage();
     const existingList = createEmptyActiveShoppingList(NOW);
@@ -147,5 +216,57 @@ describe("PWA 10 lokale persistentie", () => {
         code: "unsupported-version",
       }),
     );
+  });
+
+  it("migreert een bestaande PWA 10-week naar PWA 11 zonder dagkeuzes te verliezen", () => {
+    const legacy = {
+      schemaVersion: 1,
+      id: "week-legacy",
+      createdAt: NOW.toISOString(),
+      updatedAt: NOW.toISOString(),
+      numberOfPeople: 4,
+      numberOfDays: 1,
+      budgetCents: 10_000,
+      existingListKnownSubtotalCents: 500,
+      existingListUnpricedCount: 0,
+      categoryDistribution: {
+        dutch: 1,
+        pasta: 0,
+        rice: 0,
+        quick: 0,
+        healthy: 0,
+        comfort: 0,
+        vegetarian: 0,
+        freeChoice: 0,
+      },
+      preferences: {
+        noVegetarian: false,
+        quickImportant: false,
+        healthyImportant: false,
+        budgetImportant: true,
+      },
+      days: [{
+        dayIndex: 0,
+        category: "dutch",
+        freeChoice: false,
+        recipeId: null,
+        status: "categoryAssigned",
+      }],
+      status: "readyForGeneration",
+      listStrategy: "preserveAndComplete",
+    };
+    expect(
+      decodeStoredWeekPreparation({
+        key: "active",
+        schemaVersion: 1,
+        preparation: legacy,
+      }),
+    ).toMatchObject({
+      schemaVersion: 2,
+      id: "week-legacy",
+      ingredients: [],
+      generation: null,
+      days: [{ category: "dutch", recipe: null }],
+    });
   });
 });

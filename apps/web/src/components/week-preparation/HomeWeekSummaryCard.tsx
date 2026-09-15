@@ -17,6 +17,9 @@ export function HomeWeekSummaryCard() {
         preparation.numberOfDays,
       )
     : null;
+  const hasDishes =
+    preparation !== null &&
+    ["generated", "generationPartial"].includes(preparation.status);
 
   return (
     <section className="dashboard-card week-summary-card" aria-labelledby="week-title">
@@ -46,18 +49,24 @@ export function HomeWeekSummaryCard() {
               : ` · ${formatCents(settings.budgetCents)} budget`}
           </p>
           <strong className="week-home-status">
-            {preparation.status === "readyForGeneration"
-              ? `${preparation.numberOfDays} dagen voorbereid`
+            {hasDishes
+              ? `${preparation.days.filter((day) => day.recipe !== null).length} gerechten gekozen`
+              : preparation.status === "generating"
+                ? "Gerechten worden gekozen"
+                : preparation.status === "readyForGeneration"
+                  ? `${preparation.numberOfDays} dagen voorbereid`
               : `${progress?.assignedDays ?? 0} van ${preparation.numberOfDays ?? 0} dagen verdeeld`}
           </strong>
-          {preparation.status === "readyForGeneration" ? (
-            <span className="week-ready-label">Klaar voor gerechten</span>
+          {hasDishes ? (
+            <span className="week-ready-label">Week bevat gerechten</span>
+          ) : preparation.status === "readyForGeneration" ? (
+            <span className="week-ready-label">Klaar om gerechten te kiezen</span>
           ) : null}
         </div>
       )}
 
       <Link className="primary-action" href="/week-voorbereiden">
-        {preparation?.status === "readyForGeneration"
+        {preparation && ["readyForGeneration", "generating", "generated", "generationPartial", "generationError"].includes(preparation.status)
           ? "Bekijk je week"
           : preparation
             ? "Verder met deze week"
@@ -66,4 +75,3 @@ export function HomeWeekSummaryCard() {
     </section>
   );
 }
-

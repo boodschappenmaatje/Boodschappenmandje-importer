@@ -1,4 +1,6 @@
-export const WEEK_PREPARATION_SCHEMA_VERSION = 1 as const;
+import type { PriceFreshness, UUID } from "@/types/catalog";
+
+export const WEEK_PREPARATION_SCHEMA_VERSION = 2 as const;
 
 export const MEAL_CATEGORIES = [
   "dutch",
@@ -12,7 +14,14 @@ export const MEAL_CATEGORIES = [
 ] as const;
 
 export type MealCategory = (typeof MEAL_CATEGORIES)[number];
-export type WeekPreparationStatus = "draft" | "readyForGeneration";
+export type RecipeMealCategory = Exclude<MealCategory, "freeChoice">;
+export type WeekPreparationStatus =
+  | "draft"
+  | "readyForGeneration"
+  | "generating"
+  | "generated"
+  | "generationPartial"
+  | "generationError";
 
 export type CategoryDistribution = Record<MealCategory, number>;
 
@@ -23,12 +32,70 @@ export interface WeekPreferences {
   budgetImportant: boolean;
 }
 
+export interface SelectedRecipeReference {
+  id: UUID;
+  sourceKey: string;
+  name: string;
+}
+
 export interface PreparedDay {
   dayIndex: number;
   category: MealCategory;
   freeChoice: boolean;
-  recipeId: null;
-  status: "categoryAssigned";
+  recipeId: UUID | null;
+  recipe: SelectedRecipeReference | null;
+  status: "categoryAssigned" | "recipeSelected" | "freeChoice";
+}
+
+export type WeekIngredientUnit = "g" | "kg" | "ml" | "l" | "piece" | "loaf";
+
+export interface WeekIngredientUse {
+  recipeId: UUID;
+  recipeName: string;
+}
+
+export interface WeekProductReference {
+  productId: UUID;
+  sku: string;
+  name: string;
+  brand: string | null;
+  packageText: string | null;
+  imageUrl: string | null;
+  supermarket: string;
+  sourceUrl: string;
+}
+
+export interface WeekPriceSnapshot {
+  amountCents: number;
+  isOffer: boolean;
+  updatedAt: string | null;
+  freshness: PriceFreshness;
+}
+
+export interface WeekIngredientRequirement {
+  ingredientId: UUID;
+  sourceKey: string;
+  name: string;
+  unit: WeekIngredientUnit;
+  optional: boolean;
+  servingsBase: 1;
+  requiredQuantity: number;
+  purchaseQuantity: number | null;
+  packageCapacity: number | null;
+  usedIn: WeekIngredientUse[];
+  product: WeekProductReference | null;
+  price: WeekPriceSnapshot | null;
+  productMatchMissing: boolean;
+  packageCalculationMissing: boolean;
+}
+
+export interface WeekGenerationSummary {
+  generatedAt: string;
+  knownPurchaseCostCents: number;
+  matchedProductCount: number;
+  missingProductMatchCount: number;
+  missingPackageCalculationCount: number;
+  missingPriceCount: number;
 }
 
 export interface WeekPreparation {
@@ -44,6 +111,8 @@ export interface WeekPreparation {
   categoryDistribution: CategoryDistribution;
   preferences: WeekPreferences;
   days: PreparedDay[];
+  ingredients: WeekIngredientRequirement[];
+  generation: WeekGenerationSummary | null;
   status: WeekPreparationStatus;
   listStrategy: "preserveAndComplete";
 }

@@ -14,8 +14,11 @@ export function HomeWeekPreparationCard() {
         preparation.numberOfDays,
       )
     : null;
+  const hasWeek =
+    preparation !== null &&
+    ["readyForGeneration", "generating", "generated", "generationPartial", "generationError"].includes(preparation.status);
   const title =
-    preparation?.status === "readyForGeneration"
+    hasWeek
       ? "Bekijk je week"
       : preparation
         ? "Verder met voorbereiden"
@@ -24,7 +27,11 @@ export function HomeWeekPreparationCard() {
     status === "loading"
       ? "Je week wordt geopend…"
       : preparation
-        ? `${progress?.assignedDays ?? 0} van ${preparation.numberOfDays ?? 0} dagen verdeeld`
+        ? ["generated", "generationPartial"].includes(preparation.status)
+          ? `${preparation.days.filter((day) => day.recipe !== null).length} gerechten gekozen`
+          : preparation.status === "generating"
+            ? "Gerechten worden gekozen…"
+            : `${progress?.assignedDays ?? 0} van ${preparation.numberOfDays ?? 0} dagen verdeeld`
         : "Bereid je boodschappenweek rustig en slim voor.";
 
   return (
@@ -46,4 +53,3 @@ export function HomeWeekPreparationCard() {
     </Link>
   );
 }
-

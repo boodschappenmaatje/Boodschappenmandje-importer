@@ -12,10 +12,26 @@ import {
 } from "react";
 
 import { useBudget } from "@/features/budget/BudgetProvider";
+import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
+import {
+  createCatalogRepository,
+  type CatalogRepository,
+} from "@/services/catalog/catalog-repository";
 import {
   createIndexedDbWeekPreparationStorage,
   type WeekPreparationStorage,
 } from "@/services/week-preparation/indexeddb-storage";
+import {
+  createRecipeRepository,
+  type RecipeRepository,
+} from "@/services/week-preparation/recipe-repository";
+import {
+  calculateWeekBudgetSummary,
+  generatePreparedWeek,
+  markWeekGenerating,
+  markWeekGenerationFailed,
+  refreshGeneratedWeek,
+} from "@/services/week-preparation/week-generation";
 import {
   changePreparedDayCategory,
   createWeekPreparation,
@@ -36,6 +52,7 @@ interface WeekPreparationContextValue {
   status: WeekPreparationProviderStatus;
   preparation: WeekPreparation | null;
   persistenceWarning: string | null;
+  actionMessage: string | null;
   startPreparation: () => void;
   startNewPreparation: () => void;
   setNumberOfPeople: (value: number | null) => void;
@@ -44,6 +61,8 @@ interface WeekPreparationContextValue {
   adjustCategory: (category: MealCategory, change: -1 | 1) => void;
   setPreference: (preference: keyof WeekPreferences, value: boolean) => void;
   confirmPreparation: () => void;
+  retryGeneration: () => void;
+  completeShoppingList: () => void;
   changeDayCategory: (dayIndex: number, category: MealCategory) => void;
 }
 
@@ -54,12 +73,16 @@ interface WeekPreparationProviderProps {
   children?: ReactNode;
   initialPreparation?: WeekPreparation | null;
   storage?: WeekPreparationStorage;
+  recipeRepository?: RecipeRepository;
+  catalogRepository?: CatalogRepository;
 }
 
 export function WeekPreparationProvider({
   children,
   initialPreparation,
   storage: suppliedStorage,
+  recipeRepository: suppliedRecipeRepository,
+  catalogRepository: suppliedCatalogRepository,
 }: WeekPreparationProviderProps) {
   const {
     status: budgetStatus,
@@ -69,6 +92,7 @@ export function WeekPreparationProvider({
     setDays: setBudgetDays,
     setBudgetCents: updateBudgetCents,
   } = useBudget();
+  const shoppingList = useActiveShoppingList();
   const [status, setStatus] = useState<WeekPreparationProviderStatus>(
     initialPreparation !== undefined ? "ready" : "loading",
   );
@@ -76,9 +100,21 @@ export function WeekPreparationProvider({
     initialPreparation ?? null,
   );
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const preparationRef = useRef<WeekPreparation | null>(initialPreparation ?? null);
   const storageRef = useRef<WeekPreparationStorage | null>(suppliedStorage ?? null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const generationRunRef = useRef(0);
+  const refreshedWeekRef = useRef<string | null>(null);
+
+  const recipeRepository = useCallback(
+    () => suppliedRecipeRepository ?? createRecipeRepository(),
+    [suppliedRecipeRepository],
+  );
+  const catalogRepository = useCallback(
+    () => suppliedCatalogRepository ?? createCatalogRepository(),
+    [suppliedCatalogRepository],
+  );
 
   const persist = useCallback((next: WeekPreparation): Promise<void> => {
     const storage = storageRef.current;
@@ -120,6 +156,29 @@ export function WeekPreparationProvider({
     [replace],
   );
 
+  const runGeneration = useCallback(
+    async (base: WeekPreparation) => {
+      const run = generationRunRef.current + 1;
+      generationRunRef.current = run;
+      setActionMessage(null);
+      replace(markWeekGenerating(base));
+      try {
+        const generated = await generatePreparedWeek(
+          { ...base, status: "readyForGeneration" },
+          recipeRepository(),
+          catalogRepository(),
+        );
+        if (generationRunRef.current !== run) return;
+        refreshedWeekRef.current = generated.id;
+        replace(generated);
+      } catch {
+        if (generationRunRef.current !== run) return;
+        replace(markWeekGenerationFailed(base));
+      }
+    },
+    [catalogRepository, recipeRepository, replace],
+  );
+
   useEffect(() => {
     if (initialPreparation !== undefined) return;
     let active = true;
@@ -130,8 +189,12 @@ export function WeekPreparationProvider({
         storageRef.current = storage;
         const stored = await storage.load();
         if (!active) return;
-        preparationRef.current = stored;
-        setPreparation(stored);
+        const recovered =
+          stored?.status === "generating"
+            ? { ...stored, status: "readyForGeneration" as const }
+            : stored;
+        preparationRef.current = recovered;
+        setPreparation(recovered);
         setPersistenceWarning(null);
         setStatus("ready");
       } catch {
@@ -148,6 +211,37 @@ export function WeekPreparationProvider({
       active = false;
     };
   }, [initialPreparation, suppliedStorage]);
+
+  useEffect(() => {
+    const current = preparationRef.current;
+    if (
+      status !== "ready" ||
+      !current ||
+      refreshedWeekRef.current === current.id ||
+      !["generated", "generationPartial"].includes(current.status)
+    ) {
+      return;
+    }
+    refreshedWeekRef.current = current.id;
+    let active = true;
+    void refreshGeneratedWeek(
+      current,
+      recipeRepository(),
+      catalogRepository(),
+    )
+      .then((refreshed) => {
+        if (active && preparationRef.current?.id === refreshed.id) {
+          replace(refreshed);
+        }
+      })
+      .catch(() => {
+        // De opgeslagen selectie en laatst bekende echte productinformatie
+        // blijven bruikbaar wanneer Supabase tijdelijk niet bereikbaar is.
+      });
+    return () => {
+      active = false;
+    };
+  }, [catalogRepository, recipeRepository, replace, status]);
 
   useEffect(() => {
     const current = preparationRef.current;
@@ -171,6 +265,9 @@ export function WeekPreparationProvider({
   );
 
   const createFreshPreparation = useCallback(() => {
+    generationRunRef.current += 1;
+    refreshedWeekRef.current = null;
+    setActionMessage(null);
     replace(createWeekPreparation(budgetSettings, currentListContext()));
   }, [budgetSettings, currentListContext, replace]);
 
@@ -225,16 +322,67 @@ export function WeekPreparationProvider({
   );
 
   const confirmPreparation = useCallback(() => {
-    commit((current) => prepareWeek(current, currentListContext()));
-  }, [commit, currentListContext]);
+    const current = preparationRef.current;
+    if (!current) return;
+    const prepared = prepareWeek(current, currentListContext());
+    if (prepared.status !== "readyForGeneration") return;
+    void runGeneration(prepared);
+  }, [currentListContext, runGeneration]);
+
+  const retryGeneration = useCallback(() => {
+    const current = preparationRef.current;
+    if (!current) return;
+    if (
+      current.status === "generationError" ||
+      current.status === "readyForGeneration"
+    ) {
+      void runGeneration(current);
+      return;
+    }
+    if (["generated", "generationPartial"].includes(current.status)) {
+      refreshedWeekRef.current = null;
+      void refreshGeneratedWeek(
+        current,
+        recipeRepository(),
+        catalogRepository(),
+      )
+        .then(replace)
+        .catch(() => setActionMessage("Opnieuw controleren lukte nu niet."));
+    }
+  }, [catalogRepository, recipeRepository, replace, runGeneration]);
+
+  const completeShoppingList = useCallback(() => {
+    const current = preparationRef.current;
+    const list = shoppingList.list;
+    if (
+      !current ||
+      !list ||
+      !["generated", "generationPartial"].includes(current.status)
+    ) {
+      return;
+    }
+    const before = calculateWeekBudgetSummary(current, list);
+    void shoppingList
+      .completeFromWeek(current.ingredients)
+      .then(() => {
+        setActionMessage(
+          before.newPackageCount > 0
+            ? `${before.newPackageCount} ${before.newPackageCount === 1 ? "verpakking is" : "verpakkingen zijn"} aan je lijst toegevoegd.`
+            : "Je lijst bevatte deze boodschappen al.",
+        );
+      })
+      .catch(() => setActionMessage("Je lijst aanvullen lukte nu niet."));
+  }, [shoppingList]);
 
   const changeDayCategory = useCallback(
     (dayIndex: number, category: MealCategory) => {
-      commit((current) =>
-        changePreparedDayCategory(current, dayIndex, category),
-      );
+      const current = preparationRef.current;
+      if (!current) return;
+      const changed = changePreparedDayCategory(current, dayIndex, category);
+      if (changed === current) return;
+      void runGeneration(changed);
     },
-    [commit],
+    [runGeneration],
   );
 
   const value = useMemo<WeekPreparationContextValue>(
@@ -242,6 +390,7 @@ export function WeekPreparationProvider({
       status,
       preparation,
       persistenceWarning,
+      actionMessage,
       startPreparation: createFreshPreparation,
       startNewPreparation: createFreshPreparation,
       setNumberOfPeople,
@@ -250,15 +399,20 @@ export function WeekPreparationProvider({
       adjustCategory,
       setPreference,
       confirmPreparation,
+      retryGeneration,
+      completeShoppingList,
       changeDayCategory,
     }),
     [
+      actionMessage,
       adjustCategory,
       changeDayCategory,
+      completeShoppingList,
       confirmPreparation,
       createFreshPreparation,
       persistenceWarning,
       preparation,
+      retryGeneration,
       setBudgetCents,
       setNumberOfDays,
       setNumberOfPeople,

@@ -20,7 +20,12 @@ import {
   canPrepareWeek,
   distributionProgress,
 } from "@/services/week-preparation/week-preparation";
-import { MEAL_CATEGORIES, type MealCategory } from "@/types/week-preparation";
+import { calculateWeekBudgetSummary } from "@/services/week-preparation/week-generation";
+import {
+  MEAL_CATEGORIES,
+  type MealCategory,
+  type WeekIngredientRequirement,
+} from "@/types/week-preparation";
 
 const PEOPLE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const DAY_OPTIONS = Array.from({ length: 7 }, (_, index) => index + 1);
@@ -36,6 +41,16 @@ const DAY_LABELS = [
 
 function listCountLabel(count: number): string {
   return `${count} ${count === 1 ? "product" : "producten"}`;
+}
+
+function quantityLabel(
+  quantity: number,
+  unit: WeekIngredientRequirement["unit"],
+): string {
+  const amount = quantity.toLocaleString("nl-NL", { maximumFractionDigits: 2 });
+  if (unit === "piece") return `${amount} ${quantity === 1 ? "stuk" : "stuks"}`;
+  if (unit === "loaf") return `${amount} ${quantity === 1 ? "brood" : "broden"}`;
+  return `${amount} ${unit}`;
 }
 
 export function WeekPreparationView() {
@@ -94,6 +109,9 @@ export function WeekPreparationView() {
       ? ""
       : centsToDutchInput(budget.settings.budgetCents));
   const ready = canPrepareWeek(preparation);
+  const weekBudget = shoppingList.list
+    ? calculateWeekBudgetSummary(preparation, shoppingList.list)
+    : null;
 
   function saveBudget(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -124,55 +142,203 @@ export function WeekPreparationView() {
         </p>
       ) : null}
 
-      {preparation.status === "readyForGeneration" ? (
+      {preparation.status !== "draft" ? (
         <section className="dashboard-card prepared-week-overview" aria-labelledby="prepared-week-title">
           <div className="dashboard-card-heading">
             <div>
               <p className="card-eyebrow">Deze week</p>
-              <h2 id="prepared-week-title">Je week is voorbereid</h2>
+              <h2 id="prepared-week-title">
+                {preparation.status === "generating"
+                  ? "Je gerechten worden gekozen"
+                  : preparation.status === "generationError"
+                    ? "Gerechten kiezen lukte niet"
+                    : "Je weekgerechten"}
+              </h2>
             </div>
-            <span className="card-status">Klaar</span>
+            <span className="card-status">
+              {preparation.status === "generating"
+                ? "Bezig"
+                : preparation.status === "generationError"
+                  ? "Probeer opnieuw"
+                  : preparation.status === "readyForGeneration"
+                    ? "Klaar om te kiezen"
+                    : "Gerechten gekozen"}
+            </span>
           </div>
-          <p className="prepared-week-lead">
-            De volgende stap vult de dagen met passende gerechten en producten.
-          </p>
           <p className="week-facts">
             {preparation.numberOfPeople} personen · {preparation.numberOfDays} dagen ·{" "}
             {budget.settings.budgetCents === null
               ? "geen budget"
               : `${formatCents(budget.settings.budgetCents)} budget`}
           </p>
-          <ol className="prepared-days">
-            {preparation.days.map((day) => (
-              <li key={day.dayIndex}>
-                <label htmlFor={`prepared-day-${day.dayIndex}`}>
-                  <span>{DAY_LABELS[day.dayIndex]}</span>
-                  <select
-                    id={`prepared-day-${day.dayIndex}`}
-                    value={day.category}
-                    onChange={(event) =>
-                      week.changeDayCategory(
-                        day.dayIndex,
-                        event.target.value as MealCategory,
+          {preparation.status === "generating" || preparation.status === "readyForGeneration" ? (
+            <p className="prepared-week-lead" role="status">
+              Passende gerechten, hoeveelheden en echte Hoogvliet-producten worden klaargezet…
+            </p>
+          ) : preparation.status === "generationError" ? (
+            <div className="week-generation-error" role="alert">
+              <p>Je bestaande week, lijst en budget zijn niet gewijzigd.</p>
+              <button type="button" onClick={week.retryGeneration}>
+                Opnieuw proberen
+              </button>
+            </div>
+          ) : (
+            <>
+              {preparation.generation &&
+              (preparation.generation.missingProductMatchCount > 0 ||
+                preparation.generation.missingPackageCalculationCount > 0 ||
+                preparation.generation.missingPriceCount > 0) ? (
+                <div className="week-generation-warning" role="status">
+                  {preparation.generation.missingProductMatchCount > 0 ? (
+                    <p>
+                      {preparation.generation.missingProductMatchCount}{" "}
+                      {preparation.generation.missingProductMatchCount === 1
+                        ? "ingrediënt kon"
+                        : "ingrediënten konden"}{" "}
+                      nog niet betrouwbaar aan een product worden gekoppeld.
+                    </p>
+                  ) : null}
+                  {preparation.generation.missingPriceCount > 0 ? (
+                    <p>
+                      Voor {preparation.generation.missingPriceCount}{" "}
+                      {preparation.generation.missingPriceCount === 1
+                        ? "product ontbreekt"
+                        : "producten ontbreken"}{" "}
+                      nog een bruikbare prijs.
+                    </p>
+                  ) : null}
+                  {preparation.generation.missingPackageCalculationCount > 0 ? (
+                    <p>
+                      Bij {preparation.generation.missingPackageCalculationCount}{" "}
+                      {preparation.generation.missingPackageCalculationCount === 1
+                        ? "product kon het aantal verpakkingen"
+                        : "producten kon het aantal verpakkingen"}{" "}
+                      nog niet veilig worden berekend.
+                    </p>
+                  ) : null}
+                  <button type="button" onClick={week.retryGeneration}>
+                    Producten opnieuw controleren
+                  </button>
+                </div>
+              ) : null}
+
+              <ol className="prepared-days recipe-days">
+                {preparation.days.map((day) => {
+                  const dayIngredients = day.recipeId
+                    ? preparation.ingredients.filter((ingredient) =>
+                        ingredient.usedIn.some((use) => use.recipeId === day.recipeId),
                       )
-                    }
-                  >
-                    {MEAL_CATEGORIES.map((category) => (
-                      <option key={category} value={category}>
-                        {MEAL_CATEGORY_LABELS[category]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </li>
-            ))}
-          </ol>
-          <div className="week-next-step">
-            <strong>Klaar voor gerechten</strong>
-            <span>
-              Je bestaande lijst blijft staan; later worden alleen ontbrekende producten toegevoegd.
-            </span>
-          </div>
+                    : [];
+                  return (
+                    <li key={day.dayIndex}>
+                      <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
+                        <span>{DAY_LABELS[day.dayIndex]}</span>
+                        <select
+                          id={`prepared-day-${day.dayIndex}`}
+                          value={day.category}
+                          onChange={(event) =>
+                            week.changeDayCategory(
+                              day.dayIndex,
+                              event.target.value as MealCategory,
+                            )
+                          }
+                        >
+                          {MEAL_CATEGORIES.map((category) => (
+                            <option key={category} value={category}>
+                              {MEAL_CATEGORY_LABELS[category]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {day.freeChoice ? (
+                        <p className="free-choice-copy">Vrije keuze — kies later zelf een gerecht</p>
+                      ) : day.recipe ? (
+                        <details className="recipe-detail">
+                          <summary>
+                            <strong>{day.recipe.name}</strong>
+                            <span>Bekijk gerecht</span>
+                          </summary>
+                          <div className="recipe-detail-content">
+                            <p>
+                              {MEAL_CATEGORY_LABELS[day.category]} · {preparation.numberOfPeople} personen
+                            </p>
+                            <ul className="recipe-ingredients">
+                              {dayIngredients.map((ingredient) => (
+                                <li key={ingredient.ingredientId}>
+                                  <div>
+                                    <strong>{ingredient.name}</strong>
+                                    <span>{quantityLabel(ingredient.requiredQuantity, ingredient.unit)} nodig</span>
+                                  </div>
+                                  {ingredient.product ? (
+                                    <div className="recipe-product-match">
+                                      <span>
+                                        {ingredient.product.name}
+                                        {ingredient.product.packageText
+                                          ? ` · ${ingredient.product.packageText}`
+                                          : ""}
+                                      </span>
+                                      {ingredient.purchaseQuantity !== null ? (
+                                        <span>
+                                          {ingredient.purchaseQuantity}{" "}
+                                          {ingredient.purchaseQuantity === 1 ? "verpakking" : "verpakkingen"}
+                                          {ingredient.price
+                                            ? ` · ${formatCents(
+                                                ingredient.price.amountCents * ingredient.purchaseQuantity,
+                                              )}`
+                                            : " · prijs ontbreekt"}
+                                        </span>
+                                      ) : (
+                                        <span>Aantal verpakkingen nog niet bekend</span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="shopping-item-price-missing">
+                                      Nog geen betrouwbare productmatch
+                                    </span>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </details>
+                      ) : (
+                        <p className="shopping-item-price-missing">
+                          Voor deze categorie kon nog geen passend gerecht worden gekozen.
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {weekBudget ? (
+                <div className="week-cost-overview" aria-label="Weekkosten en budget">
+                  <div><span>Weekbudget</span><strong>{weekBudget.budgetCents === null ? "Niet ingesteld" : formatCents(weekBudget.budgetCents)}</strong></div>
+                  <div><span>Bestaande lijst</span><strong>{formatCents(weekBudget.existingListKnownSubtotalCents)}</strong></div>
+                  <div><span>Nieuwe boodschappen</span><strong>{formatCents(weekBudget.newKnownCostCents)}</strong></div>
+                  <div><span>Bekend totaal</span><strong>{formatCents(weekBudget.knownTotalCents)}</strong></div>
+                  <div>
+                    <span>Budgetruimte</span>
+                    <strong>
+                      {weekBudget.overBudgetCents > 0 && weekBudget.isComplete
+                        ? `${formatCents(weekBudget.overBudgetCents)} boven budget`
+                        : weekBudget.remainingCents !== null
+                          ? `${formatCents(weekBudget.remainingCents)} over`
+                          : "Nog niet definitief"}
+                    </strong>
+                  </div>
+                  {!weekBudget.isComplete ? (
+                    <p>Ontbrekende matches of prijzen worden niet als € 0 meegerekend.</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <button className="primary-action" type="button" onClick={week.completeShoppingList}>
+                Maak mijn lijst compleet
+              </button>
+              {week.actionMessage ? <p className="week-action-message" role="status">{week.actionMessage}</p> : null}
+            </>
+          )}
         </section>
       ) : null}
 

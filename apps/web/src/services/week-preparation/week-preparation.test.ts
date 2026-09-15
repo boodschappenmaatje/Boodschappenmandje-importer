@@ -59,7 +59,7 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
       existingListUnpricedCount: 0,
       status: "draft",
       listStrategy: "preserveAndComplete",
-      schemaVersion: 1,
+      schemaVersion: 2,
     });
   });
 
@@ -199,4 +199,3 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
     });
   });
 });
-

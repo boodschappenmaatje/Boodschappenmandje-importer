@@ -2850,3 +2850,120 @@ button:focus-visible {
     animation: none;
   }
 }
+
+.week-generation-error,
+.week-generation-warning,
+.week-cost-overview,
+.recipe-detail-content {
+  display: grid;
+  gap: 10px;
+}
+
+.week-generation-error,
+.week-generation-warning {
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-background);
+}
+
+.week-generation-warning p,
+.week-generation-error p,
+.week-cost-overview p {
+  margin: 0;
+}
+
+.recipe-days > li {
+  display: grid;
+  gap: 10px;
+}
+
+.prepared-day-category {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recipe-detail {
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.recipe-detail summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.recipe-detail summary::-webkit-details-marker {
+  display: none;
+}
+
+.recipe-detail summary span,
+.recipe-detail-content > p,
+.recipe-product-match,
+.recipe-ingredients li > div:first-child span,
+.free-choice-copy {
+  color: var(--color-muted);
+  font-size: 0.88rem;
+}
+
+.recipe-detail-content {
+  padding: 0 14px 14px;
+}
+
+.recipe-detail-content > p,
+.free-choice-copy {
+  margin: 0;
+}
+
+.recipe-ingredients {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipe-ingredients li {
+  display: grid;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.recipe-ingredients li > div:first-child,
+.recipe-product-match {
+  display: grid;
+  gap: 2px;
+}
+
+.week-cost-overview {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--color-background);
+}
+
+.week-cost-overview > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.week-cost-overview > div:nth-of-type(4) {
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.week-action-message {
+  margin: 0;
+  color: var(--color-success);
+  font-weight: 700;
+}
