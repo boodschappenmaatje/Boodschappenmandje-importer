@@ -10,6 +10,7 @@ import {
   CATALOG_SEARCH_DEBOUNCE_MS,
   ProductSearchResults,
   ShoppingListProductSearch,
+  shouldRunListProductSearch,
 } from "./ShoppingListProductSearch";
 
 const product: Product = {
@@ -55,6 +56,30 @@ describe("zoeken vanuit de actieve lijst", () => {
     expect(html).toContain("Zoek en voeg product toe");
     expect(html).toContain("Zoek op product of merk");
     expect(html).toContain("Typ minimaal 2 tekens");
+    expect(html).toContain("Open filters");
+  });
+
+  it("kan vanuit de lijst zoeken met dezelfde PWA 8-filterquery", () => {
+    expect(
+      shouldRunListProductSearch({
+        term: "",
+        category: "Frisdrank",
+        brand: null,
+        offersOnly: true,
+        maxPrice: 3,
+        sort: "price-asc",
+      }),
+    ).toBe(true);
+    expect(
+      shouldRunListProductSearch({
+        term: "",
+        category: null,
+        brand: null,
+        offersOnly: false,
+        maxPrice: null,
+        sort: "relevance",
+      }),
+    ).toBe(false);
   });
 
   it("gebruikt een korte debounce binnen de afgesproken marge", () => {

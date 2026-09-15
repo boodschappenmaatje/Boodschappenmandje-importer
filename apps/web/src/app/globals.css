@@ -1518,12 +1518,31 @@ button:focus-visible {
 }
 
 .product-search-header,
-.product-search-field,
+.product-search-query-tools,
 .search-add-feedback,
 .product-search-results,
 .product-search-done {
   width: min(100%, 620px);
   margin-inline: auto;
+}
+
+.product-search-query-tools {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.product-search-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.product-search-filter-button {
+  align-self: stretch;
+  min-height: 50px;
 }
 
 .product-search-header {

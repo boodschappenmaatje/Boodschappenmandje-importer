@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 
+import { CatalogFilterSheet } from "@/components/catalog/CatalogFilterSheet";
 import { Icon } from "@/components/Icon";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import {
@@ -12,10 +13,35 @@ import {
   normalizeCatalogSearchRequest,
 } from "@/services/catalog/catalog-repository";
 import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
+import {
+  DEFAULT_CATALOG_QUERY,
+  activeCatalogFilters,
+  clearCatalogFilters,
+} from "@/services/catalog/catalog-search-state";
 import { resolveCurrentPrice } from "@/services/catalog/price";
-import type { Product } from "@/types/catalog";
+import type {
+  CatalogFilterOptions,
+  CatalogQuery,
+  Product,
+} from "@/types/catalog";
 
 export const CATALOG_SEARCH_DEBOUNCE_MS = 325;
+
+const EMPTY_FILTER_OPTIONS: CatalogFilterOptions = {
+  categories: [],
+  brands: [],
+};
+
+export function shouldRunListProductSearch(query: CatalogQuery): boolean {
+  return (
+    normalizeCatalogSearchRequest(query.term) !== null ||
+    query.category !== null ||
+    query.brand !== null ||
+    query.offersOnly ||
+    query.maxPrice !== null ||
+    query.sort !== "relevance"
+  );
+}
 
 export type ProductSearchViewState =
   | { status: "prompt" }
@@ -174,7 +200,10 @@ export function ShoppingListProductSearch({
 }) {
   const shoppingList = useActiveShoppingList();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState<CatalogQuery>(DEFAULT_CATALOG_QUERY);
+  const [filterOptions, setFilterOptions] =
+    useState<CatalogFilterOptions>(EMPTY_FILTER_OPTIONS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [online, setOnline] = useState(() =>
     typeof window === "undefined" ? true : window.navigator.onLine,
   );
@@ -187,7 +216,7 @@ export function ShoppingListProductSearch({
     const updateOnlineState = () => {
       const nextOnline = window.navigator.onLine;
       setOnline(nextOnline);
-      if (normalizeCatalogSearchRequest(query)) {
+      if (shouldRunListProductSearch(query)) {
         setState(nextOnline ? { status: "searching" } : { status: "offline" });
       }
     };
@@ -203,14 +232,15 @@ export function ShoppingListProductSearch({
 
   useEffect(() => {
     if (!open) return;
-    const normalized = normalizeCatalogSearchRequest(query);
-    if (!normalized || !online) return;
+    if (!shouldRunListProductSearch(query) || !online) return;
 
     const controller = new AbortController();
     const debounceTimer = window.setTimeout(async () => {
       try {
-        const result = await createCatalogRepository().search(normalized.term, {
-          limit: CATALOG_SEARCH_LIMIT,
+        const result = await createCatalogRepository().query({
+          ...query,
+          page: 1,
+          pageSize: CATALOG_SEARCH_LIMIT,
           signal: controller.signal,
         });
         if (!controller.signal.aborted) {
@@ -232,6 +262,40 @@ export function ShoppingListProductSearch({
       controller.abort();
     };
   }, [online, open, query]);
+
+  useEffect(() => {
+    if (!open || !online) return;
+    const controller = new AbortController();
+    const debounceTimer = window.setTimeout(async () => {
+      try {
+        const normalized = normalizeCatalogSearchRequest(query.term);
+        const result = await createCatalogRepository().getFilterOptions({
+          term: normalized?.term ?? "",
+          category: query.category,
+          signal: controller.signal,
+        });
+        if (!controller.signal.aborted) {
+          setFilterOptions({
+            categories:
+              query.category && !result.categories.includes(query.category)
+                ? [query.category, ...result.categories]
+                : result.categories,
+            brands:
+              query.brand && !result.brands.includes(query.brand)
+                ? [query.brand, ...result.brands]
+                : result.brands,
+          });
+        }
+      } catch {
+        if (!controller.signal.aborted) setFilterOptions(EMPTY_FILTER_OPTIONS);
+      }
+    }, CATALOG_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(debounceTimer);
+      controller.abort();
+    };
+  }, [online, open, query.brand, query.category, query.term]);
 
   useEffect(() => {
     if (!open) return;
@@ -263,6 +327,8 @@ export function ShoppingListProductSearch({
     }
   }
 
+  const activeFilters = activeCatalogFilters(query);
+
   return (
     <section
       className="product-search-sheet"
@@ -283,30 +349,87 @@ export function ShoppingListProductSearch({
         </button>
       </div>
 
-      <div className="product-search-field">
-        <Icon name="products" size={20} />
-        <input
-          ref={inputRef}
-          type="search"
-          value={query}
-          onChange={(event) => {
-            const nextQuery = event.target.value;
-            setQuery(nextQuery);
-            setState(
-              !normalizeCatalogSearchRequest(nextQuery)
-                ? { status: "prompt" }
-                : window.navigator.onLine
-                  ? { status: "searching" }
-                  : { status: "offline" },
-            );
-            setFeedback(null);
-          }}
-          placeholder="Zoek op product of merk"
-          aria-label="Zoek op productnaam of merk"
-          autoComplete="off"
-          enterKeyHint="search"
-          spellCheck="false"
-        />
+      <div className="product-search-query-tools">
+        <div className="product-search-controls">
+          <div className="product-search-field">
+            <Icon name="products" size={20} />
+            <input
+              ref={inputRef}
+              type="search"
+              value={query.term}
+              onChange={(event) => {
+                const nextQuery = { ...query, term: event.target.value };
+                setQuery(nextQuery);
+                setState(
+                  !shouldRunListProductSearch(nextQuery)
+                    ? { status: "prompt" }
+                    : window.navigator.onLine
+                      ? { status: "searching" }
+                      : { status: "offline" },
+                );
+                setFeedback(null);
+              }}
+              placeholder="Zoek op product of merk"
+              aria-label="Zoek op productnaam of merk"
+              autoComplete="off"
+              enterKeyHint="search"
+              spellCheck="false"
+            />
+          </div>
+          <button
+            className="catalog-filter-button product-search-filter-button"
+            type="button"
+            aria-label={`Open filters${activeFilters.length ? `, ${activeFilters.length} actief` : ""}`}
+            onClick={() => setFiltersOpen(true)}
+          >
+            Filters
+            {activeFilters.length ? <span>{activeFilters.length}</span> : null}
+          </button>
+        </div>
+
+        {activeFilters.length ? (
+          <div className="catalog-active-filters" aria-label="Actieve filters">
+            {activeFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                aria-label={`Verwijder filter ${filter.label}`}
+                onClick={() => {
+                  const nextQuery: CatalogQuery = { ...query };
+                  if (filter.key === "offersOnly") nextQuery.offersOnly = false;
+                  else nextQuery[filter.key] = null;
+                  setQuery(nextQuery);
+                  setState(
+                    shouldRunListProductSearch(nextQuery)
+                      ? window.navigator.onLine
+                        ? { status: "searching" }
+                        : { status: "offline" }
+                      : { status: "prompt" },
+                  );
+                }}
+              >
+                {filter.label} <span aria-hidden="true">×</span>
+              </button>
+            ))}
+            <button
+              className="catalog-clear-inline"
+              type="button"
+              onClick={() => {
+                const nextQuery = clearCatalogFilters(query);
+                setQuery(nextQuery);
+                setState(
+                  shouldRunListProductSearch(nextQuery)
+                    ? window.navigator.onLine
+                      ? { status: "searching" }
+                      : { status: "offline" }
+                    : { status: "prompt" },
+                );
+              }}
+            >
+              Wis filters
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {feedback ? (
@@ -328,6 +451,36 @@ export function ShoppingListProductSearch({
       <button className="product-search-done" type="button" onClick={onClose}>
         Klaar, terug naar mijn lijst
       </button>
+
+      <CatalogFilterSheet
+        open={filtersOpen}
+        query={query}
+        options={filterOptions}
+        onClose={() => setFiltersOpen(false)}
+        onClear={() => {
+          const nextQuery = clearCatalogFilters(query);
+          setQuery(nextQuery);
+          setState(
+            shouldRunListProductSearch(nextQuery)
+              ? window.navigator.onLine
+                ? { status: "searching" }
+                : { status: "offline" }
+              : { status: "prompt" },
+          );
+          setFiltersOpen(false);
+        }}
+        onApply={(nextQuery) => {
+          setQuery(nextQuery);
+          setState(
+            shouldRunListProductSearch(nextQuery)
+              ? window.navigator.onLine
+                ? { status: "searching" }
+                : { status: "offline" }
+              : { status: "prompt" },
+          );
+          setFiltersOpen(false);
+        }}
+      />
     </section>
   );
 }
