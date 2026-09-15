@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
+import { EmptyState } from "@/components/EmptyState";
 import { PageIntro } from "@/components/PageIntro";
 
 export const metadata: Metadata = { title: "Lijst" };
@@ -7,12 +9,16 @@ export const metadata: Metadata = { title: "Lijst" };
 export default function ListPage() {
   return (
     <>
-      <PageIntro eyebrow="Hoofdonderdeel" title="Mijn boodschappen">
-        Deze route is voorbereid voor de migratie van de actieve slimme lijst.
+      <PageIntro eyebrow="Jouw lijst" title="Mijn boodschappen">
+        Hier vind je straks één actieve lijst die steeds beter weet wat je nodig hebt.
       </PageIntro>
-      <section className="placeholder-card">
-        <h2>Nog niet gemigreerd</h2>
-        <p>Er worden in PWA 2 bewust nog geen lijstgegevens gelezen of geschreven.</p>
+      <section className="dashboard-card route-empty-card">
+        <EmptyState icon="list" title="Nog geen actieve boodschappenlijst">
+          Start eerst je boodschappenweek. Je lijst blijft leeg totdat jij die stap zet.
+        </EmptyState>
+        <Link className="primary-action" href="/week-voorbereiden">
+          Start mijn week
+        </Link>
       </section>
     </>
   );
