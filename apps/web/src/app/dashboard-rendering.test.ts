@@ -55,17 +55,17 @@ function renderWithList(component: ReturnType<typeof createElement>, withProduct
 }
 
 describe("dashboard rendering", () => {
-  it("toont echte productnavigatie en lege kernstates zonder technische migratietekst", () => {
+  it("toont de mockup-home met veilige lege week zonder technische migratietekst", () => {
     const html = renderWithList(createElement(HomePage));
 
+    expect(html).toContain("Jouw week");
     expect(html).toContain("Deze week");
-    expect(html).toContain("Nog geen week voorbereid");
-    expect(html).toContain("Mijn boodschappen");
-    expect(html).toContain("Nog geen actieve boodschappenlijst");
-    expect(html).toContain('href="/producten"');
+    expect(html).toContain("Nog geen gerechten gekozen");
+    expect(html).toContain("Boodschappenlijst");
+    expect(html).toContain('href="/budget"');
+    expect(html).toContain('href="/week-voorbereiden"');
     expect(html).not.toContain("PWA-fundament");
     expect(html).not.toContain("mobiele testbasis");
-    expect(html).not.toContain("€");
   });
 
   it("geeft de lege lijst een veilige ingang naar weekvoorbereiding", () => {
@@ -75,11 +75,11 @@ describe("dashboard rendering", () => {
     expect(html).toContain('href="/producten"');
   });
 
-  it("toont echte actieve-lijstinformatie en de veilige vervolgactie op Home", () => {
+  it("toont echte actieve-lijstinformatie in de compacte Home-snelkoppeling", () => {
     const html = renderWithList(createElement(HomePage), true);
 
-    expect(html).toContain("<strong>1</strong> product op je lijst");
-    expect(html).toContain("Verder met mijn lijst");
-    expect(html).not.toContain("€ 0,00");
+    expect(html).toContain("Boodschappenlijst");
+    expect(html).toContain("1 product");
+    expect(html).toContain("€ 0,00 bekend");
   });
 });

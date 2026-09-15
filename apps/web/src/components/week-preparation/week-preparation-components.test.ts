@@ -238,22 +238,31 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     const draftHtml = render(createElement(HomePage), draft());
     const readyHtml = render(createElement(HomePage), ready());
 
-    expect(emptyHtml).toContain("Nog geen week voorbereid");
-    expect(emptyHtml).toContain("Week voorbereiden");
-    expect(draftHtml).toContain("4 van 6 dagen verdeeld");
-    expect(draftHtml).toContain("Verder met voorbereiden");
-    expect(draftHtml).toContain("Verder met deze week");
-    expect(readyHtml).toContain("6 dagen voorbereid");
-    expect(readyHtml).toContain("Klaar om gerechten te kiezen");
-    expect(readyHtml).toContain("Bekijk je week");
+    expect(emptyHtml).toContain("Nog geen gerechten gekozen");
+    expect(emptyHtml).toContain("Menu maken");
+    expect(draftHtml).toContain("4 personen");
+    expect(draftHtml).toContain("6 dagen");
+    expect(draftHtml).toContain("Menu maken");
+    expect(readyHtml).toContain("Jouw week");
+    expect(readyHtml).toContain("Bekijk week");
   });
 
-  it("behoudt Budget en Mijn boodschappen op Home naast de weekkaarten", () => {
+  it("behoudt Budget en boodschappenlijst op Home naast de weekkaarten", () => {
     const html = render(createElement(HomePage), draft());
-    expect(html).toContain("Budget");
-    expect(html).toContain("€ 24,63 bekend besteed van");
-    expect(html).toContain("Mijn boodschappen");
-    expect(html).toContain("1</strong> product op je lijst");
+    expect(html).toContain("Weekbudget");
+    expect(html).toContain("€ 24,63");
+    expect(html).toContain("Boodschappenlijst");
+    expect(html).toContain("1 product");
+  });
+
+  it("toont gegenereerde gerechten als horizontale dagkaarten met echte prijs en veilige fallback", () => {
+    const html = render(createElement(HomePage), generated());
+    expect(html).toContain("meal-day-scroller");
+    expect(html).toContain("Spaghetti bolognese");
+    expect(html).toContain("€ 8,98");
+    expect(html).toContain("Geen gerechtfoto beschikbaar");
+    expect(html).not.toContain("background-image:url(&quot;https://cdn.hoogvliet.com/rundergehakt.webp&quot;)");
+    expect(html).toContain("Menu aanpassen");
   });
 
   it("vraagt bevestiging voordat een bestaande voorbereiding wordt vervangen", () => {

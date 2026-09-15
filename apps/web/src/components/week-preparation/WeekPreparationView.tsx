@@ -253,6 +253,12 @@ export function WeekPreparationView() {
                     day.dayIndex,
                     preparation.ingredients,
                   );
+                  const dishImageUrl = safeProductImageUrl(
+                    dayIngredients.find(
+                      (ingredient) =>
+                        ingredient.kind === "mealMix" && ingredient.product?.imageUrl,
+                    )?.product?.imageUrl ?? null,
+                  );
                   return (
                     <li key={day.dayIndex}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
@@ -279,9 +285,20 @@ export function WeekPreparationView() {
                       ) : day.recipe ? (
                         <details className="recipe-detail">
                           <summary>
-                            <span className="recipe-summary-title">
-                              <strong>{mealMix?.dishName ?? day.recipe.name}</strong>
-                              {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
+                            <span className="recipe-summary-visual">
+                              <span
+                                className="recipe-summary-image"
+                                data-has-image={Boolean(dishImageUrl)}
+                                style={dishImageUrl ? { backgroundImage: `url(${JSON.stringify(dishImageUrl)})` } : undefined}
+                                role="img"
+                                aria-label={dishImageUrl ? `Afbeelding bij ${mealMix?.dishName ?? day.recipe.name}` : "Geen gerechtfoto beschikbaar"}
+                              >
+                                {!dishImageUrl ? <Icon name="prepare" size={24} /> : null}
+                              </span>
+                              <span className="recipe-summary-title">
+                                <strong>{mealMix?.dishName ?? day.recipe.name}</strong>
+                                {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
+                              </span>
                             </span>
                             <span>Bekijk gerecht</span>
                           </summary>

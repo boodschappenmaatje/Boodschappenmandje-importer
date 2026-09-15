@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export const SERVICE_WORKER_RELEASE = "pwa11-iphone-fix-2026-09-15";
+export const SERVICE_WORKER_RELEASE = "pwa11-ui-redesign-2026-09-15";
 
 export function PwaRegistrar() {
   useEffect(() => {
