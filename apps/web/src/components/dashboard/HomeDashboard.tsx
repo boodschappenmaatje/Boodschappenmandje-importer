@@ -57,6 +57,10 @@ export function HomeDashboard() {
         </div>
 
         <Link className="home-budget-link" href="/budget" aria-label="Bekijk je weekbudget">
+          <span className="home-budget-link-heading">
+            <span><Icon name="budget" size={19} />Bekijk weekbudget</span>
+            <Icon name="arrow" size={18} />
+          </span>
           <div className="week-budget-metrics">
             <div>
               <span>Weekbudget</span>
@@ -112,14 +116,6 @@ export function HomeDashboard() {
           <div className="meal-day-scroller">
             {generatedDays.map((day, index) => {
               const cost = calculateDishCostSummary(day.dayIndex, preparation!.ingredients);
-              const dayIngredients = preparation!.ingredients.filter((ingredient) =>
-                ingredient.usedIn.some((use) => use.dayIndex === day.dayIndex),
-              );
-              // A product photo is not automatically a truthful photo of the dish. Only
-              // branded meal-mix artwork is suitable here; generic dishes keep the fallback.
-              const image =
-                dayIngredients.find((item) => item.kind === "mealMix" && item.product?.imageUrl)
-                  ?.product?.imageUrl ?? null;
               return (
                 <MealDayCard
                   key={day.dayIndex}
@@ -127,7 +123,8 @@ export function HomeDashboard() {
                   title={day.freeChoice ? "Vrije keuze" : day.recipe?.name ?? "Gerecht kiezen"}
                   knownCostCents={day.freeChoice || cost.knownCostCents === 0 ? null : cost.knownCostCents}
                   complete={cost.complete}
-                  imageUrl={image}
+                  recipeSourceKey={day.recipe?.sourceKey ?? null}
+                  category={day.category}
                   active={index === 0}
                 />
               );

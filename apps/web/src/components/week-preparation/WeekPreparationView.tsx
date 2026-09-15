@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Icon } from "@/components/Icon";
+import { DishImage } from "@/components/ui/DishImage";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -18,6 +19,7 @@ import {
 } from "@/services/budget/budget-presentation";
 import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
 import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
+import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import {
   MEAL_CATEGORY_LABELS,
   canPrepareWeek,
@@ -253,12 +255,8 @@ export function WeekPreparationView() {
                     day.dayIndex,
                     preparation.ingredients,
                   );
-                  const dishImageUrl = safeProductImageUrl(
-                    dayIngredients.find(
-                      (ingredient) =>
-                        ingredient.kind === "mealMix" && ingredient.product?.imageUrl,
-                    )?.product?.imageUrl ?? null,
-                  );
+                  const dishTitle = mealMix?.dishName ?? day.recipe?.name ?? "Gerecht";
+                  const dishImage = recipeImageFor(day.recipe?.sourceKey, day.category);
                   return (
                     <li key={day.dayIndex}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
@@ -286,23 +284,33 @@ export function WeekPreparationView() {
                         <details className="recipe-detail">
                           <summary>
                             <span className="recipe-summary-visual">
-                              <span
+                              <DishImage
+                                asset={dishImage}
                                 className="recipe-summary-image"
-                                data-has-image={Boolean(dishImageUrl)}
-                                style={dishImageUrl ? { backgroundImage: `url(${JSON.stringify(dishImageUrl)})` } : undefined}
-                                role="img"
-                                aria-label={dishImageUrl ? `Afbeelding bij ${mealMix?.dishName ?? day.recipe.name}` : "Geen gerechtfoto beschikbaar"}
-                              >
-                                {!dishImageUrl ? <Icon name="prepare" size={24} /> : null}
-                              </span>
+                                sizes="58px"
+                                title={dishTitle}
+                              />
                               <span className="recipe-summary-title">
-                                <strong>{mealMix?.dishName ?? day.recipe.name}</strong>
+                                <strong>{dishTitle}</strong>
                                 {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
                               </span>
                             </span>
-                            <span>Bekijk gerecht</span>
+                            <span className="recipe-summary-action">
+                              <strong>
+                                {dishCost.knownCostCents > 0
+                                  ? `${formatCents(dishCost.knownCostCents)}${dishCost.complete ? "" : " bekend"}`
+                                  : "Nog niet bekend"}
+                              </strong>
+                              <small>Bekijk gerecht</small>
+                            </span>
                           </summary>
                           <div className="recipe-detail-content">
+                            <DishImage
+                              asset={dishImage}
+                              className="recipe-detail-hero"
+                              sizes="(max-width: 560px) calc(100vw - 60px), 500px"
+                              title={dishTitle}
+                            />
                             <p>
                               {MEAL_CATEGORY_LABELS[day.category]} · {preparation.numberOfPeople} personen
                             </p>

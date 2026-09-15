@@ -103,6 +103,8 @@ describe("PWA 9 budgetweergaven", () => {
   it("toont Budgetdetail met dynamische verdeling, voorkeuren en wijzigvelden", () => {
     const html = render(createElement(BudgetPage), activeList(10));
     expect(html).toContain("Weekbudget");
+    expect(html).toContain('href="/"');
+    expect(html).toContain("Terug");
     expect(html).toContain("Avondmaaltijden");
     expect(html).toContain("Boodschappenlijst");
     expect(html).toContain("Nog vrij");

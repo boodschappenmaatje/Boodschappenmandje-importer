@@ -1,29 +1,28 @@
 import Link from "next/link";
-import type { CSSProperties } from "react";
 
-import { Icon } from "@/components/Icon";
-import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
+import { DishImage } from "@/components/ui/DishImage";
 import { formatCents } from "@/services/budget/budget-engine";
+import { recipeImageFor } from "@/services/week-preparation/recipe-images";
+import type { MealCategory } from "@/types/week-preparation";
 
 export function MealDayCard({
   day,
   title,
   knownCostCents,
   complete,
-  imageUrl,
+  recipeSourceKey,
+  category,
   active = false,
 }: {
   day: string;
   title: string;
   knownCostCents: number | null;
   complete: boolean;
-  imageUrl: string | null;
+  recipeSourceKey: string | null;
+  category: MealCategory;
   active?: boolean;
 }) {
-  const safeImage = safeProductImageUrl(imageUrl);
-  const imageStyle: CSSProperties | undefined = safeImage
-    ? { backgroundImage: `url(${JSON.stringify(safeImage)})` }
-    : undefined;
+  const image = recipeImageFor(recipeSourceKey, category);
 
   return (
     <Link
@@ -33,15 +32,13 @@ export function MealDayCard({
       aria-label={`${day}: ${title}`}
     >
       <strong className="meal-day-label">{day}</strong>
-      <span
+      <DishImage
+        asset={image}
         className="meal-day-image"
-        data-has-image={Boolean(safeImage)}
-        style={imageStyle}
-        role="img"
-        aria-label={safeImage ? `Afbeelding bij ${title}` : "Geen gerechtfoto beschikbaar"}
-      >
-        {!safeImage ? <Icon name="prepare" size={25} /> : null}
-      </span>
+        priority={active}
+        sizes="(max-width: 390px) 105px, 122px"
+        title={title}
+      />
       <span className="meal-day-name">{title}</span>
       {knownCostCents === null ? (
         <span className="meal-day-price">Nog niet bekend</span>

@@ -226,6 +226,8 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Hoogvliet · 500 g");
     expect(html).toContain("2 verpakkingen · € 8,98");
     expect(html).toContain("Geschatte kosten gerecht: € 8,98");
+    expect(html).toContain("recipe-detail-hero");
+    expect(html).toContain("pasta-spaghetti-bolognese.webp");
     expect(html).toContain("background-image");
     expect(html).toContain("Nieuwe boodschappen");
     expect(html).toContain("Maak mijn lijst compleet");
@@ -255,13 +257,14 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("1 product");
   });
 
-  it("toont gegenereerde gerechten als horizontale dagkaarten met echte prijs en veilige fallback", () => {
+  it("toont gegenereerde gerechten als horizontale dagkaarten met echte prijs en eigen gerechtfoto", () => {
     const html = render(createElement(HomePage), generated());
     expect(html).toContain("meal-day-scroller");
     expect(html).toContain("Spaghetti bolognese");
     expect(html).toContain("€ 8,98");
-    expect(html).toContain("Geen gerechtfoto beschikbaar");
-    expect(html).not.toContain("background-image:url(&quot;https://cdn.hoogvliet.com/rundergehakt.webp&quot;)");
+    expect(html).toContain("pasta-spaghetti-bolognese.webp");
+    expect(html).toContain('data-image-source="recipe"');
+    expect(html).not.toContain("rundergehakt.webp&quot; class=\"meal-day-image");
     expect(html).toContain("Menu aanpassen");
   });
 

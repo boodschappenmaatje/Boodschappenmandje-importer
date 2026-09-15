@@ -63,6 +63,8 @@ describe("dashboard rendering", () => {
     expect(html).toContain("Nog geen gerechten gekozen");
     expect(html).toContain("Boodschappenlijst");
     expect(html).toContain('href="/budget"');
+    expect(html).toContain("Bekijk weekbudget");
+    expect(html).toContain('aria-label="Bekijk je weekbudget"');
     expect(html).toContain('href="/week-voorbereiden"');
     expect(html).not.toContain("PWA-fundament");
     expect(html).not.toContain("mobiele testbasis");
