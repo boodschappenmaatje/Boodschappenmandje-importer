@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
+import { ListBudgetSummary } from "@/components/budget/ListBudgetSummary";
 import { ShoppingListItemCard } from "@/components/shopping-list/ShoppingListItemCard";
 import { ShoppingListProductSearch } from "@/components/shopping-list/ShoppingListProductSearch";
 import { ShoppingListTotalCard } from "@/components/shopping-list/ShoppingListTotalCard";
@@ -60,6 +61,8 @@ export function ActiveShoppingListView() {
       {persistenceWarning ? (
         <p className="catalog-notice" role="status">{persistenceWarning}</p>
       ) : null}
+
+      <ListBudgetSummary />
 
       {list.items.length === 0 ? (
         <section className="dashboard-card route-empty-card">

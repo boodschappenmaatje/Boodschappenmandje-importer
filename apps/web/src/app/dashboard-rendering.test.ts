@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
+import { BudgetProvider } from "@/features/budget/BudgetProvider";
+import { DEFAULT_BUDGET_SETTINGS } from "@/services/budget/budget-settings-storage";
 import {
   addCatalogProduct,
   createEmptyActiveShoppingList,
@@ -35,7 +37,15 @@ function renderWithList(component: ReturnType<typeof createElement>, withProduct
     ? addCatalogProduct(emptyList, product, "catalog", "2026-09-15T10:01:00Z")
     : emptyList;
   return renderToStaticMarkup(
-    createElement(ActiveShoppingListProvider, { initialList: list }, component),
+    createElement(
+      ActiveShoppingListProvider,
+      { initialList: list },
+      createElement(
+        BudgetProvider,
+        { initialSettings: DEFAULT_BUDGET_SETTINGS },
+        component,
+      ),
+    ),
   );
 }
 

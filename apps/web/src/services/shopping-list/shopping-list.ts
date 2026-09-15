@@ -47,6 +47,8 @@ function priceReference(product: Product): ShoppingListPriceReference | null {
     updatedAt: resolved.updatedAt,
     freshness: resolved.freshness,
     provider: product.supermarket,
+    validFrom: catalogPrice.validFrom,
+    validUntil: catalogPrice.validUntil,
   };
 }
 

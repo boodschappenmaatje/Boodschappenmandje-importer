@@ -17,6 +17,8 @@ export interface ShoppingListPriceReference {
   updatedAt: string | null;
   freshness: PriceFreshness;
   provider: string;
+  validFrom?: string | null;
+  validUntil?: string | null;
 }
 
 export interface ShoppingListItem {

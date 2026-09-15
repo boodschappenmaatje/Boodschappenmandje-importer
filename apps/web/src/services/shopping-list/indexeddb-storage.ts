@@ -66,7 +66,9 @@ function isPriceReference(value: unknown): value is ShoppingListPriceReference {
     typeof value.isOffer === "boolean" &&
     isNullableString(value.updatedAt) &&
     ["fresh", "stale", "unknown"].includes(String(value.freshness)) &&
-    typeof value.provider === "string"
+    typeof value.provider === "string" &&
+    (value.validFrom === undefined || isNullableString(value.validFrom)) &&
+    (value.validUntil === undefined || isNullableString(value.validUntil))
   );
 }
 
