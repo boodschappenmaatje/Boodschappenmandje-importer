@@ -49,6 +49,23 @@ function mapPrice(value: unknown): ProductPrice | null {
   };
 }
 
+function newestPriceForProduct(value: unknown, productId: string): ProductPrice | null {
+  const candidates = Array.isArray(value) ? value : [value];
+  const matching = candidates
+    .map(mapPrice)
+    .filter(
+      (price): price is ProductPrice =>
+        price !== null && price.productId === productId,
+    );
+
+  return matching.sort((left, right) => {
+    const leftDate = Date.parse(left.fetchedAt ?? left.updatedAt ?? "");
+    const rightDate = Date.parse(right.fetchedAt ?? right.updatedAt ?? "");
+    return (Number.isFinite(rightDate) ? rightDate : 0) -
+      (Number.isFinite(leftDate) ? leftDate : 0);
+  })[0] ?? null;
+}
+
 function mapProduct(value: unknown): Omit<Product, "currentPrice"> | null {
   if (!isRecord(value)) {
     return null;
@@ -113,6 +130,32 @@ export function mapCatalogRows(
         currentPrice: prices.get(product.id) ?? null,
       });
     }
+  }
+
+  return { products, priceStatus };
+}
+
+export function mapJoinedCatalogRows(
+  productRows: unknown,
+  priceStatus: CatalogProductsResult["priceStatus"] = "complete",
+): CatalogProductsResult {
+  const products: Product[] = [];
+  if (!Array.isArray(productRows)) {
+    return { products, priceStatus };
+  }
+
+  for (const value of productRows) {
+    const product = mapProduct(value);
+    if (!product || !isRecord(value)) {
+      continue;
+    }
+
+    // Ook bij een relationele PostgREST-query blijft de exacte product-FK
+    // leidend. Een prijs van een andere SKU/productnaam wordt nooit hergebruikt.
+    products.push({
+      ...product,
+      currentPrice: newestPriceForProduct(value.current_price, product.id),
+    });
   }
 
   return { products, priceStatus };

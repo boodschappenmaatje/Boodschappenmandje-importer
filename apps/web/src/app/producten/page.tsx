@@ -9,7 +9,7 @@ export default function ProductsPage() {
   return (
     <>
       <PageIntro eyebrow="Catalogus" title="Producten">
-        Bekijk echte Hoogvliet-producten en de laatst opgehaalde prijsinformatie.
+        Zoek, vergelijk en voeg echte Hoogvliet-producten toe aan je lijst.
       </PageIntro>
       <ProductCatalogPreview />
     </>
