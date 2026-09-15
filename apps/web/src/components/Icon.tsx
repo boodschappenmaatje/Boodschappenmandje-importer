@@ -1,6 +1,6 @@
 import type { NavigationIcon } from "@/types/navigation";
 
-type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info";
+type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "trash" | "plus" | "minus";
 
 interface IconProps {
   name: IconName;
@@ -47,5 +47,11 @@ export function Icon({ name, size = 24 }: IconProps) {
       return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg>;
     case "info":
       return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></svg>;
+    case "trash":
+      return <svg {...common}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></svg>;
+    case "plus":
+      return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
+    case "minus":
+      return <svg {...common}><path d="M5 12h14" /></svg>;
   }
 }

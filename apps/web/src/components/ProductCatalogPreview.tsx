@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { Icon } from "@/components/Icon";
+import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import {
   DEFAULT_CATALOG_PAGE_SIZE,
   createCatalogRepository,
@@ -80,7 +81,19 @@ function Price({ product }: { product: Product }) {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({
+  product,
+  listQuantity,
+  isAdding,
+  listReady,
+  onAdd,
+}: {
+  product: Product;
+  listQuantity: number;
+  isAdding: boolean;
+  listReady: boolean;
+  onAdd: () => void;
+}) {
   const imageStyle = safeImageStyle(product.imageUrl);
   const description = [product.brand, product.packageText]
     .filter(Boolean)
@@ -104,15 +117,37 @@ function ProductCard({ product }: { product: Product }) {
         <h2>{product.name}</h2>
         {description ? <p className="product-description">{description}</p> : null}
         <Price product={product} />
+        <div className="product-add-row">
+          <button
+            className="product-add-button"
+            type="button"
+            disabled={!listReady || isAdding}
+            aria-label={`Voeg ${product.name} toe aan boodschappenlijst`}
+            onClick={onAdd}
+          >
+            <Icon name="plus" size={18} />
+            {isAdding
+              ? "Toevoegen…"
+              : listQuantity > 0
+                ? "Nog één toevoegen"
+                : "Toevoegen"}
+          </button>
+          {listQuantity > 0 ? (
+            <span className="product-list-quantity">{listQuantity} op je lijst</span>
+          ) : null}
+        </div>
       </div>
     </article>
   );
 }
 
 export function ProductCatalogPreview() {
+  const shoppingList = useActiveShoppingList();
   const [state, setState] = useState<ViewState>({ status: "loading" });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [isAddingProductId, setIsAddingProductId] = useState<string | null>(null);
+  const [addMessage, setAddMessage] = useState<string | null>(null);
   const loadMoreController = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -232,6 +267,20 @@ export function ProductCatalogPreview() {
     }
   }
 
+  async function addProduct(product: Product) {
+    if (shoppingList.status !== "ready" || isAddingProductId) return;
+    setIsAddingProductId(product.id);
+    setAddMessage(null);
+    try {
+      await shoppingList.addProduct(product);
+      setAddMessage(`${product.name} staat op je lijst.`);
+    } catch {
+      setAddMessage("Dit product kon niet veilig aan je lijst worden toegevoegd.");
+    } finally {
+      setIsAddingProductId(null);
+    }
+  }
+
   return (
     <section className="catalog-preview" aria-labelledby="catalog-heading">
       <div className="section-heading">
@@ -243,9 +292,26 @@ export function ProductCatalogPreview() {
           Producten zijn geladen; prijsinformatie is tijdelijk niet beschikbaar.
         </p>
       ) : null}
+      {shoppingList.status === "error" ? (
+        <p className="catalog-notice" role="status">
+          Je lokale lijst kan nu niet worden geopend. De catalogus blijft beschikbaar.
+        </p>
+      ) : null}
+      {addMessage ? (
+        <p className="product-add-feedback" role="status" aria-live="polite">
+          {addMessage}
+        </p>
+      ) : null}
       <div className="product-grid">
         {state.products.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            listQuantity={shoppingList.quantityFor(product.id)}
+            isAdding={isAddingProductId === product.id}
+            listReady={shoppingList.status === "ready"}
+            onAdd={() => void addProduct(product)}
+          />
         ))}
       </div>
       {loadMoreError ? (

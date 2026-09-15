@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export const SERVICE_WORKER_RELEASE = "pwa6-2026-09-15";
+export const SERVICE_WORKER_RELEASE = "pwa7-2026-09-15";
 
 export function PwaRegistrar() {
   useEffect(() => {

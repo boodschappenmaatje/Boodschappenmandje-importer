@@ -1,9 +1,10 @@
 /* BoodschappenMaatje PWA-shell. Geen database- of gebruikersdata wordt hier gecachet. */
 const CACHE_PREFIX = "boodschappenmaatje-shell";
-const CACHE_VERSION = "pwa6-2026-09-15";
+const CACHE_VERSION = "pwa7-2026-09-15";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const APP_SHELL = [
   "/",
+  "/lijst",
   "/offline",
   "/manifest.webmanifest",
   "/icons/icon-192.png",

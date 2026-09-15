@@ -266,6 +266,29 @@ button:focus-visible {
   font-size: 1.45rem;
 }
 
+.shopping-list-loading {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+}
+
+.shopping-list-dashboard-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shopping-list-dashboard-summary p {
+  margin: 0;
+}
+
+.shopping-list-dashboard-summary > p:last-child {
+  color: var(--color-primary-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .budget-summary {
   grid-template-columns: 1fr auto;
   align-items: baseline;
@@ -756,6 +779,268 @@ button:focus-visible {
   font-size: 0.75rem;
 }
 
+.product-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 10px;
+  margin-top: 12px;
+}
+
+.product-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(8, 117, 225, 0.2);
+  border-radius: 12px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.product-add-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.product-list-quantity {
+  color: var(--color-success);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.product-add-feedback {
+  margin: 0;
+  padding: 11px 14px;
+  border: 1px solid rgba(22, 132, 91, 0.14);
+  border-radius: var(--radius-small);
+  background: #eaf8f2;
+  color: #126b4b;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.active-shopping-list {
+  display: grid;
+  gap: 13px;
+}
+
+.shopping-list-heading {
+  align-items: center;
+}
+
+.shopping-list-heading a {
+  min-height: 44px;
+  padding: 12px 4px;
+  color: var(--color-primary-strong);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.shopping-items {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shopping-item-card {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr) 44px;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 10px 12px;
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 6px 22px rgba(29, 76, 126, 0.055);
+}
+
+.shopping-item-image {
+  display: grid;
+  grid-row: 1 / span 2;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
+  background-color: var(--color-primary-soft);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  color: var(--color-primary);
+}
+
+.shopping-item-image[data-has-image="true"] {
+  background-color: white;
+}
+
+.shopping-item-copy {
+  min-width: 0;
+}
+
+.shopping-item-copy h2,
+.shopping-item-copy p {
+  margin: 0;
+}
+
+.shopping-item-copy h2 {
+  overflow-wrap: anywhere;
+  font-size: 0.96rem;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+
+.shopping-item-copy p {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.shopping-item-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 7px;
+  margin-top: 7px;
+}
+
+.shopping-item-price strong {
+  font-size: 0.93rem;
+}
+
+.shopping-item-price span,
+.shopping-item-price-missing {
+  color: var(--color-muted);
+  font-size: 0.68rem;
+}
+
+.shopping-item-price-missing {
+  display: block;
+  margin-top: 7px;
+}
+
+.shopping-remove,
+.quantity-control button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  cursor: pointer;
+}
+
+.shopping-remove {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  background: #fff0ec;
+  color: #a5402b;
+}
+
+.quantity-control {
+  display: grid;
+  grid-column: 2 / 4;
+  grid-template-columns: 42px 38px 42px;
+  align-items: center;
+  justify-content: end;
+  gap: 3px;
+}
+
+.quantity-control button {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+
+.quantity-control button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.quantity-control output {
+  min-width: 38px;
+  color: var(--color-text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.shopping-total {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 17px;
+  border: 1px solid rgba(8, 117, 225, 0.16);
+  border-radius: var(--radius-card);
+  background: linear-gradient(145deg, #ffffff 20%, #eef8ff 100%);
+}
+
+.shopping-total p,
+.shopping-total span {
+  margin: 0;
+}
+
+.shopping-total p {
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.shopping-total span {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.shopping-total > strong {
+  color: var(--color-primary-strong);
+  font-size: 1.2rem;
+  letter-spacing: -0.025em;
+}
+
+.undo-snackbar {
+  position: fixed;
+  z-index: 30;
+  right: 18px;
+  bottom: calc(var(--bottom-nav-height) + 20px + env(safe-area-inset-bottom));
+  left: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(calc(100% - 36px), 560px);
+  min-height: 54px;
+  margin-inline: auto;
+  padding: 10px 12px 10px 16px;
+  border-radius: 17px;
+  background: #11243d;
+  box-shadow: 0 12px 32px rgba(17, 36, 61, 0.28);
+  color: white;
+  font-size: 0.82rem;
+}
+
+.undo-snackbar button {
+  min-height: 40px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.12);
+  color: white;
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .catalog-load-more {
   min-height: 50px;
   padding: 0 20px;
@@ -890,6 +1175,23 @@ button:focus-visible {
     width: 72px;
     height: 72px;
     border-radius: 16px;
+  }
+
+  .shopping-item-card {
+    grid-template-columns: 58px minmax(0, 1fr) 42px;
+    gap: 9px 10px;
+    padding: 11px;
+  }
+
+  .shopping-item-image {
+    width: 58px;
+    height: 58px;
+    border-radius: 14px;
+  }
+
+  .shopping-remove {
+    width: 42px;
+    height: 42px;
   }
 }
 
