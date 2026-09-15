@@ -68,6 +68,13 @@ revoke insert, update, delete on public.catalog_import_runs from anon, authentic
 revoke all on public.catalog_discovery_state from anon, authenticated;
 grant select on public.catalog_import_runs to anon, authenticated;
 
+-- RLS-bypass alleen is niet voldoende: nieuw aangemaakte tabellen moeten de
+-- server-side importer ook expliciete tabelprivileges geven. Beperk dit tot de
+-- handelingen die de runregistratie en discovery-cursor daadwerkelijk nodig
+-- hebben; browserrollen krijgen hierdoor geen extra rechten.
+grant select, insert, update on public.catalog_import_runs to service_role;
+grant select, insert, update on public.catalog_discovery_state to service_role;
+
 do $$
 begin
   if not exists (
