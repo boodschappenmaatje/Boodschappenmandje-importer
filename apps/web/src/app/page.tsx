@@ -2,6 +2,7 @@ import { DashboardActionCard } from "@/components/dashboard/DashboardActionCard"
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { ShoppingListCard } from "@/components/dashboard/ShoppingListCard";
 import { WeekSummaryCard } from "@/components/dashboard/WeekSummaryCard";
+import { HomeBudgetCard } from "@/components/budget/HomeBudgetCard";
 import { emptyDashboardState } from "@/features/dashboard/dashboard-state";
 import { homeSections } from "@/features/home/home-sections";
 
@@ -18,7 +19,11 @@ export default function HomePage() {
 
       <section className="dashboard-actions" aria-label="Snelkoppelingen">
         {homeSections.map((section) => (
-          <DashboardActionCard key={section.title} section={section} />
+          section.icon === "budget" ? (
+            <HomeBudgetCard key={section.title} />
+          ) : (
+            <DashboardActionCard key={section.title} section={section} />
+          )
         ))}
       </section>
     </>

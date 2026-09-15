@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
 import { appConfig } from "@/config/app";
+import { BudgetProvider } from "@/features/budget/BudgetProvider";
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
 
 import "./globals.css";
@@ -42,7 +43,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="nl">
       <body>
         <ActiveShoppingListProvider>
-          <AppShell>{children}</AppShell>
+          <BudgetProvider>
+            <AppShell>{children}</AppShell>
+          </BudgetProvider>
         </ActiveShoppingListProvider>
         <PwaRegistrar />
       </body>
