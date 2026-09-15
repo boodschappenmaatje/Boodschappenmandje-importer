@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   CATALOG_SEARCH_LIMIT,
@@ -8,9 +9,11 @@ import {
   normalizeCatalogPageRequest,
   normalizeCatalogQueryRequest,
   normalizeCatalogSearchRequest,
+  normalizeCatalogSearchText,
   productMatchesSearchTokens,
   productSearchRelevance,
   sortProductsForQuery,
+  SupabaseCatalogRepository,
 } from "./catalog-repository";
 import type { Product } from "@/types/catalog";
 
@@ -18,6 +21,8 @@ function product(
   name: string,
   brand: string | null = null,
   category = "Frisdrank",
+  productType: string | null = null,
+  packageText = "1 liter",
 ): Product {
   return {
     id: name,
@@ -26,8 +31,8 @@ function product(
     name,
     brand,
     category,
-    productType: null,
-    packageText: "1 liter",
+    productType,
+    packageText,
     weightGrams: null,
     imageUrl: null,
     sourceUrl: "https://example.com/product",
@@ -144,6 +149,60 @@ describe("catalogusquery", () => {
     ).toBe(true);
   });
 
+  it("rangschikt productcontext generiek boven een bereidingsomschrijving", () => {
+    const meat = product(
+      "Hoogvliet Biologische mager rundergehakt",
+      "Hoogvliet",
+      "Vlees, vis, vegetarisch/Rund-en varkensvlees/Gehakt",
+      "Gehakt",
+      "250 gram",
+    );
+    const spinach = product(
+      "G'woon Spinazie fijn gehakt",
+      "G'woon",
+      "Diepvries/Groente/Spinazie, andijvie",
+      "Gehakt",
+      "800 gram",
+    );
+
+    expect(productSearchRelevance(meat, "gehakt")).toBeGreaterThan(
+      productSearchRelevance(spinach, "gehakt"),
+    );
+  });
+
+  it.each([
+    ["kip", product("Scharrel kipfilet naturel", null, "Vlees/Kip", "Kipfilet")],
+    ["aardappel", product("Vastkokende aardappelen", null, "Groente/Aardappelen", "Aardappelen")],
+    ["melk", product("G'woon volle melk", "G'woon", "Zuivel/Melk", "Melk")],
+    ["kaas", product("Belegen kaas 48+", null, "Kaas", "Kaas")],
+    ["brood", product("Volkoren brood", null, "Brood", "Brood")],
+    ["chips", product("Naturel chips", null, "Snacks", "Chips")],
+    ["pasta", product("Volkoren pasta penne", null, "Pasta en rijst", "Pasta")],
+    ["spinazie", product("Spinazie fijn gesneden", null, "Groente/Spinazie", "Spinazie")],
+    ["honig", product("Macaroni maaltijdmix", "Honig", "Maaltijdmix", "Maaltijdmix")],
+  ])("vindt %s via dezelfde generieke tokenlogica", (term, item) => {
+    expect(productMatchesSearchTokens(item, term)).toBe(true);
+    expect(productSearchRelevance(item, term)).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ["mager rundergehakt", product("Biologische mager rundergehakt", null, "Vlees/Gehakt", "Gehakt")],
+    ["coca cola zero", product("Coca-Cola zero sugar", "Coca-Cola", "Frisdrank", "Cola")],
+    ["volle melk", product("G'woon volle melk", "G'woon", "Zuivel/Melk", "Melk")],
+    ["kipfilet naturel", product("Scharrel kipfilet naturel", null, "Vlees/Kip", "Kipfilet")],
+    ["aardappelen vastkokend", product("Aardappelen vastkokend", null, "Groente/Aardappelen", "Aardappelen")],
+  ])("vereist alle betekenisvolle tokens voor %s", (term, item) => {
+    expect(productMatchesSearchTokens(item, term)).toBe(true);
+    expect(productMatchesSearchTokens(product("Losstaand product"), term)).toBe(false);
+  });
+
+  it("normaliseert accenten, apostroffen, koppeltekens en extra spaties", () => {
+    expect(normalizeCatalogSearchText("  Crème-brûlée's  ")).toBe(
+      "creme brulee s",
+    );
+    expect(productMatchesSearchTokens(product("Café crème-brûlée"), "CAFE creme")).toBe(true);
+  });
+
   it("bouwt een databasefilter op woordbegin in plaats van vrije substring", () => {
     const search = normalizeCatalogSearchRequest("cola");
     expect(search).not.toBeNull();
@@ -201,5 +260,68 @@ describe("catalogus zoeken", () => {
     expect(normalizeCatalogSearchRequest("melk", { limit: 500 })?.limit).toBe(
       CATALOG_SEARCH_LIMIT,
     );
+  });
+});
+
+describe("centrale server-side zoekengine", () => {
+  it("stuurt zoeken, filters, sortering en paginering naar één RPC", async () => {
+    let calledFunction = "";
+    let calledParameters: Record<string, unknown> = {};
+    const client = {
+      rpc(name: string, parameters: Record<string, unknown>) {
+        calledFunction = name;
+        calledParameters = parameters;
+        return Promise.resolve({
+          data: [
+            {
+              product_data: {
+                id: "product-a",
+                supermarket: "Hoogvliet",
+                sku: "123456789",
+                name: "Biologische mager rundergehakt",
+                brand: "Hoogvliet",
+                category: "Vlees/Gehakt",
+                product_type: "Gehakt",
+                package_text: "250 gram",
+                weight_grams: 250,
+                image_url: null,
+                source_url: "https://www.hoogvliet.com/product/rundergehakt",
+                is_available: true,
+                updated_at: "2026-09-15T10:00:00Z",
+              },
+              current_price: null,
+              relevance_score: 8000,
+            },
+          ],
+          error: null,
+        });
+      },
+    } as unknown as SupabaseClient;
+    const repository = new SupabaseCatalogRepository(client);
+
+    const result = await repository.query({
+      term: "  GEHAKT ",
+      page: 2,
+      category: "Vlees/Gehakt",
+      brand: "Hoogvliet",
+      offersOnly: true,
+      maxPrice: 5,
+      sort: "price-asc",
+      now: new Date("2026-09-15T12:00:00Z"),
+    });
+
+    expect(calledFunction).toBe("search_catalog_products_v2");
+    expect(calledParameters).toMatchObject({
+      p_term: "GEHAKT",
+      p_page: 2,
+      p_page_size: 20,
+      p_category: "Vlees/Gehakt",
+      p_brand: "Hoogvliet",
+      p_offers_only: true,
+      p_max_price: 5,
+      p_sort: "price-asc",
+      p_now: "2026-09-15",
+    });
+    expect(result.products[0]?.sku).toBe("123456789");
   });
 });

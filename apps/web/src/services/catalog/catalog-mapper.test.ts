@@ -4,6 +4,7 @@ import {
   mapCatalogRows,
   mapJoinedCatalogRows,
   mapPriceSortedCatalogRows,
+  mapRankedCatalogRows,
 } from "./catalog-mapper";
 
 const product = {
@@ -161,5 +162,44 @@ describe("mapPriceSortedCatalogRows", () => {
       1.49,
       2.49,
     ]);
+  });
+});
+
+describe("mapRankedCatalogRows", () => {
+  it("behoudt productidentiteit en koppelt de prijs met dezelfde product-id", () => {
+    const result = mapRankedCatalogRows([
+      {
+        product_data: product,
+        current_price: {
+          product_id: "product-a",
+          price: 1.29,
+          is_offer: false,
+          fetched_at: "2026-09-15T10:00:00Z",
+        },
+        relevance_score: 7200,
+      },
+    ]);
+
+    expect(result.products).toHaveLength(1);
+    expect(result.products[0]?.id).toBe("product-a");
+    expect(result.products[0]?.sku).toBe("SKU-A");
+    expect(result.products[0]?.currentPrice?.productId).toBe("product-a");
+    expect(result.products[0]?.currentPrice?.price).toBe(1.29);
+  });
+
+  it("weigert een prijs van een andere product-id", () => {
+    const result = mapRankedCatalogRows([
+      {
+        product_data: product,
+        current_price: {
+          product_id: "product-b",
+          price: 9.99,
+          is_offer: false,
+        },
+        relevance_score: 7200,
+      },
+    ]);
+
+    expect(result.products[0]?.currentPrice).toBeNull();
   });
 });
