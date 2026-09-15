@@ -6,11 +6,24 @@ import type { CatalogPageResult, CatalogProductsResult } from "@/types/catalog";
 
 export const DEFAULT_CATALOG_PAGE_SIZE = 20;
 export const MAX_CATALOG_PAGE_SIZE = 20;
+export const MIN_CATALOG_SEARCH_LENGTH = 2;
+export const CATALOG_SEARCH_LIMIT = 12;
 
 export interface CatalogPageRequest {
   page?: number;
   pageSize?: number;
   signal?: AbortSignal;
+}
+
+export interface CatalogSearchRequest {
+  limit?: number;
+  signal?: AbortSignal;
+}
+
+export interface NormalizedCatalogSearchRequest {
+  term: string;
+  pattern: string;
+  limit: number;
 }
 
 export interface NormalizedCatalogPageRequest {
@@ -37,6 +50,34 @@ export function normalizeCatalogPageRequest(
     rangeStart,
     // Eén extra record bepaalt of er een volgende pagina is.
     rangeEnd: rangeStart + pageSize,
+  };
+}
+
+export function normalizeCatalogSearchRequest(
+  term: string,
+  request: CatalogSearchRequest = {},
+): NormalizedCatalogSearchRequest | null {
+  const normalizedTerm = term.trim().replace(/\s+/g, " ").slice(0, 80);
+  if (normalizedTerm.length < MIN_CATALOG_SEARCH_LENGTH) {
+    return null;
+  }
+
+  // Houd PostgREST-operatoren buiten de filterwaarde. Woorden en cijfers blijven
+  // behouden; tussenliggende tekens worden een wildcard zodat o.a. "1,5 liter"
+  // nog steeds bruikbaar zoekt zonder een vrije filterexpressie op te bouwen.
+  const safeParts = normalizedTerm.match(/[\p{L}\p{N}]+/gu) ?? [];
+  if (safeParts.join("").length < MIN_CATALOG_SEARCH_LENGTH) {
+    return null;
+  }
+
+  const requestedLimit = Number.isFinite(request.limit)
+    ? Math.trunc(request.limit ?? CATALOG_SEARCH_LIMIT)
+    : CATALOG_SEARCH_LIMIT;
+
+  return {
+    term: normalizedTerm,
+    pattern: `%${safeParts.join("%")}%`,
+    limit: Math.max(1, Math.min(CATALOG_SEARCH_LIMIT, requestedLimit)),
   };
 }
 
@@ -83,6 +124,7 @@ export class CatalogReadError extends Error {
 export interface CatalogRepository {
   getPage(request?: CatalogPageRequest): Promise<CatalogPageResult>;
   getByIds(productIds: string[], signal?: AbortSignal): Promise<CatalogProductsResult>;
+  search(term: string, request?: CatalogSearchRequest): Promise<CatalogProductsResult>;
 }
 
 export class SupabaseCatalogRepository implements CatalogRepository {
@@ -211,6 +253,54 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     }
 
     return this.pricesForProducts(productRows, returnedIds, signal);
+  }
+
+  async search(
+    term: string,
+    request: CatalogSearchRequest = {},
+  ): Promise<CatalogProductsResult> {
+    const normalized = normalizeCatalogSearchRequest(term, request);
+    if (!normalized) {
+      return { products: [], priceStatus: "complete" };
+    }
+
+    let productQuery = this.client
+      .from("products")
+      .select(PRODUCT_FIELDS)
+      .eq("supermarket", "Hoogvliet")
+      .or(`name.ilike.${normalized.pattern},brand.ilike.${normalized.pattern}`)
+      .order("name", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(normalized.limit);
+
+    if (request.signal) {
+      productQuery = productQuery.abortSignal(request.signal);
+    }
+
+    const { data: productRows, error: productError } = await productQuery;
+    if (productError) {
+      throw new CatalogReadError("products-unavailable");
+    }
+    if (!Array.isArray(productRows)) {
+      throw new CatalogReadError("invalid-response");
+    }
+    if (productRows.length === 0) {
+      return { products: [], priceStatus: "complete" };
+    }
+
+    const productIds = productRows
+      .map((row) =>
+        typeof row === "object" && row !== null && "id" in row
+          ? (row as { id?: unknown }).id
+          : null,
+      )
+      .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+    if (productIds.length === 0) {
+      throw new CatalogReadError("invalid-response");
+    }
+
+    return this.pricesForProducts(productRows, productIds, request.signal);
   }
 }
 

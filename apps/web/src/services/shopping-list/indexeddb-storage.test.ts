@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createEmptyActiveShoppingList } from "@/services/shopping-list/shopping-list";
+import {
+  addCatalogProduct,
+  createEmptyActiveShoppingList,
+} from "@/services/shopping-list/shopping-list";
+import type { Product } from "@/types/catalog";
 import { SHOPPING_LIST_SCHEMA_VERSION } from "@/types/shopping-list";
 
 import {
@@ -36,6 +40,36 @@ describe("boodschappenlijstopslag", () => {
     );
     expect(stored.schemaVersion).toBe(SHOPPING_LIST_SCHEMA_VERSION);
     expect(stored.list.schemaVersion).toBe(SHOPPING_LIST_SCHEMA_VERSION);
+  });
+
+  it("laadt een bestaande PWA 7-lijst zonder reset of schemawijziging", async () => {
+    const storage = new MemoryStorage();
+    const existingProduct: Product = {
+      id: "existing-product",
+      supermarket: "Hoogvliet",
+      sku: "existing-sku",
+      name: "Bestaand product",
+      brand: null,
+      category: null,
+      productType: null,
+      packageText: "1 stuk",
+      weightGrams: null,
+      imageUrl: null,
+      sourceUrl: "https://example.com/product",
+      isAvailable: true,
+      updatedAt: "2026-09-15T10:00:00Z",
+      currentPrice: null,
+    };
+    const existingList = addCatalogProduct(
+      createEmptyActiveShoppingList("2026-09-15T10:00:00Z"),
+      existingProduct,
+      "catalog",
+      "2026-09-15T10:01:00Z",
+    );
+
+    await storage.save(existingList);
+    await expect(storage.load()).resolves.toEqual(existingList);
+    expect((await storage.load())?.schemaVersion).toBe(1);
   });
 
   it("overschrijft onbekende toekomstige opslagversies niet stilzwijgend", () => {
