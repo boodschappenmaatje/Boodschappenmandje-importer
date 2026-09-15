@@ -4,6 +4,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   mapCatalogRows,
   mapJoinedCatalogRows,
+  mapPriceSortedCatalogRows,
 } from "@/services/catalog/catalog-mapper";
 import { DEFAULT_CATALOG_QUERY } from "@/services/catalog/catalog-search-state";
 import { isOfferActive } from "@/services/catalog/price";
@@ -292,6 +293,57 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       pattern,
       requiresPriceRelation,
     } = normalized;
+
+    if (query.sort === "price-asc" || query.sort === "price-desc") {
+      let priceQuery = this.client
+        .from("product_prices")
+        .select(`${PRICE_FIELDS},product:products!inner(${PRODUCT_FIELDS})`)
+        .eq("product.supermarket", "Hoogvliet");
+
+      if (pattern) {
+        priceQuery = priceQuery.or(
+          `name.ilike.${pattern},brand.ilike.${pattern},package_text.ilike.${pattern},category.ilike.${pattern},product_type.ilike.${pattern}`,
+          { referencedTable: "product" },
+        );
+      }
+      if (query.category) priceQuery = priceQuery.eq("product.category", query.category);
+      if (query.brand) priceQuery = priceQuery.eq("product.brand", query.brand);
+      if (query.maxPrice !== null) priceQuery = priceQuery.lte("price", query.maxPrice);
+      if (query.offersOnly) {
+        const today = (request.now ?? new Date()).toISOString().slice(0, 10);
+        priceQuery = priceQuery
+          .eq("is_offer", true)
+          .or(`valid_from.is.null,valid_from.lte.${today}`)
+          .or(`valid_until.is.null,valid_until.gte.${today}`);
+      }
+
+      priceQuery = priceQuery
+        .order("price", { ascending: query.sort === "price-asc" })
+        .order("product_id", { ascending: true })
+        .range(rangeStart, rangeEnd);
+      if (request.signal) priceQuery = priceQuery.abortSignal(request.signal);
+
+      const { data: priceRows, error: priceError } = await priceQuery;
+      if (priceError) throw new CatalogReadError("products-unavailable");
+      if (!Array.isArray(priceRows)) throw new CatalogReadError("invalid-response");
+
+      const hasMore = priceRows.length > pageSize;
+      const mapped = mapPriceSortedCatalogRows(priceRows.slice(0, pageSize));
+      return {
+        products: mapped.products.filter(
+          (product) =>
+            !query.offersOnly ||
+            (product.currentPrice !== null &&
+              isOfferActive(product.currentPrice, request.now)),
+        ),
+        priceStatus: mapped.priceStatus,
+        page,
+        pageSize,
+        hasMore,
+        query,
+      };
+    }
+
     const priceRelation = requiresPriceRelation
       ? `current_price:product_prices!inner(${PRICE_FIELDS})`
       : `current_price:product_prices(${PRICE_FIELDS})`;
@@ -323,20 +375,9 @@ export class SupabaseCatalogRepository implements CatalogRepository {
         });
     }
 
-    if (query.sort === "price-asc" || query.sort === "price-desc") {
-      productQuery = productQuery
-        .order("price", {
-          ascending: query.sort === "price-asc",
-          nullsFirst: false,
-          referencedTable: "current_price",
-        })
-        .order("name", { ascending: true })
-        .order("id", { ascending: true });
-    } else {
-      productQuery = productQuery
-        .order("name", { ascending: true })
-        .order("id", { ascending: true });
-    }
+    productQuery = productQuery
+      .order("name", { ascending: true })
+      .order("id", { ascending: true });
 
     productQuery = productQuery.range(rangeStart, rangeEnd);
     if (request.signal) productQuery = productQuery.abortSignal(request.signal);

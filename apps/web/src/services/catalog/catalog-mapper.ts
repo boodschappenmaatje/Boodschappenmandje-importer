@@ -160,3 +160,29 @@ export function mapJoinedCatalogRows(
 
   return { products, priceStatus };
 }
+
+export function mapPriceSortedCatalogRows(
+  priceRows: unknown,
+): CatalogProductsResult {
+  if (!Array.isArray(priceRows)) {
+    return { products: [], priceStatus: "complete" };
+  }
+
+  const joinedRows: UnknownRecord[] = [];
+  for (const value of priceRows) {
+    if (!isRecord(value)) continue;
+    const relatedProduct = Array.isArray(value.product)
+      ? value.product[0]
+      : value.product;
+    if (!isRecord(relatedProduct)) continue;
+
+    // De prijs komt uit dezelfde product_prices-rij waarmee Postgres sorteert.
+    // De mapper accepteert hem alleen wanneer product_id exact gelijk is.
+    joinedRows.push({
+      ...relatedProduct,
+      current_price: value,
+    });
+  }
+
+  return mapJoinedCatalogRows(joinedRows);
+}

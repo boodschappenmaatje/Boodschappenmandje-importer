@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mapCatalogRows, mapJoinedCatalogRows } from "./catalog-mapper";
+import {
+  mapCatalogRows,
+  mapJoinedCatalogRows,
+  mapPriceSortedCatalogRows,
+} from "./catalog-mapper";
 
 const product = {
   id: "product-a",
@@ -127,5 +131,35 @@ describe("mapJoinedCatalogRows", () => {
       productId: "product-a",
       price: 2.59,
     });
+  });
+});
+
+describe("mapPriceSortedCatalogRows", () => {
+  it("behoudt de door de database gesorteerde prijsvolgorde en exacte FK", () => {
+    const result = mapPriceSortedCatalogRows([
+      {
+        product_id: "product-a",
+        price: 1.49,
+        is_offer: false,
+        fetched_at: "2026-09-15T10:00:00Z",
+        product,
+      },
+      {
+        product_id: "product-b",
+        price: 2.49,
+        is_offer: false,
+        fetched_at: "2026-09-15T10:00:00Z",
+        product: { ...product, id: "product-b", sku: "SKU-B" },
+      },
+    ]);
+
+    expect(result.products.map((item) => item.id)).toEqual([
+      "product-a",
+      "product-b",
+    ]);
+    expect(result.products.map((item) => item.currentPrice?.price)).toEqual([
+      1.49,
+      2.49,
+    ]);
   });
 });
