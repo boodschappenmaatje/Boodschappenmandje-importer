@@ -2915,6 +2915,24 @@ button:focus-visible {
   font-size: 0.88rem;
 }
 
+.recipe-summary-title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  color: var(--color-text) !important;
+}
+
+.recipe-summary-title strong,
+.recipe-summary-title small {
+  overflow-wrap: anywhere;
+}
+
+.recipe-summary-title small {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 .recipe-detail-content {
   padding: 0 14px 14px;
 }
@@ -2940,9 +2958,60 @@ button:focus-visible {
 }
 
 .recipe-ingredients li > div:first-child,
-.recipe-product-match {
+.recipe-product-details {
   display: grid;
   gap: 2px;
+}
+
+.recipe-cost-summary {
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--color-background);
+  color: var(--color-text) !important;
+  font-weight: 700;
+}
+
+.recipe-cost-summary[data-complete="false"] {
+  font-weight: 600;
+}
+
+.recipe-product-match {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px;
+  border-radius: 12px;
+  background: var(--color-background);
+}
+
+.recipe-product-image {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  background-color: var(--color-surface);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  color: var(--color-muted);
+}
+
+.recipe-product-details {
+  min-width: 0;
+}
+
+.recipe-product-details strong,
+.recipe-product-details span {
+  overflow-wrap: anywhere;
+}
+
+.recipe-product-price {
+  color: var(--color-text);
+  font-weight: 800;
 }
 
 .week-cost-overview {

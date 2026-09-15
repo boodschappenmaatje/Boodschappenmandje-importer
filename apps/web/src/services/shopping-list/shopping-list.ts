@@ -1,6 +1,7 @@
 import { resolveCurrentPrice } from "@/services/catalog/price";
 import type { Product } from "@/types/catalog";
 import type { WeekIngredientRequirement } from "@/types/week-preparation";
+import { combinedProductPurchaseQuantity } from "@/services/week-preparation/product-matching";
 import {
   SHOPPING_LIST_SCHEMA_VERSION,
   type ActiveShoppingList,
@@ -144,7 +145,7 @@ export function completeShoppingListFromWeek(
     string,
     {
       requirement: WeekIngredientRequirement;
-      quantity: number;
+      requirements: WeekIngredientRequirement[];
       usedIn: string[];
     }
   >();
@@ -154,12 +155,12 @@ export function completeShoppingListFromWeek(
     const current = grouped.get(requirement.product.productId);
     const usedIn = requirement.usedIn.map((item) => item.recipeName);
     if (current) {
-      current.quantity += requirement.purchaseQuantity;
+      current.requirements.push(requirement);
       current.usedIn = uniqueStrings(current.usedIn, usedIn);
     } else {
       grouped.set(requirement.product.productId, {
         requirement,
-        quantity: requirement.purchaseQuantity,
+        requirements: [requirement],
         usedIn,
       });
     }
@@ -169,7 +170,8 @@ export function completeShoppingListFromWeek(
   const items = [...list.items];
 
   for (const group of grouped.values()) {
-    const { requirement, quantity, usedIn } = group;
+    const { requirement, requirements, usedIn } = group;
+    const quantity = combinedProductPurchaseQuantity(requirements);
     const product = requirement.product;
     if (!product) continue;
     const existingIndex = items.findIndex(

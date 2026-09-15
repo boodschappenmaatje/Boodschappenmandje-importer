@@ -1,7 +1,11 @@
 import type { RecipeIngredient } from "@/types/catalog";
+import {
+  mealMixProfileForRecipe,
+} from "@/services/week-preparation/meal-mix-profiles";
 import type { RecipeCatalog } from "@/services/week-preparation/recipe-repository";
 import type {
   PreparedDay,
+  MealMixBrand,
   WeekIngredientRequirement,
   WeekIngredientUnit,
 } from "@/types/week-preparation";
@@ -35,8 +39,108 @@ export function aggregateWeekIngredients(
   );
   const aggregated = new Map<string, WeekIngredientRequirement>();
 
+  function addRequirement(
+    day: PreparedDay,
+    ingredientId: string,
+    sourceKey: string,
+    name: string,
+    quantity: number,
+    unit: WeekIngredientUnit,
+    kind: WeekIngredientRequirement["kind"],
+    brandConstraint: MealMixBrand | null,
+  ) {
+    const scaledQuantity = roundedQuantity(quantity);
+    const current = aggregated.get(ingredientId);
+    const recipeName =
+      mealMixProfileForRecipe(day.recipe?.sourceKey ?? "")?.dishName ??
+      day.recipe?.name ??
+      "Gerecht";
+    const use = {
+      recipeId: day.recipeId!,
+      recipeName,
+      dayIndex: day.dayIndex,
+      requiredQuantity: scaledQuantity,
+    };
+
+    if (current) {
+      if (current.unit !== unit || current.kind !== kind) {
+        throw new Error("incompatible-ingredient-units");
+      }
+      current.requiredQuantity = roundedQuantity(
+        current.requiredQuantity + scaledQuantity,
+      );
+      const existingUse = current.usedIn.find(
+        (item) => item.dayIndex === day.dayIndex && item.recipeId === use.recipeId,
+      );
+      if (existingUse) {
+        existingUse.requiredQuantity = roundedQuantity(
+          existingUse.requiredQuantity + scaledQuantity,
+        );
+      } else {
+        current.usedIn.push(use);
+      }
+      return;
+    }
+
+    aggregated.set(ingredientId, {
+      ingredientId,
+      sourceKey,
+      name,
+      unit,
+      optional: false,
+      servingsBase: 1,
+      kind,
+      brandConstraint,
+      requiredQuantity: scaledQuantity,
+      purchaseQuantity: null,
+      packageCapacity: null,
+      usedIn: [use],
+      product: null,
+      price: null,
+      productMatchMissing: false,
+      packageCalculationMissing: false,
+    });
+  }
+
   for (const day of days) {
     if (!day.recipeId || !day.recipe) continue;
+    const mealMix = mealMixProfileForRecipe(day.recipe.sourceKey);
+    if (mealMix) {
+      const mixIngredient = catalog.ingredients.find(
+        (ingredient) => ingredient.sourceKey === mealMix.productIngredientSourceKey,
+      );
+      if (mixIngredient) {
+        addRequirement(
+          day,
+          mixIngredient.id,
+          mixIngredient.sourceKey,
+          mealMix.productName,
+          Math.ceil(numberOfPeople / mealMix.servingsPerPackage),
+          "piece",
+          "mealMix",
+          mealMix.brand,
+        );
+      }
+
+      for (const supplement of mealMix.supplements) {
+        const ingredient = catalog.ingredients.find(
+          (candidate) => candidate.sourceKey === supplement.sourceKey,
+        );
+        if (!ingredient) continue;
+        addRequirement(
+          day,
+          ingredient.id,
+          ingredient.sourceKey,
+          supplement.name,
+          (supplement.quantity * numberOfPeople) / mealMix.servingsPerPackage,
+          supplement.unit,
+          "ingredient",
+          null,
+        );
+      }
+      continue;
+    }
+
     for (const relation of relationsByRecipe.get(day.recipeId) ?? []) {
       const ingredient = ingredientById.get(relation.ingredientId);
       if (!ingredient) continue;
@@ -45,41 +149,16 @@ export function aggregateWeekIngredients(
         relation.amountPerPerson * numberOfPeople,
         relation.unit,
       );
-      const current = aggregated.get(ingredient.id);
-      const use = {
-        recipeId: day.recipe.id,
-        recipeName: day.recipe.name,
-      };
-
-      if (current) {
-        if (current.unit !== scaled.unit) {
-          throw new Error("incompatible-ingredient-units");
-        }
-        current.requiredQuantity = roundedQuantity(
-          current.requiredQuantity + scaled.quantity,
-        );
-        if (!current.usedIn.some((item) => item.recipeId === use.recipeId)) {
-          current.usedIn.push(use);
-        }
-        continue;
-      }
-
-      aggregated.set(ingredient.id, {
-        ingredientId: ingredient.id,
-        sourceKey: ingredient.sourceKey,
-        name: ingredient.name,
-        unit: scaled.unit,
-        optional: false,
-        servingsBase: 1,
-        requiredQuantity: roundedQuantity(scaled.quantity),
-        purchaseQuantity: null,
-        packageCapacity: null,
-        usedIn: [use],
-        product: null,
-        price: null,
-        productMatchMissing: false,
-        packageCalculationMissing: false,
-      });
+      addRequirement(
+        day,
+        ingredient.id,
+        ingredient.sourceKey,
+        ingredient.name,
+        scaled.quantity,
+        scaled.unit,
+        "ingredient",
+        null,
+      );
     }
   }
 
@@ -87,4 +166,3 @@ export function aggregateWeekIngredients(
     left.name.localeCompare(right.name, "nl-NL"),
   );
 }
-

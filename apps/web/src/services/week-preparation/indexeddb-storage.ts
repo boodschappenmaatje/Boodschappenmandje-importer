@@ -12,10 +12,11 @@ import {
   type WeekPreferences,
   type WeekPreparation,
 } from "@/types/week-preparation";
+import { mealMixProfileForIngredient } from "@/services/week-preparation/meal-mix-profiles";
 
 const ACTIVE_PREPARATION_KEY = "active";
 
-interface StoredWeekPreparationV2 {
+interface StoredWeekPreparationV3 {
   key: typeof ACTIVE_PREPARATION_KEY;
   schemaVersion: typeof WEEK_PREPARATION_SCHEMA_VERSION;
   preparation: WeekPreparation;
@@ -109,7 +110,13 @@ function isUse(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.recipeId === "string" &&
-    typeof value.recipeName === "string"
+    typeof value.recipeName === "string" &&
+    Number.isInteger(value.dayIndex) &&
+    Number(value.dayIndex) >= 0 &&
+    Number(value.dayIndex) <= 6 &&
+    typeof value.requiredQuantity === "number" &&
+    Number.isFinite(value.requiredQuantity) &&
+    Number(value.requiredQuantity) > 0
   );
 }
 
@@ -147,6 +154,9 @@ function isIngredient(value: unknown): value is WeekIngredientRequirement {
     ["g", "kg", "ml", "l", "piece", "loaf"].includes(String(value.unit)) &&
     typeof value.optional === "boolean" &&
     value.servingsBase === 1 &&
+    ["ingredient", "mealMix"].includes(String(value.kind)) &&
+    (value.brandConstraint === null ||
+      ["Knorr", "Honig"].includes(String(value.brandConstraint))) &&
     typeof value.requiredQuantity === "number" &&
     Number.isFinite(value.requiredQuantity) &&
     Number(value.requiredQuantity) > 0 &&
@@ -164,6 +174,57 @@ function isIngredient(value: unknown): value is WeekIngredientRequirement {
     typeof value.productMatchMissing === "boolean" &&
     typeof value.packageCalculationMissing === "boolean"
   );
+}
+
+function migrateV2Preparation(value: unknown): WeekPreparation | null {
+  if (!isRecord(value) || value.schemaVersion !== 2 || !Array.isArray(value.ingredients)) {
+    return null;
+  }
+  const people = Number(value.numberOfPeople);
+  const days = Array.isArray(value.days) ? value.days : [];
+  const ingredients = value.ingredients.map((raw) => {
+    if (!isRecord(raw) || typeof raw.sourceKey !== "string") return raw;
+    const profile = mealMixProfileForIngredient(raw.sourceKey);
+    const legacyUses = Array.isArray(raw.usedIn) ? raw.usedIn : [];
+    const useCount = Math.max(1, legacyUses.length);
+    const migratedQuantity =
+      profile && Number.isInteger(people) && people > 0
+        ? Math.ceil(people / profile.servingsPerPackage)
+        : Number(raw.requiredQuantity);
+    return {
+      ...raw,
+      unit: profile ? "piece" : raw.unit,
+      kind: profile ? "mealMix" : "ingredient",
+      brandConstraint: profile?.brand ?? null,
+      requiredQuantity: migratedQuantity,
+      purchaseQuantity:
+        profile && raw.product !== null ? migratedQuantity : raw.purchaseQuantity,
+      packageCapacity: profile && raw.product !== null ? 1 : raw.packageCapacity,
+      packageCalculationMissing:
+        profile && raw.product !== null ? false : raw.packageCalculationMissing,
+      usedIn: legacyUses.map((use, index) => {
+        if (!isRecord(use)) return use;
+        const matchingDays = days.filter(
+          (day) => isRecord(day) && day.recipeId === use.recipeId,
+        );
+        const matchingDay = matchingDays[index] ?? matchingDays[0];
+        return {
+          ...use,
+          dayIndex:
+            isRecord(matchingDay) && Number.isInteger(matchingDay.dayIndex)
+              ? Number(matchingDay.dayIndex)
+              : 0,
+          requiredQuantity: migratedQuantity / useCount,
+        };
+      }),
+    };
+  });
+  const migrated = {
+    ...value,
+    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    ingredients,
+  };
+  return isPreparation(migrated) ? migrated : null;
 }
 
 function isGeneration(value: unknown): boolean {
@@ -283,6 +344,11 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
     if (!migrated) throw new WeekPreparationStorageError("invalid-data");
     return migrated;
   }
+  if (value.schemaVersion === 2) {
+    const migrated = migrateV2Preparation(value.preparation);
+    if (!migrated) throw new WeekPreparationStorageError("invalid-data");
+    return migrated;
+  }
   if (value.schemaVersion !== WEEK_PREPARATION_SCHEMA_VERSION) {
     throw new WeekPreparationStorageError("unsupported-version");
   }
@@ -294,7 +360,7 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
 
 export function encodeStoredWeekPreparation(
   preparation: WeekPreparation,
-): StoredWeekPreparationV2 {
+): StoredWeekPreparationV3 {
   return {
     key: ACTIVE_PREPARATION_KEY,
     schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
@@ -374,4 +440,3 @@ export function createIndexedDbWeekPreparationStorage(): WeekPreparationStorage 
   }
   return new IndexedDbWeekPreparationStorage(window.indexedDB);
 }
-

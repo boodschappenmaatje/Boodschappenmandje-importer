@@ -1,6 +1,6 @@
 import type { PriceFreshness, UUID } from "@/types/catalog";
 
-export const WEEK_PREPARATION_SCHEMA_VERSION = 2 as const;
+export const WEEK_PREPARATION_SCHEMA_VERSION = 3 as const;
 
 export const MEAL_CATEGORIES = [
   "dutch",
@@ -15,6 +15,7 @@ export const MEAL_CATEGORIES = [
 
 export type MealCategory = (typeof MEAL_CATEGORIES)[number];
 export type RecipeMealCategory = Exclude<MealCategory, "freeChoice">;
+export type MealMixBrand = "Knorr" | "Honig";
 export type WeekPreparationStatus =
   | "draft"
   | "readyForGeneration"
@@ -52,6 +53,8 @@ export type WeekIngredientUnit = "g" | "kg" | "ml" | "l" | "piece" | "loaf";
 export interface WeekIngredientUse {
   recipeId: UUID;
   recipeName: string;
+  dayIndex: number;
+  requiredQuantity: number;
 }
 
 export interface WeekProductReference {
@@ -79,6 +82,8 @@ export interface WeekIngredientRequirement {
   unit: WeekIngredientUnit;
   optional: boolean;
   servingsBase: 1;
+  kind: "ingredient" | "mealMix";
+  brandConstraint: MealMixBrand | null;
   requiredQuantity: number;
   purchaseQuantity: number | null;
   packageCapacity: number | null;
@@ -116,4 +121,3 @@ export interface WeekPreparation {
   status: WeekPreparationStatus;
   listStrategy: "preserveAndComplete";
 }
-

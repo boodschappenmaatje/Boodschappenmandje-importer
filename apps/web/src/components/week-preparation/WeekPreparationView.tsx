@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
+import { Icon } from "@/components/Icon";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -15,12 +16,17 @@ import {
   budgetOutcomeLabel,
   missingPriceLabel,
 } from "@/services/budget/budget-presentation";
+import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
+import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
 import {
   MEAL_CATEGORY_LABELS,
   canPrepareWeek,
   distributionProgress,
 } from "@/services/week-preparation/week-preparation";
-import { calculateWeekBudgetSummary } from "@/services/week-preparation/week-generation";
+import {
+  calculateDishCostSummary,
+  calculateWeekBudgetSummary,
+} from "@/services/week-preparation/week-generation";
 import {
   MEAL_CATEGORIES,
   type MealCategory,
@@ -51,6 +57,17 @@ function quantityLabel(
   if (unit === "piece") return `${amount} ${quantity === 1 ? "stuk" : "stuks"}`;
   if (unit === "loaf") return `${amount} ${quantity === 1 ? "brood" : "broden"}`;
   return `${amount} ${unit}`;
+}
+
+function packagesForDay(
+  ingredient: WeekIngredientRequirement,
+  dayIndex: number,
+): number | null {
+  const use = ingredient.usedIn.find((item) => item.dayIndex === dayIndex);
+  if (!use) return null;
+  if (ingredient.kind === "mealMix") return Math.ceil(use.requiredQuantity);
+  if (!ingredient.packageCapacity) return null;
+  return Math.max(1, Math.ceil(use.requiredQuantity / ingredient.packageCapacity));
 }
 
 export function WeekPreparationView() {
@@ -193,9 +210,9 @@ export function WeekPreparationView() {
                     <p>
                       {preparation.generation.missingProductMatchCount}{" "}
                       {preparation.generation.missingProductMatchCount === 1
-                        ? "ingrediënt kon"
-                        : "ingrediënten konden"}{" "}
-                      nog niet betrouwbaar aan een product worden gekoppeld.
+                        ? "product konden we"
+                        : "producten konden we"}{" "}
+                      nog niet vinden.
                     </p>
                   ) : null}
                   {preparation.generation.missingPriceCount > 0 ? (
@@ -211,13 +228,13 @@ export function WeekPreparationView() {
                     <p>
                       Bij {preparation.generation.missingPackageCalculationCount}{" "}
                       {preparation.generation.missingPackageCalculationCount === 1
-                        ? "product kon het aantal verpakkingen"
-                        : "producten kon het aantal verpakkingen"}{" "}
-                      nog niet veilig worden berekend.
+                        ? "product is het aantal"
+                        : "producten is het aantal"}{" "}
+                      nog niet zeker.
                     </p>
                   ) : null}
                   <button type="button" onClick={week.retryGeneration}>
-                    Producten opnieuw controleren
+                    Nogmaals zoeken
                   </button>
                 </div>
               ) : null}
@@ -226,9 +243,16 @@ export function WeekPreparationView() {
                 {preparation.days.map((day) => {
                   const dayIngredients = day.recipeId
                     ? preparation.ingredients.filter((ingredient) =>
-                        ingredient.usedIn.some((use) => use.recipeId === day.recipeId),
+                        ingredient.usedIn.some((use) => use.dayIndex === day.dayIndex),
                       )
                     : [];
+                  const mealMix = day.recipe
+                    ? mealMixProfileForRecipe(day.recipe.sourceKey)
+                    : null;
+                  const dishCost = calculateDishCostSummary(
+                    day.dayIndex,
+                    preparation.ingredients,
+                  );
                   return (
                     <li key={day.dayIndex}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
@@ -255,49 +279,85 @@ export function WeekPreparationView() {
                       ) : day.recipe ? (
                         <details className="recipe-detail">
                           <summary>
-                            <strong>{day.recipe.name}</strong>
+                            <span className="recipe-summary-title">
+                              <strong>{mealMix?.dishName ?? day.recipe.name}</strong>
+                              {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
+                            </span>
                             <span>Bekijk gerecht</span>
                           </summary>
                           <div className="recipe-detail-content">
                             <p>
                               {MEAL_CATEGORY_LABELS[day.category]} · {preparation.numberOfPeople} personen
                             </p>
+                            <p className="recipe-cost-summary" data-complete={dishCost.complete}>
+                              {dishCost.complete
+                                ? `Geschatte kosten gerecht: ${formatCents(dishCost.knownCostCents)}`
+                                : `${formatCents(dishCost.knownCostCents)} bekend · nog ${dishCost.missingProductCount} ${dishCost.missingProductCount === 1 ? "product" : "producten"} niet compleet`}
+                            </p>
                             <ul className="recipe-ingredients">
-                              {dayIngredients.map((ingredient) => (
+                              {dayIngredients.map((ingredient) => {
+                                const use = ingredient.usedIn.find(
+                                  (item) => item.dayIndex === day.dayIndex,
+                                );
+                                const requiredQuantity =
+                                  use?.requiredQuantity ?? ingredient.requiredQuantity;
+                                const packages = packagesForDay(
+                                  ingredient,
+                                  day.dayIndex,
+                                );
+                                const imageUrl = ingredient.product
+                                  ? safeProductImageUrl(ingredient.product.imageUrl)
+                                  : null;
+                                return (
                                 <li key={ingredient.ingredientId}>
                                   <div>
-                                    <strong>{ingredient.name}</strong>
-                                    <span>{quantityLabel(ingredient.requiredQuantity, ingredient.unit)} nodig</span>
+                                    <strong>{ingredient.kind === "mealMix" ? "Maaltijdmix" : ingredient.name}</strong>
+                                    <span>
+                                      {ingredient.kind === "mealMix"
+                                        ? `${requiredQuantity} ${requiredQuantity === 1 ? "verpakking" : "verpakkingen"} nodig`
+                                        : `${quantityLabel(requiredQuantity, ingredient.unit)} nodig`}
+                                    </span>
                                   </div>
                                   {ingredient.product ? (
                                     <div className="recipe-product-match">
-                                      <span>
-                                        {ingredient.product.name}
-                                        {ingredient.product.packageText
-                                          ? ` · ${ingredient.product.packageText}`
-                                          : ""}
-                                      </span>
-                                      {ingredient.purchaseQuantity !== null ? (
-                                        <span>
-                                          {ingredient.purchaseQuantity}{" "}
-                                          {ingredient.purchaseQuantity === 1 ? "verpakking" : "verpakkingen"}
-                                          {ingredient.price
-                                            ? ` · ${formatCents(
-                                                ingredient.price.amountCents * ingredient.purchaseQuantity,
-                                              )}`
-                                            : " · prijs ontbreekt"}
-                                        </span>
-                                      ) : (
-                                        <span>Aantal verpakkingen nog niet bekend</span>
-                                      )}
+                                      <div
+                                        className="recipe-product-image"
+                                        data-has-image={Boolean(imageUrl)}
+                                        style={imageUrl ? { backgroundImage: `url(${JSON.stringify(imageUrl)})` } : undefined}
+                                        role="img"
+                                        aria-label={imageUrl ? `Afbeelding van ${ingredient.product.name}` : "Geen productafbeelding"}
+                                      >
+                                        {!imageUrl ? <Icon name="products" size={22} /> : null}
+                                      </div>
+                                      <div className="recipe-product-details">
+                                        <strong>{ingredient.product.name}</strong>
+                                        {[ingredient.product.brand, ingredient.product.packageText]
+                                          .filter(Boolean).length ? (
+                                            <span>
+                                              {[ingredient.product.brand, ingredient.product.packageText]
+                                                .filter(Boolean).join(" · ")}
+                                            </span>
+                                          ) : null}
+                                        {packages !== null ? (
+                                          <span className="recipe-product-price">
+                                            {packages} {packages === 1 ? "verpakking" : "verpakkingen"}
+                                            {ingredient.price
+                                              ? ` · ${formatCents(ingredient.price.amountCents * packages)}`
+                                              : " · prijs nog niet beschikbaar"}
+                                          </span>
+                                        ) : (
+                                          <span>Aantal nog niet zeker</span>
+                                        )}
+                                      </div>
                                     </div>
                                   ) : (
                                     <span className="shopping-item-price-missing">
-                                      Nog geen betrouwbare productmatch
+                                      Product nog niet gevonden
                                     </span>
                                   )}
                                 </li>
-                              ))}
+                                );
+                              })}
                             </ul>
                           </div>
                         </details>

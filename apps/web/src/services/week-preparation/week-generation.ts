@@ -3,6 +3,7 @@ import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
   applyProductToRequirement,
+  combinedProductPurchaseQuantity,
   matchWeekIngredients,
 } from "@/services/week-preparation/product-matching";
 import type {
@@ -10,6 +11,7 @@ import type {
   RecipeRepository,
 } from "@/services/week-preparation/recipe-repository";
 import { selectRecipesForDays } from "@/services/week-preparation/recipe-selection";
+import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import type { ActiveShoppingList } from "@/types/shopping-list";
 import type {
   WeekGenerationSummary,
@@ -22,14 +24,17 @@ function generationSummary(
   ingredients: WeekIngredientRequirement[],
   generatedAt: string,
 ): WeekGenerationSummary {
+  const pricedByProduct = Map.groupBy(
+    ingredients.filter(
+      (item) => item.product && item.price && item.purchaseQuantity !== null,
+    ),
+    (item) => item.product!.productId,
+  );
   return {
     generatedAt,
-    knownPurchaseCostCents: ingredients.reduce(
-      (total, ingredient) =>
-        total +
-        (ingredient.price && ingredient.purchaseQuantity !== null
-          ? ingredient.price.amountCents * ingredient.purchaseQuantity
-          : 0),
+    knownPurchaseCostCents: [...pricedByProduct.values()].reduce(
+      (total, grouped) =>
+        total + grouped[0].price!.amountCents * combinedProductPurchaseQuantity(grouped),
       0,
     ),
     matchedProductCount: ingredients.filter((item) => item.product !== null).length,
@@ -94,7 +99,11 @@ export async function generatePreparedWeek(
     return preparation;
   }
 
-  const catalog = await recipeRepository.loadCatalog();
+  const loadedCatalog = await recipeRepository.loadCatalog();
+  const catalog = {
+    ...loadedCatalog,
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+  };
   const days = selectRecipesForDays(
     preparation.days,
     catalog.recipes,
@@ -181,7 +190,11 @@ export async function refreshGeneratedWeek(
   ) {
     return preparation;
   }
-  const catalog = await recipeRepository.loadCatalog();
+  const loadedCatalog = await recipeRepository.loadCatalog();
+  const catalog = {
+    ...loadedCatalog,
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+  };
   const ingredients = await refreshRequirements(
     preparation.ingredients,
     catalog,
@@ -210,6 +223,42 @@ export interface WeekBudgetSummary {
   isComplete: boolean;
 }
 
+export interface DishCostSummary {
+  knownCostCents: number;
+  missingProductCount: number;
+  complete: boolean;
+}
+
+export function calculateDishCostSummary(
+  dayIndex: number,
+  ingredients: WeekIngredientRequirement[],
+): DishCostSummary {
+  let knownCostCents = 0;
+  let missingProductCount = 0;
+
+  for (const ingredient of ingredients) {
+    const use = ingredient.usedIn.find((item) => item.dayIndex === dayIndex);
+    if (!use) continue;
+    const packages =
+      ingredient.kind === "mealMix"
+        ? Math.ceil(use.requiredQuantity)
+        : ingredient.packageCapacity
+          ? Math.max(1, Math.ceil(use.requiredQuantity / ingredient.packageCapacity))
+          : null;
+    if (!ingredient.product || !ingredient.price || packages === null) {
+      missingProductCount += 1;
+      continue;
+    }
+    knownCostCents += ingredient.price.amountCents * packages;
+  }
+
+  return {
+    knownCostCents,
+    missingProductCount,
+    complete: missingProductCount === 0,
+  };
+}
+
 export function calculateWeekBudgetSummary(
   preparation: WeekPreparation,
   list: ActiveShoppingList,
@@ -222,7 +271,7 @@ export function calculateWeekBudgetSummary(
   const grouped = new Map<
     string,
     {
-      requiredPackages: number;
+      requirements: WeekIngredientRequirement[];
       priceCents: number | null;
     }
   >();
@@ -235,13 +284,13 @@ export function calculateWeekBudgetSummary(
     }
     const current = grouped.get(requirement.product.productId);
     if (current) {
-      current.requiredPackages += requirement.purchaseQuantity;
+      current.requirements.push(requirement);
       if (current.priceCents === null && requirement.price) {
         current.priceCents = requirement.price.amountCents;
       }
     } else {
       grouped.set(requirement.product.productId, {
-        requiredPackages: requirement.purchaseQuantity,
+        requirements: [requirement],
         priceCents: requirement.price?.amountCents ?? null,
       });
     }
@@ -254,7 +303,8 @@ export function calculateWeekBudgetSummary(
   for (const [productId, requirement] of grouped) {
     const packagesNeeded = Math.max(
       0,
-      requirement.requiredPackages - (existingQuantity.get(productId) ?? 0),
+      combinedProductPurchaseQuantity(requirement.requirements) -
+        (existingQuantity.get(productId) ?? 0),
     );
     if (packagesNeeded === 0) continue;
     newPackageCount += packagesNeeded;
@@ -292,4 +342,3 @@ export function calculateWeekBudgetSummary(
     isComplete,
   };
 }
-

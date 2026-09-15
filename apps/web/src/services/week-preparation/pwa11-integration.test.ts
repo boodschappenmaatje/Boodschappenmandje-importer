@@ -333,6 +333,8 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       unit: "g",
       optional: false,
       servingsBase: 1,
+      kind: "ingredient",
+      brandConstraint: null,
     });
     expect(onion?.usedIn.map((item) => item.recipeName)).toEqual([
       "Spaghetti bolognese",
@@ -356,10 +358,12 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       unit: "g",
       optional: false,
       servingsBase: 1,
+      kind: "ingredient",
+      brandConstraint: null,
       requiredQuantity: 700,
       purchaseQuantity: null,
       packageCapacity: null,
-      usedIn: [{ recipeId: RECIPE.id, recipeName: RECIPE.name }],
+      usedIn: [{ recipeId: RECIPE.id, recipeName: RECIPE.name, dayIndex: 0, requiredQuantity: 700 }],
       product: null,
       price: null,
       productMatchMissing: false,
@@ -511,10 +515,12 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
         unit: "g",
         optional: false,
         servingsBase: 1,
+        kind: "ingredient",
+        brandConstraint: null,
         requiredQuantity: 700,
         purchaseQuantity: null,
         packageCapacity: null,
-        usedIn: [{ recipeId: RECIPE.id, recipeName: RECIPE.name }],
+        usedIn: [{ recipeId: RECIPE.id, recipeName: RECIPE.name, dayIndex: 0, requiredQuantity: 700 }],
         product: null,
         price: null,
         productMatchMissing: false,
@@ -546,4 +552,3 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     expect(completed.items[0].sources).toEqual(["manual", "weekPreparation", "recipe"]);
   });
 });
-

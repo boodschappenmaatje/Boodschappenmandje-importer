@@ -105,12 +105,16 @@ describe("PWA 10 lokale persistentie", () => {
         unit: "g",
         optional: false,
         servingsBase: 1,
+        kind: "ingredient",
+        brandConstraint: null,
         requiredQuantity: 700,
         purchaseQuantity: 2,
         packageCapacity: 500,
         usedIn: [{
           recipeId: "recipe-spaghetti",
           recipeName: "Spaghetti bolognese",
+          dayIndex: 0,
+          requiredQuantity: 700,
         }],
         product: {
           productId: "catalog-product-id",
@@ -262,11 +266,85 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       id: "week-legacy",
       ingredients: [],
       generation: null,
       days: [{ category: "dutch", recipe: null }],
+    });
+  });
+
+  it("migreert een bestaande PWA 11-versie 2 zonder het gekozen gerecht te wijzigen", () => {
+    const base = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v2",
+    );
+    const legacy = JSON.parse(JSON.stringify({
+      ...base,
+      status: "generationPartial",
+      days: [{
+        dayIndex: 0,
+        category: "pasta",
+        freeChoice: false,
+        recipeId: "recipe-spaghetti",
+        recipe: { id: "recipe-spaghetti", sourceKey: "spaghetti-bolognese", name: "Spaghetti bolognese" },
+        status: "recipeSelected",
+      }],
+      ingredients: [{
+        ingredientId: "ingredient-beef",
+        sourceKey: "groundBeef",
+        name: "rundergehakt",
+        unit: "g",
+        optional: false,
+        servingsBase: 1,
+        kind: "ingredient",
+        brandConstraint: null,
+        requiredQuantity: 700,
+        purchaseQuantity: null,
+        packageCapacity: null,
+        usedIn: [{ recipeId: "recipe-spaghetti", recipeName: "Spaghetti bolognese", dayIndex: 0, requiredQuantity: 700 }],
+        product: null,
+        price: null,
+        productMatchMissing: true,
+        packageCalculationMissing: false,
+      }],
+      generation: {
+        generatedAt: NOW.toISOString(),
+        knownPurchaseCostCents: 0,
+        matchedProductCount: 0,
+        missingProductMatchCount: 1,
+        missingPackageCalculationCount: 0,
+        missingPriceCount: 0,
+      },
+    })) as Record<string, unknown>;
+    legacy.schemaVersion = 2;
+    const ingredients = legacy.ingredients as Array<Record<string, unknown>>;
+    for (const ingredient of ingredients) {
+      delete ingredient.kind;
+      delete ingredient.brandConstraint;
+      const uses = ingredient.usedIn as Array<Record<string, unknown>>;
+      for (const use of uses) {
+        delete use.dayIndex;
+        delete use.requiredQuantity;
+      }
+    }
+
+    expect(
+      decodeStoredWeekPreparation({
+        key: "active",
+        schemaVersion: 2,
+        preparation: legacy,
+      }),
+    ).toMatchObject({
+      schemaVersion: 3,
+      days: [{ recipe: { sourceKey: "spaghetti-bolognese" } }],
+      ingredients: [{
+        kind: "ingredient",
+        brandConstraint: null,
+        usedIn: [{ dayIndex: 0, requiredQuantity: 700 }],
+      }],
     });
   });
 });

@@ -122,17 +122,19 @@ function generated(): WeekPreparation {
       unit: "g",
       optional: false,
       servingsBase: 1,
+      kind: "ingredient",
+      brandConstraint: null,
       requiredQuantity: 700,
       purchaseQuantity: 2,
       packageCapacity: 500,
-      usedIn: [{ recipeId: "recipe-spaghetti", recipeName: "Spaghetti bolognese" }],
+      usedIn: [{ recipeId: "recipe-spaghetti", recipeName: "Spaghetti bolognese", dayIndex: 0, requiredQuantity: 700 }],
       product: {
         productId: "real-product-id",
         sku: "871000000001",
         name: "Hoogvliet rundergehakt",
         brand: "Hoogvliet",
         packageText: "500 g",
-        imageUrl: null,
+        imageUrl: "https://cdn.hoogvliet.com/rundergehakt.webp",
         supermarket: "Hoogvliet",
         sourceUrl: "https://www.hoogvliet.com/product/871000000001",
       },
@@ -220,8 +222,11 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Spaghetti bolognese");
     expect(html).toContain("4 personen");
     expect(html).toContain("700 g nodig");
-    expect(html).toContain("Hoogvliet rundergehakt · 500 g");
+    expect(html).toContain("Hoogvliet rundergehakt");
+    expect(html).toContain("Hoogvliet · 500 g");
     expect(html).toContain("2 verpakkingen · € 8,98");
+    expect(html).toContain("Geschatte kosten gerecht: € 8,98");
+    expect(html).toContain("background-image");
     expect(html).toContain("Nieuwe boodschappen");
     expect(html).toContain("Maak mijn lijst compleet");
     expect(html).not.toContain("871000000001");
