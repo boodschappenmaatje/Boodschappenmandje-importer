@@ -505,6 +505,26 @@ export async function finishCatalogImportRun(config, run, result, now = new Date
   });
 }
 
+export async function fetchCatalogImportRuns(config, {
+  trigger = "schedule",
+  limit = 5,
+} = {}) {
+  const safeLimit = Math.min(20, Math.max(1, Math.trunc(Number(limit) || 5)));
+  const query = {
+    select: "id,started_at,finished_at,status,trigger,processed_count,new_count,updated_count,unchanged_count,skipped_count,error_count,total_unique_products_before,total_unique_products_after,duration_seconds,error_summary",
+    order: "started_at.desc",
+  };
+  if (trigger) query.trigger = `eq.${trigger}`;
+  return getJSON(
+    config.supabaseURL,
+    "catalog_import_runs",
+    config.supabaseSecret,
+    query,
+    0,
+    safeLimit - 1,
+  );
+}
+
 export async function fetchCatalogDiscoveryState(config, stateKey) {
   const rows = await getJSON(
     config.supabaseURL,
