@@ -53,7 +53,8 @@ export interface CatalogFilterOptionsRequest {
 
 export interface NormalizedCatalogSearchRequest {
   term: string;
-  pattern: string;
+  tokens: string[];
+  patterns: string[];
   limit: number;
 }
 
@@ -67,8 +68,46 @@ export interface NormalizedCatalogPageRequest {
 export interface NormalizedCatalogQueryRequest
   extends NormalizedCatalogPageRequest {
   query: CatalogQuery;
-  pattern: string | null;
+  searchFilter: string | null;
   requiresPriceRelation: boolean;
+}
+
+const SEARCH_FIELDS = [
+  "name",
+  "brand",
+  "package_text",
+  "category",
+  "product_type",
+] as const;
+
+function searchTokens(value: string): string[] {
+  return (value.toLocaleLowerCase("nl-NL").match(/[\p{L}\p{N}]+/gu) ?? [])
+    .filter(Boolean);
+}
+
+function databaseWordStartPatterns(tokens: string[]): string[] {
+  const phrase = tokens.join("%");
+  // PostgREST ILIKE heeft geen betrouwbare woordgrensoperator in een OR-filter.
+  // Deze begrensde patronen dekken een begin en de gebruikelijke scheidingstekens
+  // in productnamen, merken en categorieën. Zo matcht cola wel Coca-Cola, maar
+  // niet de letterreeks in chocola/chocolade.
+  return [
+    `${phrase}%`,
+    `% ${phrase}%`,
+    `%-${phrase}%`,
+    `%/${phrase}%`,
+    `%>${phrase}%`,
+    `%(${phrase}%`,
+    `%[${phrase}%`,
+  ];
+}
+
+export function catalogSearchFilter(
+  search: NormalizedCatalogSearchRequest,
+): string {
+  return SEARCH_FIELDS.flatMap((field) =>
+    search.patterns.map((pattern) => `${field}.ilike.${pattern}`),
+  ).join(",");
 }
 
 const VALID_SORTS = new Set<CatalogSort>([
@@ -108,8 +147,8 @@ export function normalizeCatalogSearchRequest(
   // Houd PostgREST-operatoren buiten de filterwaarde. Woorden en cijfers blijven
   // behouden; tussenliggende tekens worden een wildcard zodat o.a. "1,5 liter"
   // bruikbaar zoekt zonder een vrije filterexpressie op te bouwen.
-  const safeParts = normalizedTerm.match(/[\p{L}\p{N}]+/gu) ?? [];
-  if (safeParts.join("").length < MIN_CATALOG_SEARCH_LENGTH) return null;
+  const tokens = searchTokens(normalizedTerm);
+  if (tokens.join("").length < MIN_CATALOG_SEARCH_LENGTH) return null;
 
   const requestedLimit = Number.isFinite(request.limit)
     ? Math.trunc(request.limit ?? CATALOG_SEARCH_LIMIT)
@@ -117,7 +156,8 @@ export function normalizeCatalogSearchRequest(
 
   return {
     term: normalizedTerm,
-    pattern: `%${safeParts.join("%")}%`,
+    tokens,
+    patterns: databaseWordStartPatterns(tokens),
     limit: Math.max(1, Math.min(CATALOG_SEARCH_LIMIT, requestedLimit)),
   };
 }
@@ -157,7 +197,7 @@ export function normalizeCatalogQueryRequest(
   return {
     ...page,
     query,
-    pattern: normalizedSearch?.pattern ?? null,
+    searchFilter: normalizedSearch ? catalogSearchFilter(normalizedSearch) : null,
     requiresPriceRelation:
       query.offersOnly ||
       query.maxPrice !== null ||
@@ -166,22 +206,41 @@ export function normalizeCatalogQueryRequest(
   };
 }
 
-export function productSearchRelevance(product: Product, term: string): number {
-  const needle = term.trim().toLocaleLowerCase("nl-NL");
-  if (!needle) return 0;
-  const name = product.name.toLocaleLowerCase("nl-NL");
-  const brand = product.brand?.toLocaleLowerCase("nl-NL") ?? "";
-  const category = product.category?.toLocaleLowerCase("nl-NL") ?? "";
-  const packageText = product.packageText?.toLocaleLowerCase("nl-NL") ?? "";
+function allQueryTokensMatchField(queryTokens: string[], value: string): boolean {
+  const valueTokens = searchTokens(value);
+  return queryTokens.every((queryToken) =>
+    valueTokens.some((valueToken) => valueToken.startsWith(queryToken)),
+  );
+}
 
-  if (name === needle) return 100;
-  if (name.startsWith(`${needle} `) || name.startsWith(`${needle}-`)) return 90;
-  if (brand === needle) return 80;
-  if (name.includes(needle)) return 70;
-  if (brand.startsWith(needle)) return 60;
-  if (brand.includes(needle)) return 50;
-  if (category.includes(needle)) return 30;
-  if (packageText.includes(needle)) return 20;
+export function productMatchesSearchTokens(product: Product, term: string): boolean {
+  const queryTokens = searchTokens(term);
+  if (queryTokens.length === 0) return true;
+  return [
+    product.name,
+    product.brand,
+    product.category,
+    product.productType,
+    product.packageText,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .some((value) => allQueryTokensMatchField(queryTokens, value));
+}
+
+export function productSearchRelevance(product: Product, term: string): number {
+  const normalizedTerm = searchTokens(term).join(" ");
+  if (!normalizedTerm) return 0;
+  const name = searchTokens(product.name).join(" ");
+  const brand = searchTokens(product.brand ?? "").join(" ");
+
+  if (name === normalizedTerm) return 1000;
+  if (name.startsWith(`${normalizedTerm} `)) return 900;
+  if (allQueryTokensMatchField(searchTokens(term), product.name)) return 800;
+  if (brand === normalizedTerm) return 750;
+  if (allQueryTokensMatchField(searchTokens(term), product.brand ?? "")) return 700;
+  if (allQueryTokensMatchField(searchTokens(term), product.category ?? "")) return 500;
+  if (allQueryTokensMatchField(searchTokens(term), product.productType ?? "")) return 450;
+  if (allQueryTokensMatchField(searchTokens(term), product.packageText ?? "")) return 200;
   return 0;
 }
 
@@ -196,6 +255,10 @@ export function sortProductsForQuery(
       productSearchRelevance(left, query.term);
     return score || left.name.localeCompare(right.name, "nl-NL") || left.id.localeCompare(right.id);
   });
+}
+
+function matchesNormalizedSearch(product: Product, query: CatalogQuery): boolean {
+  return !query.term || productMatchesSearchTokens(product, query.term);
 }
 
 const PRODUCT_FIELDS = [
@@ -290,7 +353,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       rangeStart,
       rangeEnd,
       query,
-      pattern,
+      searchFilter,
       requiresPriceRelation,
     } = normalized;
 
@@ -300,11 +363,8 @@ export class SupabaseCatalogRepository implements CatalogRepository {
         .select(`${PRICE_FIELDS},product:products!inner(${PRODUCT_FIELDS})`)
         .eq("product.supermarket", "Hoogvliet");
 
-      if (pattern) {
-        priceQuery = priceQuery.or(
-          `name.ilike.${pattern},brand.ilike.${pattern},package_text.ilike.${pattern},category.ilike.${pattern},product_type.ilike.${pattern}`,
-          { referencedTable: "product" },
-        );
+      if (searchFilter) {
+        priceQuery = priceQuery.or(searchFilter, { referencedTable: "product" });
       }
       if (query.category) priceQuery = priceQuery.eq("product.category", query.category);
       if (query.brand) priceQuery = priceQuery.eq("product.brand", query.brand);
@@ -332,9 +392,10 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       return {
         products: mapped.products.filter(
           (product) =>
-            !query.offersOnly ||
-            (product.currentPrice !== null &&
-              isOfferActive(product.currentPrice, request.now)),
+            matchesNormalizedSearch(product, query) &&
+            (!query.offersOnly ||
+              (product.currentPrice !== null &&
+                isOfferActive(product.currentPrice, request.now))),
         ),
         priceStatus: mapped.priceStatus,
         page,
@@ -353,10 +414,8 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       .select(`${PRODUCT_FIELDS},${priceRelation}`)
       .eq("supermarket", "Hoogvliet");
 
-    if (pattern) {
-      productQuery = productQuery.or(
-        `name.ilike.${pattern},brand.ilike.${pattern},package_text.ilike.${pattern},category.ilike.${pattern},product_type.ilike.${pattern}`,
-      );
+    if (searchFilter) {
+      productQuery = productQuery.or(searchFilter);
     }
     if (query.category) productQuery = productQuery.eq("category", query.category);
     if (query.brand) productQuery = productQuery.eq("brand", query.brand);
@@ -388,7 +447,10 @@ export class SupabaseCatalogRepository implements CatalogRepository {
 
     const hasMore = productRows.length > pageSize;
     const mapped = mapJoinedCatalogRows(productRows.slice(0, pageSize));
-    const products = sortProductsForQuery(mapped.products, query).filter(
+    const products = sortProductsForQuery(
+      mapped.products.filter((product) => matchesNormalizedSearch(product, query)),
+      query,
+    ).filter(
       (product) =>
         !query.offersOnly ||
         (product.currentPrice !== null &&
@@ -468,9 +530,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       .limit(CATALOG_FILTER_SAMPLE_LIMIT);
 
     if (search) {
-      facetQuery = facetQuery.or(
-        `name.ilike.${search.pattern},brand.ilike.${search.pattern},package_text.ilike.${search.pattern},category.ilike.${search.pattern},product_type.ilike.${search.pattern}`,
-      );
+      facetQuery = facetQuery.or(catalogSearchFilter(search));
     }
     if (request.category) facetQuery = facetQuery.eq("category", request.category);
     if (request.signal) facetQuery = facetQuery.abortSignal(request.signal);
