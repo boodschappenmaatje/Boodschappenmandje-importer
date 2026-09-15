@@ -1,6 +1,6 @@
 import type { NavigationIcon } from "@/types/navigation";
 
-type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud";
+type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info";
 
 interface IconProps {
   name: IconName;
@@ -39,5 +39,13 @@ export function Icon({ name, size = 24 }: IconProps) {
       return <svg {...common}><path d="M5 12h14M13 6l6 6-6 6" /></svg>;
     case "cloud":
       return <svg {...common}><path d="M7 18h10a4 4 0 0 0 .4-8 6 6 0 0 0-11.5-1A4.5 4.5 0 0 0 7 18Z" /><path d="m9 13 2 2 4-4" /></svg>;
+    case "history":
+      return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></svg>;
+    case "pantry":
+      return <svg {...common}><path d="M4 4h16v17H4zM4 10h16M8 7h3M8 14h3" /></svg>;
+    case "settings":
+      return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></svg>;
+    case "info":
+      return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></svg>;
   }
 }

@@ -1,26 +1,24 @@
-import { FeatureCard } from "@/components/FeatureCard";
+import { DashboardActionCard } from "@/components/dashboard/DashboardActionCard";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { ShoppingListCard } from "@/components/dashboard/ShoppingListCard";
+import { WeekSummaryCard } from "@/components/dashboard/WeekSummaryCard";
+import { emptyDashboardState } from "@/features/dashboard/dashboard-state";
 import { homeSections } from "@/features/home/home-sections";
 
 export default function HomePage() {
   return (
     <>
-      <section className="hero">
-        <p className="eyebrow">PWA-fundament</p>
-        <h1>Je boodschappen, straks altijd bij de hand.</h1>
-        <p>
-          De nieuwe mobiele basis staat klaar. In volgende stappen worden de
-          bestaande Supabase-data en bewezen Stap-6-logica gecontroleerd aangesloten.
-        </p>
-      </section>
+      <DashboardHeader />
+      <WeekSummaryCard week={emptyDashboardState.week} />
+      <ShoppingListCard shoppingList={emptyDashboardState.shoppingList} />
 
-      <div className="section-heading">
-        <h2>Jouw BoodschappenMaatje</h2>
-        <span>mobiele testbasis</span>
+      <div className="section-heading compact-heading">
+        <h2>Verder met je week</h2>
       </div>
 
-      <section className="feature-grid" aria-label="Onderdelen">
+      <section className="dashboard-actions" aria-label="Snelkoppelingen">
         {homeSections.map((section) => (
-          <FeatureCard key={section.title} section={section} />
+          <DashboardActionCard key={section.title} section={section} />
         ))}
       </section>
     </>

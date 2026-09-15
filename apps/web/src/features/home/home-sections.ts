@@ -4,38 +4,29 @@ export interface HomeSection {
   href: string;
   icon: "week" | "list" | "budget" | "products" | "prepare";
   emphasis?: "primary" | "regular";
+  wide?: boolean;
 }
 
 export const homeSections: readonly HomeSection[] = [
   {
-    title: "Deze week",
-    description: "De plek voor je actieve week en slimme suggesties.",
-    href: "/lijst",
-    icon: "week",
+    title: "Producten",
+    description: "Bekijk echte producten en actuele prijsinformatie.",
+    href: "/producten",
+    icon: "products",
     emphasis: "primary",
   },
   {
-    title: "Mijn boodschappen",
-    description: "Je actieve lijst komt hier centraal te staan.",
-    href: "/lijst",
-    icon: "list",
-  },
-  {
     title: "Budget",
-    description: "Ondersteunende budgetinformatie volgt later.",
-    href: "/meer",
+    description: "Bereid je weekbudget voor en houd straks overzicht.",
+    href: "/budget",
     icon: "budget",
   },
   {
-    title: "Producten",
-    description: "Zoeken in de bestaande Supabase-catalogus volgt later.",
-    href: "/producten",
-    icon: "products",
-  },
-  {
-    title: "Weekvoorbereiding",
-    description: "Menu en recepten blijven een bron voor je lijst.",
-    href: "/meer",
+    title: "Week voorbereiden",
+    description: "Bereid je boodschappenweek rustig en slim voor.",
+    href: "/week-voorbereiden",
     icon: "prepare",
+    emphasis: "primary",
+    wide: true,
   },
 ] as const;
