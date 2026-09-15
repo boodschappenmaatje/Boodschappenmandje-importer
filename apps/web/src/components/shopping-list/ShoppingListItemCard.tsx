@@ -16,6 +16,24 @@ function imageStyle(imageUrl: string | null): CSSProperties | undefined {
     : undefined;
 }
 
+function normalizedCopy(value: string): string {
+  return value.trim().toLocaleLowerCase("nl-NL").replace(/\s+/g, " ");
+}
+
+export function shoppingListItemDescription(item: ShoppingListItem): string {
+  const normalizedName = normalizedCopy(item.name);
+  return [item.brand, item.packageText]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .filter((value) => !normalizedName.includes(normalizedCopy(value)))
+    .join(" · ");
+}
+
+export function shoppingListUsedInLabel(usedIn: string[]): string | null {
+  if (usedIn.length === 0) return null;
+  if (usedIn.length === 1) return `Voor: ${usedIn[0]}`;
+  return `Voor ${usedIn.length} maaltijden`;
+}
+
 export function ShoppingListItemCard({
   item,
   onIncrease,
@@ -28,7 +46,8 @@ export function ShoppingListItemCard({
   onRemove: () => void;
 }) {
   const productImageStyle = imageStyle(item.imageUrl);
-  const description = [item.brand, item.packageText].filter(Boolean).join(" · ");
+  const description = shoppingListItemDescription(item);
+  const usedInLabel = shoppingListUsedInLabel(item.usedIn);
 
   return (
     <li className="shopping-item-card">
@@ -50,8 +69,11 @@ export function ShoppingListItemCard({
         {item.price ? (
           <div className="shopping-item-price">
             <strong>{euroFormatter.format(item.price.amount)}</strong>
+            {item.price.isOffer ? (
+              <span className="compact-offer-label">Actie</span>
+            ) : null}
             {item.price.freshness === "stale" ? (
-              <span>Laatst bekende prijs</span>
+              <span>Laatst bekend</span>
             ) : null}
           </div>
         ) : (
@@ -59,6 +81,7 @@ export function ShoppingListItemCard({
             Prijs tijdelijk niet beschikbaar
           </span>
         )}
+        {usedInLabel ? <p className="shopping-item-used-in">{usedInLabel}</p> : null}
       </div>
 
       <button

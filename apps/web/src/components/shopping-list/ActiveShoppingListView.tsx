@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
 import { ShoppingListItemCard } from "@/components/shopping-list/ShoppingListItemCard";
+import { ShoppingListProductSearch } from "@/components/shopping-list/ShoppingListProductSearch";
 import { ShoppingListTotalCard } from "@/components/shopping-list/ShoppingListTotalCard";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 
 export function ActiveShoppingListView() {
+  const [searchOpen, setSearchOpen] = useState(false);
   const {
     status,
     list,
@@ -64,8 +66,15 @@ export function ActiveShoppingListView() {
           <EmptyState icon="list" title="Je boodschappenlijst is nog leeg">
             Kies een product uit de catalogus om je lijst te beginnen.
           </EmptyState>
-          <Link className="primary-action" href="/producten">
-            Product toevoegen
+          <button
+            className="primary-action"
+            type="button"
+            onClick={() => setSearchOpen(true)}
+          >
+            Zoek en voeg product toe
+          </button>
+          <Link className="secondary-text-link" href="/producten">
+            Bekijk de volledige productcatalogus
           </Link>
         </section>
       ) : (
@@ -75,7 +84,14 @@ export function ActiveShoppingListView() {
               {list.items.length}{" "}
               {list.items.length === 1 ? "product" : "producten"}
             </h2>
-            <Link href="/producten">Product toevoegen</Link>
+            <button
+              className="shopping-list-search-action"
+              type="button"
+              onClick={() => setSearchOpen(true)}
+            >
+              <Icon name="plus" size={17} />
+              Zoek en voeg product toe
+            </button>
           </div>
 
           <ul className="shopping-items">
@@ -102,6 +118,11 @@ export function ActiveShoppingListView() {
           </button>
         </div>
       ) : null}
+
+      <ShoppingListProductSearch
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
     </>
   );
 }
