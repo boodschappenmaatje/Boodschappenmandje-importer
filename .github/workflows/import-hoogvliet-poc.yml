@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - catalog
+          - growth
           - prices
           - classify
       catalog_batch:
@@ -22,6 +23,20 @@ on:
           - fresh
           - world
           - pantry
+          - growth
+      growth_limit:
+        description: Veilige limiet voor catalogusgroei (test eerst met 10)
+        required: true
+        default: "10"
+        type: choice
+        options:
+          - "10"
+          - "400"
+      advance_discovery_state:
+        description: Discovery-cursor na deze run doorschuiven
+        required: true
+        default: true
+        type: boolean
       price_shard:
         description: Prijsdeelbatch (auto gebruikt de huidige weekdag)
         required: true
@@ -37,6 +52,10 @@ on:
           - "5"
           - "6"
   schedule:
+    # Dagelijks 06:00 Nederlandse tijd. GitHub cron is UTC; de twee mogelijke
+    # UTC-uren worden in de planstap tegen Europe/Amsterdam gecontroleerd.
+    - cron: "0 4 * * *"
+    - cron: "0 5 * * *"
     # Dagelijks 02:17 UTC: één van zeven vaste prijsdeelbatches.
     - cron: "17 2 * * *"
     # Zondag 03:43 UTC: één catalogusbatch; core/fresh/world/pantry rouleren.
@@ -52,7 +71,7 @@ concurrency:
 jobs:
   import:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 120
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -74,17 +93,40 @@ jobs:
         run: |
           set -euo pipefail
 
+          run_import="1"
+          import_trigger="manual"
+          advance_discovery_state="1"
+          discovery_state_key="daily-catalog-growth"
+
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            if [[ "${{ github.event.schedule }}" == "17 2 * * *" ]]; then
+            if [[ "${{ github.event.schedule }}" == "0 4 * * *" || "${{ github.event.schedule }}" == "0 5 * * *" ]]; then
+              local_hour="$(TZ=Europe/Amsterdam date +%H)"
+              if [[ "$local_hour" != "06" ]]; then
+                run_import="0"
+                update_mode="growth"
+                catalog_batch="growth"
+                price_shard="0"
+                max_products="400"
+                echo "DST-poort: deze UTC-run is lokaal ${local_hour}:00 en wordt veilig overgeslagen."
+              else
+                update_mode="growth"
+                catalog_batch="growth"
+                price_shard="0"
+                max_products="400"
+                import_trigger="schedule"
+              fi
+            elif [[ "${{ github.event.schedule }}" == "17 2 * * *" ]]; then
               update_mode="prices"
               catalog_batch="core"
               price_shard=$((10#$(date -u +%u) - 1))
+              max_products="100"
             elif [[ "${{ github.event.schedule }}" == "43 3 * * 0" ]]; then
               update_mode="catalog"
               batches=(core fresh world pantry)
               week=$((10#$(date -u +%V)))
               catalog_batch="${batches[$((week % ${#batches[@]}))]}"
               price_shard="0"
+              max_products="180"
             else
               echo "Onbekend automatisch updateschema" >&2
               exit 1
@@ -93,33 +135,49 @@ jobs:
             update_mode="${{ inputs.update_mode }}"
             catalog_batch="${{ inputs.catalog_batch }}"
             price_shard="${{ inputs.price_shard }}"
+            max_products="${{ inputs.growth_limit }}"
+            advance_discovery_state="${{ inputs.advance_discovery_state && '1' || '0' }}"
             if [[ "$price_shard" == "auto" ]]; then
               price_shard=$((10#$(date -u +%u) - 1))
+            fi
+            if [[ "$update_mode" == "growth" ]]; then
+              catalog_batch="growth"
             fi
           fi
 
           if [[ "$update_mode" == "prices" ]]; then
             max_products="100"
-          else
+          elif [[ "$update_mode" == "catalog" || "$update_mode" == "classify" ]]; then
             max_products="180"
           fi
 
+          if [[ "$update_mode" == "growth" && "$max_products" != "10" && "$max_products" != "400" ]]; then
+            echo "Ongeldige groeilimiet: $max_products" >&2
+            exit 1
+          fi
+
           {
+            echo "RUN_IMPORT=$run_import"
             echo "UPDATE_MODE=$update_mode"
             echo "CATALOG_BATCH=$catalog_batch"
             echo "PRICE_SHARD_COUNT=7"
             echo "PRICE_SHARD_INDEX=$price_shard"
             echo "PRICE_CYCLE_INDEX=$((10#$(date -u +%V) - 1))"
             echo "MAX_PRODUCTS=$max_products"
-            echo "MAX_NEW_PRODUCTS=100"
-            echo "MAX_PER_TERM=20"
-            echo "MAX_PAGES_PER_TERM=4"
-            echo "CATALOG_NEW_ONLY=1"
+            echo "MAX_NEW_PRODUCTS=$([[ "$update_mode" == "growth" ]] && echo "$max_products" || echo "100")"
+            echo "MAX_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "4" || echo "20")"
+            echo "MAX_PAGES_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "8" || echo "4")"
+            echo "CATALOG_NEW_ONLY=$([[ "$update_mode" == "growth" ]] && echo "0" || echo "1")"
+            echo "IMPORT_TRIGGER=$([[ "$update_mode" == "growth" && "$import_trigger" == "manual" ]] && echo "test" || echo "$import_trigger")"
+            echo "DISCOVERY_STATE_KEY=$discovery_state_key"
+            echo "ADVANCE_DISCOVERY_STATE=$advance_discovery_state"
+            echo "PREFER_NEW_PRODUCTS=$([[ "$update_mode" == "growth" && "$advance_discovery_state" == "0" ]] && echo "0" || echo "1")"
           } >> "$GITHUB_ENV"
 
           echo "Updateplan: mode=$update_mode, catalogusbatch=$catalog_batch, prijsdeelbatch=$price_shard/6"
 
       - name: Test Supabase verbinding
+        if: env.RUN_IMPORT != '0'
         run: |
           node -e "
             const base = process.env.SUPABASE_URL;
@@ -165,13 +223,17 @@ jobs:
           "
 
       - name: Dependencies installeren
+        if: env.RUN_IMPORT != '0'
         run: npm ci
 
       - name: Chromium installeren
+        if: env.RUN_IMPORT != '0'
         run: npx playwright install --with-deps chromium
 
       - name: Technische controles
+        if: env.RUN_IMPORT != '0'
         run: npm test
 
       - name: Producten en prijzen bijwerken
+        if: env.RUN_IMPORT != '0'
         run: npm run import

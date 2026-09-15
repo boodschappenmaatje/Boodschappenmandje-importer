@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.mjs";
+import { runCatalogGrowth } from "./catalog-growth.mjs";
 import { classifyProductType, productTypeCoverage } from "./product-type.mjs";
 import {
   collectProducts,
@@ -202,6 +203,13 @@ export async function main() {
   }
   if (config.updateMode === "prices") {
     await runPriceRefresh(config, logger, startedAt);
+    return;
+  }
+  if (config.updateMode === "growth") {
+    if (config.dryRun) {
+      throw new Error("Catalogusgroei met runregistratie ondersteunt geen DRY_RUN; gebruik catalog voor een bron-dry-run.");
+    }
+    await runCatalogGrowth(config, logger);
     return;
   }
   const existingSKUs = config.dryRun ? new Set() : await fetchExistingSKUs(config);

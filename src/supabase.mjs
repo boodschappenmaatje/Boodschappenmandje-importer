@@ -407,6 +407,151 @@ export async function hasProductTypeColumn(config) {
   }
 }
 
+const STALE_IMPORT_RUN_MS = 3 * 60 * 60 * 1000;
+
+function boundedCount(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.trunc(number) : 0;
+}
+
+function compactErrorSummary(value) {
+  if (typeof value !== "string") return null;
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact ? compact.slice(0, 1200) : null;
+}
+
+async function upsertImportRun(config, run) {
+  const rows = await postJSON(
+    config.supabaseURL,
+    "catalog_import_runs",
+    config.supabaseSecret,
+    [run],
+    "resolution=merge-duplicates,return=representation",
+    { on_conflict: "id", select: "*" },
+  );
+  if (!Array.isArray(rows) || rows[0]?.id !== run.id) {
+    throw new Error("Supabase bevestigde de catalogusrun niet.");
+  }
+  return rows[0];
+}
+
+export async function startCatalogImportRun(config, {
+  trigger,
+  totalUniqueProductsBefore,
+  now = new Date(),
+} = {}) {
+  const running = await getJSON(
+    config.supabaseURL,
+    "catalog_import_runs",
+    config.supabaseSecret,
+    { select: "*", status: "eq.running", order: "started_at.asc" },
+    0,
+    9,
+  );
+  for (const row of running) {
+    const started = Date.parse(row?.started_at ?? "");
+    if (Number.isFinite(started) && now.getTime() - started <= STALE_IMPORT_RUN_MS) {
+      throw new Error("Er draait al een catalogusgroeirun; een tweede run is veilig geweigerd.");
+    }
+    if (row?.id) {
+      await upsertImportRun(config, {
+        ...row,
+        status: "failed",
+        finished_at: now.toISOString(),
+        duration_seconds: Number.isFinite(started)
+          ? Number(((now.getTime() - started) / 1000).toFixed(3))
+          : 0,
+        error_summary: "Stale running-status gecontroleerd afgesloten vóór een nieuwe run.",
+      });
+    }
+  }
+
+  return upsertImportRun(config, {
+    id: crypto.randomUUID(),
+    started_at: now.toISOString(),
+    finished_at: null,
+    status: "running",
+    trigger,
+    processed_count: 0,
+    new_count: 0,
+    updated_count: 0,
+    unchanged_count: 0,
+    skipped_count: 0,
+    error_count: 0,
+    total_unique_products_before: boundedCount(totalUniqueProductsBefore),
+    total_unique_products_after: null,
+    duration_seconds: null,
+    error_summary: null,
+  });
+}
+
+export async function finishCatalogImportRun(config, run, result, now = new Date()) {
+  const started = Date.parse(run.started_at ?? "");
+  return upsertImportRun(config, {
+    ...run,
+    finished_at: now.toISOString(),
+    status: result.status,
+    processed_count: boundedCount(result.processedCount),
+    new_count: boundedCount(result.newCount),
+    updated_count: boundedCount(result.updatedCount),
+    unchanged_count: boundedCount(result.unchangedCount),
+    skipped_count: boundedCount(result.skippedCount),
+    error_count: boundedCount(result.errorCount),
+    total_unique_products_after: boundedCount(result.totalUniqueProductsAfter),
+    duration_seconds: Number.isFinite(started)
+      ? Number(((now.getTime() - started) / 1000).toFixed(3))
+      : 0,
+    error_summary: compactErrorSummary(result.errorSummary),
+  });
+}
+
+export async function fetchCatalogDiscoveryState(config, stateKey) {
+  const rows = await getJSON(
+    config.supabaseURL,
+    "catalog_discovery_state",
+    config.supabaseSecret,
+    { select: "state_key,term_cursor,page_cursor,last_batch,updated_at", state_key: `eq.${stateKey}` },
+    0,
+    0,
+  );
+  const row = rows[0];
+  return row ? {
+    stateKey: row.state_key,
+    termCursor: boundedCount(row.term_cursor),
+    pageCursor: boundedCount(row.page_cursor),
+    lastBatch: row.last_batch ?? null,
+    updatedAt: row.updated_at ?? null,
+  } : {
+    stateKey,
+    termCursor: 0,
+    pageCursor: 0,
+    lastBatch: null,
+    updatedAt: null,
+  };
+}
+
+export async function saveCatalogDiscoveryState(config, state) {
+  const payload = {
+    state_key: state.stateKey,
+    term_cursor: boundedCount(state.termCursor),
+    page_cursor: boundedCount(state.pageCursor),
+    last_batch: state.lastBatch ?? null,
+    updated_at: state.updatedAt ?? new Date().toISOString(),
+  };
+  const rows = await postJSON(
+    config.supabaseURL,
+    "catalog_discovery_state",
+    config.supabaseSecret,
+    [payload],
+    "resolution=merge-duplicates,return=representation",
+    { on_conflict: "state_key", select: "state_key,term_cursor,page_cursor,last_batch,updated_at" },
+  );
+  if (!Array.isArray(rows) || rows[0]?.state_key !== state.stateKey) {
+    throw new Error("Supabase bevestigde de discovery-state niet.");
+  }
+  return rows[0];
+}
+
 function productPayload(product, includeProductType = true) {
   const payload = {
     supermarket: product.supermarket ?? "Hoogvliet",
@@ -415,6 +560,8 @@ function productPayload(product, includeProductType = true) {
     package_text: product.packageText,
     source_url: product.sourceURL,
     updated_at: product.fetchedAt,
+    last_seen_at: product.fetchedAt,
+    missing_checks: 0,
   };
   if (product.brand != null) payload.brand = product.brand;
   if (product.category != null) payload.category = product.category;

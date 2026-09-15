@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { Icon } from "@/components/Icon";
 import { PageIntro } from "@/components/PageIntro";
@@ -12,6 +13,14 @@ export default function MorePage() {
         Aanvullende onderdelen krijgen hier een rustige, vaste plek.
       </PageIntro>
       <section className="more-list" aria-label="Meer onderdelen">
+        <Link className="more-item more-item-link" href="/meer/catalogusstatus">
+          <span className="more-icon"><Icon name="catalog" /></span>
+          <div>
+            <h2>Catalogusstatus</h2>
+            <p>Bekijk de laatste automatische Hoogvliet-update en catalogusgroei.</p>
+          </div>
+          <span className="more-arrow" aria-hidden="true">›</span>
+        </Link>
         {[
           ["history", "Geschiedenis", "Je afgeronde boodschappenrondes."],
           ["pantry", "Voorraad", "Wat je waarschijnlijk nog in huis hebt."],
