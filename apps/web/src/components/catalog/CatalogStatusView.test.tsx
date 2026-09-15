@@ -28,6 +28,7 @@ const status: CatalogStatus = {
     unchangedCount: 6,
     skippedCount: 0,
     errorCount: 0,
+    errorSummary: null,
     totalUniqueProductsBefore: 6_556,
     totalUniqueProductsAfter: 6_842,
     durationSeconds: 960,
@@ -54,6 +55,24 @@ describe("catalogusstatus", () => {
     }
   });
 
+  it("maakt bij partial onderscheid tussen bronproblemen en productfouten", () => {
+    const html = renderToStaticMarkup(createElement(CatalogStatusContent, {
+      status: {
+        ...status,
+        latestRun: {
+          ...status.latestRun!,
+          status: "partial",
+          errorCount: 0,
+          errorSummary: "2 zoektermfout(en)",
+        },
+      },
+    }));
+    expect(html).toContain("Productfouten");
+    expect(html).toContain("2 zoektermfout(en)");
+    expect(html).toContain("Alle verwerkte producten waren geldig");
+    expect(html).not.toContain("Import geslaagd");
+  });
+
   it("toont een nette eerste-runstatus zonder null of undefined", () => {
     const html = renderToStaticMarkup(createElement(CatalogStatusContent, {
       status: { ...status, latestRun: null },
@@ -68,9 +87,13 @@ describe("catalogusstatus", () => {
       id: "run-1", started_at: "2026-09-15T04:00:00Z", finished_at: null,
       status: "running", trigger: "test", processed_count: 10, new_count: 4,
       updated_count: 3, unchanged_count: 2, skipped_count: 1, error_count: 0,
+      error_summary: "1 zoektermfout(en)",
       total_unique_products_before: 100, total_unique_products_after: null,
       duration_seconds: null,
-    })).toMatchObject({ status: "running", processedCount: 10, newCount: 4 });
+    })).toMatchObject({
+      status: "running", processedCount: 10, newCount: 4,
+      errorSummary: "1 zoektermfout(en)",
+    });
     expect(mapCatalogImportRun({ status: "unknown" })).toBeNull();
   });
 
