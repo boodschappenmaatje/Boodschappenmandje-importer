@@ -6,13 +6,8 @@ export interface WeekSummary {
   expectedTotal?: number;
 }
 
-export interface ActiveShoppingListSummary {
-  itemCount: number;
-}
-
 export interface DashboardState {
   week: WeekSummary | null;
-  shoppingList: ActiveShoppingListSummary | null;
   suggestions: readonly string[];
 }
 
@@ -23,6 +18,5 @@ export interface DashboardState {
  */
 export const emptyDashboardState: DashboardState = {
   week: null,
-  shoppingList: null,
   suggestions: [],
 };

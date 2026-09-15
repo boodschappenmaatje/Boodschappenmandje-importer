@@ -6,7 +6,6 @@ describe("dashboard beginstatus", () => {
   it("bevat geen verzonnen week-, lijst- of suggestiedata", () => {
     expect(emptyDashboardState).toEqual({
       week: null,
-      shoppingList: null,
       suggestions: [],
     });
   });

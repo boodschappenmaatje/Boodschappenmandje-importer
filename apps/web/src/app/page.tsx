@@ -10,7 +10,7 @@ export default function HomePage() {
     <>
       <DashboardHeader />
       <WeekSummaryCard week={emptyDashboardState.week} />
-      <ShoppingListCard shoppingList={emptyDashboardState.shoppingList} />
+      <ShoppingListCard />
 
       <div className="section-heading compact-heading">
         <h2>Verder met je week</h2>

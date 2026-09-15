@@ -9,7 +9,7 @@ const serviceWorkerSource = readFileSync(
 );
 
 describe("PWA updatebeleid", () => {
-  it("houdt registrar en service-worker op dezelfde PWA 6-release", () => {
+  it("houdt registrar en service-worker op dezelfde PWA-release", () => {
     expect(serviceWorkerSource).toContain(
       `const CACHE_VERSION = "${SERVICE_WORKER_RELEASE}"`,
     );
