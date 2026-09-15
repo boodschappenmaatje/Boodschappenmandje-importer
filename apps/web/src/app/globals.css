@@ -663,6 +663,353 @@ button:focus-visible {
   text-align: right;
 }
 
+.week-home-status,
+.week-ready-label {
+  font-size: 0.84rem;
+}
+
+.week-ready-label {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eaf8f2;
+  color: #126b4b;
+  font-weight: 800;
+}
+
+.week-preparation-flow {
+  display: grid;
+  gap: 12px;
+}
+
+.week-preparation-flow h2,
+.week-preparation-flow p,
+.week-start-card h2,
+.week-start-card p,
+.week-storage-error h2,
+.week-storage-error p {
+  margin: 0;
+}
+
+.week-start-card,
+.week-storage-error,
+.prepared-week-overview,
+.current-list-context,
+.week-basics,
+.week-preferences,
+.week-distribution,
+.new-week-card {
+  gap: 14px;
+}
+
+.week-start-card h2,
+.week-storage-error h2,
+.week-basics h2,
+.week-preferences h2,
+.new-week-card h2 {
+  margin-top: 3px;
+  font-size: 1.05rem;
+}
+
+.week-start-card > p,
+.week-storage-error p,
+.prepared-week-lead,
+.week-budget-note,
+.week-required-note,
+.new-week-confirm p {
+  color: var(--color-muted);
+  font-size: 0.79rem;
+  line-height: 1.45;
+}
+
+.prepared-week-overview {
+  border-color: rgba(24, 137, 93, 0.2);
+  background: linear-gradient(145deg, #ffffff 25%, #effaf5 100%);
+}
+
+.prepared-week-overview .card-status {
+  background: #daf3e7;
+  color: #126b4b;
+}
+
+.prepared-days {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.prepared-days label {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 5px 6px 5px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: white;
+}
+
+.prepared-days label > span {
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.prepared-days select,
+.week-basic-fields select {
+  min-width: 0;
+  min-height: 44px;
+  padding-inline: 9px;
+  border: 1px solid rgba(8, 117, 225, 0.17);
+  border-radius: 10px;
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.week-next-step {
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  background: #eaf8f2;
+  color: #126b4b;
+}
+
+.week-next-step strong {
+  font-size: 0.82rem;
+}
+
+.week-next-step span {
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.current-list-context .dashboard-card-heading > strong {
+  color: var(--color-primary-strong);
+  font-size: 0.78rem;
+}
+
+.current-list-amount,
+.week-budget-space {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.current-list-amount span,
+.week-budget-space {
+  font-size: 0.78rem;
+}
+
+.current-list-amount strong {
+  color: var(--color-primary-strong);
+  font-size: 1.13rem;
+}
+
+.week-budget-space strong {
+  text-align: right;
+}
+
+.week-budget-warning {
+  padding: 10px 11px;
+  border-radius: 12px;
+  background: #fff7e8;
+  color: #7a5712;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.week-basic-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.week-basic-fields label,
+.week-budget-form {
+  display: grid;
+  gap: 6px;
+}
+
+.week-basic-fields label > span,
+.week-budget-form > label {
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.week-budget-form .budget-input-help,
+.week-budget-form .budget-input-error {
+  margin: 0;
+}
+
+.preference-list {
+  display: grid;
+  gap: 7px;
+}
+
+.preference-list label {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  min-height: 48px;
+  padding: 10px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 13px;
+  background: white;
+}
+
+.preference-list input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.preference-list label > span {
+  display: grid;
+  gap: 3px;
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+
+.preference-list small {
+  color: var(--color-muted);
+  font-size: 0.68rem;
+}
+
+.week-distribution .dashboard-card-heading > strong {
+  color: var(--color-primary-strong);
+}
+
+.category-steppers {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: white;
+}
+
+.category-stepper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding-left: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.category-stepper:last-child {
+  border-bottom: 0;
+}
+
+.category-stepper > span {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.category-stepper > div {
+  display: grid;
+  grid-template-columns: 44px 32px 44px;
+  place-items: center;
+}
+
+.category-stepper button {
+  width: 44px;
+  height: 47px;
+  border: 0;
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  cursor: pointer;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.category-stepper button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.category-stepper output {
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.distribution-progress {
+  display: grid;
+  gap: 7px;
+  color: var(--color-primary-strong);
+  font-size: 0.77rem;
+}
+
+.distribution-progress[data-state="over"] {
+  color: #9a4037;
+}
+
+.distribution-progress progress {
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 999px;
+  accent-color: var(--color-primary);
+}
+
+.week-distribution > .primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.new-week-card {
+  box-shadow: none;
+}
+
+.week-reset-button {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #8c3e35;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.new-week-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  border-radius: 13px;
+  background: #fff4f1;
+}
+
+.new-week-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.new-week-confirm button {
+  min-height: 44px;
+  padding-inline: 11px;
+  border: 0;
+  border-radius: 11px;
+  background: white;
+  color: var(--color-text);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.new-week-confirm button:first-child {
+  background: #9a4037;
+  color: white;
+}
+
 .more-list {
   display: grid;
   gap: 10px;

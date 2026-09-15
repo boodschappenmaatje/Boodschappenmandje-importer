@@ -8,6 +8,7 @@ import BudgetPage from "@/app/budget/page";
 import ListPage from "@/app/lijst/page";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
+import { WeekPreparationProvider } from "@/features/week-preparation/WeekPreparationProvider";
 import {
   addCatalogProduct,
   createEmptyActiveShoppingList,
@@ -74,7 +75,15 @@ function render(
     createElement(
       ActiveShoppingListProvider,
       { initialList: list },
-      createElement(BudgetProvider, { initialSettings: settings }, component),
+      createElement(
+        BudgetProvider,
+        { initialSettings: settings },
+        createElement(
+          WeekPreparationProvider,
+          { initialPreparation: null },
+          component,
+        ),
+      ),
     ),
   );
 }

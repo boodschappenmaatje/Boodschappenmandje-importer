@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";
+import { WeekPreparationProvider } from "@/features/week-preparation/WeekPreparationProvider";
 import { DEFAULT_BUDGET_SETTINGS } from "@/services/budget/budget-settings-storage";
 import {
   addCatalogProduct,
@@ -43,7 +44,11 @@ function renderWithList(component: ReturnType<typeof createElement>, withProduct
       createElement(
         BudgetProvider,
         { initialSettings: DEFAULT_BUDGET_SETTINGS },
-        component,
+        createElement(
+          WeekPreparationProvider,
+          { initialPreparation: null },
+          component,
+        ),
       ),
     ),
   );
@@ -54,7 +59,7 @@ describe("dashboard rendering", () => {
     const html = renderWithList(createElement(HomePage));
 
     expect(html).toContain("Deze week");
-    expect(html).toContain("Je hebt nog geen boodschappenweek gestart");
+    expect(html).toContain("Nog geen week voorbereid");
     expect(html).toContain("Mijn boodschappen");
     expect(html).toContain("Nog geen actieve boodschappenlijst");
     expect(html).toContain('href="/producten"');

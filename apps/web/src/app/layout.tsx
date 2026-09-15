@@ -6,6 +6,7 @@ import { PwaRegistrar } from "@/components/PwaRegistrar";
 import { appConfig } from "@/config/app";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
+import { WeekPreparationProvider } from "@/features/week-preparation/WeekPreparationProvider";
 
 import "./globals.css";
 
@@ -44,7 +45,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <body>
         <ActiveShoppingListProvider>
           <BudgetProvider>
-            <AppShell>{children}</AppShell>
+            <WeekPreparationProvider>
+              <AppShell>{children}</AppShell>
+            </WeekPreparationProvider>
           </BudgetProvider>
         </ActiveShoppingListProvider>
         <PwaRegistrar />

@@ -5,10 +5,11 @@ import {
   type ShoppingListItemSource,
   type ShoppingListPriceReference,
 } from "@/types/shopping-list";
+import {
+  SHOPPING_LIST_STORE_NAME,
+  openBoodschappenmaatjeDatabase,
+} from "@/services/storage/indexeddb";
 
-const DATABASE_NAME = "boodschappenmaatje";
-const DATABASE_VERSION = 1;
-const STORE_NAME = "shopping-lists";
 const ACTIVE_LIST_KEY = "active";
 
 interface StoredActiveShoppingListV1 {
@@ -156,26 +157,21 @@ function transactionComplete(
 export class IndexedDbShoppingListStorage implements ShoppingListStorage {
   constructor(private readonly factory: IDBFactory) {}
 
-  private openDatabase(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      const request = this.factory.open(DATABASE_NAME, DATABASE_VERSION);
-      request.onupgradeneeded = () => {
-        const database = request.result;
-        if (!database.objectStoreNames.contains(STORE_NAME)) {
-          database.createObjectStore(STORE_NAME, { keyPath: "key" });
-        }
-      };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(new ShoppingListStorageError("open-failed"));
-      request.onblocked = () => reject(new ShoppingListStorageError("open-failed"));
-    });
+  private async openDatabase(): Promise<IDBDatabase> {
+    try {
+      return await openBoodschappenmaatjeDatabase(this.factory);
+    } catch {
+      throw new ShoppingListStorageError("open-failed");
+    }
   }
 
   async load(): Promise<ActiveShoppingList | null> {
     const database = await this.openDatabase();
     try {
-      const transaction = database.transaction(STORE_NAME, "readonly");
-      const request = transaction.objectStore(STORE_NAME).get(ACTIVE_LIST_KEY);
+      const transaction = database.transaction(SHOPPING_LIST_STORE_NAME, "readonly");
+      const request = transaction
+        .objectStore(SHOPPING_LIST_STORE_NAME)
+        .get(ACTIVE_LIST_KEY);
       const [stored] = await Promise.all([
         requestResult<unknown>(request, "read-failed"),
         transactionComplete(transaction, "read-failed"),
@@ -189,8 +185,10 @@ export class IndexedDbShoppingListStorage implements ShoppingListStorage {
   async save(list: ActiveShoppingList): Promise<void> {
     const database = await this.openDatabase();
     try {
-      const transaction = database.transaction(STORE_NAME, "readwrite");
-      transaction.objectStore(STORE_NAME).put(encodeStoredActiveShoppingList(list));
+      const transaction = database.transaction(SHOPPING_LIST_STORE_NAME, "readwrite");
+      transaction
+        .objectStore(SHOPPING_LIST_STORE_NAME)
+        .put(encodeStoredActiveShoppingList(list));
       await transactionComplete(transaction, "write-failed");
     } finally {
       database.close();
