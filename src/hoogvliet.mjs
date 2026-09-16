@@ -252,6 +252,7 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
   const startPage = Math.max(0, Math.trunc(options.startPage ?? 0));
   let sourceExhausted = false;
   let lastPageNumber = startPage;
+  let firstPageAliasSkipped = false;
 
   for (let pageOffset = 0; pageOffset < maxPages; pageOffset += 1) {
     const pageNumber = startPage + pageOffset;
@@ -266,6 +267,13 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
 
     const signature = pageCandidates.map((candidate) => candidate?.sku ?? "-").join("|");
     if (seenPageSignatures.has(signature)) {
+      // Sommige Intershop-varianten behandelen PageNumber=0 en 1 allebei als
+      // de eerste pagina. Probeer dan één keer pagina 2 voordat discovery de
+      // term als werkelijk herhaald/uitgeput markeert.
+      if (startPage === 0 && pageNumber === 1 && !firstPageAliasSkipped) {
+        firstPageAliasSkipped = true;
+        continue;
+      }
       repeatedPageStopped = true;
       sourceExhausted = true;
       break;
@@ -295,6 +303,7 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
     irrelevantCandidates,
     duplicateCandidates,
     repeatedPageStopped,
+    firstPageAliasSkipped,
     sourceExhausted,
     nextPage: sourceExhausted ? 0 : lastPageNumber + 1,
   };

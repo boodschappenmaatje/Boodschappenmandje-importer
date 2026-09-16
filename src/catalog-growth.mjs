@@ -20,6 +20,54 @@ function cents(value) {
     : null;
 }
 
+const DISCOVERY_TOKEN_STOPWORDS = new Set([
+  "hoogvliet", "gwoon", "biologisch", "original", "naturel", "classic", "fresh",
+  "voor", "met", "zonder", "extra", "mini", "maxi", "klein", "groot",
+]);
+
+function discoveryKey(value) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function buildDynamicDiscoveryTerms(existingProducts, configuredTerms, limit = 450) {
+  const seen = new Set((configuredTerms ?? []).map(discoveryKey).filter(Boolean));
+  const result = [];
+  const add = (value) => {
+    const term = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+    const key = discoveryKey(term);
+    if (!key || seen.has(key) || result.length >= limit) return;
+    seen.add(key);
+    result.push(term);
+  };
+
+  for (const product of existingProducts ?? []) add(product.brand);
+  for (const product of existingProducts ?? []) add(product.category);
+  for (const product of existingProducts ?? []) add(product.productType);
+
+  // Eenlettertermen zijn een veilige laatste vangrail: de centrale
+  // relevantiegate accepteert alleen producten met een woord dat met die
+  // letter begint. Zo ontstaat brede discovery zonder willekeurige resultaten.
+  for (const letter of "abcdefghijklmnopqrstuvwxyz") add(letter);
+
+  const tokenFrequency = new Map();
+  for (const product of existingProducts ?? []) {
+    const tokens = discoveryKey(product.name).split(" ");
+    for (const token of tokens) {
+      if (token.length < 4 || DISCOVERY_TOKEN_STOPWORDS.has(token) || /^\d+$/.test(token)) continue;
+      tokenFrequency.set(token, (tokenFrequency.get(token) ?? 0) + 1);
+    }
+  }
+  for (const [token] of [...tokenFrequency].sort((left, right) => (
+    right[1] - left[1] || left[0].localeCompare(right[0], "nl")
+  ))) add(token);
+  return result;
+}
+
 export function rotateDiscoveryTerms(terms, cursor = 0) {
   if (!Array.isArray(terms) || terms.length === 0) return [];
   const offset = Math.max(0, Math.trunc(cursor)) % terms.length;
@@ -186,7 +234,8 @@ export async function runCatalogGrowth(config, logger = console) {
 
   try {
     const discoveryState = await fetchCatalogDiscoveryState(config, config.discoveryStateKey);
-    const originalTerms = [...config.searchTerms];
+    const dynamicTerms = buildDynamicDiscoveryTerms(existingProducts, config.searchTerms);
+    const originalTerms = [...config.searchTerms, ...dynamicTerms];
     const rotatedTerms = rotateDiscoveryTerms(originalTerms, discoveryState.termCursor);
     const prioritizedTerms = prioritizeDiscoveryTerms(rotatedTerms, discoveryState);
     const growthConfig = {
@@ -197,7 +246,8 @@ export async function runCatalogGrowth(config, logger = console) {
     logger.info(
       `Catalogusgroei gestart: modus=${catalogGrowthMode(totalUniqueProductsBefore)}, `
         + `cursor=${discoveryState.termCursor}, doel=${growthConfig.maxNewProducts} werkelijk nieuwe producten, `
-        + `veiligheidsgrens=${growthConfig.growthMaxCandidates} kandidaten.`,
+        + `veiligheidsgrens=${growthConfig.growthMaxCandidates} kandidaten, `
+        + `dynamische_termen=${dynamicTerms.length}.`,
     );
 
     const imported = [];

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
+  buildDynamicDiscoveryTerms,
   catalogGrowthMode,
   classifyCatalogOutcomes,
   formatCatalogGrowthSummary,
@@ -237,9 +238,25 @@ test("herhaalde resultaatpagina stopt begrensd en voorkomt een paginalus", async
     sourceURL: "https://www.hoogvliet.com/product/111111111",
   }];
   const result = await collectCandidatePages(async () => page, "cola", 8);
-  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.pagesFetched, 3);
   assert.equal(result.repeatedPageStopped, true);
+  assert.equal(result.firstPageAliasSkipped, true);
   assert.equal(result.candidates.length, 1);
+});
+
+test("PageNumber 0/1-alias blokkeert een echte tweede resultaatpagina niet", async () => {
+  const candidate = (sku, name) => ({
+    sku, name, category: "Frisdrank", sourceURL: `https://www.hoogvliet.com/product/${sku}`,
+  });
+  const first = [candidate("111111111", "Cola Original")];
+  const second = [candidate("222222222", "Cola Zero")];
+  const result = await collectCandidatePages(async (pageNumber) => (
+    pageNumber <= 1 ? first : pageNumber === 2 ? second : []
+  ), "cola", 5);
+  assert.equal(result.firstPageAliasSkipped, true);
+  assert.equal(result.repeatedPageStopped, false);
+  assert.equal(result.pagesFetched, 4);
+  assert.deepEqual(result.candidates.map(({ sku }) => sku), ["111111111", "222222222"]);
 });
 
 test("dezelfde SKU uit twee zoektermen wordt maar eenmaal geclaimd", () => {
@@ -1205,6 +1222,21 @@ test("discovery-state roteert deterministisch en ondersteunt een identieke testr
   assert.equal(nextDiscoveryCursor(2, 2, terms.length), 0);
   assert.deepEqual(rotateDiscoveryTerms(terms, 2), rotateDiscoveryTerms(terms, 2));
   assert.equal(loadConfig({ DRY_RUN: "1", PREFER_NEW_PRODUCTS: "0" }).preferNewProducts, false);
+});
+
+test("toekomstige catalogusgroei leidt nieuwe zoektermen af uit echte merk- en productmetadata", () => {
+  const terms = buildDynamicDiscoveryTerms([
+    { brand: "Nieuw Merk", category: "Wereldkeuken", productType: "Maaltijdmix", name: "Nieuw Merk Thaise curry" },
+    { brand: "Nieuw Merk", category: "Wereldkeuken", productType: "Maaltijdmix", name: "Nieuw Merk Groene curry" },
+    { brand: "Ander Merk", category: "Koek", productType: "Koek", name: "Ander Merk Haverkoek" },
+  ], ["maaltijdmix", "koek"]);
+  assert.ok(terms.includes("Nieuw Merk"));
+  assert.ok(terms.includes("Ander Merk"));
+  assert.ok(terms.includes("Wereldkeuken"));
+  assert.ok(terms.includes("a"));
+  assert.ok(terms.includes("curry"));
+  assert.equal(new Set(terms.map((term) => term.toLowerCase())).size, terms.length);
+  assert.equal(terms.includes("Maaltijdmix"), false, "reeds ingestelde termen worden niet herhaald");
 });
 
 test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compatibel in Supabase", async () => {
