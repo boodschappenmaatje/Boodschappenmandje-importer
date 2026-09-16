@@ -7,7 +7,9 @@ import {
   classifyCatalogOutcomes,
   formatCatalogGrowthSummary,
   importRunStatus,
+  mergeDiscoveryMetrics,
   nextDiscoveryCursor,
+  prioritizeDiscoveryTerms,
   productChanged,
   rotateDiscoveryTerms,
 } from "../src/catalog-growth.mjs";
@@ -21,6 +23,8 @@ import {
   claimCandidateSKU,
   describePriceUpdate,
   filterDiscoveryCandidates,
+  finalizeTermDiscoveryStats,
+  growthStopReason,
   isReliableCatalogProduct,
   isOfferPeriodActive,
   isSafeEmptyDiscovery,
@@ -34,6 +38,7 @@ import {
   searchURL,
   selectPriceShard,
   selectPriceShardWindow,
+  withTransientNavigationRetry,
   resolvedProductTypeForRefresh,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
@@ -41,7 +46,8 @@ import {
   formatBatchSummary, formatClassificationSummary, formatPriceRefreshSummary, formatTermCoverage, safeLogger,
 } from "../src/importer.mjs";
 import {
-  fetchExistingPriceStates, fetchExistingProducts, fetchExistingSKUs, hasProductTypeColumn, requestHeaders, restURL,
+  fetchCatalogDiscoveryState, fetchExistingPriceStates, fetchExistingProducts, fetchExistingSKUs,
+  hasProductTypeColumn, requestHeaders, restURL, saveCatalogDiscoveryState,
   upsertProductClassifications, upsertProducts,
 } from "../src/supabase.mjs";
 
@@ -115,6 +121,21 @@ test("paginering en catalogusfocus zijn configureerbaar en hard begrensd", () =>
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PAGES_PER_TERM: "999" }).maxPagesPerTerm, 8);
   assert.equal(limits.defaultMaxPagesPerTerm, 1);
   assert.equal(limits.safePagesPerTermLimit, 8);
+});
+
+test("growth heeft een apart ruim discoverybudget zonder het nieuwe-productdoel te verlagen", () => {
+  const config = loadConfig({
+    DRY_RUN: "1", UPDATE_MODE: "growth", MAX_PRODUCTS: "10", MAX_NEW_PRODUCTS: "400",
+    GROWTH_MAX_CANDIDATES: "6000", GROWTH_MAX_PAGES_PER_TERM: "20",
+    GROWTH_MAX_TOTAL_PAGES: "800", GROWTH_MAX_RUNTIME_MINUTES: "105",
+  });
+  assert.equal(config.maxProducts, 10);
+  assert.equal(config.maxNewProducts, 400);
+  assert.equal(config.growthMaxCandidates, 6000);
+  assert.equal(config.growthMaxPagesPerTerm, 20);
+  assert.equal(config.growthMaxTotalPages, 800);
+  assert.equal(config.growthMaxRuntimeMs, 105 * 60_000);
+  assert.equal(config.navigationRetries, 2);
 });
 
 test("prijsvenstercyclus is configureerbaar zonder de zeven SKU-shards te wijzigen", () => {
@@ -270,6 +291,97 @@ test("bestaande SKU telt niet mee voor MAX_NEW_PRODUCTS en nieuwe SKU wel", () =
   assert.deepEqual(stats, { existingProducts: 1, newProducts: 1 });
   assert.equal(catalogLimitReached(stats, { maxProducts: 180, maxNewProducts: 1 }, 2), true);
   assert.deepEqual(termStats, { existing: 1, new: 1 });
+});
+
+test("scenario A: 400 bestaande kandidaten stoppen een growth-run niet", () => {
+  const config = {
+    updateMode: "growth", maxProducts: 400, maxNewProducts: 400,
+    growthMaxCandidates: 6000, growthMaxTotalPages: 800, growthMaxRuntimeMs: 105 * 60_000,
+  };
+  const stats = {
+    processedProducts: 400, uniqueSKUsDiscovered: 400, pagesFetched: 10,
+    newProducts: 0, persistedNewProducts: 0, persistedTargetActive: true,
+  };
+  assert.equal(catalogLimitReached(stats, config, 400, 1_000, 0), false);
+  assert.equal(growthStopReason(stats, config, 400, 1_000, 0), null);
+});
+
+test("scenario B: 400 bestaand plus 400 werkelijk nieuw stopt exact op het growth-doel", () => {
+  const config = {
+    updateMode: "growth", maxProducts: 400, maxNewProducts: 400,
+    growthMaxCandidates: 6000, growthMaxTotalPages: 800, growthMaxRuntimeMs: 105 * 60_000,
+  };
+  const stats = {
+    processedProducts: 400, uniqueSKUsDiscovered: 800, pagesFetched: 20,
+    newProducts: 400, persistedNewProducts: 400, persistedTargetActive: true,
+  };
+  assert.equal(catalogLimitReached(stats, config, 400, 1_000, 0), true);
+  assert.equal(growthStopReason(stats, config, 400, 1_000, 0), "growth_target_reached");
+});
+
+test("scenario C: veel dubbele kandidaten leveren 400 unieke nieuwe SKU's", () => {
+  const existing = new Set(Array.from({ length: 400 }, (_, index) => `E${index}`));
+  const newSKUs = Array.from({ length: 400 }, (_, index) => `N${index}`);
+  const candidates = [
+    ...existing,
+    ...newSKUs,
+    ...newSKUs,
+  ].map((sku) => ({ sku }));
+  const observed = new Set();
+  const filtered = filterDiscoveryCandidates(candidates, existing, observed);
+  const claimed = new Set();
+  const stats = { duplicateSKUsSkipped: 0, uniqueSKUs: 0 };
+  const uniqueNew = filtered.candidates.filter((candidate) => claimCandidateSKU(candidate, claimed, stats));
+  assert.equal(uniqueNew.length, 400);
+  assert.equal(new Set(uniqueNew.map(({ sku }) => sku)).size, 400);
+  assert.equal(stats.duplicateSKUsSkipped, 400);
+});
+
+test("scenario D: ERR_ABORTED krijgt twee retries en een volgende poging kan slagen", async () => {
+  let attempts = 0;
+  const retries = [];
+  const result = await withTransientNavigationRetry(async () => {
+    attempts += 1;
+    if (attempts < 3) throw new Error("page.goto: net::ERR_ABORTED");
+    return "gevonden";
+  }, {
+    maxRetries: 2,
+    onRetry: (_error, attempt) => retries.push(attempt),
+    wait: async () => {},
+  });
+  assert.equal(result, "gevonden");
+  assert.equal(attempts, 3);
+  assert.deepEqual(retries, [1, 2]);
+});
+
+test("scenario E: een verzadigde term schuift tijdelijk achter productieve termen", () => {
+  const saturated = finalizeTermDiscoveryStats({ candidates: 40, new: 1 }, {
+    saturationMinCandidates: 40, saturationYieldThreshold: 0.05,
+  });
+  assert.equal(saturated.discoveryYield, 0.025);
+  assert.equal(saturated.saturated, true);
+  const now = new Date("2026-09-16T12:00:00Z");
+  const state = mergeDiscoveryMetrics({}, { pasta: saturated }, now);
+  const prioritized = prioritizeDiscoveryTerms(["pasta", "fruit"], state, now);
+  assert.deepEqual(prioritized, ["fruit", "pasta"]);
+  assert.deepEqual(prioritizeDiscoveryTerms(["pasta", "fruit"], {
+    ...state, lastTerm: "pasta", pageCursor: 3,
+  }, now), ["pasta", "fruit"], "een halve zoekterm hervat eerst op de opgeslagen pagina");
+  assert.deepEqual(prioritizeDiscoveryTerms(["pasta", "fruit"], {
+    ...state, lastTerm: "pasta", pageCursor: 0, lastStopReason: "growth_target_reached",
+  }, now), ["pasta", "fruit"], "ook pagina nul hervat wanneer het doel midden in die term viel");
+});
+
+test("scenario F: safety limits geven een concrete stopreden vóór uitputting", () => {
+  const config = {
+    updateMode: "growth", maxProducts: 400, maxNewProducts: 400,
+    growthMaxCandidates: 1200, growthMaxTotalPages: 800, growthMaxRuntimeMs: 105 * 60_000,
+  };
+  const stats = {
+    uniqueSKUsDiscovered: 1200, pagesFetched: 50, newProducts: 327,
+    persistedNewProducts: 327, persistedTargetActive: true,
+  };
+  assert.equal(growthStopReason(stats, config, 327, 1_000, 0), "candidate_safety_limit");
 });
 
 test("automatische discovery selecteert alleen nieuwe SKU's en een identieke tweede run is een veilige no-op", () => {
@@ -1041,9 +1153,14 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
   assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
-  assert.match(workflow, /MAX_PER_TERM=.*"4".*"20"/);
+  assert.match(workflow, /MAX_PER_TERM=.*"40".*"20"/);
   assert.match(workflow, /MAX_PAGES_PER_TERM=.*"8".*"4"/);
-  assert.match(workflow, /CATALOG_NEW_ONLY=.*"0".*"1"/);
+  assert.match(workflow, /GROWTH_MAX_PAGES_PER_TERM=20/);
+  assert.match(workflow, /GROWTH_MAX_TOTAL_PAGES=800/);
+  assert.match(workflow, /GROWTH_MAX_CANDIDATES=6000/);
+  assert.match(workflow, /GROWTH_MAX_RUNTIME_MINUTES=105/);
+  assert.match(workflow, /NAVIGATION_RETRIES=2/);
+  assert.match(workflow, /CATALOG_NEW_ONLY=1/);
   assert.match(workflow, /batches=\(core fresh world pantry\)/);
   assert.match(workflow, /PRICE_CYCLE_INDEX=\$\(\(10#\$\(date -u \+%V\) - 1\)\)/);
   assert.match(workflow, /- classify/);
@@ -1062,10 +1179,11 @@ test("dagelijkse bewakingsworkflow controleert de 06:00-run DST-veilig na afloop
   assert.match(workflow, /local_hour.*!= "08"/s);
   assert.match(workflow, /npm run monitor:catalog/);
   assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
+  assert.match(workflow, /CATALOG_MONITOR_GROWTH_TARGET: "400"/);
   assert.doesNotMatch(workflow, /NEXT_PUBLIC_|continue-on-error:\s*true/);
 });
 
-test("groeiconfiguratie is begrensd op maximaal 400 productverwerkingen", () => {
+test("groeiconfiguratie gebruikt 400 als doel voor werkelijk nieuwe producten", () => {
   const config = loadConfig({
     DRY_RUN: "1",
     UPDATE_MODE: "growth",
@@ -1087,6 +1205,45 @@ test("discovery-state roteert deterministisch en ondersteunt een identieke testr
   assert.equal(nextDiscoveryCursor(2, 2, terms.length), 0);
   assert.deepEqual(rotateDiscoveryTerms(terms, 2), rotateDiscoveryTerms(terms, 2));
   assert.equal(loadConfig({ DRY_RUN: "1", PREFER_NEW_PRODUCTS: "0" }).preferNewProducts, false);
+});
+
+test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compatibel in Supabase", async () => {
+  const originalFetch = globalThis.fetch;
+  let storedPayload;
+  const config = {
+    supabaseURL: "https://voorbeeld.supabase.co",
+    supabaseSecret: ["sb", "secret", "test"].join("_"),
+  };
+  globalThis.fetch = async (_url, options) => {
+    if (options.method === "GET") {
+      return new Response(JSON.stringify([{
+        state_key: "daily-growth", term_cursor: 7, page_cursor: 3,
+        last_batch: JSON.stringify({
+          version: 2, batch: "growth", lastTerm: "pasta",
+          lastStopReason: "growth_target_reached",
+          termStats: { pasta: { candidates: 80, newProducts: 25, discoveryYield: 0.3125 } },
+          saturatedUntil: { fruit: "2026-09-19T12:00:00.000Z" },
+        }),
+        updated_at: "2026-09-16T12:00:00.000Z",
+      }]), { status: 200 });
+    }
+    storedPayload = JSON.parse(options.body)[0];
+    return new Response(JSON.stringify([storedPayload]), { status: 200 });
+  };
+  try {
+    const state = await fetchCatalogDiscoveryState(config, "daily-growth");
+    assert.equal(state.termCursor, 7);
+    assert.equal(state.pageCursor, 3);
+    assert.equal(state.lastTerm, "pasta");
+    assert.equal(state.termStats.pasta.discoveryYield, 0.3125);
+    await saveCatalogDiscoveryState(config, state);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  const persistedMetadata = JSON.parse(storedPayload.last_batch);
+  assert.equal(persistedMetadata.version, 2);
+  assert.equal(persistedMetadata.lastTerm, "pasta");
+  assert.equal(persistedMetadata.saturatedUntil.fruit, "2026-09-19T12:00:00.000Z");
 });
 
 test("catalogusmodus verschuift pas nabij het indicatieve catalogusdoel", () => {
@@ -1134,10 +1291,18 @@ test("nieuwe SKU, partial/failed status en runstatistieken blijven expliciet", (
   });
   assert.equal(importRunStatus({ errorCount: 0, searchErrors: 0 }), "success");
   assert.equal(importRunStatus({ errorCount: 1, searchErrors: 0 }), "partial");
+  assert.equal(importRunStatus({
+    errorCount: 2, searchErrors: 1, actualGrowth: 400, targetNewProducts: 400,
+  }), "success", "niet-kritieke zoekfouten maken behaalde catalogusgroei niet functioneel mislukt");
+  assert.equal(importRunStatus({
+    errorCount: 0, searchErrors: 0, actualGrowth: 327, targetNewProducts: 400,
+  }), "partial");
   assert.match(formatCatalogGrowthSummary({
-    ...result, status: "partial", totalUniqueProductsBefore: 10,
-    totalUniqueProductsAfter: 11, durationSeconds: 4.2,
-  }), /verwerkt=3.*nieuw=1.*totaal_voor=10.*totaal_na=11/);
+    ...result, status: "partial", growthStatus: "partial_growth_target_not_reached",
+    targetNewProducts: 400, totalUniqueProductsBefore: 10,
+    totalUniqueProductsAfter: 11, actualGrowth: 1, candidatesViewed: 1200,
+    searchedTerms: 12, searchErrors: 1, stopReason: "discovery_exhausted", durationSeconds: 4.2,
+  }), /target_nieuw=400.*verwerkt=3.*nieuw=1.*kandidaten_bekeken=1200.*totaal_voor=10.*totaal_na=11.*werkelijke_groei=1/);
 });
 
 test("dagelijkse bewaking accepteert alleen een recente geslaagde schedule-run", () => {
@@ -1148,6 +1313,9 @@ test("dagelijkse bewaking accepteert alleen een recente geslaagde schedule-run",
     status: "success",
     trigger: "schedule",
     processed_count: 400,
+    new_count: 400,
+    total_unique_products_before: 1163,
+    total_unique_products_after: 1563,
     error_count: 0,
     error_summary: null,
   };
@@ -1155,13 +1323,19 @@ test("dagelijkse bewaking accepteert alleen een recente geslaagde schedule-run",
     evaluateCatalogMonitor([baseRun], { now, maxAgeHours: 6 }),
     {
       ok: true, state: "healthy",
-      message: "Dagelijkse catalogusrun geslaagd: 400 verwerkt.",
+      message: "Dagelijkse catalogusgroei geslaagd: 400 nieuwe producten toegevoegd.",
       run: baseRun,
     },
   );
   assert.equal(evaluateCatalogMonitor([
-    { ...baseRun, status: "partial", error_summary: "2 zoektermfout(en)" },
-  ], { now }).state, "partial");
+    {
+      ...baseRun, status: "partial", new_count: 327, total_unique_products_after: 1490,
+      error_summary: "partial_growth_target_not_reached",
+    },
+  ], { now }).state, "partial_growth_target_not_reached");
+  assert.equal(evaluateCatalogMonitor([
+    { ...baseRun, status: "success", total_unique_products_after: 1562 },
+  ], { now }).state, "partial_growth_target_not_reached", "verwerkt=400 is geen bewijs voor +400 groei");
   assert.equal(evaluateCatalogMonitor([
     { ...baseRun, status: "failed" },
   ], { now }).state, "failed");

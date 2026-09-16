@@ -165,9 +165,16 @@ jobs:
             echo "PRICE_CYCLE_INDEX=$((10#$(date -u +%V) - 1))"
             echo "MAX_PRODUCTS=$max_products"
             echo "MAX_NEW_PRODUCTS=$([[ "$update_mode" == "growth" ]] && echo "$max_products" || echo "100")"
-            echo "MAX_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "4" || echo "20")"
+            echo "MAX_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "40" || echo "20")"
             echo "MAX_PAGES_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "8" || echo "4")"
-            echo "CATALOG_NEW_ONLY=$([[ "$update_mode" == "growth" ]] && echo "0" || echo "1")"
+            echo "GROWTH_MAX_PAGES_PER_TERM=20"
+            echo "GROWTH_MAX_TOTAL_PAGES=800"
+            echo "GROWTH_MAX_CANDIDATES=6000"
+            echo "GROWTH_MAX_RUNTIME_MINUTES=105"
+            echo "NAVIGATION_RETRIES=2"
+            echo "SATURATION_MIN_CANDIDATES=40"
+            echo "SATURATION_YIELD_PERCENT=5"
+            echo "CATALOG_NEW_ONLY=1"
             echo "IMPORT_TRIGGER=$([[ "$update_mode" == "growth" && "$import_trigger" == "manual" ]] && echo "test" || echo "$import_trigger")"
             echo "DISCOVERY_STATE_KEY=$discovery_state_key"
             echo "ADVANCE_DISCOVERY_STATE=$advance_discovery_state"
@@ -237,6 +244,16 @@ jobs:
       - name: Producten en prijzen bijwerken
         if: env.RUN_IMPORT != '0'
         run: npm run import
+
+      - name: Catalogusgroei samenvatten
+        if: always() && env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'growth'
+        run: |
+          {
+            echo '## Catalogusgroei'
+            echo "Doel: ${MAX_NEW_PRODUCTS} daadwerkelijk nieuwe unieke producten."
+            echo 'De importer valideert dit met het verschil tussen de Supabase-aantallen vóór en na de run.'
+            echo 'Bestaande en bijgewerkte SKU’s tellen niet mee voor dit groeidoel.'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Geplande catalogusrun direct controleren
         if: env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'growth' && env.IMPORT_TRIGGER == 'schedule'

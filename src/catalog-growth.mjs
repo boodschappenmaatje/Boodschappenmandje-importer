@@ -31,6 +31,53 @@ export function nextDiscoveryCursor(cursor, searchedTerms, termCount) {
   return (Math.max(0, Math.trunc(cursor)) + Math.max(1, Math.trunc(searchedTerms))) % termCount;
 }
 
+export function prioritizeDiscoveryTerms(terms, discoveryState, now = new Date()) {
+  const termStats = discoveryState?.termStats ?? {};
+  const saturatedUntil = discoveryState?.saturatedUntil ?? {};
+  const nowMs = now.getTime();
+  const prioritized = terms
+    .map((term, index) => ({
+      term,
+      index,
+      yield: Number(termStats[term]?.discoveryYield) || 0,
+      saturated: Date.parse(saturatedUntil[term] ?? "") > nowMs,
+    }))
+    .sort((left, right) => (
+      Number(left.saturated) - Number(right.saturated)
+      || right.yield - left.yield
+      || left.index - right.index
+    ))
+    .map(({ term }) => term);
+  const resumePreviousTerm = (discoveryState?.pageCursor ?? 0) > 0
+    || (discoveryState?.lastStopReason
+      && discoveryState.lastStopReason !== "discovery_exhausted");
+  if (resumePreviousTerm && terms.includes(discoveryState?.lastTerm)) {
+    return [discoveryState.lastTerm, ...prioritized.filter((term) => term !== discoveryState.lastTerm)];
+  }
+  return prioritized;
+}
+
+export function mergeDiscoveryMetrics(discoveryState, termCoverage, now = new Date()) {
+  const termStats = { ...(discoveryState?.termStats ?? {}) };
+  const saturatedUntil = { ...(discoveryState?.saturatedUntil ?? {}) };
+  for (const [term, coverage] of Object.entries(termCoverage ?? {})) {
+    termStats[term] = {
+      candidates: coverage.candidates ?? 0,
+      newProducts: coverage.new ?? 0,
+      existingProducts: coverage.existingSkipped ?? coverage.existing ?? 0,
+      errors: coverage.errors ?? 0,
+      discoveryYield: Number((coverage.discoveryYield ?? 0).toFixed(4)),
+      updatedAt: now.toISOString(),
+    };
+    if (coverage.saturated) {
+      saturatedUntil[term] = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000).toISOString();
+    } else {
+      delete saturatedUntil[term];
+    }
+  }
+  return { termStats, saturatedUntil };
+}
+
 export function catalogGrowthMode(totalUniqueProducts) {
   const total = Math.max(0, Number(totalUniqueProducts) || 0);
   if (total >= 10_000) return "maintenance";
@@ -88,7 +135,15 @@ export function classifyCatalogOutcomes({
   return { processedCount, newCount, updatedCount, unchangedCount, skippedCount, errorCount };
 }
 
-export function importRunStatus({ errorCount, searchErrors = 0 }) {
+export function importRunStatus({
+  errorCount,
+  searchErrors = 0,
+  actualGrowth = null,
+  targetNewProducts = null,
+} = {}) {
+  if (Number.isFinite(actualGrowth) && Number.isFinite(targetNewProducts)) {
+    return actualGrowth >= targetNewProducts ? "success" : "partial";
+  }
   return errorCount > 0 || searchErrors > 0 ? "partial" : "success";
 }
 
@@ -96,14 +151,21 @@ export function formatCatalogGrowthSummary(result) {
   return [
     "Catalogusgroei",
     `status=${result.status}`,
+    `groeistatus=${result.growthStatus}`,
+    `target_nieuw=${result.targetNewProducts}`,
     `verwerkt=${result.processedCount}`,
     `nieuw=${result.newCount}`,
     `bijgewerkt=${result.updatedCount}`,
     `ongewijzigd=${result.unchangedCount}`,
     `overgeslagen=${result.skippedCount}`,
     `fouten=${result.errorCount}`,
+    `kandidaten_bekeken=${result.candidatesViewed}`,
+    `zoektermen=${result.searchedTerms}`,
+    `zoektermfouten=${result.searchErrors}`,
     `totaal_voor=${result.totalUniqueProductsBefore}`,
     `totaal_na=${result.totalUniqueProductsAfter}`,
+    `werkelijke_groei=${result.actualGrowth}`,
+    `stopreden=${result.stopReason}`,
     `duur=${result.durationSeconds.toFixed(1)}s`,
   ].join(" | ");
 }
@@ -126,14 +188,16 @@ export async function runCatalogGrowth(config, logger = console) {
     const discoveryState = await fetchCatalogDiscoveryState(config, config.discoveryStateKey);
     const originalTerms = [...config.searchTerms];
     const rotatedTerms = rotateDiscoveryTerms(originalTerms, discoveryState.termCursor);
+    const prioritizedTerms = prioritizeDiscoveryTerms(rotatedTerms, discoveryState);
     const growthConfig = {
       ...config,
-      searchTerms: rotatedTerms,
-      catalogNewOnly: false,
+      searchTerms: prioritizedTerms,
+      catalogNewOnly: true,
     };
     logger.info(
       `Catalogusgroei gestart: modus=${catalogGrowthMode(totalUniqueProductsBefore)}, `
-        + `cursor=${discoveryState.termCursor}, limiet=${growthConfig.maxProducts}.`,
+        + `cursor=${discoveryState.termCursor}, doel=${growthConfig.maxNewProducts} werkelijk nieuwe producten, `
+        + `veiligheidsgrens=${growthConfig.growthMaxCandidates} kandidaten.`,
     );
 
     const imported = [];
@@ -142,11 +206,15 @@ export async function runCatalogGrowth(config, logger = console) {
       imported.push(...result.imported);
       writeErrors.push(...result.errors);
       logger.info(`Catalogusgroei tussentijds opgeslagen: ${imported.length}.`);
+      return {
+        newProducts: result.imported.filter((product) => !existingSKUs.has(product.sku)).length,
+      };
     };
     const collected = await collectProducts(growthConfig, logger, {
       existingSKUs,
       onBatch: persistBatch,
       persistBatchSize: 10,
+      initialPageCursor: discoveryState.pageCursor,
     });
     stats = collected.stats;
     const importedSKUs = new Set(imported.map((product) => product.sku));
@@ -159,30 +227,59 @@ export async function runCatalogGrowth(config, logger = console) {
       writeErrors: writeErrors.length,
     });
     const totalUniqueProductsAfter = (await fetchExistingSKUs(config)).size;
+    const actualGrowth = Math.max(0, totalUniqueProductsAfter - totalUniqueProductsBefore);
     const searchErrors = stats.searchErrors ?? 0;
+    const targetReached = actualGrowth >= config.maxNewProducts;
+    const growthStatus = targetReached
+      ? (searchErrors > 0 || counts.errorCount > 0
+        ? "partial_but_growth_target_reached"
+        : "growth_target_reached")
+      : "partial_growth_target_not_reached";
     const result = {
       ...counts,
-      status: importRunStatus({ errorCount: counts.errorCount, searchErrors }),
+      processedCount: stats.processedProducts ?? counts.processedCount,
+      newCount: actualGrowth,
+      status: importRunStatus({
+        errorCount: counts.errorCount,
+        searchErrors,
+        actualGrowth,
+        targetNewProducts: config.maxNewProducts,
+      }),
+      growthStatus,
+      targetNewProducts: config.maxNewProducts,
+      targetReached,
       totalUniqueProductsBefore,
       totalUniqueProductsAfter,
+      actualGrowth,
+      candidatesViewed: stats.uniqueSKUsDiscovered ?? 0,
+      searchedTerms: stats.searchedTerms ?? 0,
+      searchErrors,
+      stopReason: stats.stopReason ?? "discovery_exhausted",
       durationSeconds: (Date.now() - startedAt) / 1000,
       errorSummary: [
+        growthStatus,
         searchErrors ? `${searchErrors} zoektermfout(en)` : null,
         writeErrors.length ? `${writeErrors.length} schrijffout(en)` : null,
+        !targetReached ? `stopreden=${stats.stopReason ?? "discovery_exhausted"}` : null,
       ].filter(Boolean).join("; ") || null,
     };
     await finishCatalogImportRun(config, run, result);
 
     if (config.advanceDiscoveryState) {
+      const metrics = mergeDiscoveryMetrics(discoveryState, stats.termCoverage);
+      const lastOriginalIndex = originalTerms.indexOf(stats.lastSearchedTerm);
+      const resumeCurrentTerm = result.stopReason !== "discovery_exhausted"
+        && lastOriginalIndex >= 0;
       await saveCatalogDiscoveryState(config, {
         ...discoveryState,
-        termCursor: nextDiscoveryCursor(
-          discoveryState.termCursor,
-          stats.searchedTerms ?? 0,
-          originalTerms.length,
-        ),
-        pageCursor: 0,
+        termCursor: lastOriginalIndex < 0
+          ? nextDiscoveryCursor(discoveryState.termCursor, stats.searchedTerms ?? 0, originalTerms.length)
+          : (lastOriginalIndex + (resumeCurrentTerm ? 0 : 1)) % originalTerms.length,
+        pageCursor: stats.nextPageCursor ?? 0,
         lastBatch: config.catalogBatch,
+        lastTerm: stats.lastSearchedTerm,
+        lastStopReason: result.stopReason,
+        ...metrics,
         updatedAt: new Date().toISOString(),
       });
     }
@@ -192,16 +289,18 @@ export async function runCatalogGrowth(config, logger = console) {
     const totalUniqueProductsAfter = await fetchExistingSKUs(config)
       .then((skus) => skus.size)
       .catch(() => totalUniqueProductsBefore);
+    const actualGrowth = Math.max(0, totalUniqueProductsAfter - totalUniqueProductsBefore);
     await finishCatalogImportRun(config, run, {
-      status: "failed",
+      status: actualGrowth > 0 ? "partial" : "failed",
       processedCount: stats.processedProducts ?? 0,
-      newCount: 0,
+      newCount: actualGrowth,
       updatedCount: 0,
       unchangedCount: 0,
       skippedCount: stats.invalidProductsSkipped ?? 0,
       errorCount: Math.max(1, (stats.productErrors ?? 0) + writeErrors.length),
       totalUniqueProductsAfter,
-      errorSummary: error instanceof Error ? error.message : "Onbekende importfout",
+      errorSummary: `partial_growth_target_not_reached; werkelijke_groei=${actualGrowth}; `
+        + (error instanceof Error ? error.message : "Onbekende importfout"),
     }).catch((finishError) => {
       logger.error(`Runstatus kon niet worden afgesloten: ${finishError instanceof Error ? finishError.message : "onbekend"}`);
     });

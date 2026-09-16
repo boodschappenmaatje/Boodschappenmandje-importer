@@ -23,6 +23,7 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       CATALOG_MONITOR_MAX_AGE_HOURS: "6"
+      CATALOG_MONITOR_GROWTH_TARGET: "400"
 
     steps:
       - name: Bewakingsmoment bepalen
@@ -67,4 +68,3 @@ jobs:
             echo 'GitHub kan daarop een Actions-melding/e-mail sturen volgens de persoonlijke notificatie-instellingen.'
             echo 'De bestaande catalogus blijft bij iedere waarschuwing beschikbaar.'
           } >> "$GITHUB_STEP_SUMMARY"
-

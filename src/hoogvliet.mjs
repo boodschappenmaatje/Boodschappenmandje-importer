@@ -239,7 +239,7 @@ function normalizeCandidate(candidate) {
     : null;
 }
 
-export async function collectCandidatePages(fetchPage, term, maxPages) {
+export async function collectCandidatePages(fetchPage, term, maxPages, options = {}) {
   const candidates = [];
   const seenSKUs = new Set();
   const seenPageSignatures = new Set();
@@ -249,15 +249,25 @@ export async function collectCandidatePages(fetchPage, term, maxPages) {
   let pagesFetched = 0;
   let repeatedPageStopped = false;
 
-  for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
+  const startPage = Math.max(0, Math.trunc(options.startPage ?? 0));
+  let sourceExhausted = false;
+  let lastPageNumber = startPage;
+
+  for (let pageOffset = 0; pageOffset < maxPages; pageOffset += 1) {
+    const pageNumber = startPage + pageOffset;
     const pageCandidates = await fetchPage(pageNumber);
     pagesFetched += 1;
-    if (!Array.isArray(pageCandidates) || pageCandidates.length === 0) break;
+    lastPageNumber = pageNumber;
+    if (!Array.isArray(pageCandidates) || pageCandidates.length === 0) {
+      sourceExhausted = true;
+      break;
+    }
     rawCandidates += pageCandidates.length;
 
     const signature = pageCandidates.map((candidate) => candidate?.sku ?? "-").join("|");
     if (seenPageSignatures.has(signature)) {
       repeatedPageStopped = true;
+      sourceExhausted = true;
       break;
     }
     seenPageSignatures.add(signature);
@@ -285,17 +295,46 @@ export async function collectCandidatePages(fetchPage, term, maxPages) {
     irrelevantCandidates,
     duplicateCandidates,
     repeatedPageStopped,
+    sourceExhausted,
+    nextPage: sourceExhausted ? 0 : lastPageNumber + 1,
   };
 }
 
-async function findCandidates(page, term, maxPages) {
-  return collectCandidatePages(async (pageNumber) => {
-    let candidates = await searchOnce(page, term, pageNumber);
-    if (pageNumber === 0 && candidates.length === 0) {
-      candidates = await searchUsingVisibleForm(page, term);
+export function isTransientNavigationError(error) {
+  const value = `${error?.name ?? ""} ${error?.code ?? ""} ${error?.message ?? ""}`.toUpperCase();
+  return /ERR_ABORTED|TIMEOUT|TIMEDOUT|NAVIGATION.*FAILED|FRAME.*DETACHED|CONNECTION.*RESET/.test(value);
+}
+
+export async function withTransientNavigationRetry(operation, {
+  maxRetries = 2,
+  onRetry = null,
+  wait = (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)),
+} = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation(attempt + 1);
+    } catch (error) {
+      if (!isTransientNavigationError(error) || attempt >= maxRetries) throw error;
+      if (typeof onRetry === "function") onRetry(error, attempt + 1);
+      await wait(350 * (attempt + 1));
     }
-    return candidates;
-  }, term, maxPages);
+  }
+}
+
+async function findCandidates(page, term, maxPages, options = {}) {
+  return collectCandidatePages(async (pageNumber) => {
+    return withTransientNavigationRetry(async () => {
+      let candidates = await searchOnce(page, term, pageNumber);
+      if (pageNumber === 0 && candidates.length === 0) {
+        candidates = await searchUsingVisibleForm(page, term);
+      }
+      return candidates;
+    }, {
+      maxRetries: options.navigationRetries ?? 2,
+      onRetry: options.onRetry,
+      wait: async (delayMs) => page.waitForTimeout(delayMs),
+    });
+  }, term, maxPages, { startPage: options.startPage ?? 0 });
 }
 
 async function extractProductDetails(page) {
@@ -426,11 +465,41 @@ export function recordCatalogProduct(sku, existingSKUs, stats, termStats = null)
   return "new";
 }
 
-export function catalogLimitReached(stats, config, totalProducts) {
+function growthNewCount(stats) {
+  return stats.persistedTargetActive
+    ? (stats.persistedNewProducts ?? 0)
+    : (stats.newProducts ?? 0);
+}
+
+export function growthStopReason(stats, config, totalProducts, nowMs = Date.now(), startedAtMs = nowMs) {
+  if (growthNewCount(stats) >= config.maxNewProducts) return "growth_target_reached";
+  if ((stats.uniqueSKUsDiscovered ?? 0) >= config.growthMaxCandidates) return "candidate_safety_limit";
+  if ((stats.pagesFetched ?? 0) >= config.growthMaxTotalPages) return "page_safety_limit";
+  if (nowMs - startedAtMs >= config.growthMaxRuntimeMs) return "runtime_safety_limit";
+  if (config.updateMode !== "growth" && totalProducts >= config.maxProducts) return "product_limit";
+  return null;
+}
+
+export function catalogLimitReached(stats, config, totalProducts, nowMs = Date.now(), startedAtMs = nowMs) {
+  if (config.updateMode === "growth") {
+    return growthStopReason(stats, config, totalProducts, nowMs, startedAtMs) !== null;
+  }
   const processedProducts = Number.isFinite(stats.processedProducts)
     ? stats.processedProducts
     : totalProducts;
   return processedProducts >= config.maxProducts || stats.newProducts >= config.maxNewProducts;
+}
+
+export function finalizeTermDiscoveryStats(termStats, config) {
+  const viewed = Math.max(0, termStats.candidates ?? 0);
+  const discovered = Math.max(0, termStats.new ?? 0);
+  const discoveryYield = viewed > 0 ? discovered / viewed : 0;
+  return {
+    ...termStats,
+    discoveryYield,
+    saturated: viewed >= config.saturationMinCandidates
+      && discoveryYield < config.saturationYieldThreshold,
+  };
 }
 
 export function filterDiscoveryCandidates(candidates, existingSKUs, observedExistingSKUs) {
@@ -602,6 +671,9 @@ export async function collectProducts(config, logger = console, options = {}) {
   const observedExistingSKUs = new Set();
   const observedCatalogSKUs = new Set();
   const observedNewSKUs = new Set();
+  const growthMode = config.updateMode === "growth";
+  const initialPageCursor = Math.max(0, Math.trunc(options.initialPageCursor ?? 0));
+  let resumePageCursor = initialPageCursor;
   const stats = {
     configuredSearchTerms: config.searchTerms.length,
     searchedTerms: 0,
@@ -618,24 +690,55 @@ export async function collectProducts(config, logger = console, options = {}) {
     processedProducts: 0,
     existingProducts: 0,
     newProducts: 0,
+    persistedNewProducts: 0,
+    persistedTargetActive: Boolean(growthMode && onBatch),
     unknownProductTypes: 0,
     validatedProducts: 0,
     duplicateSKUsSkipped: 0,
     invalidProductsSkipped: 0,
     productErrors: 0,
     searchErrors: 0,
+    searchRetries: 0,
+    stopReason: null,
+    lastSearchedTerm: null,
+    nextPageCursor: initialPageCursor,
+    completedTerms: 0,
     termCoverage: {},
     durationMs: 0,
   };
 
+  const persistPendingProducts = async () => {
+    if (!onBatch || pendingPersistence.length === 0) return;
+    const batch = pendingPersistence.splice(0, pendingPersistence.length);
+    const feedback = await onBatch(batch);
+    const persistedNew = Number(feedback?.newProducts);
+    if (Number.isFinite(persistedNew) && persistedNew > 0) {
+      stats.persistedNewProducts += Math.trunc(persistedNew);
+    }
+  };
+
   try {
-    await searchPage.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
+    await withTransientNavigationRetry(
+      () => searchPage.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+      {
+        maxRetries: config.navigationRetries,
+        onRetry: (error, attempt) => {
+          stats.searchRetries += 1;
+          logger.info(`Startpagina opnieuw proberen (${attempt}/${config.navigationRetries}): ${error.message}`);
+        },
+        wait: async (delayMs) => searchPage.waitForTimeout(delayMs),
+      },
+    );
     await acceptCookiesIfShown(searchPage);
 
     for (const term of config.searchTerms) {
-      if (catalogLimitReached(stats, config, chosen.length)) break;
+      stats.stopReason = growthMode
+        ? growthStopReason(stats, config, chosen.length, Date.now(), startedAt)
+        : null;
+      if (catalogLimitReached(stats, config, chosen.length, Date.now(), startedAt)) break;
       logger.info(`Zoeken: ${term}`);
       stats.searchedTerms += 1;
+      stats.lastSearchedTerm = term;
       const termStats = {
         candidates: 0,
         rawCandidates: 0,
@@ -649,11 +752,32 @@ export async function collectProducts(config, logger = console, options = {}) {
         new: 0,
         skipped: 0,
         errors: 0,
+        sourceExhausted: false,
       };
       stats.termCoverage[term] = termStats;
       let candidates;
+      const termStartPage = resumePageCursor;
       try {
-        const pageResult = await findCandidates(searchPage, term, config.maxPagesPerTerm);
+        const remainingGrowthPages = growthMode
+          ? Math.max(0, config.growthMaxTotalPages - stats.pagesFetched)
+          : config.maxPagesPerTerm;
+        const requestedPages = growthMode
+          ? Math.min(config.growthMaxPagesPerTerm, remainingGrowthPages)
+          : config.maxPagesPerTerm;
+        if (requestedPages === 0) {
+          stats.stopReason = "page_safety_limit";
+          break;
+        }
+        const pageResult = await findCandidates(searchPage, term, requestedPages, {
+          startPage: resumePageCursor,
+          navigationRetries: config.navigationRetries,
+          onRetry: (error, attempt) => {
+            stats.searchRetries += 1;
+            logger.info(`Zoekterm opnieuw proberen (${term}, ${attempt}/${config.navigationRetries}): ${error.message}`);
+          },
+        });
+        resumePageCursor = 0;
+        stats.nextPageCursor = pageResult.nextPage;
         candidates = config.preferNewProducts === false
           ? pageResult.candidates
           : prioritizeCandidates(pageResult.candidates, existingSKUs);
@@ -674,7 +798,8 @@ export async function collectProducts(config, logger = console, options = {}) {
         termStats.pages = pageResult.pagesFetched;
         termStats.irrelevant = pageResult.irrelevantCandidates;
         termStats.duplicates += pageResult.duplicateCandidates;
-        if (config.catalogNewOnly) {
+        termStats.sourceExhausted = pageResult.sourceExhausted;
+        if (config.catalogNewOnly || growthMode) {
           const discovery = filterDiscoveryCandidates(
             candidates,
             existingSKUs,
@@ -689,13 +814,21 @@ export async function collectProducts(config, logger = console, options = {}) {
         if (error instanceof SourceBlockedError) throw error;
         stats.searchErrors += 1;
         termStats.errors += 1;
+        resumePageCursor = 0;
+        stats.nextPageCursor = 0;
+        stats.completedTerms += 1;
+        stats.termCoverage[term] = finalizeTermDiscoveryStats(termStats, config);
         logger.error(`Zoekterm overgeslagen (${term}): ${error instanceof Error ? error.message : "onbekende fout"}`);
         continue;
       }
       let acceptedForTerm = 0;
 
       for (const candidate of candidates) {
-        if (catalogLimitReached(stats, config, chosen.length) || acceptedForTerm >= config.maxPerTerm) break;
+        stats.stopReason = growthMode
+          ? growthStopReason(stats, config, chosen.length, Date.now(), startedAt)
+          : null;
+        if (catalogLimitReached(stats, config, chosen.length, Date.now(), startedAt)
+          || acceptedForTerm >= config.maxPerTerm) break;
         if (!claimCandidateSKU(candidate, attemptedSKUs, stats, termStats)) continue;
         stats.processedProducts += 1;
         let product;
@@ -723,17 +856,35 @@ export async function collectProducts(config, logger = console, options = {}) {
         recordCatalogProduct(product.sku, existingSKUs, stats, termStats);
         logger.info(`Gevalideerd: ${product.sku} | ${product.name} | €${product.price.toFixed(2)}`);
         if (onBatch && pendingPersistence.length >= persistBatchSize) {
-          await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
+          await persistPendingProducts();
         }
         await detailPage.waitForTimeout(250);
       }
+      stats.termCoverage[term] = finalizeTermDiscoveryStats(termStats, config);
+      const reachedLimit = catalogLimitReached(
+        stats,
+        config,
+        chosen.length,
+        Date.now(),
+        startedAt,
+      );
+      if (!reachedLimit) {
+        stats.completedTerms += 1;
+        stats.nextPageCursor = 0;
+      } else {
+        stats.nextPageCursor = termStartPage;
+      }
     }
     if (onBatch && pendingPersistence.length > 0) {
-      await onBatch(pendingPersistence.splice(0, pendingPersistence.length));
+      await persistPendingProducts();
     }
   } finally {
     await context.close();
     await browser.close();
+  }
+  if (growthMode && !stats.stopReason) {
+    stats.stopReason = growthStopReason(stats, config, chosen.length, Date.now(), startedAt)
+      ?? "discovery_exhausted";
   }
 
   if (chosen.length === 0 && !isSafeEmptyDiscovery(config, stats, attemptedSKUs.size)) {

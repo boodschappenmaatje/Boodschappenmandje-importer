@@ -535,27 +535,50 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     0,
   );
   const row = rows[0];
+  let metadata = {};
+  if (typeof row?.last_batch === "string" && row.last_batch.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(row.last_batch);
+      if (parsed?.version === 2) metadata = parsed;
+    } catch {}
+  }
   return row ? {
     stateKey: row.state_key,
     termCursor: boundedCount(row.term_cursor),
     pageCursor: boundedCount(row.page_cursor),
-    lastBatch: row.last_batch ?? null,
+    lastBatch: metadata.batch ?? row.last_batch ?? null,
+    lastTerm: metadata.lastTerm ?? null,
+    lastStopReason: metadata.lastStopReason ?? null,
+    termStats: metadata.termStats ?? {},
+    saturatedUntil: metadata.saturatedUntil ?? {},
     updatedAt: row.updated_at ?? null,
   } : {
     stateKey,
     termCursor: 0,
     pageCursor: 0,
     lastBatch: null,
+    lastTerm: null,
+    lastStopReason: null,
+    termStats: {},
+    saturatedUntil: {},
     updatedAt: null,
   };
 }
 
 export async function saveCatalogDiscoveryState(config, state) {
+  const lastBatch = JSON.stringify({
+    version: 2,
+    batch: state.lastBatch ?? null,
+    lastTerm: state.lastTerm ?? null,
+    lastStopReason: state.lastStopReason ?? null,
+    termStats: state.termStats ?? {},
+    saturatedUntil: state.saturatedUntil ?? {},
+  });
   const payload = {
     state_key: state.stateKey,
     term_cursor: boundedCount(state.termCursor),
     page_cursor: boundedCount(state.pageCursor),
-    last_batch: state.lastBatch ?? null,
+    last_batch: lastBatch,
     updated_at: state.updatedAt ?? new Date().toISOString(),
   };
   const rows = await postJSON(

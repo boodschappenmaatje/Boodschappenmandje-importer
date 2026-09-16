@@ -57,6 +57,18 @@ const DEFAULT_MAX_PER_TERM = 2;
 const SAFE_PER_TERM_LIMIT = 40;
 const DEFAULT_MAX_PAGES_PER_TERM = 1;
 const SAFE_PAGES_PER_TERM_LIMIT = 8;
+const DEFAULT_GROWTH_MAX_CANDIDATES = 5_000;
+const SAFE_GROWTH_MAX_CANDIDATES = 10_000;
+const DEFAULT_GROWTH_MAX_PAGES_PER_TERM = 20;
+const SAFE_GROWTH_MAX_PAGES_PER_TERM = 40;
+const DEFAULT_GROWTH_MAX_TOTAL_PAGES = 800;
+const SAFE_GROWTH_MAX_TOTAL_PAGES = 1_500;
+const DEFAULT_GROWTH_MAX_RUNTIME_MINUTES = 105;
+const SAFE_GROWTH_MAX_RUNTIME_MINUTES = 110;
+const DEFAULT_NAVIGATION_RETRIES = 2;
+const SAFE_NAVIGATION_RETRIES = 4;
+const DEFAULT_SATURATION_MIN_CANDIDATES = 40;
+const DEFAULT_SATURATION_YIELD_PERCENT = 5;
 const DEFAULT_PRICE_SHARD_COUNT = 7;
 const SAFE_PRICE_SHARD_COUNT = 31;
 
@@ -98,7 +110,7 @@ export function loadConfig(env = process.env) {
   );
   const maxNewProducts = Math.min(
     positiveInteger(env.MAX_NEW_PRODUCTS, DEFAULT_MAX_NEW_PRODUCTS),
-    maxProducts,
+    updateMode === "growth" ? SAFE_NEW_PRODUCT_LIMIT : maxProducts,
     SAFE_NEW_PRODUCT_LIMIT,
   );
   const priceShardCount = Math.min(
@@ -127,6 +139,34 @@ export function loadConfig(env = process.env) {
     maxPagesPerTerm: Math.min(
       positiveInteger(env.MAX_PAGES_PER_TERM, DEFAULT_MAX_PAGES_PER_TERM),
       SAFE_PAGES_PER_TERM_LIMIT,
+    ),
+    growthMaxCandidates: Math.min(
+      positiveInteger(env.GROWTH_MAX_CANDIDATES, DEFAULT_GROWTH_MAX_CANDIDATES),
+      SAFE_GROWTH_MAX_CANDIDATES,
+    ),
+    growthMaxPagesPerTerm: Math.min(
+      positiveInteger(env.GROWTH_MAX_PAGES_PER_TERM, DEFAULT_GROWTH_MAX_PAGES_PER_TERM),
+      SAFE_GROWTH_MAX_PAGES_PER_TERM,
+    ),
+    growthMaxTotalPages: Math.min(
+      positiveInteger(env.GROWTH_MAX_TOTAL_PAGES, DEFAULT_GROWTH_MAX_TOTAL_PAGES),
+      SAFE_GROWTH_MAX_TOTAL_PAGES,
+    ),
+    growthMaxRuntimeMs: Math.min(
+      positiveInteger(env.GROWTH_MAX_RUNTIME_MINUTES, DEFAULT_GROWTH_MAX_RUNTIME_MINUTES),
+      SAFE_GROWTH_MAX_RUNTIME_MINUTES,
+    ) * 60_000,
+    navigationRetries: Math.min(
+      nonNegativeInteger(env.NAVIGATION_RETRIES, DEFAULT_NAVIGATION_RETRIES),
+      SAFE_NAVIGATION_RETRIES,
+    ),
+    saturationMinCandidates: positiveInteger(
+      env.SATURATION_MIN_CANDIDATES,
+      DEFAULT_SATURATION_MIN_CANDIDATES,
+    ),
+    saturationYieldThreshold: Math.min(
+      1,
+      positiveInteger(env.SATURATION_YIELD_PERCENT, DEFAULT_SATURATION_YIELD_PERCENT) / 100,
     ),
     catalogNewOnly: env.CATALOG_NEW_ONLY === "1" || env.CATALOG_NEW_ONLY === "true",
     searchTerms,
@@ -166,6 +206,16 @@ export const limits = Object.freeze({
   safePerTermLimit: SAFE_PER_TERM_LIMIT,
   defaultMaxPagesPerTerm: DEFAULT_MAX_PAGES_PER_TERM,
   safePagesPerTermLimit: SAFE_PAGES_PER_TERM_LIMIT,
+  defaultGrowthMaxCandidates: DEFAULT_GROWTH_MAX_CANDIDATES,
+  safeGrowthMaxCandidates: SAFE_GROWTH_MAX_CANDIDATES,
+  defaultGrowthMaxPagesPerTerm: DEFAULT_GROWTH_MAX_PAGES_PER_TERM,
+  safeGrowthMaxPagesPerTerm: SAFE_GROWTH_MAX_PAGES_PER_TERM,
+  defaultGrowthMaxTotalPages: DEFAULT_GROWTH_MAX_TOTAL_PAGES,
+  safeGrowthMaxTotalPages: SAFE_GROWTH_MAX_TOTAL_PAGES,
+  defaultGrowthMaxRuntimeMinutes: DEFAULT_GROWTH_MAX_RUNTIME_MINUTES,
+  safeGrowthMaxRuntimeMinutes: SAFE_GROWTH_MAX_RUNTIME_MINUTES,
+  defaultNavigationRetries: DEFAULT_NAVIGATION_RETRIES,
+  safeNavigationRetries: SAFE_NAVIGATION_RETRIES,
   defaultPriceShardCount: DEFAULT_PRICE_SHARD_COUNT,
   safePriceShardCount: SAFE_PRICE_SHARD_COUNT,
 });
