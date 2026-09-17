@@ -28,6 +28,7 @@ import {
 import {
   calculateDishCostSummary,
   calculateWeekBudgetSummary,
+  dayReadinessIssueCount,
 } from "@/services/week-preparation/week-generation";
 import {
   MEAL_CATEGORIES,
@@ -131,6 +132,26 @@ export function WeekPreparationView() {
   const weekBudget = shoppingList.list
     ? calculateWeekBudgetSummary(preparation, shoppingList.list)
     : null;
+  const incompleteDayIndexes = new Set(
+    preparation.days
+      .filter((day) => {
+        if (day.freeChoice) return false;
+        if (!day.recipeId) return true;
+        const requiredIngredients = preparation.ingredients.filter(
+          (ingredient) =>
+            !ingredient.optional &&
+            ingredient.usedIn.some((use) => use.dayIndex === day.dayIndex),
+        );
+        return (
+          dayReadinessIssueCount(day.dayIndex, preparation.ingredients) > 0 ||
+          (preparation.status === "generationPartial" && requiredIngredients.length === 0)
+        );
+      })
+      .map((day) => day.dayIndex),
+  );
+  const incompleteDishCount = incompleteDayIndexes.size;
+  const listCompletionBlocked =
+    preparation.status !== "generated" || incompleteDishCount > 0;
 
   function saveBudget(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -257,6 +278,7 @@ export function WeekPreparationView() {
                   );
                   const dishTitle = mealMix?.dishName ?? day.recipe?.name ?? "Gerecht";
                   const dishImage = recipeImageFor(day.recipe?.sourceKey, day.category);
+                  const dishNeedsReview = incompleteDayIndexes.has(day.dayIndex);
                   return (
                     <li key={day.dayIndex}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
@@ -281,30 +303,36 @@ export function WeekPreparationView() {
                       {day.freeChoice ? (
                         <p className="free-choice-copy">Vrije keuze — kies later zelf een gerecht</p>
                       ) : day.recipe ? (
-                        <details className="recipe-detail">
-                          <summary>
-                            <span className="recipe-summary-visual">
-                              <DishImage
-                                asset={dishImage}
-                                className="recipe-summary-image"
-                                sizes="58px"
-                                title={dishTitle}
-                              />
-                              <span className="recipe-summary-title">
-                                <strong>{dishTitle}</strong>
-                                {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
+                        <div className="recipe-day-entry">
+                          {dishNeedsReview ? (
+                            <p className="recipe-readiness-notice" role="status">
+                              Dit gerecht is niet meer compleet beschikbaar. Controleer het gerecht opnieuw.
+                            </p>
+                          ) : null}
+                          <details className="recipe-detail" data-ready={!dishNeedsReview}>
+                            <summary>
+                              <span className="recipe-summary-visual">
+                                <DishImage
+                                  asset={dishImage}
+                                  className="recipe-summary-image"
+                                  sizes="58px"
+                                  title={dishTitle}
+                                />
+                                <span className="recipe-summary-title">
+                                  <strong>{dishTitle}</strong>
+                                  {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
+                                </span>
                               </span>
-                            </span>
-                            <span className="recipe-summary-action">
-                              <strong>
-                                {dishCost.knownCostCents > 0
-                                  ? `${formatCents(dishCost.knownCostCents)}${dishCost.complete ? "" : " bekend"}`
-                                  : "Nog niet bekend"}
-                              </strong>
-                              <small>Bekijk gerecht</small>
-                            </span>
-                          </summary>
-                          <div className="recipe-detail-content">
+                              <span className="recipe-summary-action">
+                                <strong>
+                                  {dishCost.knownCostCents > 0
+                                    ? `${formatCents(dishCost.knownCostCents)}${dishCost.complete ? "" : " bekend"}`
+                                    : "Nog niet bekend"}
+                                </strong>
+                                <small>Bekijk gerecht</small>
+                              </span>
+                            </summary>
+                            <div className="recipe-detail-content">
                             <DishImage
                               asset={dishImage}
                               className="recipe-detail-hero"
@@ -384,8 +412,9 @@ export function WeekPreparationView() {
                                 );
                               })}
                             </ul>
-                          </div>
-                        </details>
+                            </div>
+                          </details>
+                        </div>
                       ) : (
                         <p className="shopping-item-price-missing">
                           Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie.
@@ -407,20 +436,39 @@ export function WeekPreparationView() {
                     <strong>
                       {weekBudget.overBudgetCents > 0 && weekBudget.isComplete
                         ? `${formatCents(weekBudget.overBudgetCents)} boven budget`
+                        : weekBudget.overBudgetCents > 0
+                          ? `Minimaal ${formatCents(weekBudget.overBudgetCents)} boven budget`
                         : weekBudget.remainingCents !== null
                           ? `${formatCents(weekBudget.remainingCents)} over`
                           : "Nog niet definitief"}
                     </strong>
                   </div>
                   {!weekBudget.isComplete ? (
-                    <p>Ontbrekende matches of prijzen worden niet als € 0 meegerekend.</p>
+                    <p>
+                      {weekBudget.overBudgetCents > 0
+                        ? "Enkele producten zijn nog niet compleet bekend; het uiteindelijke bedrag kan hoger worden."
+                        : "Ontbrekende matches of prijzen worden niet als € 0 meegerekend."}
+                    </p>
                   ) : null}
                 </div>
               ) : null}
 
-              <button className="primary-action" type="button" onClick={week.completeShoppingList}>
+              <button
+                className="primary-action"
+                type="button"
+                onClick={week.completeShoppingList}
+                disabled={listCompletionBlocked}
+                aria-describedby={listCompletionBlocked ? "list-completion-readiness" : undefined}
+              >
                 Maak mijn lijst compleet
               </button>
+              {listCompletionBlocked ? (
+                <p id="list-completion-readiness" className="week-list-readiness" role="status">
+                  {incompleteDishCount > 0
+                    ? `Controleer eerst ${incompleteDishCount} ${incompleteDishCount === 1 ? "onvolledig gerecht" : "onvolledige gerechten"}.`
+                    : "Wacht tot alle gerechten compleet zijn gecontroleerd."}
+                </p>
+              ) : null}
               {week.actionMessage ? <p className="week-action-message" role="status">{week.actionMessage}</p> : null}
             </>
           )}

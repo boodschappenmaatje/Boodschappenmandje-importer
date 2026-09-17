@@ -263,6 +263,33 @@ describe("Recipe Readiness Gate", () => {
     );
     expect(before.recipes[0].ready).toBe(false);
     expect(after.recipes[0].ready).toBe(true);
+
+    const day: PreparedDay = {
+      dayIndex: 0,
+      category: "pasta",
+      freeChoice: false,
+      recipeId: null,
+      recipe: null,
+      status: "categoryAssigned",
+    };
+    expect(
+      selectRecipesForDays(
+        [day],
+        [RECIPE],
+        PREFERENCES,
+        "current-catalog",
+        readyRecipeIds(before),
+      )[0].recipeId,
+    ).toBeNull();
+    expect(
+      selectRecipesForDays(
+        [day],
+        [RECIPE],
+        PREFERENCES,
+        "current-catalog",
+        readyRecipeIds(after),
+      )[0].recipeId,
+    ).toBe(RECIPE.id);
   });
 
   it("filtert NOT READY kandidaten vóór selectie en gebruikt geen incomplete fallback", async () => {
@@ -315,6 +342,83 @@ describe("Recipe Readiness Gate", () => {
       recipe: null,
       status: "categoryAssigned",
     });
+  });
+
+  it("filtert een incomplete snelle tosti vóór selectie tussen meerdere READY kandidaten", async () => {
+    const tosti: Recipe = {
+      ...RECIPE,
+      id: "recipe-luxe-tosti",
+      sourceKey: "luxe-tosti-ham-kaas-tomaat",
+      name: "Luxe tosti’s met ham, kaas en tomaat",
+      normalizedName: "luxe tostis met ham kaas en tomaat",
+      preparationMinutes: 15,
+    };
+    const quickOne: Recipe = {
+      ...RECIPE,
+      id: "recipe-quick-one",
+      sourceKey: "snelle-gehaktschotel",
+      name: "Snelle gehaktschotel",
+      normalizedName: "snelle gehaktschotel",
+      preparationMinutes: 20,
+    };
+    const quickTwo: Recipe = {
+      ...RECIPE,
+      id: "recipe-quick-two",
+      sourceKey: "gehakt-wraps",
+      name: "Gehaktwraps",
+      normalizedName: "gehaktwraps",
+      preparationMinutes: 20,
+    };
+    const ham: RecipeIngredientDefinition = {
+      id: "ingredient-ham",
+      sourceKey: "ham",
+      name: "achterham",
+      normalizedName: "achterham",
+      defaultUnit: "grams",
+      category: "Vleeswaren",
+      aliases: ["achterham", "ham"],
+    };
+    const relations: RecipeIngredient[] = [
+      {
+        ...RELATION,
+        id: "relation-tosti-ham",
+        recipeId: tosti.id,
+        ingredientId: ham.id,
+      },
+      { ...RELATION, id: "relation-quick-one", recipeId: quickOne.id },
+      { ...RELATION, id: "relation-quick-two", recipeId: quickTwo.id },
+    ];
+    const recipes = [tosti, quickOne, quickTwo];
+    const gate = await evaluateRecipeReadiness(
+      recipes,
+      4,
+      catalog([BEEF, ham], relations, recipes),
+      matchingRepository([
+        product({ id: "product-ready-beef", sku: "871000011", name: "Rundergehakt" }),
+      ]),
+    );
+    const readiness = new Map(gate.recipes.map((result) => [result.recipeId, result.ready]));
+    expect(readiness.get(tosti.id)).toBe(false);
+    expect(readiness.get(quickOne.id)).toBe(true);
+    expect(readiness.get(quickTwo.id)).toBe(true);
+
+    const selected = selectRecipesForDays(
+      [{
+        dayIndex: 0,
+        category: "quick",
+        freeChoice: false,
+        recipeId: null,
+        recipe: null,
+        status: "categoryAssigned",
+      }],
+      recipes,
+      PREFERENCES,
+      "simple-and-fast",
+      readyRecipeIds(gate),
+    );
+
+    expect(selected[0].recipeId).not.toBe(tosti.id);
+    expect([quickOne.id, quickTwo.id]).toContain(selected[0].recipeId);
   });
 
   it("classificeert receptdata, matcherfailure en ongeldige referenties afzonderlijk", async () => {

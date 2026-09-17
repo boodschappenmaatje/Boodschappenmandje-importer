@@ -141,7 +141,7 @@ export function selectRecipesForDays(
   recipes: Recipe[],
   preferences: WeekPreferences,
   seed: string,
-  readyRecipes?: ReadonlySet<string>,
+  readyRecipes: ReadonlySet<string>,
 ): PreparedDay[] {
   const usedRecipeIds = new Set<string>();
 
@@ -157,7 +157,7 @@ export function selectRecipesForDays(
     }
 
     const candidates = suitableRecipes(recipes, day.category, preferences)
-      .filter((recipe) => readyRecipes?.has(recipe.id) ?? true)
+      .filter((recipe) => readyRecipes.has(recipe.id))
       .toSorted((left, right) => {
         const preferenceDifference =
           preferenceScore(right, preferences) - preferenceScore(left, preferences);

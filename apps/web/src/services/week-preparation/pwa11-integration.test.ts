@@ -21,6 +21,7 @@ import {
 import {
   calculateWeekBudgetSummary,
   generatePreparedWeek,
+  refreshGeneratedWeek,
   revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
 import {
@@ -287,6 +288,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       [RECIPE, secondPasta, vegetarianQuick],
       { ...PREFERENCES, noVegetarian: true, quickImportant: true },
       "stable-week",
+      new Set([RECIPE.id, secondPasta.id, vegetarianQuick.id]),
     );
     expect(selected[0].recipe?.id).not.toBe(selected[1].recipe?.id);
     expect(selected.slice(0, 2).every((day) => day.recipe?.id !== "vegetarian")).toBe(true);
@@ -509,6 +511,16 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       status: "categoryAssigned",
     });
     expect(generated.ingredients).toEqual([]);
+
+    const originalList: ActiveShoppingList = {
+      schemaVersion: 1,
+      startedAt: NOW.toISOString(),
+      updatedAt: NOW.toISOString(),
+      items: [],
+    };
+    expect(completeShoppingListFromWeek(originalList, generated.ingredients, NOW)).toEqual(
+      originalList,
+    );
   });
 
   it("behoudt een handmatig hoger aantal en verhoogt alleen bij echte extra weekbehoefte", () => {
@@ -582,5 +594,38 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     expect(
       validation.preparation.ingredients.find((item) => item.sourceKey === "onion"),
     ).toMatchObject({ productMatchMissing: true, price: null });
+  });
+
+  it("revalideert ook een oude opgeslagen week zonder ingrediëntsnapshot", async () => {
+    const recipeRepository: RecipeRepository = {
+      async loadCatalog() {
+        return CATALOG;
+      },
+    };
+    const oldWeek: ReturnType<typeof preparedWeek> = {
+      ...preparedWeek(),
+      status: "generated",
+      days: [{
+        dayIndex: 0,
+        category: "pasta",
+        freeChoice: false,
+        recipeId: RECIPE.id,
+        recipe: { id: RECIPE.id, sourceKey: RECIPE.sourceKey, name: RECIPE.name },
+        status: "recipeSelected",
+      }],
+      ingredients: [],
+      generation: null,
+    };
+
+    const refreshed = await refreshGeneratedWeek(
+      oldWeek,
+      recipeRepository,
+      catalogRepository([BEEF]),
+      new Date("2026-09-15T14:00:00Z"),
+    );
+
+    expect(refreshed.days[0].recipeId).toBe(RECIPE.id);
+    expect(refreshed.status).toBe("generationPartial");
+    expect(refreshed.ingredients).toHaveLength(2);
   });
 });

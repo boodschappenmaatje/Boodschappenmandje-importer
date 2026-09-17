@@ -113,7 +113,14 @@ function generated(): WeekPreparation {
             },
             status: "recipeSelected" as const,
           }
-        : day,
+        : {
+            ...day,
+            category: "freeChoice" as const,
+            freeChoice: true,
+            recipeId: null,
+            recipe: null,
+            status: "freeChoice" as const,
+          },
     ),
     ingredients: [{
       ingredientId: "ingredient-ground-beef",
@@ -154,6 +161,41 @@ function generated(): WeekPreparation {
       missingProductMatchCount: 0,
       missingPackageCalculationCount: 0,
       missingPriceCount: 0,
+    },
+  };
+}
+
+function incompleteGenerated(): WeekPreparation {
+  const preparation = generated();
+  return {
+    ...preparation,
+    status: "generationPartial",
+    ingredients: [
+      {
+        ...preparation.ingredients[0],
+        price: {
+          ...preparation.ingredients[0].price!,
+          amountCents: 2_294,
+        },
+      },
+      {
+        ...preparation.ingredients[0],
+        ingredientId: "ingredient-missing",
+        sourceKey: "missingIngredient",
+        name: "ontbrekend product",
+        requiredQuantity: 1,
+        purchaseQuantity: null,
+        packageCapacity: null,
+        product: null,
+        price: null,
+        productMatchMissing: true,
+        packageCalculationMissing: false,
+      },
+    ],
+    generation: {
+      ...preparation.generation!,
+      knownPurchaseCostCents: 4_588,
+      missingProductMatchCount: 1,
     },
   };
 }
@@ -233,6 +275,22 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Maak mijn lijst compleet");
     expect(html).not.toContain("871000000001");
     expect(html).not.toContain("real-product-id");
+  });
+
+  it("markeert een bewaard incompleet gerecht, blokkeert de CTA en toont minimaal boven budget", () => {
+    const html = render(
+      createElement(PrepareWeekPage),
+      incompleteGenerated(),
+      list(89.56),
+    );
+
+    expect(html).toContain("Dit gerecht is niet meer compleet beschikbaar");
+    expect(html).toContain("Controleer eerst 1 onvolledig gerecht.");
+    expect(html).toContain("Minimaal € 35,44 boven budget");
+    expect(html).toContain(
+      "Enkele producten zijn nog niet compleet bekend; het uiteindelijke bedrag kan hoger worden.",
+    );
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Maak mijn lijst compleet<\/button>/);
   });
 
   it("maakt Home dynamisch voor geen week, draft en ready", () => {

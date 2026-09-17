@@ -216,8 +216,7 @@ export async function refreshGeneratedWeek(
   now: Date = new Date(),
 ): Promise<WeekPreparation> {
   if (
-    !["generated", "generationPartial"].includes(preparation.status) ||
-    preparation.ingredients.length === 0
+    !["generated", "generationPartial"].includes(preparation.status)
   ) {
     return preparation;
   }
@@ -250,6 +249,23 @@ export interface DishCostSummary {
   complete: boolean;
 }
 
+export function dayReadinessIssueCount(
+  dayIndex: number,
+  ingredients: WeekIngredientRequirement[],
+): number {
+  return ingredients.filter(
+    (ingredient) =>
+      !ingredient.optional &&
+      ingredient.usedIn.some((item) => item.dayIndex === dayIndex) &&
+      (ingredient.product === null ||
+        ingredient.productMatchMissing ||
+        ingredient.price === null ||
+        ingredient.purchaseQuantity === null ||
+        ingredient.packageCapacity === null ||
+        ingredient.packageCalculationMissing),
+  ).length;
+}
+
 export function calculateDishCostSummary(
   dayIndex: number,
   ingredients: WeekIngredientRequirement[],
@@ -258,6 +274,7 @@ export function calculateDishCostSummary(
   let missingProductCount = 0;
 
   for (const ingredient of ingredients) {
+    if (ingredient.optional) continue;
     const use = ingredient.usedIn.find((item) => item.dayIndex === dayIndex);
     if (!use) continue;
     const packages =
@@ -299,6 +316,9 @@ export function calculateWeekBudgetSummary(
   let unmatchedOrUnpackaged = 0;
 
   for (const requirement of preparation.ingredients) {
+    if (requirement.optional && (!requirement.product || requirement.purchaseQuantity === null)) {
+      continue;
+    }
     if (!requirement.product || requirement.purchaseQuantity === null) {
       unmatchedOrUnpackaged += 1;
       continue;

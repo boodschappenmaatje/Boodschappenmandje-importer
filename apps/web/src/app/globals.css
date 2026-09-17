@@ -2942,6 +2942,29 @@ button:focus-visible {
   gap: 10px;
 }
 
+.recipe-day-entry {
+  display: grid;
+  gap: 8px;
+}
+
+.recipe-readiness-notice,
+.week-list-readiness {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(210, 139, 30, 0.2);
+  border-radius: 10px;
+  background: var(--color-warning-soft, #fff7e8);
+  color: #76510c;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.prepared-week-overview > .primary-action:disabled {
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.48;
+}
+
 .prepared-day-category {
   display: flex;
   align-items: center;
