@@ -17,6 +17,7 @@ import {
   createWeekPreparation,
   prepareWeek,
   setCategoryCount,
+  setMealBudgetCents,
 } from "@/services/week-preparation/week-preparation";
 import type { BudgetSettings } from "@/types/budget";
 import type { Product } from "@/types/catalog";
@@ -79,6 +80,7 @@ function draft(): WeekPreparation {
     NOW,
     "week-component",
   );
+  preparation = setMealBudgetCents(preparation, 5_000, NOW);
   preparation = setCategoryCount(preparation, "dutch", 2, NOW);
   preparation = setCategoryCount(preparation, "pasta", 1, NOW);
   preparation = setCategoryCount(preparation, "rice", 1, NOW);
@@ -157,6 +159,15 @@ function generated(): WeekPreparation {
     generation: {
       generatedAt: NOW.toISOString(),
       knownPurchaseCostCents: 898,
+      mealPlanKnownCostCents: 898,
+      mealBudgetRemainingCents: 4_102,
+      nonMealReservedCents: 5_000,
+      totalKnownWeekCostCents: 898,
+      mealBudgetStatus: "withinMealBudget",
+      weekBudgetStatus: "underBudget",
+      isMealBudgetComplete: true,
+      mealBudgetCandidateCount: 1,
+      mealBudgetRejectedCount: 0,
       matchedProductCount: 1,
       missingProductMatchCount: 0,
       missingPackageCalculationCount: 0,

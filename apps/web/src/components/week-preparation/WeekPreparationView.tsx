@@ -12,6 +12,7 @@ import {
   centsToDutchInput,
   formatCents,
   parseDutchEuroInput,
+  parseDutchEuroInputAllowZero,
 } from "@/services/budget/budget-engine";
 import {
   budgetOutcomeLabel,
@@ -79,6 +80,8 @@ export function WeekPreparationView() {
   const week = useWeekPreparation();
   const [budgetDraft, setBudgetDraft] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [mealBudgetDraft, setMealBudgetDraft] = useState<string | null>(null);
+  const [mealBudgetError, setMealBudgetError] = useState<string | null>(null);
 
   if (week.status === "loading" || budget.status === "loading") {
     return (
@@ -128,6 +131,18 @@ export function WeekPreparationView() {
     (budget.settings.budgetCents === null
       ? ""
       : centsToDutchInput(budget.settings.budgetCents));
+  const displayedMealBudget =
+    mealBudgetDraft ??
+    (preparation.mealBudgetCents === null
+      ? ""
+      : centsToDutchInput(preparation.mealBudgetCents));
+  const draftMealBudgetCents = parseDutchEuroInputAllowZero(displayedMealBudget);
+  const liveNonMealReservedCents =
+    budget.settings.budgetCents !== null &&
+    draftMealBudgetCents !== null &&
+    draftMealBudgetCents <= budget.settings.budgetCents
+      ? budget.settings.budgetCents - draftMealBudgetCents
+      : null;
   const ready = canPrepareWeek(preparation);
   const weekBudget = shoppingList.list
     ? calculateWeekBudgetSummary(preparation, shoppingList.list)
@@ -151,7 +166,12 @@ export function WeekPreparationView() {
   );
   const incompleteDishCount = incompleteDayIndexes.size;
   const listCompletionBlocked =
-    preparation.status !== "generated" || incompleteDishCount > 0;
+    preparation.status !== "generated" ||
+    incompleteDishCount > 0 ||
+    !preparation.generation?.isMealBudgetComplete ||
+    !["withinMealBudget", "exactlyMealBudget"].includes(
+      preparation.generation?.mealBudgetStatus ?? "noMealBudget",
+    );
 
   function saveBudget(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,6 +183,26 @@ export function WeekPreparationView() {
     week.setBudgetCents(cents);
     setBudgetDraft(centsToDutchInput(cents));
     setBudgetError(null);
+  }
+
+  function saveMealBudget(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const cents = parseDutchEuroInputAllowZero(displayedMealBudget);
+    if (cents === null) {
+      setMealBudgetError("Vul een geldig bedrag in, bijvoorbeeld 50 of 45,50.");
+      return;
+    }
+    if (budget.settings.budgetCents === null) {
+      setMealBudgetError("Stel eerst je totale weekbudget in.");
+      return;
+    }
+    if (cents > budget.settings.budgetCents) {
+      setMealBudgetError("Het maaltijd-budget kan niet hoger zijn dan je weekbudget.");
+      return;
+    }
+    week.setMealBudgetCents(cents);
+    setMealBudgetDraft(centsToDutchInput(cents));
+    setMealBudgetError(null);
   }
 
   const progressMessage =
@@ -210,6 +250,9 @@ export function WeekPreparationView() {
             {budget.settings.budgetCents === null
               ? "geen budget"
               : `${formatCents(budget.settings.budgetCents)} budget`}
+            {preparation.mealBudgetCents === null
+              ? " · geen maaltijd-budget"
+              : ` · max. ${formatCents(preparation.mealBudgetCents)} voor maaltijden`}
           </p>
           {preparation.status === "generating" || preparation.status === "readyForGeneration" ? (
             <p className="prepared-week-lead" role="status">
@@ -224,6 +267,23 @@ export function WeekPreparationView() {
             </div>
           ) : (
             <>
+              {preparation.generation?.mealBudgetStatus ===
+              "noValidMealPlanWithinBudget" ? (
+                <div className="week-generation-warning" role="status">
+                  <p>
+                    Met {formatCents(preparation.mealBudgetCents ?? 0)} is er op dit
+                    moment geen complete maaltijdweek beschikbaar voor deze verdeling.
+                  </p>
+                  <p>
+                    Verhoog het maaltijd-budget, pas je weekverdeling aan of kies minder dagen.
+                  </p>
+                </div>
+              ) : preparation.generation?.mealBudgetStatus === "overMealBudget" ? (
+                <div className="week-generation-warning" role="status">
+                  <p>Je huidige maaltijden passen niet meer binnen je maaltijd-budget.</p>
+                  <p>Je opgeslagen gerechten zijn niet automatisch vervangen.</p>
+                </div>
+              ) : null}
               {preparation.generation &&
               (preparation.generation.missingProductMatchCount > 0 ||
                 preparation.generation.missingPackageCalculationCount > 0 ||
@@ -441,7 +501,19 @@ export function WeekPreparationView() {
               {weekBudget ? (
                 <div className="week-cost-overview" aria-label="Weekkosten en budget">
                   <div><span>Weekbudget</span><strong>{weekBudget.budgetCents === null ? "Niet ingesteld" : formatCents(weekBudget.budgetCents)}</strong></div>
-                  <div><span>Bestaande lijst</span><strong>{formatCents(weekBudget.existingListKnownSubtotalCents)}</strong></div>
+                  <div><span>Maaltijd-budget</span><strong>{preparation.mealBudgetCents === null ? "Niet ingesteld" : `max. ${formatCents(preparation.mealBudgetCents)}`}</strong></div>
+                  <div><span>Geplande maaltijden</span><strong>{formatCents(preparation.generation?.mealPlanKnownCostCents ?? 0)}</strong></div>
+                  <div>
+                    <span>Over binnen maaltijd-budget</span>
+                    <strong>
+                      {preparation.generation?.mealBudgetRemainingCents !== null &&
+                      preparation.generation?.mealBudgetRemainingCents !== undefined
+                        ? formatCents(preparation.generation.mealBudgetRemainingCents)
+                        : "Nog niet definitief"}
+                    </strong>
+                  </div>
+                  <div><span>Minimaal voor overige boodschappen</span><strong>{preparation.generation?.nonMealReservedCents === null || preparation.generation?.nonMealReservedCents === undefined ? "Niet ingesteld" : formatCents(preparation.generation.nonMealReservedCents)}</strong></div>
+                  <div className="week-cost-total"><span>Bestaande lijst</span><strong>{formatCents(weekBudget.existingListKnownSubtotalCents)}</strong></div>
                   <div><span>Nieuwe boodschappen</span><strong>{formatCents(weekBudget.newKnownCostCents)}</strong></div>
                   <div><span>Bekend totaal</span><strong>{formatCents(weekBudget.knownTotalCents)}</strong></div>
                   <div>
@@ -479,7 +551,11 @@ export function WeekPreparationView() {
                 <p id="list-completion-readiness" className="week-list-readiness" role="status">
                   {incompleteDishCount > 0
                     ? `Controleer eerst ${incompleteDishCount} ${incompleteDishCount === 1 ? "onvolledig gerecht" : "onvolledige gerechten"}.`
-                    : "Wacht tot alle gerechten compleet zijn gecontroleerd."}
+                    : preparation.generation?.mealBudgetStatus === "overMealBudget"
+                      ? "Je huidige maaltijden passen niet binnen je maaltijd-budget."
+                      : preparation.generation?.mealBudgetStatus === "noValidMealPlanWithinBudget"
+                        ? "Er is nog geen complete maaltijdweek binnen dit budget."
+                        : "Wacht tot alle gerechten en het maaltijd-budget compleet zijn gecontroleerd."}
                 </p>
               ) : null}
               {week.actionMessage ? <p className="week-action-message" role="status">{week.actionMessage}</p> : null}
@@ -577,6 +653,44 @@ export function WeekPreparationView() {
             </p>
           ) : (
             <p className="budget-input-help">Dit is hetzelfde budget als op Budget.</p>
+          )}
+        </form>
+        <form className="week-budget-form meal-budget-form" onSubmit={saveMealBudget}>
+          <label htmlFor="week-preparation-meal-budget">
+            Maximaal voor avondmaaltijden
+          </label>
+          <div className="budget-input-row">
+            <span aria-hidden="true">€</span>
+            <input
+              id="week-preparation-meal-budget"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder="50,00"
+              value={displayedMealBudget}
+              onChange={(event) => {
+                setMealBudgetDraft(event.target.value);
+                setMealBudgetError(null);
+              }}
+              aria-invalid={mealBudgetError ? "true" : "false"}
+              aria-describedby={
+                mealBudgetError
+                  ? "meal-budget-error"
+                  : "meal-budget-help"
+              }
+            />
+            <button type="submit">Bewaren</button>
+          </div>
+          {mealBudgetError ? (
+            <p id="meal-budget-error" className="budget-input-error" role="alert">
+              {mealBudgetError}
+            </p>
+          ) : (
+            <p id="meal-budget-help" className="budget-input-help">
+              Zo houd je ruimte over voor brood, drinken, fruit en andere boodschappen.
+              {liveNonMealReservedCents !== null
+                ? ` ${formatCents(liveNonMealReservedCents)} blijft minimaal voor overige boodschappen.`
+                : ""}
+            </p>
           )}
         </form>
       </section>
@@ -678,7 +792,7 @@ export function WeekPreparationView() {
         </button>
         {!ready && progress.state === "exact" ? (
           <p className="week-required-note" role="status">
-            Kies personen, dagen en een budget om verder te gaan.
+            Kies personen, dagen, een weekbudget en een maaltijd-budget om verder te gaan.
           </p>
         ) : null}
       </section>
@@ -687,6 +801,7 @@ export function WeekPreparationView() {
         onStartNew={() => {
           week.startNewPreparation();
           setBudgetDraft(null);
+          setMealBudgetDraft(null);
         }}
       />
     </div>

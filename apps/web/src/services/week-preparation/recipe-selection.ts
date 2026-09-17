@@ -92,7 +92,7 @@ function stableHash(value: string): number {
   return hash >>> 0;
 }
 
-function preferenceScore(recipe: Recipe, preferences: WeekPreferences): number {
+export function recipePreferenceScore(recipe: Recipe, preferences: WeekPreferences): number {
   let score = 0;
   if (preferences.quickImportant && recipe.preparationMinutes <= 25) score += 80;
   if (preferences.healthyImportant && recipe.healthy) score += 70;
@@ -101,6 +101,27 @@ function preferenceScore(recipe: Recipe, preferences: WeekPreferences): number {
   }
   if (recipe.kidFriendly) score += 10;
   return score;
+}
+
+export function rankedReadyRecipesForDay(
+  day: PreparedDay,
+  recipes: Recipe[],
+  preferences: WeekPreferences,
+  seed: string,
+  readyRecipes: ReadonlySet<string>,
+): Recipe[] {
+  if (day.freeChoice || day.category === "freeChoice") return [];
+  return suitableRecipes(recipes, day.category, preferences)
+    .filter((recipe) => readyRecipes.has(recipe.id))
+    .toSorted((left, right) => {
+      const preferenceDifference =
+        recipePreferenceScore(right, preferences) -
+        recipePreferenceScore(left, preferences);
+      if (preferenceDifference) return preferenceDifference;
+      const leftHash = stableHash(`${seed}:${day.dayIndex}:${left.sourceKey}`);
+      const rightHash = stableHash(`${seed}:${day.dayIndex}:${right.sourceKey}`);
+      return leftHash - rightHash || left.sourceKey.localeCompare(right.sourceKey);
+    });
 }
 
 export function suitableRecipes(
@@ -156,16 +177,13 @@ export function selectRecipesForDays(
       };
     }
 
-    const candidates = suitableRecipes(recipes, day.category, preferences)
-      .filter((recipe) => readyRecipes.has(recipe.id))
-      .toSorted((left, right) => {
-        const preferenceDifference =
-          preferenceScore(right, preferences) - preferenceScore(left, preferences);
-        if (preferenceDifference) return preferenceDifference;
-        const leftHash = stableHash(`${seed}:${day.dayIndex}:${left.sourceKey}`);
-        const rightHash = stableHash(`${seed}:${day.dayIndex}:${right.sourceKey}`);
-        return leftHash - rightHash || left.sourceKey.localeCompare(right.sourceKey);
-      });
+    const candidates = rankedReadyRecipesForDay(
+      day,
+      recipes,
+      preferences,
+      seed,
+      readyRecipes,
+    );
     const recipe =
       candidates.find((candidate) => !usedRecipeIds.has(candidate.id)) ??
       candidates[0];

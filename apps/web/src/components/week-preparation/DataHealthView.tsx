@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
+import { formatCents } from "@/services/budget/budget-engine";
 import { createCatalogRepository } from "@/services/catalog/catalog-repository";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import {
@@ -236,6 +237,18 @@ export function DataHealthView() {
           ))}
         </ul>
       </section>
+
+      {week.preparation?.generation ? (
+        <section className="data-health-card">
+          <h2>Meal Budget Gate</h2>
+          <div className="data-health-image-summary">
+            <div><span>Status</span><strong>{week.preparation.generation.mealBudgetStatus}</strong></div>
+            <div><span>Beoordeelde kandidaten</span><strong>{week.preparation.generation.mealBudgetCandidateCount}</strong></div>
+            <div><span>Budget-afwijzingen</span><strong>{week.preparation.generation.mealBudgetRejectedCount}</strong></div>
+            <div><span>Weekkosten kandidaat</span><strong>{formatCents(week.preparation.generation.mealPlanKnownCostCents)}</strong></div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="data-health-card">
         <h2>Recipe Image Health</h2>

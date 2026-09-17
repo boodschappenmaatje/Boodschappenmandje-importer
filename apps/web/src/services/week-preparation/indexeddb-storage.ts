@@ -16,7 +16,7 @@ import { mealMixProfileForIngredient } from "@/services/week-preparation/meal-mi
 
 const ACTIVE_PREPARATION_KEY = "active";
 
-interface StoredWeekPreparationV3 {
+interface StoredWeekPreparationV4 {
   key: typeof ACTIVE_PREPARATION_KEY;
   schemaVersion: typeof WEEK_PREPARATION_SCHEMA_VERSION;
   preparation: WeekPreparation;
@@ -221,8 +221,37 @@ function migrateV2Preparation(value: unknown): WeekPreparation | null {
   });
   const migrated = {
     ...value,
-    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    schemaVersion: 3,
     ingredients,
+  };
+  return migrateV3Preparation(migrated);
+}
+
+function migrateV3Preparation(value: unknown): WeekPreparation | null {
+  if (!isRecord(value) || value.schemaVersion !== 3) return null;
+  const generation = value.generation;
+  const migratedGeneration =
+    generation === null
+      ? null
+      : isRecord(generation)
+        ? {
+            ...generation,
+            mealPlanKnownCostCents: Number(generation.knownPurchaseCostCents ?? 0),
+            mealBudgetRemainingCents: null,
+            nonMealReservedCents: null,
+            totalKnownWeekCostCents: Number(generation.knownPurchaseCostCents ?? 0),
+            mealBudgetStatus: "noMealBudget",
+            weekBudgetStatus: "incompletePrices",
+            isMealBudgetComplete: false,
+            mealBudgetCandidateCount: 0,
+            mealBudgetRejectedCount: 0,
+          }
+        : generation;
+  const migrated = {
+    ...value,
+    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    mealBudgetCents: null,
+    generation: migratedGeneration,
   };
   return isPreparation(migrated) ? migrated : null;
 }
@@ -234,6 +263,19 @@ function isGeneration(value: unknown): boolean {
       typeof value.generatedAt === "string" &&
       Number.isSafeInteger(value.knownPurchaseCostCents) &&
       Number(value.knownPurchaseCostCents) >= 0 &&
+      Number.isSafeInteger(value.mealPlanKnownCostCents) &&
+      Number(value.mealPlanKnownCostCents) >= 0 &&
+      (value.mealBudgetRemainingCents === null ||
+        (Number.isSafeInteger(value.mealBudgetRemainingCents) && Number(value.mealBudgetRemainingCents) >= 0)) &&
+      (value.nonMealReservedCents === null ||
+        (Number.isSafeInteger(value.nonMealReservedCents) && Number(value.nonMealReservedCents) >= 0)) &&
+      Number.isSafeInteger(value.totalKnownWeekCostCents) &&
+      Number(value.totalKnownWeekCostCents) >= 0 &&
+      ["noMealBudget", "withinMealBudget", "exactlyMealBudget", "overMealBudget", "incompleteValidation", "noValidMealPlanWithinBudget"].includes(String(value.mealBudgetStatus)) &&
+      ["noBudget", "underBudget", "exactlyBudget", "overBudget", "incompletePrices"].includes(String(value.weekBudgetStatus)) &&
+      typeof value.isMealBudgetComplete === "boolean" &&
+      Number.isInteger(value.mealBudgetCandidateCount) && Number(value.mealBudgetCandidateCount) >= 0 &&
+      Number.isInteger(value.mealBudgetRejectedCount) && Number(value.mealBudgetRejectedCount) >= 0 &&
       ["matchedProductCount", "missingProductMatchCount", "missingPackageCalculationCount", "missingPriceCount"].every(
         (field) =>
           Number.isInteger(value[field]) && Number(value[field]) >= 0,
@@ -251,6 +293,11 @@ function isPreparation(value: unknown): value is WeekPreparation {
     isNullableIntegerInRange(value.numberOfPeople, 1, 12) &&
     isNullableIntegerInRange(value.numberOfDays, 1, 7) &&
     (value.budgetCents === null || (Number.isSafeInteger(value.budgetCents) && Number(value.budgetCents) > 0)) &&
+    (value.mealBudgetCents === null ||
+      (Number.isSafeInteger(value.mealBudgetCents) &&
+        Number(value.mealBudgetCents) >= 0 &&
+        value.budgetCents !== null &&
+        Number(value.mealBudgetCents) <= Number(value.budgetCents))) &&
     Number.isSafeInteger(value.existingListKnownSubtotalCents) &&
     Number(value.existingListKnownSubtotalCents) >= 0 &&
     Number.isInteger(value.existingListUnpricedCount) &&
@@ -321,6 +368,7 @@ function migrateV1Preparation(value: unknown): WeekPreparation | null {
     numberOfPeople: value.numberOfPeople as number | null,
     numberOfDays: value.numberOfDays as number | null,
     budgetCents: value.budgetCents as number | null,
+    mealBudgetCents: null,
     existingListKnownSubtotalCents: Number(value.existingListKnownSubtotalCents),
     existingListUnpricedCount: Number(value.existingListUnpricedCount),
     categoryDistribution: value.categoryDistribution,
@@ -349,6 +397,11 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
     if (!migrated) throw new WeekPreparationStorageError("invalid-data");
     return migrated;
   }
+  if (value.schemaVersion === 3) {
+    const migrated = migrateV3Preparation(value.preparation);
+    if (!migrated) throw new WeekPreparationStorageError("invalid-data");
+    return migrated;
+  }
   if (value.schemaVersion !== WEEK_PREPARATION_SCHEMA_VERSION) {
     throw new WeekPreparationStorageError("unsupported-version");
   }
@@ -360,7 +413,7 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
 
 export function encodeStoredWeekPreparation(
   preparation: WeekPreparation,
-): StoredWeekPreparationV3 {
+): StoredWeekPreparationV4 {
   return {
     key: ACTIVE_PREPARATION_KEY,
     schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,

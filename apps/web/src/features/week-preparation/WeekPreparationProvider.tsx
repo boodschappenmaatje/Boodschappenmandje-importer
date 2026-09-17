@@ -30,6 +30,7 @@ import {
   generatePreparedWeek,
   markWeekGenerating,
   markWeekGenerationFailed,
+  recalculateMealBudgetSummary,
   refreshGeneratedWeek,
   revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
@@ -37,6 +38,7 @@ import {
   changePreparedDayCategory,
   createWeekPreparation,
   prepareWeek,
+  setMealBudgetCents as updateMealBudgetCents,
   setCategoryCount,
   setWeekPreference,
   updateWeekSettings,
@@ -59,6 +61,7 @@ interface WeekPreparationContextValue {
   setNumberOfPeople: (value: number | null) => void;
   setNumberOfDays: (value: number | null) => void;
   setBudgetCents: (value: number) => void;
+  setMealBudgetCents: (value: number) => void;
   adjustCategory: (category: MealCategory, change: -1 | 1) => void;
   setPreference: (preference: keyof WeekPreferences, value: boolean) => void;
   confirmPreparation: () => void;
@@ -168,6 +171,8 @@ export function WeekPreparationProvider({
           { ...base, status: "readyForGeneration" },
           recipeRepository(),
           catalogRepository(),
+          new Date(),
+          shoppingList.list ?? undefined,
         );
         if (generationRunRef.current !== run) return;
         refreshedWeekRef.current = generated.id;
@@ -177,7 +182,7 @@ export function WeekPreparationProvider({
         replace(markWeekGenerationFailed(base));
       }
     },
-    [catalogRepository, recipeRepository, replace],
+    [catalogRepository, recipeRepository, replace, shoppingList.list],
   );
 
   useEffect(() => {
@@ -229,6 +234,8 @@ export function WeekPreparationProvider({
       current,
       recipeRepository(),
       catalogRepository(),
+      new Date(),
+      shoppingList.list ?? undefined,
     )
       .then((refreshed) => {
         if (active && preparationRef.current?.id === refreshed.id) {
@@ -242,7 +249,7 @@ export function WeekPreparationProvider({
     return () => {
       active = false;
     };
-  }, [catalogRepository, recipeRepository, replace, status]);
+  }, [catalogRepository, recipeRepository, replace, shoppingList.list, status]);
 
   useEffect(() => {
     const current = preparationRef.current;
@@ -254,8 +261,13 @@ export function WeekPreparationProvider({
     ) {
       return;
     }
-    commit((latest) => updateWeekSettings(latest, budgetSettings));
-  }, [budgetSettings, budgetStatus, commit, status]);
+    commit((latest) => {
+      const updated = updateWeekSettings(latest, budgetSettings);
+      return shoppingList.list
+        ? recalculateMealBudgetSummary(updated, shoppingList.list)
+        : updated;
+    });
+  }, [budgetSettings, budgetStatus, commit, shoppingList.list, status]);
 
   const currentListContext = useCallback(
     () => ({
@@ -269,7 +281,9 @@ export function WeekPreparationProvider({
     generationRunRef.current += 1;
     refreshedWeekRef.current = null;
     setActionMessage(null);
-    replace(createWeekPreparation(budgetSettings, currentListContext()));
+    const previousMealBudget = preparationRef.current?.mealBudgetCents ?? null;
+    const fresh = createWeekPreparation(budgetSettings, currentListContext());
+    replace(updateMealBudgetCents(fresh, previousMealBudget));
   }, [budgetSettings, currentListContext, replace]);
 
   const setNumberOfPeople = useCallback(
@@ -295,11 +309,29 @@ export function WeekPreparationProvider({
   const setBudgetCents = useCallback(
     (value: number) => {
       updateBudgetCents(value);
-      commit((current) =>
-        updateWeekSettings(current, { ...budgetSettings, budgetCents: value }),
-      );
+      commit((current) => {
+        const updated = updateWeekSettings(current, {
+          ...budgetSettings,
+          budgetCents: value,
+        });
+        return shoppingList.list
+          ? recalculateMealBudgetSummary(updated, shoppingList.list)
+          : updated;
+      });
     },
-    [budgetSettings, commit, updateBudgetCents],
+    [budgetSettings, commit, shoppingList.list, updateBudgetCents],
+  );
+
+  const setMealBudgetCents = useCallback(
+    (value: number) => {
+      commit((current) => {
+        const updated = updateMealBudgetCents(current, value);
+        return shoppingList.list
+          ? recalculateMealBudgetSummary(updated, shoppingList.list)
+          : updated;
+      });
+    },
+    [commit, shoppingList.list],
   );
 
   const adjustCategory = useCallback(
@@ -346,11 +378,13 @@ export function WeekPreparationProvider({
         current,
         recipeRepository(),
         catalogRepository(),
+        new Date(),
+        shoppingList.list ?? undefined,
       )
         .then(replace)
         .catch(() => setActionMessage("Opnieuw controleren lukte nu niet."));
     }
-  }, [catalogRepository, recipeRepository, replace, runGeneration]);
+  }, [catalogRepository, recipeRepository, replace, runGeneration, shoppingList.list]);
 
   const completeShoppingList = useCallback(() => {
     const current = preparationRef.current;
@@ -367,6 +401,8 @@ export function WeekPreparationProvider({
       current,
       recipeRepository(),
       catalogRepository(),
+      new Date(),
+      list,
     )
       .then(async (validation) => {
         if (preparationRef.current?.id !== validation.preparation.id) return;
@@ -410,6 +446,7 @@ export function WeekPreparationProvider({
       setNumberOfPeople,
       setNumberOfDays,
       setBudgetCents,
+      setMealBudgetCents,
       adjustCategory,
       setPreference,
       confirmPreparation,
@@ -428,6 +465,7 @@ export function WeekPreparationProvider({
       preparation,
       retryGeneration,
       setBudgetCents,
+      setMealBudgetCents,
       setNumberOfDays,
       setNumberOfPeople,
       setPreference,

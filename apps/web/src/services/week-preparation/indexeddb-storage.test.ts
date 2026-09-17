@@ -138,6 +138,15 @@ describe("PWA 10 lokale persistentie", () => {
       generation: {
         generatedAt: NOW.toISOString(),
         knownPurchaseCostCents: 898,
+        mealPlanKnownCostCents: 898,
+        mealBudgetRemainingCents: 4_102,
+        nonMealReservedCents: 5_000,
+        totalKnownWeekCostCents: 898,
+        mealBudgetStatus: "withinMealBudget",
+        weekBudgetStatus: "underBudget",
+        isMealBudgetComplete: true,
+        mealBudgetCandidateCount: 1,
+        mealBudgetRejectedCount: 0,
         matchedProductCount: 1,
         missingProductMatchCount: 0,
         missingPackageCalculationCount: 0,
@@ -266,7 +275,8 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
+      mealBudgetCents: null,
       id: "week-legacy",
       ingredients: [],
       generation: null,
@@ -338,13 +348,76 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 3,
+      schemaVersion: 4,
+      mealBudgetCents: null,
       days: [{ recipe: { sourceKey: "spaghetti-bolognese" } }],
       ingredients: [{
         kind: "ingredient",
         brandConstraint: null,
         usedIn: [{ dayIndex: 0, requiredQuantity: 700 }],
       }],
+    });
+  });
+
+  it("migreert schema v3 naar een expliciet nog in te stellen maaltijd-budget zonder de week te vervangen", () => {
+    const base = createWeekPreparation(
+      SETTINGS,
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v3",
+    );
+    const current: WeekPreparation = {
+      ...base,
+      status: "generated",
+      generation: {
+        generatedAt: NOW.toISOString(),
+        knownPurchaseCostCents: 898,
+        mealPlanKnownCostCents: 898,
+        mealBudgetRemainingCents: null,
+        nonMealReservedCents: null,
+        totalKnownWeekCostCents: 898,
+        mealBudgetStatus: "noMealBudget",
+        weekBudgetStatus: "underBudget",
+        isMealBudgetComplete: false,
+        mealBudgetCandidateCount: 0,
+        mealBudgetRejectedCount: 0,
+        matchedProductCount: 1,
+        missingProductMatchCount: 0,
+        missingPackageCalculationCount: 0,
+        missingPriceCount: 0,
+      },
+    };
+    const legacy = structuredClone(current) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 3;
+    delete legacy.mealBudgetCents;
+    const generation = legacy.generation as Record<string, unknown>;
+    for (const field of [
+      "mealPlanKnownCostCents",
+      "mealBudgetRemainingCents",
+      "nonMealReservedCents",
+      "totalKnownWeekCostCents",
+      "mealBudgetStatus",
+      "weekBudgetStatus",
+      "isMealBudgetComplete",
+      "mealBudgetCandidateCount",
+      "mealBudgetRejectedCount",
+    ]) delete generation[field];
+
+    const migrated = decodeStoredWeekPreparation({
+      key: "active",
+      schemaVersion: 3,
+      preparation: legacy,
+    });
+    expect(migrated).toMatchObject({
+      schemaVersion: 4,
+      mealBudgetCents: null,
+      days: current.days,
+      generation: {
+        knownPurchaseCostCents: 898,
+        mealPlanKnownCostCents: 898,
+        mealBudgetStatus: "noMealBudget",
+        isMealBudgetComplete: false,
+      },
     });
   });
 });

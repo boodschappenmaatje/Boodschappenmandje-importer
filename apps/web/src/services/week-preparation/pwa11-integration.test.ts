@@ -29,6 +29,7 @@ import {
   createWeekPreparation,
   prepareWeek,
   setCategoryCount,
+  setMealBudgetCents,
 } from "@/services/week-preparation/week-preparation";
 import type { Product, Recipe } from "@/types/catalog";
 import type { ActiveShoppingList } from "@/types/shopping-list";
@@ -229,6 +230,7 @@ function preparedWeek() {
     NOW,
     "week-pwa-11",
   );
+  preparation = setMealBudgetCents(preparation, 5_000, NOW);
   preparation = setCategoryCount(preparation, "pasta", 1, NOW);
   return prepareWeek(
     preparation,

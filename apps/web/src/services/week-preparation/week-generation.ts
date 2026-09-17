@@ -15,8 +15,13 @@ import type {
 } from "@/services/week-preparation/recipe-repository";
 import {
   candidateRecipesForDays,
-  selectRecipesForDays,
+  rankedReadyRecipesForDay,
 } from "@/services/week-preparation/recipe-selection";
+import {
+  evaluateMealBudget,
+  mealBudgetAllowsPlan,
+  type MealBudgetEvaluation,
+} from "@/services/week-preparation/meal-budget";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import type { ActiveShoppingList } from "@/types/shopping-list";
 import type {
@@ -26,9 +31,29 @@ import type {
   WeekPreparationStatus,
 } from "@/types/week-preparation";
 
+const EMPTY_LIST: ActiveShoppingList = {
+  schemaVersion: 1,
+  startedAt: "1970-01-01T00:00:00.000Z",
+  updatedAt: "1970-01-01T00:00:00.000Z",
+  items: [],
+};
+
+interface BudgetedSelection {
+  days: WeekPreparation["days"];
+  ingredients: WeekIngredientRequirement[];
+  evaluation: MealBudgetEvaluation;
+  candidateCount: number;
+  rejectedCount: number;
+  found: boolean;
+  status: WeekGenerationSummary["mealBudgetStatus"];
+}
+
 function generationSummary(
   ingredients: WeekIngredientRequirement[],
   generatedAt: string,
+  evaluation: MealBudgetEvaluation,
+  candidateCount = 0,
+  rejectedCount = 0,
 ): WeekGenerationSummary {
   const pricedByProduct = Map.groupBy(
     ingredients.filter(
@@ -43,6 +68,15 @@ function generationSummary(
         total + grouped[0].price!.amountCents * combinedProductPurchaseQuantity(grouped),
       0,
     ),
+    mealPlanKnownCostCents: evaluation.mealPlanKnownCostCents,
+    mealBudgetRemainingCents: evaluation.mealBudgetRemainingCents,
+    nonMealReservedCents: evaluation.nonMealReservedCents,
+    totalKnownWeekCostCents: evaluation.totalKnownWeekCostCents,
+    mealBudgetStatus: evaluation.mealBudgetStatus,
+    weekBudgetStatus: evaluation.weekBudgetStatus,
+    isMealBudgetComplete: evaluation.isMealBudgetComplete,
+    mealBudgetCandidateCount: candidateCount,
+    mealBudgetRejectedCount: rejectedCount,
     matchedProductCount: ingredients.filter((item) => item.product !== null).length,
     missingProductMatchCount: ingredients.filter(
       (item) => !item.optional && item.productMatchMissing,
@@ -59,6 +93,7 @@ function generationSummary(
 function finalStatus(
   preparation: WeekPreparation,
   ingredients: WeekIngredientRequirement[],
+  evaluation?: MealBudgetEvaluation,
 ): WeekPreparationStatus {
   const hasRecipeGap = preparation.days.some(
     (day) => !day.freeChoice && !day.recipeId,
@@ -70,7 +105,185 @@ function finalStatus(
         item.packageCalculationMissing ||
         item.price === null),
   );
-  return hasRecipeGap || hasIngredientGap ? "generationPartial" : "generated";
+  const budgetGap =
+    evaluation !== undefined && !mealBudgetAllowsPlan(evaluation);
+  return hasRecipeGap || hasIngredientGap || budgetGap
+    ? "generationPartial"
+    : "generated";
+}
+
+function selectedDay(
+  day: WeekPreparation["days"][number],
+  recipe: RecipeCatalog["recipes"][number],
+): WeekPreparation["days"][number] {
+  return {
+    ...day,
+    recipeId: recipe.id,
+    recipe: {
+      id: recipe.id,
+      sourceKey: recipe.sourceKey,
+      name: recipe.name,
+    },
+    status: "recipeSelected",
+  };
+}
+
+function unselectedDays(days: WeekPreparation["days"]): WeekPreparation["days"] {
+  return days.map((day) =>
+    day.freeChoice
+      ? { ...day, recipeId: null, recipe: null, status: "freeChoice" as const }
+      : { ...day, recipeId: null, recipe: null, status: "categoryAssigned" as const },
+  );
+}
+
+function selectWeekWithinMealBudget(
+  preparation: WeekPreparation,
+  catalog: RecipeCatalog,
+  readiness: Awaited<ReturnType<typeof evaluateRecipeReadiness>>,
+  list: ActiveShoppingList,
+  now: Date,
+): BudgetedSelection {
+  const readyIds = readyRecipeIds(readiness);
+  const autoDays = preparation.days.filter((day) => !day.freeChoice);
+  const missingReadyCategory = autoDays.some((day) =>
+    rankedReadyRecipesForDay(
+      day,
+      catalog.recipes,
+      preparation.preferences,
+      preparation.id,
+      readyIds,
+    ).length === 0
+  );
+  if (preparation.mealBudgetCents === null || missingReadyCategory) {
+    const days = unselectedDays(preparation.days);
+    const evaluation = evaluateMealBudget(
+      preparation.budgetCents,
+      preparation.mealBudgetCents,
+      [],
+      list,
+      now,
+    );
+    return {
+      days,
+      ingredients: [],
+      evaluation,
+      candidateCount: 0,
+      rejectedCount: 0,
+      found: false,
+      status: preparation.mealBudgetCents === null
+        ? "noMealBudget"
+        : "incompleteValidation",
+    };
+  }
+
+  type State = { days: WeekPreparation["days"]; rank: number; duplicates: number };
+  let states: State[] = [{ days: [], rank: 0, duplicates: 0 }];
+  let candidateCount = 0;
+  let rejectedCount = 0;
+  const beamWidth = 192;
+
+  for (const day of preparation.days) {
+    if (day.freeChoice) {
+      states = states.map((state) => ({
+        ...state,
+        days: [...state.days, { ...day, recipeId: null, recipe: null, status: "freeChoice" }],
+      }));
+      continue;
+    }
+    const candidates = rankedReadyRecipesForDay(
+      day,
+      catalog.recipes,
+      preparation.preferences,
+      preparation.id,
+      readyIds,
+    ).slice(0, 24);
+    const nextStates: State[] = [];
+    for (const state of states) {
+      const usedIds = new Set(state.days.map((item) => item.recipeId).filter(Boolean));
+      candidates.forEach((recipe, rank) => {
+        candidateCount += 1;
+        const days = [...state.days, selectedDay(day, recipe)];
+        const requirements = aggregateWeekIngredients(days, preparation.numberOfPeople!, catalog);
+        const ingredients = applyReadinessProducts(requirements, readiness);
+        const evaluation = evaluateMealBudget(
+          preparation.budgetCents,
+          preparation.mealBudgetCents,
+          ingredients,
+          list,
+          now,
+        );
+        if (!mealBudgetAllowsPlan(evaluation)) {
+          rejectedCount += 1;
+          return;
+        }
+        nextStates.push({
+          days,
+          rank: state.rank + rank,
+          duplicates: state.duplicates + (usedIds.has(recipe.id) ? 1 : 0),
+        });
+      });
+    }
+    const unique = new Map<string, State>();
+    for (const state of nextStates) {
+      const signature = state.days.map((item) => item.recipeId ?? "free").join(":");
+      const current = unique.get(signature);
+      if (!current || state.duplicates < current.duplicates || state.rank < current.rank) {
+        unique.set(signature, state);
+      }
+    }
+    states = [...unique.values()]
+      .toSorted((left, right) => left.duplicates - right.duplicates || left.rank - right.rank)
+      .slice(0, beamWidth);
+    if (states.length === 0) break;
+  }
+
+  const evaluated = states.map((state) => {
+    const requirements = aggregateWeekIngredients(state.days, preparation.numberOfPeople!, catalog);
+    const ingredients = applyReadinessProducts(requirements, readiness);
+    const evaluation = evaluateMealBudget(
+      preparation.budgetCents,
+      preparation.mealBudgetCents,
+      ingredients,
+      list,
+      now,
+    );
+    return { ...state, ingredients, evaluation };
+  }).filter((state) => state.days.length === preparation.days.length && mealBudgetAllowsPlan(state.evaluation));
+
+  const best = evaluated.toSorted((left, right) => {
+    const leftWeekPenalty = left.evaluation.weekBudgetStatus === "overBudget" ? 1 : 0;
+    const rightWeekPenalty = right.evaluation.weekBudgetStatus === "overBudget" ? 1 : 0;
+    return leftWeekPenalty - rightWeekPenalty || left.duplicates - right.duplicates || left.rank - right.rank;
+  })[0];
+
+  if (!best) {
+    const days = unselectedDays(preparation.days);
+    const evaluation = evaluateMealBudget(
+      preparation.budgetCents,
+      preparation.mealBudgetCents,
+      [],
+      list,
+      now,
+    );
+    return {
+      days,
+      ingredients: [],
+      evaluation,
+      candidateCount,
+      rejectedCount,
+      found: false,
+      status: "noValidMealPlanWithinBudget",
+    };
+  }
+  return {
+    days: best.days,
+    ingredients: best.ingredients,
+    evaluation: best.evaluation,
+    candidateCount,
+    rejectedCount,
+    found: true,
+    status: best.evaluation.mealBudgetStatus,
+  };
 }
 
 export function markWeekGenerating(
@@ -100,6 +313,7 @@ export async function generatePreparedWeek(
   recipeRepository: RecipeRepository,
   catalogRepository: CatalogRepository,
   now: Date = new Date(),
+  list: ActiveShoppingList = EMPTY_LIST,
 ): Promise<WeekPreparation> {
   if (
     !["readyForGeneration", "generationError"].includes(preparation.status) ||
@@ -124,19 +338,14 @@ export async function generatePreparedWeek(
     catalog,
     catalogRepository,
   );
-  const days = selectRecipesForDays(
-    preparation.days,
-    catalog.recipes,
-    preparation.preferences,
-    preparation.id,
-    readyRecipeIds(readiness),
-  );
-  const requirements = aggregateWeekIngredients(
-    days,
-    preparation.numberOfPeople,
+  const selection = selectWeekWithinMealBudget(
+    preparation,
     catalog,
+    readiness,
+    list,
+    now,
   );
-  const ingredients = applyReadinessProducts(requirements, readiness);
+  const { days, ingredients } = selection;
   const generatedAt = now.toISOString();
   const prepared = {
     ...preparation,
@@ -146,8 +355,19 @@ export async function generatePreparedWeek(
 
   return {
     ...prepared,
-    generation: generationSummary(ingredients, generatedAt),
-    status: finalStatus(prepared, ingredients),
+    generation: {
+      ...generationSummary(
+        ingredients,
+        generatedAt,
+        selection.evaluation,
+        selection.candidateCount,
+        selection.rejectedCount,
+      ),
+      mealBudgetStatus: selection.status,
+    },
+    status: selection.found
+      ? finalStatus(prepared, ingredients, selection.evaluation)
+      : "generationPartial",
     updatedAt: generatedAt,
   };
 }
@@ -162,6 +382,7 @@ export async function revalidatePreparedWeek(
   recipeRepository: RecipeRepository,
   catalogRepository: CatalogRepository,
   now: Date = new Date(),
+  list: ActiveShoppingList = EMPTY_LIST,
 ): Promise<PreparedWeekReadinessResult> {
   if (preparation.numberOfPeople === null) {
     return { ready: false, preparation };
@@ -197,14 +418,26 @@ export async function revalidatePreparedWeek(
   const ingredients = applyReadinessProducts(requirements, readiness);
   const generatedAt = now.toISOString();
   const refreshed = { ...preparation, ingredients };
+  const mealBudget = evaluateMealBudget(
+    preparation.budgetCents,
+    preparation.mealBudgetCents,
+    ingredients,
+    list,
+    now,
+  );
   const next: WeekPreparation = {
     ...refreshed,
-    generation: generationSummary(ingredients, generatedAt),
-    status: hasDayGap ? "generationPartial" : finalStatus(refreshed, ingredients),
+    generation: generationSummary(ingredients, generatedAt, mealBudget),
+    status: hasDayGap
+      ? "generationPartial"
+      : finalStatus(refreshed, ingredients, mealBudget),
     updatedAt: generatedAt,
   };
   return {
-    ready: !hasDayGap && next.status === "generated",
+    ready:
+      !hasDayGap &&
+      next.status === "generated" &&
+      mealBudgetAllowsPlan(mealBudget),
     preparation: next,
   };
 }
@@ -214,6 +447,7 @@ export async function refreshGeneratedWeek(
   recipeRepository: RecipeRepository,
   catalogRepository: CatalogRepository,
   now: Date = new Date(),
+  list: ActiveShoppingList = EMPTY_LIST,
 ): Promise<WeekPreparation> {
   if (
     !["generated", "generationPartial"].includes(preparation.status)
@@ -226,6 +460,7 @@ export async function refreshGeneratedWeek(
       recipeRepository,
       catalogRepository,
       now,
+      list,
     )
   ).preparation;
 }
@@ -316,7 +551,12 @@ export function calculateWeekBudgetSummary(
   let unmatchedOrUnpackaged = 0;
 
   for (const requirement of preparation.ingredients) {
-    if (requirement.optional && (!requirement.product || requirement.purchaseQuantity === null)) {
+    if (
+      requirement.optional &&
+      (!requirement.product ||
+        requirement.purchaseQuantity === null ||
+        requirement.price === null)
+    ) {
       continue;
     }
     if (!requirement.product || requirement.purchaseQuantity === null) {
@@ -381,5 +621,35 @@ export function calculateWeekBudgetSummary(
     remainingCents,
     overBudgetCents,
     isComplete,
+  };
+}
+
+export function recalculateMealBudgetSummary(
+  preparation: WeekPreparation,
+  list: ActiveShoppingList,
+  now: Date = new Date(),
+): WeekPreparation {
+  if (!preparation.generation) return preparation;
+  const evaluation = evaluateMealBudget(
+    preparation.budgetCents,
+    preparation.mealBudgetCents,
+    preparation.ingredients,
+    list,
+    now,
+  );
+  return {
+    ...preparation,
+    generation: {
+      ...preparation.generation,
+      mealPlanKnownCostCents: evaluation.mealPlanKnownCostCents,
+      mealBudgetRemainingCents: evaluation.mealBudgetRemainingCents,
+      nonMealReservedCents: evaluation.nonMealReservedCents,
+      totalKnownWeekCostCents: evaluation.totalKnownWeekCostCents,
+      mealBudgetStatus: evaluation.mealBudgetStatus,
+      weekBudgetStatus: evaluation.weekBudgetStatus,
+      isMealBudgetComplete: evaluation.isMealBudgetComplete,
+    },
+    status: finalStatus(preparation, preparation.ingredients, evaluation),
+    updatedAt: now.toISOString(),
   };
 }

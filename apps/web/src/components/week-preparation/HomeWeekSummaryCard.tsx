@@ -57,6 +57,12 @@ export function HomeWeekSummaryCard() {
                   ? `${preparation.numberOfDays} dagen voorbereid`
               : `${progress?.assignedDays ?? 0} van ${preparation.numberOfDays ?? 0} dagen verdeeld`}
           </strong>
+          {preparation.generation && preparation.mealBudgetCents !== null ? (
+            <span className="week-ready-label">
+              Maaltijden {formatCents(preparation.generation.mealPlanKnownCostCents)} /{" "}
+              {formatCents(preparation.mealBudgetCents)}
+            </span>
+          ) : null}
           {hasDishes ? (
             <span className="week-ready-label">Week bevat gerechten</span>
           ) : preparation.status === "readyForGeneration" ? (

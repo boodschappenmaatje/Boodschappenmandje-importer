@@ -62,6 +62,7 @@ export function createWeekPreparation(
   listContext: ExistingListContext,
   now: Date = new Date(),
   id: string = createPreparationId(now),
+  mealBudgetCents: number | null = null,
 ): WeekPreparation {
   const timestamp = now.toISOString();
   return {
@@ -72,6 +73,13 @@ export function createWeekPreparation(
     numberOfPeople: settings.people,
     numberOfDays: settings.days,
     budgetCents: settings.budgetCents,
+    mealBudgetCents:
+      mealBudgetCents !== null &&
+      mealBudgetCents >= 0 &&
+      settings.budgetCents !== null &&
+      mealBudgetCents <= settings.budgetCents
+        ? mealBudgetCents
+        : null,
     existingListKnownSubtotalCents: listContext.knownSubtotalCents,
     existingListUnpricedCount: listContext.unpricedItemCount,
     categoryDistribution: emptyCategoryDistribution(),
@@ -124,6 +132,12 @@ export function updateWeekSettings(
     numberOfPeople: settings.people,
     numberOfDays: settings.days,
     budgetCents: settings.budgetCents,
+    mealBudgetCents:
+      settings.budgetCents !== null &&
+      preparation.mealBudgetCents !== null &&
+      preparation.mealBudgetCents <= settings.budgetCents
+        ? preparation.mealBudgetCents
+        : null,
   });
   if (daysChanged) {
     return {
@@ -137,6 +151,21 @@ export function updateWeekSettings(
   return requiredSettingMissing
     ? { ...next, ingredients: [], generation: null, status: "draft" }
     : next;
+}
+
+export function setMealBudgetCents(
+  preparation: WeekPreparation,
+  mealBudgetCents: number | null,
+  now: Date = new Date(),
+): WeekPreparation {
+  const valid =
+    mealBudgetCents === null ||
+    (Number.isSafeInteger(mealBudgetCents) &&
+      mealBudgetCents >= 0 &&
+      preparation.budgetCents !== null &&
+      mealBudgetCents <= preparation.budgetCents);
+  if (!valid || preparation.mealBudgetCents === mealBudgetCents) return preparation;
+  return withUpdatedAt(preparation, now, { mealBudgetCents });
 }
 
 export function updateListSnapshot(
@@ -192,6 +221,9 @@ export function canPrepareWeek(preparation: WeekPreparation): boolean {
     preparation.numberOfDays <= 7 &&
     preparation.budgetCents !== null &&
     preparation.budgetCents > 0 &&
+    preparation.mealBudgetCents !== null &&
+    preparation.mealBudgetCents >= 0 &&
+    preparation.mealBudgetCents <= preparation.budgetCents &&
     distributionProgress(
       preparation.categoryDistribution,
       preparation.numberOfDays,

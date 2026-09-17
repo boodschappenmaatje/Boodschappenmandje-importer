@@ -151,7 +151,11 @@ export function completeShoppingListFromWeek(
   >();
 
   for (const requirement of requirements) {
-    if (!requirement.product || requirement.purchaseQuantity === null) continue;
+    if (
+      !requirement.product ||
+      requirement.purchaseQuantity === null ||
+      (requirement.optional && requirement.price === null)
+    ) continue;
     const current = grouped.get(requirement.product.productId);
     const usedIn = requirement.usedIn.map((item) => item.recipeName);
     if (current) {

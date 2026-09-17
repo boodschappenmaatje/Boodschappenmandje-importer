@@ -1,6 +1,7 @@
 import type { PriceFreshness, UUID } from "@/types/catalog";
+import type { BudgetStatus } from "@/types/budget";
 
-export const WEEK_PREPARATION_SCHEMA_VERSION = 3 as const;
+export const WEEK_PREPARATION_SCHEMA_VERSION = 4 as const;
 
 export const MEAL_CATEGORIES = [
   "dutch",
@@ -23,6 +24,17 @@ export type WeekPreparationStatus =
   | "generated"
   | "generationPartial"
   | "generationError";
+
+export const MEAL_BUDGET_STATUSES = [
+  "noMealBudget",
+  "withinMealBudget",
+  "exactlyMealBudget",
+  "overMealBudget",
+  "incompleteValidation",
+  "noValidMealPlanWithinBudget",
+] as const;
+
+export type MealBudgetStatus = (typeof MEAL_BUDGET_STATUSES)[number];
 
 export type CategoryDistribution = Record<MealCategory, number>;
 
@@ -97,6 +109,15 @@ export interface WeekIngredientRequirement {
 export interface WeekGenerationSummary {
   generatedAt: string;
   knownPurchaseCostCents: number;
+  mealPlanKnownCostCents: number;
+  mealBudgetRemainingCents: number | null;
+  nonMealReservedCents: number | null;
+  totalKnownWeekCostCents: number;
+  mealBudgetStatus: MealBudgetStatus;
+  weekBudgetStatus: BudgetStatus;
+  isMealBudgetComplete: boolean;
+  mealBudgetCandidateCount: number;
+  mealBudgetRejectedCount: number;
   matchedProductCount: number;
   missingProductMatchCount: number;
   missingPackageCalculationCount: number;
@@ -111,6 +132,7 @@ export interface WeekPreparation {
   numberOfPeople: number | null;
   numberOfDays: number | null;
   budgetCents: number | null;
+  mealBudgetCents: number | null;
   existingListKnownSubtotalCents: number;
   existingListUnpricedCount: number;
   categoryDistribution: CategoryDistribution;
