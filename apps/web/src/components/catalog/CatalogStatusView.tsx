@@ -6,7 +6,11 @@ import {
   CatalogStatusReadError,
   createCatalogStatusRepository,
 } from "@/services/catalog/catalog-status-repository";
-import type { CatalogImportStatus, CatalogStatus } from "@/types/catalog-status";
+import type {
+  CatalogDailyJobStatus,
+  CatalogImportStatus,
+  CatalogStatus,
+} from "@/types/catalog-status";
 
 interface CatalogStatusViewProps {
   initialStatus?: CatalogStatus | null;
@@ -18,6 +22,25 @@ const statusLabels: Record<CatalogImportStatus, string> = {
   partial: "Import gedeeltelijk voltooid",
   failed: "Laatste import mislukt",
 };
+
+const dailyStatusLabels: Record<CatalogDailyJobStatus, string> = {
+  pending: "Nieuwe poging wordt voorbereid",
+  running: "Bezig met bijwerken",
+  retry_scheduled: "Tijdelijk gepauzeerd",
+  target_reached: "Dagdoel behaald",
+  daily_target_partial: "Dagdoel gedeeltelijk behaald",
+  failed_requires_attention: "Update heeft aandacht nodig",
+};
+
+export function formatNextCatalogAttempt(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "later";
+  return new Intl.DateTimeFormat("nl-NL", {
+    timeZone: "Europe/Amsterdam",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
 export function formatCatalogUpdateTime(value: string, now = new Date()): string {
   const date = new Date(value);
@@ -49,6 +72,10 @@ export function formatCatalogUpdateTime(value: string, now = new Date()): string
 
 export function CatalogStatusContent({ status }: { status: CatalogStatus }) {
   const run = status.latestRun;
+  const dailyJob = status.dailyJob;
+  const dailyProgress = dailyJob
+    ? Math.min(100, Math.round((dailyJob.newProductsCollected / dailyJob.targetNewProducts) * 100))
+    : 0;
   return (
     <section className="catalog-status-card" aria-labelledby="catalog-status-title">
       <div className="catalog-status-heading">
@@ -65,12 +92,52 @@ export function CatalogStatusContent({ status }: { status: CatalogStatus }) {
       </div>
       <p className="catalog-progress-caption">±{status.progressPercent}% van het richtgetal verzameld</p>
 
+      {dailyJob ? (
+        <section className="catalog-daily-progress" aria-labelledby="catalog-daily-title">
+          <div className="catalog-daily-heading">
+            <div>
+              <p>Vandaag nieuw</p>
+              <h3 id="catalog-daily-title">
+                {dailyJob.newProductsCollected} / {dailyJob.targetNewProducts}
+              </h3>
+            </div>
+            <span>{dailyProgress}%</span>
+          </div>
+          <div className="catalog-daily-bar" aria-label={`${dailyJob.newProductsCollected} van ${dailyJob.targetNewProducts} nieuwe producten toegevoegd`}>
+            <span style={{ width: `${dailyProgress}%` }} />
+          </div>
+          <div className="catalog-run-status" data-status={dailyJob.status}>
+            <span aria-hidden="true" />
+            <strong>{dailyStatusLabels[dailyJob.status]}</strong>
+          </div>
+          {dailyJob.status === "retry_scheduled" && dailyJob.nextRetryAt ? (
+            <p className="catalog-next-attempt">
+              Volgende poging rond {formatNextCatalogAttempt(dailyJob.nextRetryAt)}
+            </p>
+          ) : null}
+          {dailyJob.status === "daily_target_partial" ? (
+            <p className="catalog-daily-message">
+              {dailyJob.newProductsCollected} van {dailyJob.targetNewProducts} nieuwe producten toegevoegd. De bestaande catalogus blijft beschikbaar.
+            </p>
+          ) : null}
+          {dailyJob.status === "failed_requires_attention" ? (
+            <p className="catalog-daily-message" role="status">
+              Catalogusupdate heeft aandacht nodig. De bestaande catalogus blijft beschikbaar.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
       {run ? (
         <>
-          <div className="catalog-run-status" data-status={run.status}>
-            <span aria-hidden="true" />
-            <strong>{statusLabels[run.status]}</strong>
-          </div>
+          {dailyJob ? (
+            <p className="card-eyebrow catalog-attempt-eyebrow">Laatste poging</p>
+          ) : (
+            <div className="catalog-run-status" data-status={run.status}>
+              <span aria-hidden="true" />
+              <strong>{statusLabels[run.status]}</strong>
+            </div>
+          )}
           <dl className="catalog-run-grid">
             <div><dt>Verwerkt</dt><dd>{run.processedCount}</dd></div>
             <div><dt>Nieuw</dt><dd>+{run.newCount}</dd></div>
@@ -79,7 +146,7 @@ export function CatalogStatusContent({ status }: { status: CatalogStatus }) {
             <div><dt>Overgeslagen</dt><dd>{run.skippedCount}</dd></div>
             <div><dt>Productfouten</dt><dd>{run.errorCount}</dd></div>
           </dl>
-          {run.errorSummary ? (
+          {run.errorSummary && !dailyJob ? (
             <p className="catalog-run-warning" role={run.status === "failed" ? "alert" : "status"}>
               <strong>{run.status === "partial" ? "Bronwaarschuwing:" : "Foutmelding:"}</strong>{" "}
               {run.errorSummary}.

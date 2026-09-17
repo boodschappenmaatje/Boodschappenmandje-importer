@@ -1,0 +1,92 @@
+name: Hoogvliet dagelijkse catalogusretry
+
+on:
+  schedule:
+    # Elke tien minuten binnen het ruimste UTC-venster. De applicatielaag
+    # beslist in Europe/Amsterdam of de job werkelijk verschuldigd is.
+    - cron: "*/10 4-21 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-supabase-update
+  cancel-in-progress: false
+
+jobs:
+  retry-if-due:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      HEADLESS: "1"
+      UPDATE_MODE: growth
+      CATALOG_BATCH: growth
+      MAX_PRODUCTS: "400"
+      MAX_NEW_PRODUCTS: "400"
+      MAX_PER_TERM: "40"
+      MAX_PAGES_PER_TERM: "8"
+      GROWTH_MAX_PAGES_PER_TERM: "20"
+      GROWTH_MAX_TOTAL_PAGES: "800"
+      GROWTH_MAX_CANDIDATES: "6000"
+      GROWTH_MAX_RUNTIME_MINUTES: "105"
+      NAVIGATION_RETRIES: "2"
+      SATURATION_MIN_CANDIDATES: "40"
+      SATURATION_YIELD_PERCENT: "5"
+      CATALOG_NEW_ONLY: "1"
+      IMPORT_TRIGGER: schedule
+      DISCOVERY_STATE_KEY: daily-catalog-growth
+      ADVANCE_DISCOVERY_STATE: "1"
+      PREFER_NEW_PRODUCTS: "1"
+      DAILY_IMPORT_STATE_KEY: daily-catalog-growth
+      DAILY_NEW_PRODUCT_TARGET: "400"
+      DAILY_IMPORT_END_HOUR: "23"
+
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@v4
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Controleren of een attempt verschuldigd is
+        id: due
+        shell: bash
+        run: |
+          set -euo pipefail
+          decision="$(npm run --silent inspect:daily)"
+          echo "$decision"
+          run_attempt="$(printf '%s\n' "$decision" | sed -n 's/^run_attempt=//p' | tail -1)"
+          reason="$(printf '%s\n' "$decision" | sed -n 's/^reason=//p' | tail -1)"
+          if [[ "$run_attempt" != "1" ]]; then
+            run_attempt="0"
+          fi
+          echo "run_attempt=$run_attempt" >> "$GITHUB_OUTPUT"
+          echo "reason=${reason:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Dependencies installeren
+        if: steps.due.outputs.run_attempt == '1'
+        run: npm ci
+
+      - name: Chromium installeren
+        if: steps.due.outputs.run_attempt == '1'
+        run: npx playwright install --with-deps chromium
+
+      - name: Verschuldigde daily attempt uitvoeren
+        if: steps.due.outputs.run_attempt == '1'
+        run: npm run import:daily
+
+      - name: Retrystatus samenvatten
+        if: always()
+        run: |
+          {
+            echo '## Persistente dagelijkse catalogusgroei'
+            echo "Attempt uitgevoerd: ${{ steps.due.outputs.run_attempt }}"
+            echo "Beslissing: ${{ steps.due.outputs.reason }}"
+            echo 'Een retry telt uitsluitend werkelijke nieuwe unieke Supabase-producten mee.'
+            echo 'De bestaande catalogus blijft bij een tijdelijke bronstoring beschikbaar.'
+          } >> "$GITHUB_STEP_SUMMARY"

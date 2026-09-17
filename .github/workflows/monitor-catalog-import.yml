@@ -23,6 +23,11 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       CATALOG_MONITOR_MAX_AGE_HOURS: "6"
+      CATALOG_MONITOR_GROWTH_TARGET: "400"
+      UPDATE_MODE: growth
+      CATALOG_BATCH: growth
+      DAILY_IMPORT_STATE_KEY: daily-catalog-growth
+      DAILY_NEW_PRODUCT_TARGET: "400"
 
     steps:
       - name: Bewakingsmoment bepalen
@@ -63,8 +68,8 @@ jobs:
         run: |
           {
             echo '## Dagelijkse catalogusbewaking'
-            echo 'Een mislukte, gedeeltelijke, nog lopende of ontbrekende ochtendrun laat deze workflow falen.'
-            echo 'GitHub kan daarop een Actions-melding/e-mail sturen volgens de persoonlijke notificatie-instellingen.'
+            echo 'Een lopende of geplande retry is normaal herstelgedrag en geldt niet als fout.'
+            echo 'Een ontbrekende dagjob wordt veilig klaargezet voor de retry-workflow.'
+            echo 'Alleen een niet-herstelbare fout vraagt directe aandacht.'
             echo 'De bestaande catalogus blijft bij iedere waarschuwing beschikbaar.'
           } >> "$GITHUB_STEP_SUMMARY"
-

@@ -1,0 +1,331 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+import {
+  amsterdamDateKey,
+  classifyDailyImportError,
+  dailyRetryAt,
+  dailyRetryDelayMinutes,
+  isDailyImportWindowOpen,
+  runDailyCatalogAttempt,
+  shouldRunDailyImport,
+} from "../src/daily-catalog-growth.mjs";
+import { evaluateDailyCatalogMonitor } from "../src/catalog-monitor.mjs";
+import {
+  claimCatalogDailyAttempt,
+  finishCatalogDailyAttempt,
+  rpcURL,
+} from "../src/supabase.mjs";
+
+const logger = { info() {}, error() {} };
+const config = {
+  dryRun: false,
+  maxProducts: 400,
+  maxNewProducts: 400,
+  dailyImportStateKey: "daily-catalog-growth-test",
+  dailyTargetNewProducts: 400,
+  dailyEndHour: 23,
+};
+
+function createHarness(growthSequence, {
+  initialNew = 0,
+  target = 400,
+  date = "2026-09-17",
+  times = [],
+} = {}) {
+  const state = {
+    id: "daily-job-1",
+    stateKey: config.dailyImportStateKey,
+    jobDate: date,
+    timezone: "Europe/Amsterdam",
+    targetNewProducts: target,
+    newProductsCollected: initialNew,
+    remainingTarget: target - initialNew,
+    status: "pending",
+    attemptCount: 0,
+    startedAt: "2026-09-17T04:00:00.000Z",
+    lastAttemptAt: null,
+    nextRetryAt: null,
+    completedAt: null,
+    lastPublicMessage: null,
+  };
+  const attempts = [];
+  let growthIndex = 0;
+  let timeIndex = 0;
+  return {
+    state,
+    attempts,
+    dependencies: {
+      now: () => times[timeIndex++] ?? new Date("2026-09-17T08:00:00.000Z"),
+      hasProductTypeColumn: async () => true,
+      claim: async () => {
+        if (state.status === "running") {
+          return { claimed: false, reason: "attempt_running", job: { ...state } };
+        }
+        state.status = "running";
+        state.attemptCount += 1;
+        state.nextRetryAt = null;
+        return {
+          claimed: true,
+          reason: "claimed",
+          attemptId: `attempt-${state.attemptCount}`,
+          lockToken: `lock-${state.attemptCount}`,
+          job: { ...state },
+        };
+      },
+      runGrowth: async () => {
+        const entry = growthSequence[growthIndex++];
+        if (entry instanceof Error) throw entry;
+        return {
+          actualGrowth: entry.new ?? 0,
+          candidatesViewed: entry.candidates ?? 0,
+          updatedCount: entry.updated ?? 0,
+          unchangedCount: entry.unchanged ?? 0,
+          skippedCount: entry.skipped ?? 0,
+          searchErrors: entry.sourceErrors ?? 0,
+        };
+      },
+      finish: async (_config, input) => {
+        state.newProductsCollected = Math.min(
+          state.targetNewProducts,
+          state.newProductsCollected + input.counts.new,
+        );
+        state.remainingTarget = state.targetNewProducts - state.newProductsCollected;
+        state.nextRetryAt = input.nextRetryAt?.toISOString?.() ?? input.nextRetryAt ?? null;
+        if (state.remainingTarget === 0) state.status = "target_reached";
+        else if (input.outcome === "non_retryable_failure") state.status = "failed_requires_attention";
+        else if (input.outcome === "daily_target_partial") state.status = "daily_target_partial";
+        else state.status = "retry_scheduled";
+        attempts.push({ ...input, resultingStatus: state.status });
+        return { ...state };
+      },
+    },
+  };
+}
+
+test("400 nieuwe producten in de eerste poging stopt de dagjob", async () => {
+  const harness = createHarness([{ new: 400, candidates: 800 }]);
+  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(result.job.newProductsCollected, 400);
+  assert.equal(result.job.remainingTarget, 0);
+  assert.equal(result.job.status, "target_reached");
+  assert.equal(result.job.nextRetryAt, null);
+});
+
+test("137 nieuwe producten blijven bewaard en een retry vervolgt het resterende doel", async () => {
+  const harness = createHarness([{ new: 137 }, { new: 263 }]);
+  const first = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(first.job.newProductsCollected, 137);
+  assert.equal(first.job.remainingTarget, 263);
+  assert.equal(first.job.status, "retry_scheduled");
+  const second = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(second.job.newProductsCollected, 400);
+  assert.equal(second.job.status, "target_reached");
+});
+
+test("kleine gecontroleerde target-10 test hervat 4 + 6 zonder opnieuw te beginnen", async () => {
+  const harness = createHarness([{ new: 4 }, { new: 6 }], { target: 10 });
+  const testConfig = { ...config, dailyTargetNewProducts: 10, maxProducts: 10 };
+  const first = await runDailyCatalogAttempt(testConfig, logger, harness.dependencies);
+  const second = await runDailyCatalogAttempt(testConfig, logger, harness.dependencies);
+  assert.deepEqual(
+    [first.job.newProductsCollected, second.job.newProductsCollected],
+    [4, 10],
+  );
+  assert.equal(second.job.status, "target_reached");
+  assert.equal(harness.attempts.length, 2);
+});
+
+test("meerdere attempts tellen alleen werkelijke databasegroei en eindigen exact op 400", async () => {
+  const harness = createHarness([
+    { new: 137, updated: 80, unchanged: 120 },
+    { new: 91, updated: 50, unchanged: 200 },
+    { new: 172, updated: 30, unchanged: 300 },
+  ]);
+  await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(result.job.newProductsCollected, 400);
+  assert.deepEqual(harness.attempts.map((attempt) => attempt.counts.new), [137, 91, 172]);
+});
+
+test("bekend, duplicate, updated, unchanged en invalid tellen niet als nieuw", async () => {
+  const harness = createHarness([{
+    new: 0, candidates: 900, updated: 300, unchanged: 400, skipped: 200,
+  }]);
+  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(result.job.newProductsCollected, 0);
+  assert.equal(harness.attempts[0].counts.updated, 300);
+  assert.equal(harness.attempts[0].counts.unchanged, 400);
+  assert.equal(harness.attempts[0].counts.skipped, 200);
+});
+
+test("tijdelijke bronuitval bewaart gedeeltelijke groei en plant een retry", async () => {
+  const sourceError = Object.assign(new Error("Bron tijdelijk zonder productdata"), {
+    code: "source_unavailable",
+    actualGrowth: 137,
+    catalogAttemptMetrics: { candidatesViewed: 240, sourceErrors: 3 },
+  });
+  const harness = createHarness([sourceError]);
+  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(result.job.newProductsCollected, 137);
+  assert.equal(result.job.status, "retry_scheduled");
+  assert.equal(harness.attempts[0].outcome, "retryable_failure");
+  assert.equal(harness.attempts[0].retryReason, "source_unavailable");
+});
+
+test("back-off gebruikt 10, 20, 40 en daarna 60 minuten", () => {
+  assert.deepEqual([1, 2, 3, 4, 9].map(dailyRetryDelayMinutes), [10, 20, 40, 60, 60]);
+  assert.equal(
+    dailyRetryAt(2, new Date("2026-09-17T08:00:00Z")).toISOString(),
+    "2026-09-17T08:20:00.000Z",
+  );
+});
+
+test("een lopende attempt en een dubbele retrytrigger worden geweigerd", () => {
+  const running = {
+    status: "running", newProductsCollected: 137, targetNewProducts: 400,
+  };
+  assert.deepEqual(
+    shouldRunDailyImport(running, new Date("2026-09-17T08:00:00Z")),
+    { run: false, reason: "attempt_running" },
+  );
+  const futureRetry = {
+    ...running, status: "retry_scheduled", nextRetryAt: "2026-09-17T08:10:00Z",
+  };
+  assert.deepEqual(
+    shouldRunDailyImport(futureRetry, new Date("2026-09-17T08:00:00Z")),
+    { run: false, reason: "retry_not_due" },
+  );
+});
+
+test("non-retryable configuratiefout stopt automatische retries en vraagt aandacht", async () => {
+  const harness = createHarness([new Error("SUPABASE_SECRET_KEY ontbreekt.")]);
+  await assert.rejects(
+    runDailyCatalogAttempt(config, logger, harness.dependencies),
+    /SUPABASE_SECRET_KEY ontbreekt/,
+  );
+  assert.equal(harness.state.status, "failed_requires_attention");
+  assert.equal(harness.attempts[0].nextRetryAt, null);
+  assert.equal(classifyDailyImportError(new Error("schema ontbreekt")).retryable, false);
+});
+
+test("23:00 Europe/Amsterdam sluit veilig af als partial zonder rollback", async () => {
+  const harness = createHarness([{ new: 327 }], {
+    times: [
+      new Date("2026-09-17T20:50:00Z"), // 22:50 CEST
+      new Date("2026-09-17T21:05:00Z"), // 23:05 CEST
+    ],
+  });
+  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
+  assert.equal(result.job.newProductsCollected, 327);
+  assert.equal(result.job.status, "daily_target_partial");
+  assert.equal(result.job.nextRetryAt, null);
+});
+
+test("een nieuwe Amsterdamse kalenderdag krijgt een nieuw dagdoel zonder DST-fout", () => {
+  assert.equal(amsterdamDateKey(new Date("2026-03-28T23:30:00Z")), "2026-03-29");
+  assert.equal(amsterdamDateKey(new Date("2026-10-24T22:30:00Z")), "2026-10-25");
+  assert.equal(isDailyImportWindowOpen(new Date("2026-03-29T04:00:00Z")), true);
+  assert.equal(isDailyImportWindowOpen(new Date("2026-10-25T05:00:00Z")), true);
+});
+
+test("08:30-bewaking accepteert running, paused, success en partial maar niet attention", () => {
+  const base = {
+    id: "daily-1", targetNewProducts: 400, newProductsCollected: 228,
+  };
+  assert.equal(evaluateDailyCatalogMonitor({ ...base, status: "running" }).state, "running");
+  assert.equal(evaluateDailyCatalogMonitor({ ...base, status: "retry_scheduled" }).state, "retry_scheduled");
+  assert.equal(evaluateDailyCatalogMonitor({ ...base, status: "target_reached", newProductsCollected: 400 }).state, "healthy");
+  assert.equal(evaluateDailyCatalogMonitor({ ...base, status: "daily_target_partial" }).state, "daily_target_partial");
+  assert.equal(evaluateDailyCatalogMonitor({ ...base, status: "failed_requires_attention" }).ok, false);
+  assert.equal(evaluateDailyCatalogMonitor(null).state, "missing");
+});
+
+test("dagjobmigratie is additief, server-locked en browser read-only", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260917_self_healing_daily_catalog_growth.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /create table if not exists public\.catalog_daily_jobs/i);
+  assert.match(migration, /create table if not exists public\.catalog_daily_attempts/i);
+  assert.match(migration, /claim_catalog_daily_attempt/i);
+  assert.match(migration, /for update/i);
+  assert.match(migration, /catalog_daily_jobs_single_running_idx/i);
+  assert.match(migration, /grant select on public\.catalog_daily_jobs to anon, authenticated/i);
+  assert.match(migration, /revoke all on public\.catalog_daily_attempts from anon, authenticated/i);
+  assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from|truncate/i);
+});
+
+test("daily job-RPC's gebruiken typed claims en locktokens", async () => {
+  assert.equal(
+    rpcURL("https://voorbeeld.supabase.co", "claim_catalog_daily_attempt").href,
+    "https://voorbeeld.supabase.co/rest/v1/rpc/claim_catalog_daily_attempt",
+  );
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url, options) => {
+    requests.push({ url: String(url), body: JSON.parse(options.body) });
+    if (String(url).endsWith("claim_catalog_daily_attempt")) {
+      return new Response(JSON.stringify({
+        claimed: true,
+        reason: "claimed",
+        attemptId: "attempt-1",
+        lockToken: "lock-1",
+        job: {
+          id: "daily-1", state_key: "test", job_date: "2026-09-17",
+          timezone: "Europe/Amsterdam", target_new_products: 10,
+          new_products_collected: 4, status: "running", attempt_count: 2,
+          started_at: "2026-09-17T04:00:00Z",
+        },
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      id: "daily-1", state_key: "test", job_date: "2026-09-17",
+      timezone: "Europe/Amsterdam", target_new_products: 10,
+      new_products_collected: 10, status: "target_reached", attempt_count: 2,
+      started_at: "2026-09-17T04:00:00Z",
+    }), { status: 200 });
+  };
+  const dbConfig = {
+    supabaseURL: "https://voorbeeld.supabase.co",
+    supabaseSecret: "secret",
+  };
+  try {
+    const claim = await claimCatalogDailyAttempt(dbConfig, {
+      stateKey: "test", jobDate: "2026-09-17", targetNewProducts: 10,
+      now: new Date("2026-09-17T04:00:00Z"),
+    });
+    assert.equal(claim.claimed, true);
+    assert.equal(claim.job.remainingTarget, 6);
+    const finished = await finishCatalogDailyAttempt(dbConfig, {
+      jobID: claim.job.id, attemptID: claim.attemptId, lockToken: claim.lockToken,
+      outcome: "succeeded",
+      counts: { candidates: 12, new: 6, updated: 0, unchanged: 0, skipped: 0, invalid: 0, sourceErrors: 0 },
+      now: new Date("2026-09-17T04:05:00Z"),
+    });
+    assert.equal(finished.status, "target_reached");
+    assert.equal(finished.newProductsCollected, 10);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].body.p_target_new_products, 10);
+  assert.equal(requests[1].body.p_lock_token, "lock-1");
+});
+
+test("Actions gebruikt één concurrencygroep, korte schedulerchecks en geen urenlange sleep", async () => {
+  const [initial, retry, monitor] = await Promise.all([
+    readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/retry-daily-catalog-import.yml", import.meta.url), "utf8"),
+    readFile(new URL("../.github/workflows/monitor-catalog-import.yml", import.meta.url), "utf8"),
+  ]);
+  assert.match(initial, /npm run import:daily/);
+  assert.match(initial, /group: hoogvliet-supabase-update/);
+  assert.match(retry, /cron: "\*\/10 4-21 \* \* \*"/);
+  assert.match(retry, /npm run --silent inspect:daily/);
+  assert.match(retry, /group: hoogvliet-supabase-update/);
+  assert.doesNotMatch(retry, /\bsleep\s+[1-9]\d{2,}/i);
+  assert.match(monitor, /ontbrekende dagjob wordt veilig klaargezet/i);
+});

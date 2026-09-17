@@ -209,7 +209,13 @@ export async function main() {
     if (config.dryRun) {
       throw new Error("Catalogusgroei met runregistratie ondersteunt geen DRY_RUN; gebruik catalog voor een bron-dry-run.");
     }
-    await runCatalogGrowth(config, logger);
+    const result = await runCatalogGrowth(config, logger);
+    if (!result.targetReached) {
+      throw new Error(
+        `Catalogusgroeidoel niet gehaald: ${result.actualGrowth}/${result.targetNewProducts} `
+          + `nieuwe producten; stopreden=${result.stopReason}.`,
+      );
+    }
     return;
   }
   const existingSKUs = config.dryRun ? new Set() : await fetchExistingSKUs(config);
