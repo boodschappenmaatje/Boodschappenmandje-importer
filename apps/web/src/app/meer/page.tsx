@@ -21,6 +21,15 @@ export default function MorePage() {
           </div>
           <span className="more-arrow" aria-hidden="true">›</span>
         </Link>
+        <Link className="more-item more-item-link" href="/meer/data-health">
+          <span className="more-icon"><Icon name="info" /></span>
+          <div>
+            <h2>Data Health</h2>
+            <p>Interne controle van recept-, match-, prijs- en verpakkingsdekking.</p>
+          </div>
+          <span className="future-label">Intern</span>
+          <span className="more-arrow" aria-hidden="true">›</span>
+        </Link>
         {[
           ["history", "Geschiedenis", "Je afgeronde boodschappenrondes."],
           ["pantry", "Voorraad", "Wat je waarschijnlijk nog in huis hebt."],

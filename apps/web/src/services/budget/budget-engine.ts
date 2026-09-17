@@ -21,6 +21,16 @@ export function parseDutchEuroInput(value: string): number | null {
   return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
 }
 
+export function parseDutchEuroInputAllowZero(value: string): number | null {
+  const normalized = value.trim().replace(/\s/g, "");
+  const match = /^(\d+)(?:,(\d{1,2}))?$/.exec(normalized);
+  if (!match) return null;
+  const euros = Number(match[1]);
+  const decimals = (match[2] ?? "").padEnd(2, "0");
+  const cents = euros * 100 + Number(decimals || "0");
+  return Number.isSafeInteger(cents) && cents >= 0 ? cents : null;
+}
+
 export function formatCents(cents: number): string {
   const euros = Math.trunc(cents / 100);
   const remainder = Math.abs(cents % 100).toString().padStart(2, "0");
@@ -35,7 +45,7 @@ export function centsToDutchInput(cents: number): string {
   );
 }
 
-function usablePriceCents(
+export function shoppingListPriceCents(
   price: ShoppingListPriceReference | null,
   now: Date,
 ): number | null {
@@ -84,7 +94,7 @@ export function calculateBudget(
   let unpricedItemCount = 0;
 
   for (const item of list.items) {
-    const unitPriceCents = usablePriceCents(item.price, now);
+    const unitPriceCents = shoppingListPriceCents(item.price, now);
     if (unitPriceCents === null) {
       unpricedItemCount += 1;
       continue;

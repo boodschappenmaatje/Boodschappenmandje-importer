@@ -19,6 +19,7 @@ import {
 import {
   addCatalogProduct,
   calculateShoppingListTotal,
+  completeShoppingListFromWeek,
   createEmptyActiveShoppingList,
   decreaseQuantity,
   increaseQuantity,
@@ -27,6 +28,7 @@ import {
   restoreShoppingListItem,
 } from "@/services/shopping-list/shopping-list";
 import type { Product } from "@/types/catalog";
+import type { WeekIngredientRequirement } from "@/types/week-preparation";
 import type {
   ActiveShoppingList,
   RemovedShoppingListItem,
@@ -42,6 +44,7 @@ interface ActiveShoppingListContextValue {
   persistenceWarning: string | null;
   lastRemoved: RemovedShoppingListItem | null;
   addProduct: (product: Product) => Promise<void>;
+  completeFromWeek: (requirements: WeekIngredientRequirement[]) => Promise<void>;
   increase: (productId: string) => Promise<void>;
   decrease: (productId: string) => Promise<void>;
   remove: (productId: string) => Promise<void>;
@@ -182,6 +185,16 @@ export function ActiveShoppingListProvider({
     [commit],
   );
 
+  const completeFromWeek = useCallback(
+    async (requirements: WeekIngredientRequirement[]) => {
+      setLastRemoved(null);
+      await commit((current) =>
+        completeShoppingListFromWeek(current, requirements),
+      );
+    },
+    [commit],
+  );
+
   const increase = useCallback(
     async (productId: string) => {
       setLastRemoved(null);
@@ -240,6 +253,7 @@ export function ActiveShoppingListProvider({
       persistenceWarning,
       lastRemoved,
       addProduct,
+      completeFromWeek,
       increase,
       decrease,
       remove,
@@ -249,6 +263,7 @@ export function ActiveShoppingListProvider({
     }),
     [
       addProduct,
+      completeFromWeek,
       decrease,
       dismissUndo,
       increase,

@@ -75,6 +75,93 @@ describe("PWA 10 lokale persistentie", () => {
     });
   });
 
+  it("bewaart gegenereerde gerechten, requirements, usedIn en productreferenties stabiel", async () => {
+    const storage = new MemoryWeekStorage();
+    const base = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-generated",
+    );
+    const generated: WeekPreparation = {
+      ...base,
+      status: "generated",
+      days: [{
+        dayIndex: 0,
+        category: "pasta",
+        freeChoice: false,
+        recipeId: "recipe-spaghetti",
+        recipe: {
+          id: "recipe-spaghetti",
+          sourceKey: "spaghetti-bolognese",
+          name: "Spaghetti bolognese",
+        },
+        status: "recipeSelected",
+      }],
+      ingredients: [{
+        ingredientId: "ingredient-beef",
+        sourceKey: "groundBeef",
+        name: "rundergehakt",
+        unit: "g",
+        optional: false,
+        servingsBase: 1,
+        kind: "ingredient",
+        brandConstraint: null,
+        requiredQuantity: 700,
+        purchaseQuantity: 2,
+        packageCapacity: 500,
+        usedIn: [{
+          recipeId: "recipe-spaghetti",
+          recipeName: "Spaghetti bolognese",
+          dayIndex: 0,
+          requiredQuantity: 700,
+        }],
+        product: {
+          productId: "catalog-product-id",
+          sku: "871000000001",
+          name: "Hoogvliet rundergehakt",
+          brand: "Hoogvliet",
+          packageText: "500 g",
+          imageUrl: null,
+          supermarket: "Hoogvliet",
+          sourceUrl: "https://www.hoogvliet.com/product/871000000001",
+        },
+        price: {
+          amountCents: 449,
+          isOffer: false,
+          updatedAt: NOW.toISOString(),
+          freshness: "fresh",
+        },
+        productMatchMissing: false,
+        packageCalculationMissing: false,
+      }],
+      generation: {
+        generatedAt: NOW.toISOString(),
+        knownPurchaseCostCents: 898,
+        mealPlanKnownCostCents: 898,
+        mealBudgetRemainingCents: 4_102,
+        nonMealReservedCents: 5_000,
+        totalKnownWeekCostCents: 898,
+        mealBudgetStatus: "withinMealBudget",
+        weekBudgetStatus: "underBudget",
+        isMealBudgetComplete: true,
+        mealBudgetCandidateCount: 1,
+        mealBudgetRejectedCount: 0,
+        readinessByCategory: [
+          { category: "pasta", candidateCount: 19, readyCount: 10 },
+        ],
+        lowestCompleteMealPlanCostCents: 898,
+        lowestCompleteMealPlanCostReliable: true,
+        matchedProductCount: 1,
+        missingProductMatchCount: 0,
+        missingPackageCalculationCount: 0,
+        missingPriceCount: 0,
+      },
+    };
+    await storage.save(generated);
+    await expect(storage.load()).resolves.toEqual(generated);
+  });
+
   it("vervangt alleen de voorbereiding bij een nieuwe week", async () => {
     const storage = new MemoryWeekStorage();
     const existingList = createEmptyActiveShoppingList(NOW);
@@ -147,5 +234,195 @@ describe("PWA 10 lokale persistentie", () => {
         code: "unsupported-version",
       }),
     );
+  });
+
+  it("migreert een bestaande PWA 10-week naar PWA 11 zonder dagkeuzes te verliezen", () => {
+    const legacy = {
+      schemaVersion: 1,
+      id: "week-legacy",
+      createdAt: NOW.toISOString(),
+      updatedAt: NOW.toISOString(),
+      numberOfPeople: 4,
+      numberOfDays: 1,
+      budgetCents: 10_000,
+      existingListKnownSubtotalCents: 500,
+      existingListUnpricedCount: 0,
+      categoryDistribution: {
+        dutch: 1,
+        pasta: 0,
+        rice: 0,
+        quick: 0,
+        healthy: 0,
+        comfort: 0,
+        vegetarian: 0,
+        freeChoice: 0,
+      },
+      preferences: {
+        noVegetarian: false,
+        quickImportant: false,
+        healthyImportant: false,
+        budgetImportant: true,
+      },
+      days: [{
+        dayIndex: 0,
+        category: "dutch",
+        freeChoice: false,
+        recipeId: null,
+        status: "categoryAssigned",
+      }],
+      status: "readyForGeneration",
+      listStrategy: "preserveAndComplete",
+    };
+    expect(
+      decodeStoredWeekPreparation({
+        key: "active",
+        schemaVersion: 1,
+        preparation: legacy,
+      }),
+    ).toMatchObject({
+      schemaVersion: 4,
+      mealBudgetCents: null,
+      id: "week-legacy",
+      ingredients: [],
+      generation: null,
+      days: [{ category: "dutch", recipe: null }],
+    });
+  });
+
+  it("migreert een bestaande PWA 11-versie 2 zonder het gekozen gerecht te wijzigen", () => {
+    const base = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v2",
+    );
+    const legacy = JSON.parse(JSON.stringify({
+      ...base,
+      status: "generationPartial",
+      days: [{
+        dayIndex: 0,
+        category: "pasta",
+        freeChoice: false,
+        recipeId: "recipe-spaghetti",
+        recipe: { id: "recipe-spaghetti", sourceKey: "spaghetti-bolognese", name: "Spaghetti bolognese" },
+        status: "recipeSelected",
+      }],
+      ingredients: [{
+        ingredientId: "ingredient-beef",
+        sourceKey: "groundBeef",
+        name: "rundergehakt",
+        unit: "g",
+        optional: false,
+        servingsBase: 1,
+        kind: "ingredient",
+        brandConstraint: null,
+        requiredQuantity: 700,
+        purchaseQuantity: null,
+        packageCapacity: null,
+        usedIn: [{ recipeId: "recipe-spaghetti", recipeName: "Spaghetti bolognese", dayIndex: 0, requiredQuantity: 700 }],
+        product: null,
+        price: null,
+        productMatchMissing: true,
+        packageCalculationMissing: false,
+      }],
+      generation: {
+        generatedAt: NOW.toISOString(),
+        knownPurchaseCostCents: 0,
+        matchedProductCount: 0,
+        missingProductMatchCount: 1,
+        missingPackageCalculationCount: 0,
+        missingPriceCount: 0,
+      },
+    })) as Record<string, unknown>;
+    legacy.schemaVersion = 2;
+    const ingredients = legacy.ingredients as Array<Record<string, unknown>>;
+    for (const ingredient of ingredients) {
+      delete ingredient.kind;
+      delete ingredient.brandConstraint;
+      const uses = ingredient.usedIn as Array<Record<string, unknown>>;
+      for (const use of uses) {
+        delete use.dayIndex;
+        delete use.requiredQuantity;
+      }
+    }
+
+    expect(
+      decodeStoredWeekPreparation({
+        key: "active",
+        schemaVersion: 2,
+        preparation: legacy,
+      }),
+    ).toMatchObject({
+      schemaVersion: 4,
+      mealBudgetCents: null,
+      days: [{ recipe: { sourceKey: "spaghetti-bolognese" } }],
+      ingredients: [{
+        kind: "ingredient",
+        brandConstraint: null,
+        usedIn: [{ dayIndex: 0, requiredQuantity: 700 }],
+      }],
+    });
+  });
+
+  it("migreert schema v3 naar een expliciet nog in te stellen maaltijd-budget zonder de week te vervangen", () => {
+    const base = createWeekPreparation(
+      SETTINGS,
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v3",
+    );
+    const current: WeekPreparation = {
+      ...base,
+      status: "generated",
+      generation: {
+        generatedAt: NOW.toISOString(),
+        knownPurchaseCostCents: 898,
+        mealPlanKnownCostCents: 898,
+        mealBudgetRemainingCents: null,
+        nonMealReservedCents: null,
+        totalKnownWeekCostCents: 898,
+        mealBudgetStatus: "noMealBudget",
+        weekBudgetStatus: "underBudget",
+        isMealBudgetComplete: false,
+        mealBudgetCandidateCount: 0,
+        mealBudgetRejectedCount: 0,
+        matchedProductCount: 1,
+        missingProductMatchCount: 0,
+        missingPackageCalculationCount: 0,
+        missingPriceCount: 0,
+      },
+    };
+    const legacy = structuredClone(current) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 3;
+    delete legacy.mealBudgetCents;
+    const generation = legacy.generation as Record<string, unknown>;
+    for (const field of [
+      "mealPlanKnownCostCents",
+      "mealBudgetRemainingCents",
+      "nonMealReservedCents",
+      "totalKnownWeekCostCents",
+      "mealBudgetStatus",
+      "weekBudgetStatus",
+      "isMealBudgetComplete",
+      "mealBudgetCandidateCount",
+      "mealBudgetRejectedCount",
+    ]) delete generation[field];
+
+    const migrated = decodeStoredWeekPreparation({
+      key: "active",
+      schemaVersion: 3,
+      preparation: legacy,
+    });
+    expect(migrated).toMatchObject({
+      schemaVersion: 4,
+      mealBudgetCents: null,
+      days: current.days,
+      generation: {
+        knownPurchaseCostCents: 898,
+        mealPlanKnownCostCents: 898,
+        mealBudgetStatus: "noMealBudget",
+        isMealBudgetComplete: false,
+      },
+    });
   });
 });

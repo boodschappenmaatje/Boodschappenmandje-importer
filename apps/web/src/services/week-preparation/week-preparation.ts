@@ -62,6 +62,7 @@ export function createWeekPreparation(
   listContext: ExistingListContext,
   now: Date = new Date(),
   id: string = createPreparationId(now),
+  mealBudgetCents: number | null = null,
 ): WeekPreparation {
   const timestamp = now.toISOString();
   return {
@@ -72,11 +73,20 @@ export function createWeekPreparation(
     numberOfPeople: settings.people,
     numberOfDays: settings.days,
     budgetCents: settings.budgetCents,
+    mealBudgetCents:
+      mealBudgetCents !== null &&
+      mealBudgetCents >= 0 &&
+      settings.budgetCents !== null &&
+      mealBudgetCents <= settings.budgetCents
+        ? mealBudgetCents
+        : null,
     existingListKnownSubtotalCents: listContext.knownSubtotalCents,
     existingListUnpricedCount: listContext.unpricedItemCount,
     categoryDistribution: emptyCategoryDistribution(),
     preferences: DEFAULT_WEEK_PREFERENCES,
     days: [],
+    ingredients: [],
+    generation: null,
     status: "draft",
     listStrategy: "preserveAndComplete",
   };
@@ -122,9 +132,40 @@ export function updateWeekSettings(
     numberOfPeople: settings.people,
     numberOfDays: settings.days,
     budgetCents: settings.budgetCents,
+    mealBudgetCents:
+      settings.budgetCents !== null &&
+      preparation.mealBudgetCents !== null &&
+      preparation.mealBudgetCents <= settings.budgetCents
+        ? preparation.mealBudgetCents
+        : null,
   });
-  if (daysChanged) return { ...next, days: [], status: "draft" };
-  return requiredSettingMissing ? { ...next, status: "draft" } : next;
+  if (daysChanged) {
+    return {
+      ...next,
+      days: [],
+      ingredients: [],
+      generation: null,
+      status: "draft",
+    };
+  }
+  return requiredSettingMissing
+    ? { ...next, ingredients: [], generation: null, status: "draft" }
+    : next;
+}
+
+export function setMealBudgetCents(
+  preparation: WeekPreparation,
+  mealBudgetCents: number | null,
+  now: Date = new Date(),
+): WeekPreparation {
+  const valid =
+    mealBudgetCents === null ||
+    (Number.isSafeInteger(mealBudgetCents) &&
+      mealBudgetCents >= 0 &&
+      preparation.budgetCents !== null &&
+      mealBudgetCents <= preparation.budgetCents);
+  if (!valid || preparation.mealBudgetCents === mealBudgetCents) return preparation;
+  return withUpdatedAt(preparation, now, { mealBudgetCents });
 }
 
 export function updateListSnapshot(
@@ -152,6 +193,8 @@ export function setCategoryCount(
       [category]: count,
     },
     days: [],
+    ingredients: [],
+    generation: null,
     status: "draft",
   });
 }
@@ -178,6 +221,9 @@ export function canPrepareWeek(preparation: WeekPreparation): boolean {
     preparation.numberOfDays <= 7 &&
     preparation.budgetCents !== null &&
     preparation.budgetCents > 0 &&
+    preparation.mealBudgetCents !== null &&
+    preparation.mealBudgetCents >= 0 &&
+    preparation.mealBudgetCents <= preparation.budgetCents &&
     distributionProgress(
       preparation.categoryDistribution,
       preparation.numberOfDays,
@@ -214,7 +260,8 @@ export function distributeCategories(
     category,
     freeChoice: category === "freeChoice",
     recipeId: null,
-    status: "categoryAssigned",
+    recipe: null,
+    status: category === "freeChoice" ? "freeChoice" : "categoryAssigned",
   }));
 }
 
@@ -243,17 +290,32 @@ export function changePreparedDayCategory(
   category: MealCategory,
   now: Date = new Date(),
 ): WeekPreparation {
-  if (preparation.status !== "readyForGeneration") return preparation;
+  if (!["readyForGeneration", "generated", "generationPartial"].includes(preparation.status)) {
+    return preparation;
+  }
   const currentDay = preparation.days.find((day) => day.dayIndex === dayIndex);
   if (!currentDay || currentDay.category === category) return preparation;
 
   const days = preparation.days.map((day) =>
     day.dayIndex === dayIndex
-      ? { ...day, category, freeChoice: category === "freeChoice" }
+      ? {
+          ...day,
+          category,
+          freeChoice: category === "freeChoice",
+          recipeId: null,
+          recipe: null,
+          status: category === "freeChoice" ? "freeChoice" as const : "categoryAssigned" as const,
+        }
       : day,
   );
   const categoryDistribution = emptyCategoryDistribution();
   for (const day of days) categoryDistribution[day.category] += 1;
 
-  return withUpdatedAt(preparation, now, { days, categoryDistribution });
+  return withUpdatedAt(preparation, now, {
+    days,
+    categoryDistribution,
+    ingredients: [],
+    generation: null,
+    status: "readyForGeneration",
+  });
 }

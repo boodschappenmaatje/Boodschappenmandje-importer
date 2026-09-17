@@ -9,6 +9,8 @@ describe("Meer", () => {
     const html = renderToStaticMarkup(createElement(MorePage));
     expect(html).toContain('href="/meer/catalogusstatus"');
     expect(html).toContain("Catalogusstatus");
+    expect(html).toContain('href="/meer/data-health"');
+    expect(html).toContain("Data Health");
     expect(html).toContain("Binnenkort");
   });
 });

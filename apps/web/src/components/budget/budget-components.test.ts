@@ -89,30 +89,36 @@ function render(
 }
 
 describe("PWA 9 budgetweergaven", () => {
-  it("toont op Home een echte compacte budgetkaart", () => {
+  it("toont op Home de drie echte budgetwaarden uit de mockup", () => {
     const html = render(createElement(HomePage), activeList(10));
-    expect(html).toContain("€");
-    expect(html).toContain("bekend besteed van");
-    expect(html).toContain("90,00");
+    expect(html).toContain("Weekbudget");
+    expect(html).toContain("Gepland");
+    expect(html).toContain("Over");
+    expect(html).toContain("€ 100,00");
+    expect(html).toContain("€ 90,00");
     expect(html).toContain('href="/budget"');
-    expect(html).toContain("<progress");
+    expect(html).toContain('role="progressbar"');
   });
 
-  it("toont Budgetdetail met totaalinformatie en wijzigvelden", () => {
+  it("toont Budgetdetail met dynamische verdeling, voorkeuren en wijzigvelden", () => {
     const html = render(createElement(BudgetPage), activeList(10));
-    expect(html).toContain("Bekend lijsttotaal");
-    expect(html).toContain("Geprijsde producten");
-    expect(html).toContain("Producten zonder prijs");
-    expect(html).toContain("Bedrag in euro");
+    expect(html).toContain("Weekbudget");
+    expect(html).toContain('href="/"');
+    expect(html).toContain("Terug");
+    expect(html).toContain("Avondmaaltijden");
+    expect(html).toContain("Boodschappenlijst");
+    expect(html).toContain("Nog vrij");
+    expect(html).toContain("Voorkeuren");
+    expect(html).toContain("Weekbudget in euro");
     expect(html).toContain("Personen");
     expect(html).toContain("Dagen");
-    expect(html).toContain("Budget per dag");
+    expect(html).toContain("Hoogvliet");
   });
 
   it("toont ontbrekende prijs zonder een betrouwbaar resterend bedrag te claimen", () => {
     const html = render(createElement(BudgetPage), activeList(null));
-    expect(html).toContain("1 product zonder beschikbare prijs");
-    expect(html).toContain("resterend eindbedrag is daarom nog niet betrouwbaar");
+    expect(html).toContain("Nog niet geprijsd");
+    expect(html).toContain("Nog niet alle prijzen zijn bekend");
     expect(html).not.toContain("100,00 over");
   });
 
@@ -128,17 +134,26 @@ describe("PWA 9 budgetweergaven", () => {
       ...SETTINGS,
       budgetCents: null,
     });
-    expect(html).toContain("Budget instellen");
-    expect(html).not.toContain("bekend besteed van");
+    expect(html).toContain("Niet ingesteld");
+    expect(html).toContain("Stel een weekbudget in");
   });
 
-  it("behoudt compacte mobiele layoutregels", () => {
+  it("toont een concrete rustige waarschuwing boven budget", () => {
+    const html = render(createElement(HomePage), activeList(120));
+    expect(html).toContain("Boven");
+    expect(html).toContain("Je zit € 20,00 boven je budget");
+    expect(html).toContain('data-tone="danger"');
+  });
+
+  it("behoudt compacte layoutregels voor 375, 390 en 430 pixels", () => {
     const css = readFileSync(
       new URL("../../app/globals.css", import.meta.url),
       "utf8",
     );
-    expect(css).toContain("@media (max-width: 360px)");
+    expect(css).toContain("@media (max-width: 375px)");
+    expect(css).toContain("@media (max-width: 390px)");
+    expect(css).toContain("@media (max-width: 430px)");
     expect(css).toContain(".list-budget-summary");
-    expect(css).toContain(".budget-facts");
+    expect(css).toContain(".budget-donut");
   });
 });

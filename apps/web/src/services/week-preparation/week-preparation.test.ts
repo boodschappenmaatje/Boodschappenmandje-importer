@@ -12,6 +12,7 @@ import {
   distributionProgress,
   prepareWeek,
   setCategoryCount,
+  setMealBudgetCents,
   setWeekPreference,
   updateListSnapshot,
   updateWeekSettings,
@@ -26,12 +27,12 @@ const SETTINGS: BudgetSettings = {
 };
 
 function preparation() {
-  return createWeekPreparation(
+  return setMealBudgetCents(createWeekPreparation(
     SETTINGS,
     { knownSubtotalCents: 2_463, unpricedItemCount: 0 },
     NOW,
     "week-test",
-  );
+  ), 5_000, NOW);
 }
 
 function withDistribution(entries: Partial<Record<MealCategory, number>>) {
@@ -59,7 +60,8 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
       existingListUnpricedCount: 0,
       status: "draft",
       listStrategy: "preserveAndComplete",
-      schemaVersion: 1,
+      schemaVersion: 4,
+      mealBudgetCents: null,
     });
   });
 
@@ -107,6 +109,19 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
       prepareWeek(exact, { knownSubtotalCents: 2_463, unpricedItemCount: 0 }, NOW)
         .status,
     ).toBe("readyForGeneration");
+  });
+
+  it("accepteert een cent-nauwkeurig maaltijd-budget van nul tot maximaal het weekbudget", () => {
+    const base = createWeekPreparation(
+      SETTINGS,
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-meal-budget",
+    );
+    expect(setMealBudgetCents(base, 0, NOW).mealBudgetCents).toBe(0);
+    expect(setMealBudgetCents(base, 10_000, NOW).mealBudgetCents).toBe(10_000);
+    expect(setMealBudgetCents(base, 10_001, NOW)).toBe(base);
+    expect(setMealBudgetCents(base, 50.5, NOW)).toBe(base);
   });
 
   it("maakt exact het gekozen aantal dagen zonder ontbrekende of extra dagen", () => {
@@ -199,4 +214,3 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
     });
   });
 });
-

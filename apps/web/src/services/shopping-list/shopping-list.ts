@@ -1,5 +1,7 @@
 import { resolveCurrentPrice } from "@/services/catalog/price";
 import type { Product } from "@/types/catalog";
+import type { WeekIngredientRequirement } from "@/types/week-preparation";
+import { combinedProductPurchaseQuantity } from "@/services/week-preparation/product-matching";
 import {
   SHOPPING_LIST_SCHEMA_VERSION,
   type ActiveShoppingList,
@@ -26,6 +28,14 @@ function uniqueSources(
   source: ShoppingListItemSource,
 ): ShoppingListItemSource[] {
   return current.includes(source) ? current : [...current, source];
+}
+
+function uniqueStrings(current: string[], additions: string[]): string[] {
+  return [...new Set([...current, ...additions])];
+}
+
+function recipeSources(current: ShoppingListItemSource[]): ShoppingListItemSource[] {
+  return uniqueSources(uniqueSources(current, "weekPreparation"), "recipe");
 }
 
 function priceReference(product: Product): ShoppingListPriceReference | null {
@@ -123,6 +133,109 @@ export function addCatalogProduct(
     items: [...list.items, item],
     updatedAt: timestamp,
   };
+}
+
+export function completeShoppingListFromWeek(
+  list: ActiveShoppingList,
+  requirements: WeekIngredientRequirement[],
+  now: Date | string = new Date(),
+): ActiveShoppingList {
+  const timestamp = nowIso(now);
+  const grouped = new Map<
+    string,
+    {
+      requirement: WeekIngredientRequirement;
+      requirements: WeekIngredientRequirement[];
+      usedIn: string[];
+    }
+  >();
+
+  for (const requirement of requirements) {
+    if (
+      !requirement.product ||
+      requirement.purchaseQuantity === null ||
+      (requirement.optional && requirement.price === null)
+    ) continue;
+    const current = grouped.get(requirement.product.productId);
+    const usedIn = requirement.usedIn.map((item) => item.recipeName);
+    if (current) {
+      current.requirements.push(requirement);
+      current.usedIn = uniqueStrings(current.usedIn, usedIn);
+    } else {
+      grouped.set(requirement.product.productId, {
+        requirement,
+        requirements: [requirement],
+        usedIn,
+      });
+    }
+  }
+
+  let changed = false;
+  const items = [...list.items];
+
+  for (const group of grouped.values()) {
+    const { requirement, requirements, usedIn } = group;
+    const quantity = combinedProductPurchaseQuantity(requirements);
+    const product = requirement.product;
+    if (!product) continue;
+    const existingIndex = items.findIndex(
+      (item) => item.productId === product.productId,
+    );
+    const price: ShoppingListPriceReference | null = requirement.price
+      ? {
+          productId: product.productId,
+          sku: product.sku,
+          amount: requirement.price.amountCents / 100,
+          isOffer: requirement.price.isOffer,
+          updatedAt: requirement.price.updatedAt,
+          freshness: requirement.price.freshness,
+          provider: product.supermarket,
+        }
+      : null;
+
+    if (existingIndex >= 0) {
+      const existing = items[existingIndex];
+      if (existing.sku !== null && existing.sku !== product.sku) {
+        throw new ShoppingListIdentityError();
+      }
+      const next: ShoppingListItem = {
+        ...existing,
+        sku: existing.sku ?? product.sku,
+        name: product.name,
+        brand: product.brand,
+        packageText: product.packageText,
+        imageUrl: product.imageUrl,
+        quantity: Math.max(existing.quantity, quantity),
+        price: price ?? existing.price,
+        sources: recipeSources(existing.sources),
+        usedIn: uniqueStrings(existing.usedIn, usedIn),
+        updatedAt: existing.updatedAt,
+      };
+      if (JSON.stringify(next) !== JSON.stringify(existing)) {
+        items[existingIndex] = { ...next, updatedAt: timestamp };
+        changed = true;
+      }
+      continue;
+    }
+
+    items.push({
+      productId: product.productId,
+      sku: product.sku,
+      name: product.name,
+      brand: product.brand,
+      packageText: product.packageText,
+      imageUrl: product.imageUrl,
+      quantity,
+      price,
+      sources: ["weekPreparation", "recipe"],
+      usedIn,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    changed = true;
+  }
+
+  return changed ? { ...list, items, updatedAt: timestamp } : list;
 }
 
 export function increaseQuantity(

@@ -1,6 +1,6 @@
 import type { NavigationIcon } from "@/types/navigation";
 
-type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "trash" | "plus" | "minus";
+type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back";
 
 interface IconProps {
   name: IconName;
@@ -23,6 +23,8 @@ export function Icon({ name, size = 24 }: IconProps) {
   switch (name) {
     case "home":
       return <svg {...common}><path d="m3 11 9-8 9 8" /><path d="M5 10v11h14V10" /><path d="M9 21v-7h6v7" /></svg>;
+    case "menu":
+      return <svg {...common}><path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10" /><path d="M17 3v18M17 3c3 2 4 5 4 9h-4" /></svg>;
     case "list":
       return <svg {...common}><path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>;
     case "products":
@@ -55,5 +57,15 @@ export function Icon({ name, size = 24 }: IconProps) {
       return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
     case "minus":
       return <svg {...common}><path d="M5 12h14" /></svg>;
+    case "users":
+      return <svg {...common}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></svg>;
+    case "store":
+      return <svg {...common}><path d="M3 9h18l-2-5H5L3 9Z" /><path d="M5 9v11h14V9M9 20v-6h6v6" /><path d="M3 9c0 2 3 3 4.5 1C9 12 12 12 13.5 10 15 12 18 12 19 9" /></svg>;
+    case "check":
+      return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="m8 12 2.7 2.7L16.5 9" /></svg>;
+    case "lightbulb":
+      return <svg {...common}><path d="M9 18h6M10 22h4" /><path d="M8.5 15.5A7 7 0 1 1 15.5 15.5c-.9.7-1.5 1.5-1.5 2.5h-4c0-1-.6-1.8-1.5-2.5Z" /></svg>;
+    case "back":
+      return <svg {...common}><path d="m15 18-6-6 6-6" /></svg>;
   }
 }

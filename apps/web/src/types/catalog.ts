@@ -82,6 +82,7 @@ export interface RecipeIngredient {
   amountPerPerson: number;
   unit: "g" | "kg" | "ml" | "l" | "piece" | "loaf";
   position: number;
+  optional?: boolean;
 }
 
 export interface CatalogProductsResult {
