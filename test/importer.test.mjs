@@ -4,7 +4,9 @@ import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
   buildDynamicDiscoveryTerms,
+  catalogImportFailure,
   catalogGrowthMode,
+  CATALOG_SOURCE_UNAVAILABLE_MESSAGE,
   classifyCatalogOutcomes,
   formatCatalogGrowthSummary,
   importRunStatus,
@@ -22,6 +24,7 @@ import {
   collectCandidatePages,
   catalogLimitReached,
   claimCandidateSKU,
+  classifySourcePageEvidence,
   describePriceUpdate,
   filterDiscoveryCandidates,
   finalizeTermDiscoveryStats,
@@ -32,6 +35,7 @@ import {
   isRelevantCandidate,
   isValidProductURL,
   isValidSKU,
+  nextEmptySourceSearchCount,
   parseOfferPeriod,
   parsePriceText,
   prioritizeCandidates,
@@ -39,7 +43,9 @@ import {
   searchURL,
   selectPriceShard,
   selectPriceShardWindow,
+  SourceBlockedError,
   withTransientNavigationRetry,
+  waitForSourceContent,
   resolvedProductTypeForRefresh,
   weightInGrams,
 } from "../src/hoogvliet.mjs";
@@ -122,6 +128,104 @@ test("paginering en catalogusfocus zijn configureerbaar en hard begrensd", () =>
   assert.equal(loadConfig({ DRY_RUN: "1", MAX_PAGES_PER_TERM: "999" }).maxPagesPerTerm, 8);
   assert.equal(limits.defaultMaxPagesPerTerm, 1);
   assert.equal(limits.safePagesPerTermLimit, 8);
+});
+
+test("een lege Incapsula-loader wordt als tijdelijke bronbeveiliging herkend", () => {
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: false,
+    hasIncapsula: true,
+    bodyTextLength: 0,
+    htmlLength: 212,
+  }), "security_check");
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: true,
+    hasIncapsula: true,
+    bodyTextLength: 1832,
+    htmlLength: 704779,
+  }), "ready");
+  assert.equal(classifySourcePageEvidence({ captcha: true }), "blocked");
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: false,
+    hasIncapsula: true,
+    bodyTextLength: 1800,
+    htmlLength: 700000,
+  }), "security_check");
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: false,
+    hasExplicitEmptyState: true,
+    hasIncapsula: true,
+  }), "empty");
+});
+
+test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resetten de teller", () => {
+  assert.equal(nextEmptySourceSearchCount(0, 0), 1);
+  assert.equal(nextEmptySourceSearchCount(1, 0), 2);
+  assert.equal(nextEmptySourceSearchCount(2, 0), 3);
+  assert.equal(nextEmptySourceSearchCount(3, 4), 0);
+});
+
+test("bronproblemen krijgen een consumentveilige catalogusstatus", () => {
+  const error = new SourceBlockedError("Technische broncontrole met interne details");
+  const failure = catalogImportFailure(error, 0);
+  assert.equal(failure.sourceStatus, "source_challenge");
+  assert.equal(failure.publicSummary, CATALOG_SOURCE_UNAVAILABLE_MESSAGE);
+  assert.doesNotMatch(failure.publicSummary, /Incapsula|Imperva|HTTP|challenge/i);
+});
+
+test("de importer laat een normale Incapsula-controle in dezelfde sessie uitlopen", async () => {
+  const evidence = [
+    {
+      hasExpectedContent: false,
+      hasIncapsula: true,
+      bodyTextLength: 0,
+      htmlLength: 212,
+    },
+    {
+      hasExpectedContent: true,
+      hasIncapsula: true,
+      bodyTextLength: 1832,
+      htmlLength: 704779,
+    },
+  ];
+  const waitCalls = [];
+  let securityChecks = 0;
+  const page = {
+    waitForFunction: async (...args) => waitCalls.push(args),
+    evaluate: async () => evidence.shift(),
+  };
+
+  const result = await waitForSourceContent(page, ".product-tile", {
+    normalTimeoutMs: 12_000,
+    securityTimeoutMs: 45_000,
+    onSecurityCheck: () => { securityChecks += 1; },
+  });
+
+  assert.equal(result.securityCheckObserved, true);
+  assert.equal(securityChecks, 1);
+  assert.equal(waitCalls.length, 2);
+  assert.equal(waitCalls[0][2].timeout, 12_000);
+  assert.equal(waitCalls[1][2].timeout, 45_000);
+});
+
+test("een veiligheidscontrole die niet afrondt faalt vroeg en expliciet", async () => {
+  const evidence = {
+    hasExpectedContent: false,
+    hasIncapsula: true,
+    bodyTextLength: 0,
+    htmlLength: 212,
+  };
+  const page = {
+    waitForFunction: async () => {},
+    evaluate: async () => evidence,
+  };
+
+  await assert.rejects(
+    waitForSourceContent(page, ".product-tile", {
+      normalTimeoutMs: 1,
+      securityTimeoutMs: 1,
+    }),
+    /Incapsula.*wachttijd/,
+  );
 });
 
 test("growth heeft een apart ruim discoverybudget zonder het nieuwe-productdoel te verlagen", () => {

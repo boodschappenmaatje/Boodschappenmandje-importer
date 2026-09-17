@@ -48,6 +48,15 @@ export function restURL(value, table) {
   return url;
 }
 
+export function rpcURL(value, functionName) {
+  if (typeof functionName !== "string" || !/^[a-z_]+$/.test(functionName)) {
+    throw new Error("Ongeldige Supabase-RPC-naam.");
+  }
+  const url = restURL(value, functionName);
+  url.pathname = `/rest/v1/rpc/${functionName}`;
+  return url;
+}
+
 export function requestHeaders(secret, prefer) {
   if (typeof secret !== "string" || !secret.trim()) {
     throw new Error("SUPABASE_SECRET_KEY ontbreekt.");
@@ -136,8 +145,7 @@ async function waitBeforeRetry(attempt) {
   await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
 }
 
-async function postJSON(baseValue, table, secret, payload, prefer, query) {
-  const url = restURL(baseValue, table);
+async function postJSONToURL(url, phase, secret, payload, prefer, query = {}) {
   const host = url.host;
   for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
   const body = JSON.stringify(payload);
@@ -157,7 +165,7 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
       });
       responseBody = await response.text();
     } catch (error) {
-      const safeError = networkError(error, table, host, secret);
+      const safeError = networkError(error, phase, host, secret);
       if (attempt < MAX_ATTEMPTS) {
         await waitBeforeRetry(attempt);
         continue;
@@ -167,7 +175,7 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
         {
           retryable: true,
           code: safeError.code,
-          phase: table,
+          phase,
           host,
           kind: safeError.kind,
         },
@@ -179,14 +187,14 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
     if (!response.ok) {
       const detail = responseError(responseBody, secret);
       const safeError = new SupabaseRequestError(
-        `Supabase write mislukt | fase=${table} | host=${host} | soort=http | HTTP ${response.status}`
+        `Supabase write mislukt | fase=${phase} | host=${host} | soort=http | HTTP ${response.status}`
           + `${detail.code ? ` | code=${detail.code}` : ""}`
           + `${detail.body ? ` | response=${detail.body}` : ""}`,
         {
           retryable: RETRYABLE_STATUS.has(response.status),
           status: response.status,
           code: detail.code,
-          phase: table,
+          phase,
           host,
           kind: "http",
         },
@@ -203,12 +211,26 @@ async function postJSON(baseValue, table, secret, payload, prefer, query) {
       return JSON.parse(responseBody);
     } catch {
       throw new SupabaseRequestError(
-        `Supabase write mislukt | fase=${table} | host=${host} | soort=response | succesvolle reactie bevatte ongeldige JSON.`,
-        { phase: table, host, kind: "response" },
+        `Supabase write mislukt | fase=${phase} | host=${host} | soort=response | succesvolle reactie bevatte ongeldige JSON.`,
+        { phase, host, kind: "response" },
       );
     }
   }
-  throw new SupabaseRequestError(`Supabase ${table}: onverwacht einde van request.`);
+  throw new SupabaseRequestError(`Supabase ${phase}: onverwacht einde van request.`);
+}
+
+async function postJSON(baseValue, table, secret, payload, prefer, query) {
+  return postJSONToURL(restURL(baseValue, table), table, secret, payload, prefer, query);
+}
+
+async function postRPC(baseValue, functionName, secret, payload) {
+  return postJSONToURL(
+    rpcURL(baseValue, functionName),
+    `rpc:${functionName}`,
+    secret,
+    payload,
+    "return=representation",
+  );
 }
 
 async function getJSON(baseValue, table, secret, query, rangeStart, rangeEnd) {
@@ -523,6 +545,145 @@ export async function fetchCatalogImportRuns(config, {
     0,
     safeLimit - 1,
   );
+}
+
+function dailyJobFromRow(row) {
+  if (!row || typeof row !== "object" || !row.id) return null;
+  return {
+    id: row.id,
+    stateKey: row.state_key,
+    jobDate: row.job_date,
+    timezone: row.timezone,
+    targetNewProducts: boundedCount(row.target_new_products),
+    newProductsCollected: boundedCount(row.new_products_collected),
+    remainingTarget: Math.max(
+      0,
+      boundedCount(row.target_new_products) - boundedCount(row.new_products_collected),
+    ),
+    status: row.status,
+    attemptCount: boundedCount(row.attempt_count),
+    startedAt: row.started_at ?? null,
+    lastAttemptAt: row.last_attempt_at ?? null,
+    nextRetryAt: row.next_retry_at ?? null,
+    completedAt: row.completed_at ?? null,
+    lockExpiresAt: row.lock_expires_at ?? null,
+    lastPublicMessage: row.last_public_message ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
+}
+
+function rpcObject(value) {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value && typeof value === "object" ? value : null;
+}
+
+export async function fetchCatalogDailyJob(config, {
+  stateKey,
+  jobDate,
+} = {}) {
+  const rows = await getJSON(
+    config.supabaseURL,
+    "catalog_daily_jobs",
+    config.supabaseSecret,
+    {
+      select: "id,state_key,job_date,timezone,target_new_products,new_products_collected,status,attempt_count,started_at,last_attempt_at,next_retry_at,completed_at,lock_expires_at,last_public_message,updated_at",
+      state_key: `eq.${stateKey}`,
+      job_date: `eq.${jobDate}`,
+    },
+    0,
+    0,
+  );
+  return dailyJobFromRow(rows[0]);
+}
+
+export async function ensureCatalogDailyJob(config, {
+  stateKey,
+  jobDate,
+  targetNewProducts,
+  now = new Date(),
+} = {}) {
+  const result = rpcObject(await postRPC(
+    config.supabaseURL,
+    "ensure_catalog_daily_job",
+    config.supabaseSecret,
+    {
+      p_state_key: stateKey,
+      p_job_date: jobDate,
+      p_target_new_products: targetNewProducts,
+      p_now: now.toISOString(),
+    },
+  ));
+  const job = dailyJobFromRow(result);
+  if (!job) throw new Error("Supabase bevestigde de dagelijkse catalogusjob niet.");
+  return job;
+}
+
+export async function claimCatalogDailyAttempt(config, {
+  stateKey,
+  jobDate,
+  targetNewProducts,
+  now = new Date(),
+  lockTTLMinutes = 130,
+} = {}) {
+  const result = rpcObject(await postRPC(
+    config.supabaseURL,
+    "claim_catalog_daily_attempt",
+    config.supabaseSecret,
+    {
+      p_state_key: stateKey,
+      p_job_date: jobDate,
+      p_target_new_products: targetNewProducts,
+      p_now: now.toISOString(),
+      p_lock_ttl_minutes: lockTTLMinutes,
+    },
+  ));
+  const job = dailyJobFromRow(result?.job);
+  if (!job || typeof result?.claimed !== "boolean") {
+    throw new Error("Supabase gaf geen geldige daily-attemptclaim terug.");
+  }
+  return {
+    claimed: result.claimed,
+    reason: typeof result.reason === "string" ? result.reason : "unknown",
+    attemptId: typeof result.attemptId === "string" ? result.attemptId : null,
+    lockToken: typeof result.lockToken === "string" ? result.lockToken : null,
+    job,
+  };
+}
+
+export async function finishCatalogDailyAttempt(config, {
+  jobID,
+  attemptID,
+  lockToken,
+  outcome,
+  counts,
+  retryReason = null,
+  nextRetryAt = null,
+  errorCode: code = null,
+  errorSummary = null,
+  publicMessage = null,
+  now = new Date(),
+} = {}) {
+  const result = rpcObject(await postRPC(
+    config.supabaseURL,
+    "finish_catalog_daily_attempt",
+    config.supabaseSecret,
+    {
+      p_job_id: jobID,
+      p_attempt_id: attemptID,
+      p_lock_token: lockToken,
+      p_outcome: outcome,
+      p_counts: counts,
+      p_retry_reason: retryReason,
+      p_next_retry_at: nextRetryAt?.toISOString?.() ?? nextRetryAt,
+      p_error_code: code,
+      p_error_summary: compactErrorSummary(errorSummary),
+      p_public_message: compactErrorSummary(publicMessage),
+      p_now: now.toISOString(),
+    },
+  ));
+  const job = dailyJobFromRow(result);
+  if (!job) throw new Error("Supabase bevestigde de afgesloten daily attempt niet.");
+  return job;
 }
 
 export async function fetchCatalogDiscoveryState(config, stateKey) {

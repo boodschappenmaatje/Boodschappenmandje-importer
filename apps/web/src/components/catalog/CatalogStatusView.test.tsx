@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import {
   CatalogStatusContent,
   formatCatalogUpdateTime,
+  formatNextCatalogAttempt,
 } from "@/components/catalog/CatalogStatusView";
 import {
   catalogProgressPercent,
+  mapCatalogDailyJob,
   mapCatalogImportRun,
 } from "@/services/catalog/catalog-status-repository";
 import type { CatalogStatus } from "@/types/catalog-status";
@@ -33,6 +35,7 @@ const status: CatalogStatus = {
     totalUniqueProductsAfter: 6_842,
     durationSeconds: 960,
   },
+  dailyJob: null,
 };
 
 describe("catalogusstatus", () => {
@@ -109,5 +112,78 @@ describe("catalogusstatus", () => {
       "2026-09-15T04:16:00Z",
       new Date("2026-09-15T08:00:00Z"),
     )).toBe("vandaag 06:16");
+    expect(formatNextCatalogAttempt("2026-09-15T07:20:00Z")).toBe("09:20");
+  });
+
+  it("toont cumulatieve dagvoortgang en een consumentvriendelijke retrytijd", () => {
+    const html = renderToStaticMarkup(createElement(CatalogStatusContent, {
+      status: {
+        ...status,
+        dailyJob: {
+          id: "daily-1",
+          jobDate: "2026-09-15",
+          targetNewProducts: 400,
+          newProductsCollected: 228,
+          remainingTarget: 172,
+          status: "retry_scheduled",
+          attemptCount: 2,
+          startedAt: "2026-09-15T04:00:00Z",
+          lastAttemptAt: "2026-09-15T06:55:00Z",
+          nextRetryAt: "2026-09-15T07:20:00Z",
+          completedAt: null,
+          lastPublicMessage: "Catalogusupdate tijdelijk gepauzeerd.",
+        },
+      },
+    }));
+    expect(html).toContain("Vandaag nieuw");
+    expect(html).toContain("228 / 400");
+    expect(html).toContain("Tijdelijk gepauzeerd");
+    expect(html).toContain("Volgende poging rond 09:20");
+    expect(html).not.toContain("source_challenge");
+  });
+
+  it("mapt alle publieke dagjobstatussen typed", () => {
+    for (const dailyStatus of [
+      "pending", "running", "retry_scheduled", "target_reached",
+      "daily_target_partial", "failed_requires_attention",
+    ] as const) {
+      expect(mapCatalogDailyJob({
+        id: "daily-1",
+        job_date: "2026-09-15",
+        target_new_products: 400,
+        new_products_collected: 137,
+        status: dailyStatus,
+        attempt_count: 1,
+        started_at: "2026-09-15T04:00:00Z",
+      })).toMatchObject({ status: dailyStatus, newProductsCollected: 137, remainingTarget: 263 });
+    }
+  });
+
+  it("toont alle dagjobstatussen zonder technische foutcodes", () => {
+    const labels = new Map([
+      ["pending", "Nieuwe poging wordt voorbereid"],
+      ["running", "Bezig met bijwerken"],
+      ["retry_scheduled", "Tijdelijk gepauzeerd"],
+      ["target_reached", "Dagdoel behaald"],
+      ["daily_target_partial", "Dagdoel gedeeltelijk behaald"],
+      ["failed_requires_attention", "Update heeft aandacht nodig"],
+    ] as const);
+    for (const [dailyStatus, label] of labels) {
+      const html = renderToStaticMarkup(createElement(CatalogStatusContent, {
+        status: {
+          ...status,
+          dailyJob: {
+            id: "daily-1", jobDate: "2026-09-15", targetNewProducts: 400,
+            newProductsCollected: dailyStatus === "target_reached" ? 400 : 137,
+            remainingTarget: dailyStatus === "target_reached" ? 0 : 263,
+            status: dailyStatus, attemptCount: 2,
+            startedAt: "2026-09-15T04:00:00Z", lastAttemptAt: null,
+            nextRetryAt: null, completedAt: null, lastPublicMessage: null,
+          },
+        },
+      }));
+      expect(html).toContain(label);
+      expect(html).not.toContain("source_unavailable");
+    }
   });
 });

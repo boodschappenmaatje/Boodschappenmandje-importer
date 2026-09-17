@@ -1,7 +1,11 @@
 import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.mjs";
-import { fetchCatalogImportRuns } from "./supabase.mjs";
+import { amsterdamDateKey } from "./daily-catalog-growth.mjs";
+import {
+  ensureCatalogDailyJob,
+  fetchCatalogDailyJob,
+} from "./supabase.mjs";
 
 const DEFAULT_MAX_AGE_HOURS = 6;
 const DEFAULT_GROWTH_TARGET = 400;
@@ -77,21 +81,95 @@ export function evaluateCatalogMonitor(runs, {
   };
 }
 
+export function evaluateDailyCatalogMonitor(job, {
+  growthTarget = DEFAULT_GROWTH_TARGET,
+} = {}) {
+  if (!job) {
+    return {
+      ok: false,
+      state: "missing",
+      message: "De dagelijkse catalogusjob ontbreekt en moet veilig worden ingepland.",
+      job: null,
+    };
+  }
+  const target = Math.max(1, Number(job.targetNewProducts) || Number(growthTarget) || DEFAULT_GROWTH_TARGET);
+  const collected = Math.max(0, Number(job.newProductsCollected) || 0);
+  if (job.status === "target_reached" || collected >= target) {
+    return {
+      ok: true,
+      state: "healthy",
+      message: `Dagdoel behaald: ${collected}/${target} nieuwe producten toegevoegd.`,
+      job,
+    };
+  }
+  if (job.status === "failed_requires_attention") {
+    return {
+      ok: false,
+      state: "failed_requires_attention",
+      message: `Catalogusupdate heeft aandacht nodig; voortgang ${collected}/${target}.`,
+      job,
+    };
+  }
+  if (job.status === "daily_target_partial") {
+    return {
+      ok: true,
+      state: "daily_target_partial",
+      message: `Dagupdate gedeeltelijk voltooid: ${collected}/${target} nieuwe producten toegevoegd.`,
+      job,
+    };
+  }
+  if (job.status === "running") {
+    return {
+      ok: true,
+      state: "running",
+      message: `Catalogusupdate is bezig; voortgang ${collected}/${target}.`,
+      job,
+    };
+  }
+  if (job.status === "retry_scheduled") {
+    return {
+      ok: true,
+      state: "retry_scheduled",
+      message: `Normaal herstelproces actief; voortgang ${collected}/${target}.`,
+      job,
+    };
+  }
+  return {
+    ok: true,
+    state: "retry_scheduled",
+    message: `Dagjob staat klaar voor de volgende veilige poging; voortgang ${collected}/${target}.`,
+    job,
+  };
+}
+
 export async function monitorDailyCatalog(env = process.env, logger = console) {
   const config = loadConfig(env);
-  const runs = await fetchCatalogImportRuns(config, { trigger: "schedule", limit: 3 });
-  const result = evaluateCatalogMonitor(runs, {
-    maxAgeHours: Number(env.CATALOG_MONITOR_MAX_AGE_HOURS) || DEFAULT_MAX_AGE_HOURS,
+  const now = new Date();
+  const jobDate = amsterdamDateKey(now);
+  let job = await fetchCatalogDailyJob(config, {
+    stateKey: config.dailyImportStateKey,
+    jobDate,
+  });
+  if (!job) {
+    job = await ensureCatalogDailyJob(config, {
+      stateKey: config.dailyImportStateKey,
+      jobDate,
+      targetNewProducts: config.dailyTargetNewProducts,
+      now,
+    });
+    logger.info("Catalogusbewaking heeft de ontbrekende dagjob veilig klaargezet; de retry-workflow neemt deze over.");
+  }
+  const result = evaluateDailyCatalogMonitor(job, {
     growthTarget: Number(env.CATALOG_MONITOR_GROWTH_TARGET) || DEFAULT_GROWTH_TARGET,
   });
-  const run = result.run;
   logger.info([
     `Catalogusbewaking: ${result.message}`,
-    run ? `status=${run.status}` : null,
-    run ? `gestart=${run.started_at}` : null,
-    run?.finished_at ? `afgerond=${run.finished_at}` : null,
-    run ? `productfouten=${run.error_count ?? 0}` : null,
-    run ? `werkelijke_groei=${Math.max(0, Number(run.total_unique_products_after) - Number(run.total_unique_products_before))}` : null,
+    `dailyImportId=${job.id}`,
+    `status=${job.status}`,
+    `pogingen=${job.attemptCount}`,
+    `cumulatief_nieuw=${job.newProductsCollected}`,
+    `resterend=${job.remainingTarget}`,
+    job.nextRetryAt ? `volgende_poging=${job.nextRetryAt}` : null,
   ].filter(Boolean).join(" | "));
   if (!result.ok) throw new Error(result.message);
   return result;

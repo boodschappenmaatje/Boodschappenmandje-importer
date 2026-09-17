@@ -95,6 +95,7 @@ jobs:
 
           run_import="1"
           import_trigger="manual"
+          daily_import_job="0"
           advance_discovery_state="1"
           discovery_state_key="daily-catalog-growth"
 
@@ -114,6 +115,7 @@ jobs:
                 price_shard="0"
                 max_products="400"
                 import_trigger="schedule"
+                daily_import_job="1"
               fi
             elif [[ "${{ github.event.schedule }}" == "17 2 * * *" ]]; then
               update_mode="prices"
@@ -177,6 +179,10 @@ jobs:
             echo "CATALOG_NEW_ONLY=1"
             echo "IMPORT_TRIGGER=$([[ "$update_mode" == "growth" && "$import_trigger" == "manual" ]] && echo "test" || echo "$import_trigger")"
             echo "DISCOVERY_STATE_KEY=$discovery_state_key"
+            echo "DAILY_IMPORT_JOB=$daily_import_job"
+            echo "DAILY_IMPORT_STATE_KEY=daily-catalog-growth"
+            echo "DAILY_NEW_PRODUCT_TARGET=$max_products"
+            echo "DAILY_IMPORT_END_HOUR=23"
             echo "ADVANCE_DISCOVERY_STATE=$advance_discovery_state"
             echo "PREFER_NEW_PRODUCTS=$([[ "$update_mode" == "growth" && "$advance_discovery_state" == "0" ]] && echo "0" || echo "1")"
           } >> "$GITHUB_ENV"
@@ -243,7 +249,12 @@ jobs:
 
       - name: Producten en prijzen bijwerken
         if: env.RUN_IMPORT != '0'
-        run: npm run import
+        run: |
+          if [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
+            npm run import:daily
+          else
+            npm run import
+          fi
 
       - name: Catalogusgroei samenvatten
         if: always() && env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'growth'
@@ -253,6 +264,9 @@ jobs:
             echo "Doel: ${MAX_NEW_PRODUCTS} daadwerkelijk nieuwe unieke producten."
             echo 'De importer valideert dit met het verschil tussen de Supabase-aantallen vóór en na de run.'
             echo 'Bestaande en bijgewerkte SKU’s tellen niet mee voor dit groeidoel.'
+            if [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
+              echo 'Dit is één attempt binnen de persistente dagjob; gedeeltelijke groei blijft bewaard.'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Geplande catalogusrun direct controleren

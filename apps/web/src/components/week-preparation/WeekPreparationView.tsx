@@ -388,7 +388,7 @@ export function WeekPreparationView() {
                         </details>
                       ) : (
                         <p className="shopping-item-price-missing">
-                          Voor deze categorie kon nog geen passend gerecht worden gekozen.
+                          Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie.
                         </p>
                       )}
                     </li>

@@ -121,11 +121,27 @@ export function suitableRecipes(
   });
 }
 
+export function candidateRecipesForDays(
+  days: PreparedDay[],
+  recipes: Recipe[],
+  preferences: WeekPreferences,
+): Recipe[] {
+  const candidates = new Map<string, Recipe>();
+  for (const day of days) {
+    if (day.freeChoice || day.category === "freeChoice") continue;
+    for (const recipe of suitableRecipes(recipes, day.category, preferences)) {
+      candidates.set(recipe.id, recipe);
+    }
+  }
+  return [...candidates.values()];
+}
+
 export function selectRecipesForDays(
   days: PreparedDay[],
   recipes: Recipe[],
   preferences: WeekPreferences,
   seed: string,
+  readyRecipes?: ReadonlySet<string>,
 ): PreparedDay[] {
   const usedRecipeIds = new Set<string>();
 
@@ -141,6 +157,7 @@ export function selectRecipesForDays(
     }
 
     const candidates = suitableRecipes(recipes, day.category, preferences)
+      .filter((recipe) => readyRecipes?.has(recipe.id) ?? true)
       .toSorted((left, right) => {
         const preferenceDifference =
           preferenceScore(right, preferences) - preferenceScore(left, preferences);

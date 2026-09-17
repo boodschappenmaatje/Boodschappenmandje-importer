@@ -24,6 +24,17 @@ const KNOWN_CATEGORY_SIGNALS: Record<string, string[]> = {
   "Pasta, rijst & granen": ["pasta", "rijst", "graan", "spaghetti", "macaroni", "noedel"],
   "Brood": ["brood", "bol", "wrap", "tortilla"],
   "Snacks": ["snack", "chips", "friet", "pizza", "nugget"],
+  "Aardappel & zetmeel": ["aardappel", "zetmeel", "friet", "krieltjes", "puree"],
+  "Sauzen & smaakmakers": ["saus", "smaakmaker", "kruiden", "pesto", "jus"],
+  "Vegetarische proteïne": ["vegetarisch", "plantaardig", "vegan", "tofu", "falafel"],
+  "Maaltijdcomponenten": ["maaltijd", "wereldgerecht", "pizza", "soep", "mix"],
+};
+
+const CATEGORY_COMPATIBILITY: Record<string, string[]> = {
+  "Pasta, rijst & granen": ["Brood"],
+  "Aardappel & zetmeel": ["Snacks"],
+  "Maaltijdcomponenten": ["Snacks", "Pasta, rijst & granen"],
+  "Vegetarische proteïne": ["Vlees"],
 };
 
 function normalize(value: string | null): string {
@@ -56,10 +67,20 @@ function categoryConflicts(
   const expected = expectedSignals.some((signal) =>
     containsTerm(classification, normalize(signal)),
   );
+  if (
+    ingredient.category === "Vlees" &&
+    ["vegetarisch", "plantaardig", "vegan"].some((signal) =>
+      containsTerm(`${classification} ${normalize(product.name)}`, signal),
+    )
+  ) {
+    return true;
+  }
   if (expected) return false;
 
+  const compatibleCategories = new Set(CATEGORY_COMPATIBILITY[ingredient.category] ?? []);
   const belongsToOtherKnownCategory = Object.entries(KNOWN_CATEGORY_SIGNALS)
     .filter(([category]) => category !== ingredient.category)
+    .filter(([category]) => !compatibleCategories.has(category))
     .some(([, signals]) =>
       signals.some((signal) => containsTerm(classification, normalize(signal))),
     );
@@ -207,13 +228,19 @@ export function productPackageCapacity(
   product: Product,
   unit: WeekIngredientUnit,
 ): number | null {
+  const massUnit = unit === "g" || unit === "kg";
+  const volumeUnit = unit === "ml" || unit === "l";
   const textCapacity = capacityFromText(
     [product.packageText, product.name].filter(Boolean).join(" "),
-    unit,
+    massUnit ? "g" : volumeUnit ? "ml" : unit,
   );
-  if (textCapacity !== null) return textCapacity;
-  if (unit === "g" && product.weightGrams && product.weightGrams > 0) {
-    return product.weightGrams;
+  if (textCapacity !== null) {
+    if (unit === "kg") return textCapacity / 1000;
+    if (unit === "l") return textCapacity / 1000;
+    return textCapacity;
+  }
+  if (massUnit && product.weightGrams && product.weightGrams > 0) {
+    return unit === "kg" ? product.weightGrams / 1000 : product.weightGrams;
   }
   return null;
 }
@@ -222,17 +249,23 @@ function matchScore(
   ingredient: RecipeIngredientDefinition,
   product: Product,
 ): number {
-  const primary = normalize(ingredient.name);
+  const terms = [...new Set([ingredient.name, ...ingredient.aliases].map(normalize))]
+    .filter(Boolean);
   const name = normalize(product.name);
   const type = normalize(product.productType);
   const category = normalize(product.category);
-  let score = productSearchRelevance(product, ingredient.name);
+  let score = Math.max(
+    0,
+    ...[ingredient.name, ...ingredient.aliases].map((term) =>
+      productSearchRelevance(product, term),
+    ),
+  );
 
-  if (name === primary) score += 5_000;
-  else if (name.startsWith(`${primary} `)) score += 3_000;
-  else if (containsTerm(name, primary)) score += 1_500;
-  if (type === primary || containsTerm(type, primary)) score += 1_000;
-  if (category === primary || containsTerm(category, primary)) score += 500;
+  if (terms.some((term) => name === term)) score += 5_000;
+  else if (terms.some((term) => name.startsWith(`${term} `))) score += 3_000;
+  else if (terms.some((term) => containsTerm(name, term))) score += 1_500;
+  if (terms.some((term) => type === term || containsTerm(type, term))) score += 1_000;
+  if (terms.some((term) => category === term || containsTerm(category, term))) score += 500;
   if (product.currentPrice && resolveCurrentPrice(product.currentPrice)) score += 80;
   if (productPackageCapacity(product, "g") || product.packageText) score += 30;
 
@@ -282,7 +315,10 @@ export function applyProductToRequirement(
     packageCapacity === null
       ? null
       : Math.max(1, Math.ceil(requirement.requiredQuantity / packageCapacity));
-  const resolvedPrice = resolveCurrentPrice(product.currentPrice);
+  const resolvedPrice =
+    product.currentPrice?.productId === product.id
+      ? resolveCurrentPrice(product.currentPrice)
+      : null;
   const amountCents = resolvedPrice
     ? euroAmountToCents(resolvedPrice.amount)
     : null;
@@ -343,11 +379,53 @@ export function combinedProductPurchaseQuantity(
   );
 }
 
-async function searchIngredient(
+export type IngredientMatchFailureReason =
+  | "no_catalog_product"
+  | "low_confidence_match"
+  | "category_mismatch"
+  | "product_reference_invalid"
+  | "matcher_failed";
+
+export interface IngredientMatchDiagnostics {
+  product: Product | null;
+  candidates: Product[];
+  failureReason: IngredientMatchFailureReason | null;
+}
+
+function ingredientMatchFailure(
+  ingredient: RecipeIngredientDefinition,
+  products: Product[],
+  brandConstraint: MealMixBrand | null,
+): IngredientMatchFailureReason {
+  if (products.length === 0) return "no_catalog_product";
+
+  const requiredBrand = normalize(brandConstraint);
+  const stronglyRelated = products.filter((product) => {
+    const brandMatches =
+      !requiredBrand ||
+      normalize(product.brand) === requiredBrand ||
+      containsTerm(normalize(product.name), requiredBrand);
+    return (
+      brandMatches &&
+      (reliableTermMatch(ingredient, product) ||
+        (Boolean(requiredBrand) && reliableBrandedMealMixMatch(ingredient, product)))
+    );
+  });
+  if (stronglyRelated.length === 0) return "low_confidence_match";
+  if (stronglyRelated.every((product) => categoryConflicts(ingredient, product))) {
+    return "category_mismatch";
+  }
+  if (stronglyRelated.some((product) => !product.id.trim() || !product.sku.trim())) {
+    return "product_reference_invalid";
+  }
+  return "matcher_failed";
+}
+
+export async function searchIngredientProduct(
   repository: CatalogRepository,
   ingredient: RecipeIngredientDefinition,
   brandConstraint: MealMixBrand | null,
-): Promise<Product | null> {
+): Promise<IngredientMatchDiagnostics> {
   const terms = [...new Set([ingredient.name, ...ingredient.aliases])]
     .map((term) => term.trim())
     .filter((term) => term.length >= 2)
@@ -362,22 +440,40 @@ async function searchIngredient(
       [...found.values()],
       brandConstraint,
     );
-    if (match) return match;
+    if (match) {
+      return {
+        product: match,
+        candidates: [...found.values()],
+        failureReason: null,
+      };
+    }
   }
 
-  return selectIngredientProduct(ingredient, [...found.values()], brandConstraint);
+  const candidates = [...found.values()];
+  const product = selectIngredientProduct(ingredient, candidates, brandConstraint);
+  return {
+    product,
+    candidates,
+    failureReason: product
+      ? null
+      : ingredientMatchFailure(ingredient, candidates, brandConstraint),
+  };
 }
 
-export async function matchWeekIngredients(
+export interface WeekIngredientMatchDiagnostics extends IngredientMatchDiagnostics {
+  requirement: WeekIngredientRequirement;
+}
+
+export async function matchWeekIngredientsWithDiagnostics(
   requirements: WeekIngredientRequirement[],
   ingredients: RecipeIngredientDefinition[],
   repository: CatalogRepository,
   concurrency = 6,
-): Promise<WeekIngredientRequirement[]> {
+): Promise<WeekIngredientMatchDiagnostics[]> {
   const ingredientById = new Map(
     ingredients.map((ingredient) => [ingredient.id, ingredient]),
   );
-  const result = new Array<WeekIngredientRequirement>(requirements.length);
+  const result = new Array<WeekIngredientMatchDiagnostics>(requirements.length);
   let nextIndex = 0;
 
   async function worker() {
@@ -387,15 +483,23 @@ export async function matchWeekIngredients(
       const requirement = requirements[index];
       const ingredient = ingredientById.get(requirement.ingredientId);
       if (!ingredient) {
-        result[index] = applyProductToRequirement(requirement, null);
+        result[index] = {
+          requirement: applyProductToRequirement(requirement, null),
+          product: null,
+          candidates: [],
+          failureReason: "matcher_failed",
+        };
         continue;
       }
-      const product = await searchIngredient(
+      const diagnostic = await searchIngredientProduct(
         repository,
         ingredient,
         requirement.brandConstraint ?? inferMealMixBrand(ingredient),
       );
-      result[index] = applyProductToRequirement(requirement, product);
+      result[index] = {
+        ...diagnostic,
+        requirement: applyProductToRequirement(requirement, diagnostic.product),
+      };
     }
   }
 
@@ -406,4 +510,19 @@ export async function matchWeekIngredients(
     ),
   );
   return result;
+}
+
+export async function matchWeekIngredients(
+  requirements: WeekIngredientRequirement[],
+  ingredients: RecipeIngredientDefinition[],
+  repository: CatalogRepository,
+  concurrency = 6,
+): Promise<WeekIngredientRequirement[]> {
+  const diagnostics = await matchWeekIngredientsWithDiagnostics(
+    requirements,
+    ingredients,
+    repository,
+    concurrency,
+  );
+  return diagnostics.map((item) => item.requirement);
 }

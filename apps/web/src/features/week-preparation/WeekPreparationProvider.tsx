@@ -31,6 +31,7 @@ import {
   markWeekGenerating,
   markWeekGenerationFailed,
   refreshGeneratedWeek,
+  revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
 import {
   changePreparedDayCategory,
@@ -361,10 +362,23 @@ export function WeekPreparationProvider({
     ) {
       return;
     }
-    const before = calculateWeekBudgetSummary(current, list);
-    void shoppingList
-      .completeFromWeek(current.ingredients)
-      .then(() => {
+    setActionMessage("Je gerechten worden nog één keer gecontroleerd…");
+    void revalidatePreparedWeek(
+      current,
+      recipeRepository(),
+      catalogRepository(),
+    )
+      .then(async (validation) => {
+        if (preparationRef.current?.id !== validation.preparation.id) return;
+        replace(validation.preparation);
+        if (!validation.ready) {
+          setActionMessage(
+            "Je lijst is niet aangepast. Eén of meer gerechten moeten eerst opnieuw worden gecontroleerd.",
+          );
+          return;
+        }
+        const before = calculateWeekBudgetSummary(validation.preparation, list);
+        await shoppingList.completeFromWeek(validation.preparation.ingredients);
         setActionMessage(
           before.newPackageCount > 0
             ? `${before.newPackageCount} ${before.newPackageCount === 1 ? "verpakking is" : "verpakkingen zijn"} aan je lijst toegevoegd.`
@@ -372,7 +386,7 @@ export function WeekPreparationProvider({
         );
       })
       .catch(() => setActionMessage("Je lijst aanvullen lukte nu niet."));
-  }, [shoppingList]);
+  }, [catalogRepository, recipeRepository, replace, shoppingList]);
 
   const changeDayCategory = useCallback(
     (dayIndex: number, category: MealCategory) => {

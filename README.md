@@ -158,6 +158,26 @@ De workflow leest ze uitsluitend als environmentvariabelen. De waarden worden ni
 
 Een succesvolle run vermeldt per geïmporteerd product alleen SKU, naam en prijs. Secrets worden niet getoond. De workflow ververst dagelijks één begrensd prijsdeel en draait wekelijks één roulerende catalogusbatch; handmatig starten blijft beschikbaar.
 
+## Zelfherstellende dagelijkse catalogusgroei
+
+De automatische start rond 06:00 Europe/Amsterdam gebruikt één persistente
+dagjob met een maximum van 400 daadwerkelijk nieuwe, unieke producten. Een
+gedeeltelijk geslaagde attempt blijft bewaard. Bij een tijdelijke bron- of
+netwerkstoring controleert een lichte scheduler iedere tien minuten of de
+volgende begrensde attempt verschuldigd is. De back-off is 10, 20 en 40 minuten,
+daarna maximaal één attempt per uur. Om 23:00 sluit een onvoltooide dagjob als
+gedeeltelijk af; de volgende kalenderdag begint een nieuwe teller zonder de
+globale discovery-cursor te resetten.
+
+Voer vóór activatie eenmalig
+`supabase/migrations/20260917_self_healing_daily_catalog_growth.sql` uit. Deze
+additieve migratie maakt alleen job-/attemptmetadata en atomische RPC-locks aan;
+product- en prijstabellen worden niet verwijderd of teruggezet. De 08:30-
+bewaking beschouwt een lopende of geplande retry als normaal herstel en zet een
+ontbrekende dagjob veilig klaar. Een niet-herstelbare configuratie-, schema- of
+authenticatiefout krijgt status `failed_requires_attention` en wordt niet in een
+retrylus geplaatst.
+
 ## Catalogusbatches
 
 | Batch | Zoektermen |
@@ -180,7 +200,7 @@ Kies daarna in de handmatige GitHub Action **Soort update → classify** om best
 ## Veiligheids- en betrouwbaarheidsregels
 
 - Workflowinstellingen: `MAX_PRODUCTS=180`, `MAX_NEW_PRODUCTS=100`, `MAX_PER_TERM=20` en `MAX_PAGES_PER_TERM=4`.
-- Harde technische limieten: maximaal 500 producten totaal, maximaal 300 nieuwe producten, maximaal 40 gevalideerde producten en maximaal 8 resultaatpagina's per zoekterm, ook bij foutieve environmentconfiguratie.
+- Harde technische limieten: maximaal 500 producten totaal, maximaal 400 nieuwe producten, maximaal 40 gevalideerde producten en maximaal 8 resultaatpagina's per zoekterm, ook bij foutieve environmentconfiguratie.
 - Iedere resultaatpagina wordt op SKU gededupliceerd. Een lege pagina, een herhaalde paginasignatuur of de ingestelde paginalimiet stopt de paginering veilig.
 - Zoekresultaten moeten via naam, merk of broncategorie woord-/prefixrelevant zijn. Zo blijft een geldige merkvariant behouden, terwijl een toevallige middenwoordmatch wordt geweigerd.
 - Voor de scrape wordt uitsluitend de bestaande Hoogvliet-SKU-lijst licht uit Supabase gelezen. Catalogusruns richten zich op onbekende SKU's; de dagelijkse prijsdeelruns houden reeds bekende producten en prijzen actueel.

@@ -21,6 +21,7 @@ import {
 import {
   calculateWeekBudgetSummary,
   generatePreparedWeek,
+  revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
 import {
   createWeekPreparation,
@@ -484,7 +485,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     });
   });
 
-  it("laat een ontbrekende match de betrouwbare boodschappen en bekende prijs niet blokkeren", async () => {
+  it("zet een gerecht met een ontbrekende verplichte match niet automatisch in de week", async () => {
     const recipeRepository: RecipeRepository = {
       async loadCatalog() {
         return CATALOG;
@@ -498,12 +499,16 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     );
     expect(generated.status).toBe("generationPartial");
     expect(generated.generation).toMatchObject({
-      matchedProductCount: 1,
-      missingProductMatchCount: 1,
-      knownPurchaseCostCents: 898,
+      matchedProductCount: 0,
+      missingProductMatchCount: 0,
+      knownPurchaseCostCents: 0,
     });
-    expect(generated.ingredients.find((item) => item.sourceKey === "groundBeef")?.product?.sku).toBe(BEEF.sku);
-    expect(generated.ingredients.find((item) => item.sourceKey === "onion")?.productMatchMissing).toBe(true);
+    expect(generated.days[0]).toMatchObject({
+      recipeId: null,
+      recipe: null,
+      status: "categoryAssigned",
+    });
+    expect(generated.ingredients).toEqual([]);
   });
 
   it("behoudt een handmatig hoger aantal en verhoogt alleen bij echte extra weekbehoefte", () => {
@@ -550,5 +555,32 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     const completed = completeShoppingListFromWeek(list, [requirement], NOW);
     expect(completed.items[0].quantity).toBe(3);
     expect(completed.items[0].sources).toEqual(["manual", "weekPreparation", "recipe"]);
+  });
+
+  it("hercontroleert vóór lijstaanvulling en verwijdert een bestaand gerecht niet stilzwijgend", async () => {
+    const recipeRepository: RecipeRepository = {
+      async loadCatalog() {
+        return CATALOG;
+      },
+    };
+    const generated = await generatePreparedWeek(
+      preparedWeek(),
+      recipeRepository,
+      catalogRepository([BEEF, ONIONS]),
+      NOW,
+    );
+    const validation = await revalidatePreparedWeek(
+      generated,
+      recipeRepository,
+      catalogRepository([BEEF]),
+      new Date("2026-09-15T13:00:00Z"),
+    );
+
+    expect(validation.ready).toBe(false);
+    expect(validation.preparation.status).toBe("generationPartial");
+    expect(validation.preparation.days[0].recipe).toEqual(generated.days[0].recipe);
+    expect(
+      validation.preparation.ingredients.find((item) => item.sourceKey === "onion"),
+    ).toMatchObject({ productMatchMissing: true, price: null });
   });
 });

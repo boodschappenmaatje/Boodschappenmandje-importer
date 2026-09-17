@@ -48,6 +48,7 @@ export function aggregateWeekIngredients(
     unit: WeekIngredientUnit,
     kind: WeekIngredientRequirement["kind"],
     brandConstraint: MealMixBrand | null,
+    optional = false,
   ) {
     const scaledQuantity = roundedQuantity(quantity);
     const current = aggregated.get(ingredientId);
@@ -69,6 +70,9 @@ export function aggregateWeekIngredients(
       current.requiredQuantity = roundedQuantity(
         current.requiredQuantity + scaledQuantity,
       );
+      // Zodra één gerecht dit ingrediënt verplicht maakt, is de gezamenlijke
+      // weekbehoefte eveneens verplicht.
+      current.optional = current.optional && optional;
       const existingUse = current.usedIn.find(
         (item) => item.dayIndex === day.dayIndex && item.recipeId === use.recipeId,
       );
@@ -87,7 +91,7 @@ export function aggregateWeekIngredients(
       sourceKey,
       name,
       unit,
-      optional: false,
+      optional,
       servingsBase: 1,
       kind,
       brandConstraint,
@@ -119,6 +123,7 @@ export function aggregateWeekIngredients(
           "piece",
           "mealMix",
           mealMix.brand,
+          false,
         );
       }
 
@@ -136,6 +141,7 @@ export function aggregateWeekIngredients(
           supplement.unit,
           "ingredient",
           null,
+          false,
         );
       }
       continue;
@@ -158,6 +164,7 @@ export function aggregateWeekIngredients(
         scaled.unit,
         "ingredient",
         null,
+        relation.optional === true,
       );
     }
   }

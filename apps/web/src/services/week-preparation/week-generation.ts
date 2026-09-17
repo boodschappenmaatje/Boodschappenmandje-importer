@@ -2,15 +2,21 @@ import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
-  applyProductToRequirement,
   combinedProductPurchaseQuantity,
-  matchWeekIngredients,
 } from "@/services/week-preparation/product-matching";
+import {
+  applyReadinessProducts,
+  evaluateRecipeReadiness,
+  readyRecipeIds,
+} from "@/services/week-preparation/recipe-readiness";
 import type {
   RecipeCatalog,
   RecipeRepository,
 } from "@/services/week-preparation/recipe-repository";
-import { selectRecipesForDays } from "@/services/week-preparation/recipe-selection";
+import {
+  candidateRecipesForDays,
+  selectRecipesForDays,
+} from "@/services/week-preparation/recipe-selection";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import type { ActiveShoppingList } from "@/types/shopping-list";
 import type {
@@ -38,12 +44,14 @@ function generationSummary(
       0,
     ),
     matchedProductCount: ingredients.filter((item) => item.product !== null).length,
-    missingProductMatchCount: ingredients.filter((item) => item.productMatchMissing).length,
+    missingProductMatchCount: ingredients.filter(
+      (item) => !item.optional && item.productMatchMissing,
+    ).length,
     missingPackageCalculationCount: ingredients.filter(
-      (item) => item.packageCalculationMissing,
+      (item) => !item.optional && item.packageCalculationMissing,
     ).length,
     missingPriceCount: ingredients.filter(
-      (item) => item.product !== null && item.price === null,
+      (item) => !item.optional && item.product !== null && item.price === null,
     ).length,
   };
 }
@@ -57,9 +65,10 @@ function finalStatus(
   );
   const hasIngredientGap = ingredients.some(
     (item) =>
-      item.productMatchMissing ||
-      item.packageCalculationMissing ||
-      item.price === null,
+      !item.optional &&
+      (item.productMatchMissing ||
+        item.packageCalculationMissing ||
+        item.price === null),
   );
   return hasRecipeGap || hasIngredientGap ? "generationPartial" : "generated";
 }
@@ -104,22 +113,30 @@ export async function generatePreparedWeek(
     ...loadedCatalog,
     ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
   };
+  const candidates = candidateRecipesForDays(
+    preparation.days,
+    catalog.recipes,
+    preparation.preferences,
+  );
+  const readiness = await evaluateRecipeReadiness(
+    candidates,
+    preparation.numberOfPeople,
+    catalog,
+    catalogRepository,
+  );
   const days = selectRecipesForDays(
     preparation.days,
     catalog.recipes,
     preparation.preferences,
     preparation.id,
+    readyRecipeIds(readiness),
   );
   const requirements = aggregateWeekIngredients(
     days,
     preparation.numberOfPeople,
     catalog,
   );
-  const ingredients = await matchWeekIngredients(
-    requirements,
-    catalog.ingredients,
-    catalogRepository,
-  );
+  const ingredients = applyReadinessProducts(requirements, readiness);
   const generatedAt = now.toISOString();
   const prepared = {
     ...preparation,
@@ -135,47 +152,61 @@ export async function generatePreparedWeek(
   };
 }
 
-async function refreshRequirements(
-  requirements: WeekIngredientRequirement[],
-  catalog: RecipeCatalog,
-  catalogRepository: CatalogRepository,
-): Promise<WeekIngredientRequirement[]> {
-  const productIds = requirements
-    .map((item) => item.product?.productId)
-    .filter((id): id is string => Boolean(id));
-  const currentProducts = productIds.length
-    ? await catalogRepository.getByIds(productIds)
-    : { products: [], priceStatus: "complete" as const };
-  const productById = new Map(
-    currentProducts.products.map((product) => [product.id, product]),
-  );
-  const refreshed = requirements.map((requirement) => {
-    const product = requirement.product
-      ? productById.get(requirement.product.productId)
-      : null;
-    return product && product.sku === requirement.product?.sku
-      ? applyProductToRequirement(requirement, product)
-      : applyProductToRequirement(requirement, null);
-  });
-  const retryIndexes = refreshed
-    .map((requirement, index) =>
-      requirement.productMatchMissing || requirement.packageCalculationMissing
-        ? index
-        : -1,
-    )
-    .filter((index) => index >= 0);
+export interface PreparedWeekReadinessResult {
+  ready: boolean;
+  preparation: WeekPreparation;
+}
 
-  if (retryIndexes.length === 0) return refreshed;
-  const retried = await matchWeekIngredients(
-    retryIndexes.map((index) => refreshed[index]),
-    catalog.ingredients,
+export async function revalidatePreparedWeek(
+  preparation: WeekPreparation,
+  recipeRepository: RecipeRepository,
+  catalogRepository: CatalogRepository,
+  now: Date = new Date(),
+): Promise<PreparedWeekReadinessResult> {
+  if (preparation.numberOfPeople === null) {
+    return { ready: false, preparation };
+  }
+  const loadedCatalog = await recipeRepository.loadCatalog();
+  const catalog: RecipeCatalog = {
+    ...loadedCatalog,
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+  };
+  const selectedIds = new Set(
+    preparation.days
+      .map((day) => day.recipeId)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const selectedRecipes = catalog.recipes.filter((recipe) => selectedIds.has(recipe.id));
+  const readiness = await evaluateRecipeReadiness(
+    selectedRecipes,
+    preparation.numberOfPeople,
+    catalog,
     catalogRepository,
   );
-  const result = [...refreshed];
-  retryIndexes.forEach((index, retryIndex) => {
-    result[index] = retried[retryIndex];
-  });
-  return result;
+  const readyIds = readyRecipeIds(readiness);
+  const hasDayGap = preparation.days.some(
+    (day) =>
+      !day.freeChoice &&
+      (!day.recipeId || !readyIds.has(day.recipeId)),
+  );
+  const requirements = aggregateWeekIngredients(
+    preparation.days,
+    preparation.numberOfPeople,
+    catalog,
+  );
+  const ingredients = applyReadinessProducts(requirements, readiness);
+  const generatedAt = now.toISOString();
+  const refreshed = { ...preparation, ingredients };
+  const next: WeekPreparation = {
+    ...refreshed,
+    generation: generationSummary(ingredients, generatedAt),
+    status: hasDayGap ? "generationPartial" : finalStatus(refreshed, ingredients),
+    updatedAt: generatedAt,
+  };
+  return {
+    ready: !hasDayGap && next.status === "generated",
+    preparation: next,
+  };
 }
 
 export async function refreshGeneratedWeek(
@@ -190,24 +221,14 @@ export async function refreshGeneratedWeek(
   ) {
     return preparation;
   }
-  const loadedCatalog = await recipeRepository.loadCatalog();
-  const catalog = {
-    ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
-  };
-  const ingredients = await refreshRequirements(
-    preparation.ingredients,
-    catalog,
-    catalogRepository,
-  );
-  const generatedAt = now.toISOString();
-  const refreshed = { ...preparation, ingredients };
-  return {
-    ...refreshed,
-    generation: generationSummary(ingredients, generatedAt),
-    status: finalStatus(refreshed, ingredients),
-    updatedAt: generatedAt,
-  };
+  return (
+    await revalidatePreparedWeek(
+      preparation,
+      recipeRepository,
+      catalogRepository,
+      now,
+    )
+  ).preparation;
 }
 
 export interface WeekBudgetSummary {

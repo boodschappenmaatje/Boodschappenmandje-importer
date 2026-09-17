@@ -2,6 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type {
+  CatalogDailyJob,
+  CatalogDailyJobStatus,
   CatalogImportRun,
   CatalogImportStatus,
   CatalogStatus,
@@ -13,6 +15,14 @@ const VALID_STATUSES = new Set<CatalogImportStatus>([
   "success",
   "partial",
   "failed",
+]);
+const VALID_DAILY_STATUSES = new Set<CatalogDailyJobStatus>([
+  "pending",
+  "running",
+  "retry_scheduled",
+  "target_reached",
+  "daily_target_partial",
+  "failed_requires_attention",
 ]);
 
 function count(value: unknown): number {
@@ -67,6 +77,48 @@ export function mapCatalogImportRun(row: unknown): CatalogImportRun | null {
   };
 }
 
+export function mapCatalogDailyJob(row: unknown): CatalogDailyJob | null {
+  if (typeof row !== "object" || row === null) return null;
+  const value = row as Record<string, unknown>;
+  const id = typeof value.id === "string" ? value.id : null;
+  const jobDate = typeof value.job_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.job_date)
+    ? value.job_date
+    : null;
+  const startedAt = dateValue(value.started_at);
+  const status = typeof value.status === "string"
+    && VALID_DAILY_STATUSES.has(value.status as CatalogDailyJobStatus)
+    ? value.status as CatalogDailyJobStatus
+    : null;
+  if (!id || !jobDate || !startedAt || !status) return null;
+  const targetNewProducts = Math.max(1, count(value.target_new_products));
+  const newProductsCollected = Math.min(targetNewProducts, count(value.new_products_collected));
+  return {
+    id,
+    jobDate,
+    targetNewProducts,
+    newProductsCollected,
+    remainingTarget: Math.max(0, targetNewProducts - newProductsCollected),
+    status,
+    attemptCount: count(value.attempt_count),
+    startedAt,
+    lastAttemptAt: dateValue(value.last_attempt_at),
+    nextRetryAt: dateValue(value.next_retry_at),
+    completedAt: dateValue(value.completed_at),
+    lastPublicMessage: optionalText(value.last_public_message),
+  };
+}
+
+function amsterdamDateKey(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 export class CatalogStatusReadError extends Error {
   constructor() {
     super("catalog-status-unavailable");
@@ -87,11 +139,22 @@ export class CatalogStatusRepository {
       .select("id,started_at,finished_at,status,trigger,processed_count,new_count,updated_count,unchanged_count,skipped_count,error_count,error_summary,total_unique_products_before,total_unique_products_after,duration_seconds")
       .order("started_at", { ascending: false })
       .limit(1);
+    let dailyQuery = this.client
+      .from("catalog_daily_jobs")
+      .select("id,job_date,target_new_products,new_products_collected,status,attempt_count,started_at,last_attempt_at,next_retry_at,completed_at,last_public_message")
+      .eq("state_key", "daily-catalog-growth")
+      .eq("job_date", amsterdamDateKey())
+      .limit(1);
     if (signal) {
       totalQuery = totalQuery.abortSignal(signal);
       runQuery = runQuery.abortSignal(signal);
+      dailyQuery = dailyQuery.abortSignal(signal);
     }
-    const [totalResult, runResult] = await Promise.all([totalQuery, runQuery]);
+    const [totalResult, runResult, dailyResult] = await Promise.all([
+      totalQuery,
+      runQuery,
+      dailyQuery,
+    ]);
     if (totalResult.error || runResult.error || totalResult.count === null) {
       throw new CatalogStatusReadError();
     }
@@ -102,6 +165,12 @@ export class CatalogStatusRepository {
       progressPercent: catalogProgressPercent(totalUniqueProducts),
       latestRun: Array.isArray(runResult.data)
         ? mapCatalogImportRun(runResult.data[0])
+        : null,
+      // De migratie wordt vóór activatie van de scheduler uitgerold. Tijdens
+      // een Preview vóór die database-uitrol blijft de bestaande statuskaart
+      // bewust bruikbaar in plaats van de hele PWA te blokkeren.
+      dailyJob: dailyResult.error === null && Array.isArray(dailyResult.data)
+        ? mapCatalogDailyJob(dailyResult.data[0])
         : null,
     };
   }

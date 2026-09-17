@@ -1,0 +1,480 @@
+import { describe, expect, it } from "vitest";
+
+import type { CatalogRepository } from "@/services/catalog/catalog-repository";
+import {
+  applyProductToRequirement,
+  isReliableIngredientMatch,
+  productPackageCapacity,
+} from "@/services/week-preparation/product-matching";
+import {
+  evaluateRecipeReadiness,
+  readyRecipeIds,
+} from "@/services/week-preparation/recipe-readiness";
+import type {
+  RecipeCatalog,
+  RecipeIngredientDefinition,
+} from "@/services/week-preparation/recipe-repository";
+import { selectRecipesForDays } from "@/services/week-preparation/recipe-selection";
+import type { Product, Recipe, RecipeIngredient } from "@/types/catalog";
+import type { PreparedDay, WeekPreferences } from "@/types/week-preparation";
+
+const NOW = "2026-09-17T12:00:00.000Z";
+const RECIPE: Recipe = {
+  id: "recipe-pasta",
+  sourceKey: "spaghetti-bolognese",
+  name: "Spaghetti bolognese",
+  normalizedName: "spaghetti bolognese",
+  symbol: "fork.knife",
+  preparationMinutes: 30,
+  vegetarian: false,
+  containsPork: false,
+  kidFriendly: true,
+  healthy: false,
+  budgetTier: "standard",
+};
+const BEEF: RecipeIngredientDefinition = {
+  id: "ingredient-beef",
+  sourceKey: "groundBeef",
+  name: "rundergehakt",
+  normalizedName: "rundergehakt",
+  defaultUnit: "grams",
+  category: "Vlees",
+  aliases: ["rundergehakt", "gehakt"],
+};
+const PARSLEY: RecipeIngredientDefinition = {
+  id: "ingredient-parsley",
+  sourceKey: "parsley",
+  name: "peterselie",
+  normalizedName: "peterselie",
+  defaultUnit: "grams",
+  category: "Groente",
+  aliases: ["peterselie"],
+};
+const RELATION: RecipeIngredient = {
+  id: "relation-beef",
+  recipeId: RECIPE.id,
+  ingredientId: BEEF.id,
+  amountPerPerson: 175,
+  unit: "g",
+  position: 0,
+  optional: false,
+};
+const PREFERENCES: WeekPreferences = {
+  noVegetarian: false,
+  quickImportant: false,
+  healthyImportant: false,
+  budgetImportant: false,
+};
+
+function product(
+  input: Partial<Product> & Pick<Product, "id" | "sku" | "name">,
+): Product {
+  return {
+    supermarket: "Hoogvliet",
+    brand: "Hoogvliet",
+    category: "Vlees",
+    productType: "Rundergehakt",
+    packageText: "500 g",
+    weightGrams: 500,
+    imageUrl: null,
+    sourceUrl: `https://www.hoogvliet.com/product/${input.sku}`,
+    isAvailable: true,
+    updatedAt: NOW,
+    currentPrice: {
+      productId: input.id,
+      price: 4.99,
+      oldPrice: null,
+      isOffer: false,
+      offerText: null,
+      validFrom: null,
+      validUntil: null,
+      fetchedAt: NOW,
+      updatedAt: NOW,
+    },
+    ...input,
+  };
+}
+
+function repository(
+  search: (term: string) => Product[],
+): CatalogRepository {
+  return {
+    async getPage() {
+      return { products: [], priceStatus: "complete", page: 1, pageSize: 20, hasMore: false };
+    },
+    async getByIds() {
+      return { products: [], priceStatus: "complete" };
+    },
+    async query(request = {}) {
+      return {
+        products: search(request.term ?? ""),
+        priceStatus: "complete",
+        page: 1,
+        pageSize: 20,
+        hasMore: false,
+        query: {
+          term: request.term ?? "",
+          category: null,
+          brand: null,
+          offersOnly: false,
+          maxPrice: null,
+          sort: "relevance",
+        },
+      };
+    },
+    async search(term) {
+      return { products: search(term), priceStatus: "complete" };
+    },
+    async getFilterOptions() {
+      return { categories: [], brands: [] };
+    },
+  };
+}
+
+function catalog(
+  ingredients: RecipeIngredientDefinition[] = [BEEF],
+  relations: RecipeIngredient[] = [RELATION],
+  recipes: Recipe[] = [RECIPE],
+): RecipeCatalog {
+  return { recipes, ingredients, relations };
+}
+
+function matchingRepository(products: Product[]): CatalogRepository {
+  return repository((term) => {
+    const normalized = term.toLocaleLowerCase("nl-NL");
+    return products.filter((item) =>
+      [item.name, item.productType, item.category]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("nl-NL")
+        .includes(normalized),
+    );
+  });
+}
+
+describe("Recipe Readiness Gate", () => {
+  it("markeert een recept pas READY als alle verplichte controles slagen", async () => {
+    const realProduct = product({ id: "product-beef", sku: "871000001", name: "Hoogvliet rundergehakt" });
+    const gate = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog(),
+      matchingRepository([realProduct]),
+    );
+
+    expect(gate.recipes[0]).toMatchObject({
+      ready: true,
+      requiredIngredientCount: 1,
+      readyRequiredIngredientCount: 1,
+      problemCount: 0,
+    });
+    expect(gate.recipes[0].ingredients[0]).toMatchObject({
+      requiredQuantity: 700,
+      catalogProductAvailable: true,
+      reliableProductMatch: true,
+      priceKnown: true,
+      packageCalculable: true,
+      sku: "871000001",
+    });
+  });
+
+  it.each([
+    {
+      label: "ontbrekend catalogusproduct",
+      products: [] as Product[],
+      reason: "no_catalog_product",
+      origin: "catalogCoverage",
+    },
+    {
+      label: "te lage matchzekerheid",
+      products: [product({ id: "product-vink", sku: "871000002", name: "Rundervinken", productType: "Rundervink" })],
+      reason: "low_confidence_match",
+      origin: "catalogCoverage",
+    },
+    {
+      label: "categorieconflict",
+      products: [product({ id: "product-spinach", sku: "871000003", name: "Spinazie fijn gehakt", category: "Groente", productType: "Spinazie" })],
+      reason: "category_mismatch",
+      origin: "softwareOrMatching",
+    },
+    {
+      label: "ontbrekende prijs",
+      products: [product({ id: "product-no-price", sku: "871000004", name: "Rundergehakt", currentPrice: null })],
+      reason: "missing_price",
+      origin: "catalogCoverage",
+    },
+    {
+      label: "onbekende verpakking",
+      products: [product({ id: "product-pieces", sku: "871000005", name: "Rundergehakt", packageText: "8 stuks", weightGrams: null })],
+      reason: "package_unknown",
+      origin: "catalogCoverage",
+    },
+  ])("blokkeert een required ingrediënt bij $label", async ({ products, reason, origin }) => {
+    const gate = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog(),
+      repository(() => products),
+    );
+    expect(gate.recipes[0].ready).toBe(false);
+    expect(gate.recipes[0].ingredients[0]).toMatchObject({ reason, origin });
+  });
+
+  it("laat een ontbrekend optioneel ingrediënt toe", async () => {
+    const optionalRelation: RecipeIngredient = {
+      id: "relation-parsley",
+      recipeId: RECIPE.id,
+      ingredientId: PARSLEY.id,
+      amountPerPerson: 2,
+      unit: "g",
+      position: 1,
+      optional: true,
+    };
+    const realProduct = product({ id: "product-beef", sku: "871000006", name: "Rundergehakt" });
+    const gate = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog([BEEF, PARSLEY], [RELATION, optionalRelation]),
+      matchingRepository([realProduct]),
+    );
+    expect(gate.recipes[0]).toMatchObject({
+      ready: true,
+      requiredIngredientCount: 1,
+      readyRequiredIngredientCount: 1,
+      problemCount: 1,
+    });
+    expect(gate.recipes[0].ingredients.find((item) => item.sourceKey === "parsley")).toMatchObject({
+      required: false,
+      ready: false,
+      reason: "no_catalog_product",
+    });
+  });
+
+  it("hercontroleert tegen de actuele catalogus en keurt niet permanent af", async () => {
+    const before = await evaluateRecipeReadiness([RECIPE], 4, catalog(), repository(() => []));
+    const after = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog(),
+      matchingRepository([
+        product({ id: "product-later", sku: "871000007", name: "Rundergehakt" }),
+      ]),
+    );
+    expect(before.recipes[0].ready).toBe(false);
+    expect(after.recipes[0].ready).toBe(true);
+  });
+
+  it("filtert NOT READY kandidaten vóór selectie en gebruikt geen incomplete fallback", async () => {
+    const second: Recipe = {
+      ...RECIPE,
+      id: "recipe-macaroni",
+      sourceKey: "macaroni",
+      name: "Macaroni",
+      normalizedName: "macaroni",
+    };
+    const secondRelation: RecipeIngredient = {
+      ...RELATION,
+      id: "relation-second",
+      recipeId: second.id,
+    };
+    const gate = await evaluateRecipeReadiness(
+      [RECIPE, second],
+      4,
+      catalog([BEEF], [RELATION, secondRelation], [RECIPE, second]),
+      matchingRepository([
+        product({ id: "product-beef", sku: "871000008", name: "Rundergehakt" }),
+      ]),
+    );
+    const day: PreparedDay = {
+      dayIndex: 0,
+      category: "pasta",
+      freeChoice: false,
+      recipeId: null,
+      recipe: null,
+      status: "categoryAssigned",
+    };
+    const selected = selectRecipesForDays(
+      [day],
+      [RECIPE, second],
+      PREFERENCES,
+      "week",
+      readyRecipeIds(gate),
+    );
+    expect(selected[0].recipeId).not.toBeNull();
+
+    const noFallback = selectRecipesForDays(
+      [day],
+      [RECIPE, second],
+      PREFERENCES,
+      "week",
+      new Set(),
+    );
+    expect(noFallback[0]).toMatchObject({
+      recipeId: null,
+      recipe: null,
+      status: "categoryAssigned",
+    });
+  });
+
+  it("classificeert receptdata, matcherfailure en ongeldige referenties afzonderlijk", async () => {
+    const noAliases = { ...BEEF, aliases: [] };
+    const aliasGate = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog([noAliases]),
+      repository(() => []),
+    );
+    expect(aliasGate.recipes[0].ingredients[0]).toMatchObject({
+      reason: "alias_missing",
+      origin: "recipeData",
+    });
+
+    const unavailable = product({
+      id: "product-unavailable",
+      sku: "871000009",
+      name: "Rundergehakt",
+      isAvailable: false,
+    });
+    const matcherGate = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog(),
+      repository(() => [unavailable]),
+    );
+    expect(matcherGate.recipes[0].ingredients[0]).toMatchObject({
+      reason: "matcher_failed",
+      origin: "softwareOrMatching",
+    });
+
+    const invalidPriceReference = product({
+      id: "product-invalid-reference",
+      sku: "871000010",
+      name: "Rundergehakt",
+    });
+    invalidPriceReference.currentPrice = {
+      ...invalidPriceReference.currentPrice!,
+      productId: "different-product",
+    };
+    const referenceGate = await evaluateRecipeReadiness(
+      [RECIPE],
+      4,
+      catalog(),
+      repository(() => [invalidPriceReference]),
+    );
+    expect(referenceGate.recipes[0].ingredients[0]).toMatchObject({
+      reason: "product_reference_invalid",
+      origin: "softwareOrMatching",
+    });
+  });
+});
+
+describe("generieke matching en verpakkingseenheden", () => {
+  it.each([
+    ["gehakt", "Vlees"],
+    ["kip", "Vlees"],
+    ["pasta", "Pasta, rijst & granen"],
+    ["rijst", "Pasta, rijst & granen"],
+    ["aardappel", "Aardappel & zetmeel"],
+    ["ui", "Groente"],
+    ["paprika", "Groente"],
+    ["tomatensaus", "Sauzen & smaakmakers"],
+    ["melk", "Zuivel & eieren"],
+    ["kaas", "Zuivel & eieren"],
+    ["brood", "Brood"],
+    ["friet", "Aardappel & zetmeel"],
+  ])("matcht %s via hetzelfde alias- en categoriepad", (name, category) => {
+    const ingredient: RecipeIngredientDefinition = {
+      id: `ingredient-${name}`,
+      sourceKey: name,
+      name,
+      normalizedName: name,
+      defaultUnit: "grams",
+      category,
+      aliases: [name],
+    };
+    const catalogProduct = product({
+      id: `product-${name}`,
+      sku: `sku-${name}`,
+      name: `Hoogvliet ${name}`,
+      category,
+      productType: name,
+    });
+    expect(isReliableIngredientMatch(ingredient, catalogProduct)).toBe(true);
+  });
+
+  it("gebruikt ook een onbekende gecureerde alias zonder productie-if", () => {
+    const ingredient: RecipeIngredientDefinition = {
+      id: "ingredient-generic",
+      sourceKey: "generic",
+      name: "plantaardige kruimels",
+      normalizedName: "plantaardige kruimels",
+      defaultUnit: "grams",
+      category: "Vegetarische proteïne",
+      aliases: ["tempeh flakes"],
+    };
+    const catalogProduct = product({
+      id: "product-generic",
+      sku: "871000011",
+      name: "Tempeh flakes",
+      category: "Vegetarische proteïne",
+      productType: "Tempeh",
+    });
+    expect(isReliableIngredientMatch(ingredient, catalogProduct)).toBe(true);
+  });
+
+  it.each([
+    ["200 g", "g", 200],
+    ["500 g", "g", 500],
+    ["1 kg", "g", 1000],
+    ["1 kg", "kg", 1],
+    ["1 l", "ml", 1000],
+    ["1 l", "l", 1],
+    ["8 stuks", "piece", 8],
+  ] as const)("leest %s betrouwbaar voor %s", (packageText, unit, expected) => {
+    const packaged = product({
+      id: `package-${packageText}-${unit}`,
+      sku: `package-${unit}`,
+      name: "Testproduct",
+      packageText,
+      weightGrams: null,
+    });
+    expect(productPackageCapacity(packaged, unit)).toBe(expected);
+  });
+
+  it.each([
+    [190, "g", "200 g", 1],
+    [700, "g", "500 g", 2],
+    [500, "ml", "1 l", 1],
+    [1500, "ml", "1 l", 2],
+  ] as const)(
+    "rondt %s %s bij verpakking %s naar %s verpakking(en) af",
+    (requiredQuantity, unit, packageText, expected) => {
+      const packaged = product({
+        id: `package-count-${requiredQuantity}-${unit}`,
+        sku: `package-count-${requiredQuantity}-${unit}`,
+        name: unit === "ml" ? "Testmelk" : "Testproduct",
+        packageText,
+        weightGrams: null,
+      });
+      const requirement = {
+        ingredientId: "ingredient-package",
+        sourceKey: "package",
+        name: "Testproduct",
+        unit,
+        optional: false,
+        servingsBase: 1 as const,
+        kind: "ingredient" as const,
+        brandConstraint: null,
+        requiredQuantity,
+        purchaseQuantity: null,
+        packageCapacity: null,
+        usedIn: [],
+        product: null,
+        price: null,
+        productMatchMissing: false,
+        packageCalculationMissing: false,
+      };
+      expect(applyProductToRequirement(requirement, packaged).purchaseQuantity).toBe(expected);
+    },
+  );
+});

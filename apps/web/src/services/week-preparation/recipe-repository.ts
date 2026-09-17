@@ -130,7 +130,19 @@ function mapRelation(value: unknown): RecipeIngredient | null {
   ) {
     return null;
   }
-  return { id, recipeId, ingredientId, amountPerPerson, unit, position };
+  return {
+    id,
+    recipeId,
+    ingredientId,
+    amountPerPerson,
+    unit,
+    position,
+    // De bestaande Production-tabel heeft nog geen optional-kolom. Het
+    // domeinmodel ondersteunt optionele relaties wel alvast; bestaande data
+    // blijft veilig required totdat een latere gecureerde datamigratie dit
+    // expliciet anders aangeeft.
+    optional: value.optional === true,
+  };
 }
 
 export class SupabaseRecipeRepository implements RecipeRepository {
@@ -249,4 +261,3 @@ export function createRecipeRepository(): RecipeRepository {
   if (!client) throw new RecipeReadError("not-configured");
   return new SupabaseRecipeRepository(client);
 }
-
