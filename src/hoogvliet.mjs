@@ -3,6 +3,8 @@ import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 
 const BASE_URL = "https://www.hoogvliet.com";
 const SEARCH_PATH = "/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch";
+const NORMAL_SOURCE_READY_TIMEOUT_MS = 12_000;
+const SECURITY_CHECK_READY_TIMEOUT_MS = 45_000;
 
 export class SourceBlockedError extends Error {
   constructor(message) {
@@ -123,17 +125,68 @@ export function searchURL(term, pageNumber = 0) {
   return url.href;
 }
 
-async function detectBlocking(page) {
-  const evidence = await page.evaluate(() => {
+export function classifySourcePageEvidence(evidence = {}) {
+  if (evidence.captcha || evidence.denied) return "blocked";
+  if (evidence.hasExpectedContent) return "ready";
+  if (evidence.hasIncapsula
+    && Number(evidence.bodyTextLength ?? 0) < 120
+    && Number(evidence.htmlLength ?? 0) < 10_000) {
+    return "security_check";
+  }
+  return "empty";
+}
+
+async function readSourcePageEvidence(page, expectedSelector = null) {
+  return page.evaluate((selector) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     return {
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
+      hasExpectedContent: Boolean(selector && document.querySelector(selector)),
+      hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
+      bodyTextLength: text.trim().length,
+      htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
-  });
-  if (evidence.captcha || evidence.denied) {
+  }, expectedSelector);
+}
+
+async function detectBlocking(page, expectedSelector = null) {
+  const evidence = await readSourcePageEvidence(page, expectedSelector);
+  if (classifySourcePageEvidence(evidence) === "blocked") {
     throw new SourceBlockedError("Hoogvliet blokkeert de browsersessie met een toegangscontrole of CAPTCHA.");
   }
+  return evidence;
+}
+
+export async function waitForSourceContent(page, expectedSelector, options = {}) {
+  const waitForExpectedContent = (timeout) => page.waitForFunction(
+    (selector) => {
+      const text = (document.body?.innerText ?? "").toLowerCase();
+      return Boolean(document.querySelector(selector))
+        || /captcha|verify you are human|controleer of je een mens bent/.test(text)
+        || /access denied|toegang geweigerd|forbidden/.test(text);
+    },
+    expectedSelector,
+    { timeout },
+  );
+
+  await waitForExpectedContent(options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS)
+    .catch(() => {});
+  let evidence = await detectBlocking(page, expectedSelector);
+  if (classifySourcePageEvidence(evidence) !== "security_check") {
+    return { securityCheckObserved: false, evidence };
+  }
+
+  if (typeof options.onSecurityCheck === "function") options.onSecurityCheck();
+  await waitForExpectedContent(options.securityTimeoutMs ?? SECURITY_CHECK_READY_TIMEOUT_MS)
+    .catch(() => {});
+  evidence = await detectBlocking(page, expectedSelector);
+  if (classifySourcePageEvidence(evidence) === "security_check") {
+    throw new SourceBlockedError(
+      "De normale Hoogvliet-veiligheidscontrole (Incapsula) werd niet binnen de wachttijd afgerond.",
+    );
+  }
+  return { securityCheckObserved: true, evidence };
 }
 
 async function acceptCookiesIfShown(page) {
@@ -176,26 +229,25 @@ async function extractSearchCandidates(page) {
   });
 }
 
-async function searchOnce(page, term, pageNumber = 0) {
+async function searchOnce(page, term, pageNumber = 0, options = {}) {
   await page.goto(searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
-  await page.waitForFunction(
-    () => document.querySelectorAll(".product-tile").length > 0 || document.querySelector(".pagination-total"),
-    { timeout: 12_000 },
-  ).catch(() => {});
-  await detectBlocking(page);
+  await waitForSourceContent(page, ".product-tile, .pagination-total", options);
   return extractSearchCandidates(page);
 }
 
-async function searchUsingVisibleForm(page, term) {
+async function searchUsingVisibleForm(page, term, options = {}) {
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await waitForSourceContent(page, "input[name='SearchTerm']", {
+    ...options,
+    normalTimeoutMs: 5_000,
+  });
   await acceptCookiesIfShown(page);
   const input = page.locator("input[name='SearchTerm']").first();
   if (!(await input.isVisible({ timeout: 5000 }).catch(() => false))) return [];
   await input.fill(term);
   await input.press("Enter");
   await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
-  await page.waitForSelector(".product-tile", { timeout: 12_000 }).catch(() => {});
-  await detectBlocking(page);
+  await waitForSourceContent(page, ".product-tile, .pagination-total", options);
   return extractSearchCandidates(page);
 }
 
@@ -333,9 +385,9 @@ export async function withTransientNavigationRetry(operation, {
 async function findCandidates(page, term, maxPages, options = {}) {
   return collectCandidatePages(async (pageNumber) => {
     return withTransientNavigationRetry(async () => {
-      let candidates = await searchOnce(page, term, pageNumber);
+      let candidates = await searchOnce(page, term, pageNumber, options);
       if (pageNumber === 0 && candidates.length === 0) {
-        candidates = await searchUsingVisibleForm(page, term);
+        candidates = await searchUsingVisibleForm(page, term, options);
       }
       return candidates;
     }, {
@@ -394,8 +446,7 @@ async function validateCandidate(page, candidate, diagnostics = null) {
     return null;
   };
   await page.goto(candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 });
-  await page.waitForSelector(".product-details", { timeout: 12_000 }).catch(() => {});
-  await detectBlocking(page);
+  await waitForSourceContent(page, ".product-details");
   const details = await extractProductDetails(page);
   if (!details) return fail("notFound");
   if (details.sku !== candidate.sku || !isValidSKU(details.sku)) return fail("invalidProduct");
@@ -708,6 +759,8 @@ export async function collectProducts(config, logger = console, options = {}) {
     productErrors: 0,
     searchErrors: 0,
     searchRetries: 0,
+    sourceSecurityChecks: 0,
+    validationFailures: {},
     stopReason: null,
     lastSearchedTerm: null,
     nextPageCursor: initialPageCursor,
@@ -738,6 +791,13 @@ export async function collectProducts(config, logger = console, options = {}) {
         wait: async (delayMs) => searchPage.waitForTimeout(delayMs),
       },
     );
+    await waitForSourceContent(searchPage, "input[name='SearchTerm']", {
+      normalTimeoutMs: 5_000,
+      onSecurityCheck: () => {
+        stats.sourceSecurityChecks += 1;
+        logger.info("Hoogvliet-veiligheidscontrole gedetecteerd; dezelfde sessie krijgt tijd om normaal te laden.");
+      },
+    });
     await acceptCookiesIfShown(searchPage);
 
     for (const term of config.searchTerms) {
@@ -783,6 +843,10 @@ export async function collectProducts(config, logger = console, options = {}) {
           onRetry: (error, attempt) => {
             stats.searchRetries += 1;
             logger.info(`Zoekterm opnieuw proberen (${term}, ${attempt}/${config.navigationRetries}): ${error.message}`);
+          },
+          onSecurityCheck: () => {
+            stats.sourceSecurityChecks += 1;
+            logger.info(`Hoogvliet-veiligheidscontrole bij '${term}'; wachten binnen dezelfde browsersessie.`);
           },
         });
         resumePageCursor = 0;
@@ -841,9 +905,10 @@ export async function collectProducts(config, logger = console, options = {}) {
         if (!claimCandidateSKU(candidate, attemptedSKUs, stats, termStats)) continue;
         stats.processedProducts += 1;
         let product;
+        const diagnostics = {};
         try {
           candidate.searchTerm = term;
-          product = await validateCandidate(detailPage, candidate);
+          product = await validateCandidate(detailPage, candidate, diagnostics);
         } catch (error) {
           if (error instanceof SourceBlockedError) throw error;
           stats.productErrors += 1;
@@ -854,6 +919,9 @@ export async function collectProducts(config, logger = console, options = {}) {
         if (!product) {
           stats.invalidProductsSkipped += 1;
           termStats.skipped += 1;
+          const reason = diagnostics.reason ?? "invalidProduct";
+          stats.validationFailures[reason] = (stats.validationFailures[reason] ?? 0) + 1;
+          logger.info(`Product afgewezen: ${candidate.sku} | reden=${reason}`);
           continue;
         }
         chosen.push(product);
@@ -896,9 +964,22 @@ export async function collectProducts(config, logger = console, options = {}) {
       ?? "discovery_exhausted";
   }
 
+  stats.durationMs = Date.now() - startedAt;
+
   if (chosen.length === 0 && !isSafeEmptyDiscovery(config, stats, attemptedSKUs.size)) {
+    logger.error(
+      "Importdiagnose"
+        + ` | zoekroutes=${stats.searchedTerms}`
+        + ` | pagina's=${stats.pagesFetched}`
+        + ` | ruwe_kandidaten=${stats.rawCandidatesFound}`
+        + ` | geparsed=${stats.candidatesFound}`
+        + ` | unieke_skus=${stats.uniqueSKUs}`
+        + ` | gevalideerd=${stats.validatedProducts}`
+        + ` | afgewezen=${stats.invalidProductsSkipped}`
+        + ` | veiligheidscontroles=${stats.sourceSecurityChecks}`
+        + ` | afwijsredenen=${JSON.stringify(stats.validationFailures)}`,
+    );
     throw new Error("De Hoogvliet-bron leverde geen volledig valideerbare producten op.");
   }
-  stats.durationMs = Date.now() - startedAt;
   return { products: chosen, stats };
 }
