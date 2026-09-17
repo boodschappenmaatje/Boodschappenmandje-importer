@@ -200,6 +200,34 @@ function incompleteGenerated(): WeekPreparation {
   };
 }
 
+function generatedWithoutControlledImage(): WeekPreparation {
+  const preparation = generated();
+  return {
+    ...preparation,
+    days: preparation.days.map((day, index) =>
+      index === 0
+        ? {
+            ...day,
+            recipeId: "future-recipe",
+            recipe: {
+              id: "future-recipe",
+              sourceKey: "future-recipe-without-image",
+              name: "Nieuwe maaltijd zonder gecontroleerde foto",
+            },
+          }
+        : day,
+    ),
+    ingredients: preparation.ingredients.map((ingredient) => ({
+      ...ingredient,
+      usedIn: ingredient.usedIn.map((use) => ({
+        ...use,
+        recipeId: "future-recipe",
+        recipeName: "Nieuwe maaltijd zonder gecontroleerde foto",
+      })),
+    })),
+  };
+}
+
 function render(
   component: ReturnType<typeof createElement>,
   preparation: WeekPreparation | null,
@@ -324,6 +352,17 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain('data-image-source="recipe"');
     expect(html).not.toContain("rundergehakt.webp&quot; class=\"meal-day-image");
     expect(html).toContain("Menu aanpassen");
+  });
+
+  it("gebruikt op weekkaart en gerechtdetail dezelfde nette fallback bij een niet-gevalideerde foto", () => {
+    const homeHtml = render(createElement(HomePage), generatedWithoutControlledImage());
+    const weekHtml = render(createElement(PrepareWeekPage), generatedWithoutControlledImage());
+
+    expect(homeHtml).toContain('data-image-source="placeholder"');
+    expect(weekHtml).toContain('data-image-source="placeholder"');
+    expect(weekHtml).toContain("recipe-detail-hero");
+    expect(homeHtml).not.toContain("future-recipe-without-image.webp");
+    expect(weekHtml).not.toContain("future-recipe-without-image.webp");
   });
 
   it("vraagt bevestiging voordat een bestaande voorbereiding wordt vervangen", () => {

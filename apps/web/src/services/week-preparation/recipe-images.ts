@@ -1,7 +1,6 @@
-import type {
-  MealCategory,
-  RecipeMealCategory,
-} from "@/types/week-preparation";
+import type { Recipe } from "@/types/catalog";
+import type { RecipeCatalog } from "@/services/week-preparation/recipe-repository";
+import type { RecipeMealCategory } from "@/types/week-preparation";
 
 export const DISH_IMAGE_KEYS = [
   "pasta-spaghetti-bolognese",
@@ -187,41 +186,449 @@ export const RECIPE_IMAGE_KEYS = {
   "zalm-traybake": "healthy-salmon-traybake",
 } as const satisfies Record<string, DishImageKey>;
 
-export const CATEGORY_IMAGE_KEYS: Record<RecipeMealCategory, DishImageKey> = {
-  dutch: "dutch-potatoes-broccoli-meatball",
-  pasta: "pasta-spaghetti-bolognese",
-  rice: "world-nasi-chicken",
-  quick: "comfort-toasties",
-  healthy: "healthy-chicken-stirfry-rice",
-  comfort: "comfort-cheeseburger-fries",
-  vegetarian: "vegetable-quinoa-feta",
+export const RECIPE_IMAGE_STATUSES = [
+  "verified",
+  "likely_match",
+  "mismatch",
+  "missing",
+  "needs_review",
+] as const;
+
+export type RecipeImageStatus = (typeof RECIPE_IMAGE_STATUSES)[number];
+
+export type RecipeImageIssue =
+  | "image_missing"
+  | "dish_type_conflict"
+  | "primary_ingredient_conflict"
+  | "insufficient_image_metadata"
+  | "weak_semantic_match";
+
+const SEMANTIC_TAGS = [
+  "potato", "sweetPotato", "fries", "spinach", "cauliflower", "broccoli",
+  "carrot", "greenBeans", "peas", "leek", "andijvie", "boerenkool",
+  "sauerkraut", "redCabbage", "courgette", "mushroom", "tomato", "vegetable",
+  "pasta", "spaghetti", "macaroni", "tagliatelle", "fusilli", "lasagne",
+  "tortellini", "gnocchi", "rice", "noodles", "couscous", "quinoa",
+  "wrap", "taco", "bread", "pizza", "soup", "pancake", "toastie", "nachos",
+  "chicken", "beef", "fish", "salmon", "tuna", "egg", "sausage", "tartare",
+  "meatball", "burger", "hotdog", "nuggets", "shawarma", "satay", "kofta",
+  "tofu", "falafel", "chickpea", "lentil", "beans", "cheese", "ham", "bacon",
+  "curry", "chili", "shakshuka",
+] as const;
+
+type RecipeImageSemanticTag = (typeof SEMANTIC_TAGS)[number];
+
+const SEMANTIC_TERMS: Record<RecipeImageSemanticTag, readonly string[]> = {
+  potato: ["aardappel", "aardappelen", "potato", "potatoes", "krieltjes", "gratin"],
+  sweetPotato: ["zoete aardappel", "zoete aardappelen", "sweet potato"],
+  fries: ["friet", "frites", "patat", "fries", "loaded fries"],
+  spinach: ["spinazie", "spinach"],
+  cauliflower: ["bloemkool", "cauliflower"],
+  broccoli: ["broccoli"],
+  carrot: ["wortel", "worteltjes", "winterpeen", "carrot", "hutspot"],
+  greenBeans: ["sperziebonen", "green beans", "beans"],
+  peas: ["doperwten", "peas"],
+  leek: ["prei", "leek"],
+  andijvie: ["andijvie", "endive"],
+  boerenkool: ["boerenkool", "kale"],
+  sauerkraut: ["zuurkool", "sauerkraut"],
+  redCabbage: ["rode kool", "red cabbage"],
+  courgette: ["courgette", "zucchini"],
+  mushroom: ["champignon", "champignons", "mushroom"],
+  tomato: ["tomaat", "tomaten", "tomato", "bolognese", "arrabbiata"],
+  vegetable: ["groente", "groenten", "vegetable", "vegetables", "stir fry"],
+  pasta: ["pasta", "penne", "spaghetti", "macaroni", "tagliatelle", "fusilli", "lasagne", "tortellini", "gnocchi"],
+  spaghetti: ["spaghetti"],
+  macaroni: ["macaroni"],
+  tagliatelle: ["tagliatelle"],
+  fusilli: ["fusilli"],
+  lasagne: ["lasagne", "lasagna"],
+  tortellini: ["tortellini"],
+  gnocchi: ["gnocchi"],
+  rice: ["rijst", "rice", "nasi"],
+  noodles: ["noedels", "noodles", "bami", "mie", "hokkien"],
+  couscous: ["couscous"],
+  quinoa: ["quinoa"],
+  wrap: ["wrap", "wraps", "burrito", "burritos", "quesadilla", "quesadillas", "roti"],
+  taco: ["taco", "tacos"],
+  bread: ["brood", "broodje", "broodjes", "bread", "pita"],
+  pizza: ["pizza"],
+  soup: ["soep", "soup"],
+  pancake: ["pannenkoek", "pannenkoeken", "pancake", "pancakes"],
+  toastie: ["tosti", "tostis", "toastie", "toasties"],
+  nachos: ["nacho", "nachos"],
+  chicken: ["kip", "chicken", "nugget", "nuggets", "shoarma", "saté", "sate"],
+  beef: ["rund", "runder", "beef", "gehakt", "bolognese", "hachee", "kofta"],
+  fish: ["vis", "fish", "zalm", "salmon", "tonijn", "tuna"],
+  salmon: ["zalm", "salmon"],
+  tuna: ["tonijn", "tuna"],
+  egg: ["ei", "eieren", "egg", "eggs"],
+  sausage: ["worst", "rookworst", "braadworst", "sausage", "hotdog", "hotdogs"],
+  tartare: ["tartaar", "tartare"],
+  meatball: ["gehaktbal", "gehaktballen", "gehaktballetjes", "meatball", "meatballs", "kofta"],
+  burger: ["burger", "burgers", "hamburger", "hamburgers", "vegburger", "cheeseburger"],
+  hotdog: ["hotdog", "hotdogs"],
+  nuggets: ["nugget", "nuggets"],
+  shawarma: ["shoarma", "shawarma", "kapsalon"],
+  satay: ["saté", "sate", "satay"],
+  kofta: ["kofta"],
+  tofu: ["tofu"],
+  falafel: ["falafel"],
+  chickpea: ["kikkererwt", "kikkererwten", "chickpea", "chickpeas"],
+  lentil: ["linzen", "lentil", "lentils"],
+  beans: ["bonen", "kidneybonen", "zwarte bonen", "beans", "chili"],
+  cheese: ["kaas", "cheese", "cheddar", "mozzarella", "feta", "caprese"],
+  ham: ["ham"],
+  bacon: ["spek", "spekjes", "bacon", "carbonara"],
+  curry: ["curry", "madras", "tikka masala"],
+  chili: ["chili"],
+  shakshuka: ["shakshuka"],
 };
+
+const CONFLICT_GROUPS: ReadonlyArray<{
+  issue: RecipeImageIssue;
+  tags: ReadonlySet<RecipeImageSemanticTag>;
+}> = [
+  {
+    issue: "dish_type_conflict",
+    tags: new Set([
+      "spaghetti", "macaroni", "tagliatelle", "fusilli", "lasagne", "tortellini",
+      "gnocchi", "rice", "noodles", "couscous", "quinoa", "wrap", "taco",
+      "pizza", "soup", "pancake", "toastie", "nachos", "burger", "hotdog",
+    ]),
+  },
+  {
+    issue: "primary_ingredient_conflict",
+    tags: new Set(["chicken", "beef", "fish", "egg", "sausage", "tofu", "falafel", "chickpea", "lentil"]),
+  },
+  {
+    issue: "primary_ingredient_conflict",
+    tags: new Set(["tartare", "meatball", "burger", "hotdog", "nuggets", "shawarma", "satay", "kofta"]),
+  },
+  {
+    issue: "primary_ingredient_conflict",
+    tags: new Set([
+      "spinach", "cauliflower", "broccoli", "carrot", "greenBeans", "peas", "leek",
+      "andijvie", "boerenkool", "sauerkraut", "redCabbage", "courgette", "mushroom",
+    ]),
+  },
+];
+
+const CATEGORY_HINTS: Record<string, readonly RecipeMealCategory[]> = {
+  pasta: ["pasta"],
+  dutch: ["dutch"],
+  oven: ["dutch", "comfort", "healthy"],
+  comfort: ["comfort", "quick"],
+  world: ["rice", "comfort", "healthy"],
+  vegetarian: ["vegetarian", "healthy"],
+  vegetable: ["vegetarian", "healthy"],
+  healthy: ["healthy"],
+};
+
+const IMAGE_TAG_OVERRIDES: Partial<
+  Record<DishImageKey, readonly RecipeImageSemanticTag[]>
+> = {
+  "oven-shepherds-pie": ["potato", "beef", "carrot", "peas"],
+  "world-sweet-sour-chicken": ["chicken", "rice", "tomato"],
+  "world-teriyaki-chicken": ["chicken", "rice", "vegetable"],
+};
+
+export interface RecipeImageIngredientContext {
+  sourceKey: string;
+  name: string;
+  category?: string | null;
+  position?: number | null;
+  optional?: boolean;
+}
+
+export interface RecipeImageContext {
+  recipeSourceKey: string;
+  recipeName: string;
+  categories: readonly RecipeMealCategory[];
+  ingredients: readonly RecipeImageIngredientContext[];
+}
+
+export interface RecipeImageQualityResult {
+  recipeSourceKey: string;
+  imageKey: DishImageKey | null;
+  imagePresent: boolean;
+  provenance: "controlled-generated" | null;
+  status: RecipeImageStatus;
+  accepted: boolean;
+  recipeNameMatch: boolean;
+  categoryMatch: boolean;
+  primaryIngredientNames: string[];
+  primaryIngredientMatchCount: number;
+  primaryIngredientCount: number;
+  issues: RecipeImageIssue[];
+  fallbackNeeded: boolean;
+}
+
+export interface RecipeImageHealthScan {
+  recipes: RecipeImageQualityResult[];
+  summary: {
+    total: number;
+    imagePresent: number;
+    verified: number;
+    likelyMatch: number;
+    needsReview: number;
+    mismatch: number;
+    missing: number;
+    fallbackNeeded: number;
+  };
+}
 
 export interface DishImageAsset {
   key: DishImageKey;
   src: `/images/dishes/${DishImageKey}.webp`;
-  source: "recipe" | "category";
+  source: "recipe";
 }
 
-function imageAsset(key: DishImageKey, source: DishImageAsset["source"]): DishImageAsset {
+interface DishImageProfile {
+  key: DishImageKey;
+  tags: ReadonlySet<RecipeImageSemanticTag>;
+  categoryHints: readonly RecipeMealCategory[];
+  provenance: "controlled-generated";
+}
+
+function imageAsset(key: DishImageKey): DishImageAsset {
   return {
     key,
     src: `/images/dishes/${key}.webp`,
-    source,
+    source: "recipe",
+  };
+}
+
+function normalizeSemanticText(value: string): string {
+  return value
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("nl-NL")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function containsSemanticTerm(text: string, term: string): boolean {
+  const normalizedTerm = normalizeSemanticText(term);
+  if (` ${text} `.includes(` ${normalizedTerm} `)) return true;
+  if (normalizedTerm.includes(" ") || normalizedTerm.length < 5) return false;
+  return text
+    .split(" ")
+    .some(
+      (token) =>
+        token.startsWith(normalizedTerm) || token.endsWith(normalizedTerm),
+    );
+}
+
+function semanticTagsForText(value: string): Set<RecipeImageSemanticTag> {
+  const normalized = normalizeSemanticText(value);
+  const tags = new Set<RecipeImageSemanticTag>();
+  for (const tag of SEMANTIC_TAGS) {
+    if (SEMANTIC_TERMS[tag].some((term) => containsSemanticTerm(normalized, term))) {
+      tags.add(tag);
+    }
+  }
+  return tags;
+}
+
+function imageTags(key: DishImageKey): Set<RecipeImageSemanticTag> {
+  return new Set([
+    ...semanticTagsForText(key.replaceAll("-", " ")),
+    ...(IMAGE_TAG_OVERRIDES[key] ?? []),
+  ]);
+}
+
+function imageCategoryHints(key: DishImageKey): readonly RecipeMealCategory[] {
+  return CATEGORY_HINTS[key.split("-")[0]] ?? [];
+}
+
+function imageProfile(key: DishImageKey): DishImageProfile {
+  return {
+    key,
+    tags: imageTags(key),
+    categoryHints: imageCategoryHints(key),
+    provenance: "controlled-generated",
+  };
+}
+
+function ingredientTags(ingredient: RecipeImageIngredientContext): Set<RecipeImageSemanticTag> {
+  return semanticTagsForText(`${ingredient.sourceKey} ${ingredient.name}`);
+}
+
+function primaryIngredients(context: RecipeImageContext): RecipeImageIngredientContext[] {
+  const recipeNameTags = semanticTagsForText(context.recipeName);
+  const required = context.ingredients
+    .map((ingredient, inputIndex) => ({ ingredient, inputIndex }))
+    .filter(({ ingredient }) => ingredient.optional !== true)
+    .toSorted(
+      (left, right) =>
+        (left.ingredient.position ?? left.inputIndex) -
+        (right.ingredient.position ?? right.inputIndex),
+    )
+    .map(({ ingredient }) => ingredient);
+  const named = required.filter((ingredient) =>
+    [...ingredientTags(ingredient)].some((tag) => recipeNameTags.has(tag)),
+  );
+  const visuallySignificant = required.filter(
+    (ingredient) =>
+      !named.includes(ingredient) &&
+      ingredient.category !== "Sauzen & smaakmakers" &&
+      ingredient.category !== "Maaltijdcomponenten",
+  );
+  return [...named, ...visuallySignificant].slice(0, 3);
+}
+
+function conflictIssues(
+  expected: ReadonlySet<RecipeImageSemanticTag>,
+  actual: ReadonlySet<RecipeImageSemanticTag>,
+): RecipeImageIssue[] {
+  const issues = new Set<RecipeImageIssue>();
+  for (const group of CONFLICT_GROUPS) {
+    const expectedInGroup = [...expected].filter((tag) => group.tags.has(tag));
+    const actualInGroup = [...actual].filter((tag) => group.tags.has(tag));
+    if (
+      expectedInGroup.length > 0 &&
+      actualInGroup.length > 0 &&
+      !expectedInGroup.some((tag) => actualInGroup.includes(tag))
+    ) {
+      issues.add(group.issue);
+    }
+  }
+  return [...issues];
+}
+
+export function evaluateRecipeImageQuality(
+  context: RecipeImageContext,
+): RecipeImageQualityResult {
+  const imageKey = (RECIPE_IMAGE_KEYS as Record<string, DishImageKey | undefined>)[
+    context.recipeSourceKey
+  ] ?? null;
+  const primary = primaryIngredients(context);
+  const primaryTags = new Set(primary.flatMap((ingredient) => [...ingredientTags(ingredient)]));
+  const recipeNameTags = semanticTagsForText(context.recipeName);
+
+  if (!imageKey) {
+    return {
+      recipeSourceKey: context.recipeSourceKey,
+      imageKey: null,
+      imagePresent: false,
+      provenance: null,
+      status: "missing",
+      accepted: false,
+      recipeNameMatch: false,
+      categoryMatch: false,
+      primaryIngredientNames: primary.map((ingredient) => ingredient.name),
+      primaryIngredientMatchCount: 0,
+      primaryIngredientCount: primary.length,
+      issues: ["image_missing"],
+      fallbackNeeded: true,
+    };
+  }
+
+  const profile = imageProfile(imageKey);
+  const actualTags = profile.tags;
+  const issues = conflictIssues(
+    new Set([...recipeNameTags, ...primaryTags]),
+    actualTags,
+  );
+  const matchingPrimary = primary.filter((ingredient) =>
+    [...ingredientTags(ingredient)].some((tag) => actualTags.has(tag)),
+  );
+  const recipeNameMatch = [...recipeNameTags].some((tag) => actualTags.has(tag));
+  const categoryMatch = context.categories.some((category) =>
+    profile.categoryHints.includes(category),
+  );
+
+  let status: RecipeImageStatus;
+  if (actualTags.size === 0) {
+    status = "needs_review";
+    issues.push("insufficient_image_metadata");
+  } else if (issues.length > 0) {
+    status = "mismatch";
+  } else if (
+    matchingPrimary.length >= 2 ||
+    (recipeNameMatch && matchingPrimary.length >= 1)
+  ) {
+    status = "verified";
+  } else if (matchingPrimary.length >= 1 || recipeNameMatch) {
+    status = "likely_match";
+  } else {
+    status = "needs_review";
+    issues.push("weak_semantic_match");
+  }
+  const accepted = status === "verified" || status === "likely_match";
+
+  return {
+    recipeSourceKey: context.recipeSourceKey,
+    imageKey,
+    imagePresent: true,
+    provenance: profile.provenance,
+    status,
+    accepted,
+    recipeNameMatch,
+    categoryMatch,
+    primaryIngredientNames: primary.map((ingredient) => ingredient.name),
+    primaryIngredientMatchCount: matchingPrimary.length,
+    primaryIngredientCount: primary.length,
+    issues: [...new Set(issues)],
+    fallbackNeeded: !accepted,
+  };
+}
+
+export function evaluateRecipeImageHealth(
+  contexts: readonly RecipeImageContext[],
+): RecipeImageHealthScan {
+  const recipes = contexts.map(evaluateRecipeImageQuality);
+  return {
+    recipes,
+    summary: {
+      total: recipes.length,
+      imagePresent: recipes.filter((item) => item.imagePresent).length,
+      verified: recipes.filter((item) => item.status === "verified").length,
+      likelyMatch: recipes.filter((item) => item.status === "likely_match").length,
+      needsReview: recipes.filter((item) => item.status === "needs_review").length,
+      mismatch: recipes.filter((item) => item.status === "mismatch").length,
+      missing: recipes.filter((item) => item.status === "missing").length,
+      fallbackNeeded: recipes.filter((item) => item.fallbackNeeded).length,
+    },
+  };
+}
+
+export function recipeImageContextFromCatalog(
+  recipe: Recipe,
+  categories: readonly RecipeMealCategory[],
+  catalog: RecipeCatalog,
+): RecipeImageContext {
+  const ingredientsById = new Map(
+    catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+  );
+  return {
+    recipeSourceKey: recipe.sourceKey,
+    recipeName: recipe.name,
+    categories,
+    ingredients: catalog.relations
+      .filter((relation) => relation.recipeId === recipe.id)
+      .map((relation) => {
+        const ingredient = ingredientsById.get(relation.ingredientId);
+        return {
+          sourceKey: ingredient?.sourceKey ?? relation.ingredientId,
+          name: ingredient?.name ?? relation.ingredientId,
+          category: ingredient?.category ?? null,
+          position: relation.position,
+          optional: relation.optional === true,
+        };
+      }),
   };
 }
 
 export function recipeImageFor(
-  recipeSourceKey: string | null | undefined,
-  category: MealCategory,
+  context: RecipeImageContext | null | undefined,
 ): DishImageAsset | null {
-  const mapped = recipeSourceKey
-    ? (RECIPE_IMAGE_KEYS as Record<string, DishImageKey>)[recipeSourceKey]
-    : undefined;
-  if (mapped) return imageAsset(mapped, "recipe");
-  if (category === "freeChoice") return null;
-  return imageAsset(CATEGORY_IMAGE_KEYS[category], "category");
+  if (!context) return null;
+  const result = evaluateRecipeImageQuality(context);
+  return result.accepted && result.imageKey ? imageAsset(result.imageKey) : null;
 }
 
 export const SPECIFIC_RECIPE_IMAGE_COUNT = Object.keys(RECIPE_IMAGE_KEYS).length;
-export const CATEGORY_FALLBACK_IMAGE_COUNT = Object.keys(CATEGORY_IMAGE_KEYS).length;
+export const CATEGORY_FALLBACK_IMAGE_COUNT = 0;

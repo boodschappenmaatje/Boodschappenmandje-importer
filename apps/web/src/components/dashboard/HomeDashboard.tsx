@@ -116,6 +116,15 @@ export function HomeDashboard() {
           <div className="meal-day-scroller">
             {generatedDays.map((day, index) => {
               const cost = calculateDishCostSummary(day.dayIndex, preparation!.ingredients);
+              const dayIngredients = preparation!.ingredients
+                .filter((ingredient) =>
+                  ingredient.usedIn.some((use) => use.dayIndex === day.dayIndex),
+                )
+                .map((ingredient) => ({
+                  sourceKey: ingredient.sourceKey,
+                  name: ingredient.name,
+                  optional: ingredient.optional,
+                }));
               return (
                 <MealDayCard
                   key={day.dayIndex}
@@ -125,6 +134,7 @@ export function HomeDashboard() {
                   complete={cost.complete}
                   recipeSourceKey={day.recipe?.sourceKey ?? null}
                   category={day.category}
+                  ingredients={dayIngredients}
                   active={index === 0}
                 />
               );

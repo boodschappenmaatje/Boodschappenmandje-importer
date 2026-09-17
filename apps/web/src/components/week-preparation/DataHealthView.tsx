@@ -6,6 +6,13 @@ import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationP
 import { createCatalogRepository } from "@/services/catalog/catalog-repository";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import {
+  evaluateRecipeImageHealth,
+  recipeImageContextFromCatalog,
+  type RecipeImageHealthScan,
+  type RecipeImageIssue,
+  type RecipeImageStatus,
+} from "@/services/week-preparation/recipe-images";
+import {
   evaluateRecipeReadiness,
   type RecipeReadinessGateResult,
   type RecipeReadinessIssueOrigin,
@@ -46,8 +53,25 @@ const ORIGIN_LABELS: Record<RecipeReadinessIssueOrigin, string> = {
   recipeData: "Receptdata",
 };
 
+const IMAGE_STATUS_LABELS: Record<RecipeImageStatus, string> = {
+  verified: "Betrouwbaar passend",
+  likely_match: "Waarschijnlijk passend",
+  mismatch: "Duidelijke mismatch",
+  missing: "Geen specifieke afbeelding",
+  needs_review: "Controle nodig",
+};
+
+const IMAGE_ISSUE_LABELS: Record<RecipeImageIssue, string> = {
+  image_missing: "Geen gecontroleerde afbeelding gekoppeld",
+  dish_type_conflict: "Het gerechtstype op de afbeelding wijkt af",
+  primary_ingredient_conflict: "Een bepalend ingrediënt conflicteert",
+  insufficient_image_metadata: "Afbeeldingsmetadata is onvoldoende",
+  weak_semantic_match: "Te weinig betrouwbare overeenkomst",
+};
+
 interface DataHealthResult {
   gate: RecipeReadinessGateResult;
+  imageHealth: RecipeImageHealthScan;
   recipes: Recipe[];
   checkedAt: string;
 }
@@ -64,7 +88,21 @@ async function loadDataHealth(numberOfPeople: number): Promise<DataHealthResult>
     catalog,
     createCatalogRepository(),
   );
-  return { gate, recipes: catalog.recipes, checkedAt: new Date().toISOString() };
+  const imageHealth = evaluateRecipeImageHealth(
+    catalog.recipes.map((recipe) =>
+      recipeImageContextFromCatalog(
+        recipe,
+        recipeCategories(recipe),
+        catalog,
+      ),
+    ),
+  );
+  return {
+    gate,
+    imageHealth,
+    recipes: catalog.recipes,
+    checkedAt: new Date().toISOString(),
+  };
 }
 
 export function DataHealthView() {
@@ -106,6 +144,9 @@ export function DataHealthView() {
   const summary = useMemo(() => {
     if (!result) return null;
     const recipeById = new Map(result.recipes.map((recipe) => [recipe.id, recipe]));
+    const imageBySourceKey = new Map(
+      result.imageHealth.recipes.map((image) => [image.recipeSourceKey, image]),
+    );
     const required = result.gate.recipes.reduce(
       (total, recipe) => total + recipe.requiredIngredientCount,
       0,
@@ -134,7 +175,7 @@ export function DataHealthView() {
         ready: candidates.filter((candidate) => candidate.ready).length,
       };
     });
-    return { required, readyRequired, origins, categories };
+    return { required, readyRequired, origins, categories, recipeById, imageBySourceKey };
   }, [result]);
 
   if (status === "loading") {
@@ -173,6 +214,12 @@ export function DataHealthView() {
           <span>Personen</span>
           <strong>{numberOfPeople}</strong>
         </div>
+        <div>
+          <span>Afbeeldingen betrouwbaar</span>
+          <strong>
+            {result.imageHealth.summary.verified + result.imageHealth.summary.likelyMatch} / {result.imageHealth.summary.total}
+          </strong>
+        </div>
         <button className="secondary-action" type="button" onClick={retry}>
           Opnieuw controleren
         </button>
@@ -191,6 +238,18 @@ export function DataHealthView() {
       </section>
 
       <section className="data-health-card">
+        <h2>Recipe Image Health</h2>
+        <div className="data-health-image-summary">
+          <div><span>Betrouwbaar</span><strong>{result.imageHealth.summary.verified}</strong></div>
+          <div><span>Waarschijnlijk</span><strong>{result.imageHealth.summary.likelyMatch}</strong></div>
+          <div><span>Controle nodig</span><strong>{result.imageHealth.summary.needsReview}</strong></div>
+          <div><span>Mismatch</span><strong>{result.imageHealth.summary.mismatch}</strong></div>
+          <div><span>Ontbrekend</span><strong>{result.imageHealth.summary.missing}</strong></div>
+          <div><span>Fallback</span><strong>{result.imageHealth.summary.fallbackNeeded}</strong></div>
+        </div>
+      </section>
+
+      <section className="data-health-card">
         <h2>Probleemclassificatie</h2>
         <div className="data-health-origins">
           {(Object.entries(summary.origins) as [RecipeReadinessIssueOrigin, number][]).map(
@@ -205,15 +264,44 @@ export function DataHealthView() {
       </section>
 
       <section className="data-health-recipes" aria-label="Readiness per recept">
-        {result.gate.recipes.map((recipe) => (
+        {result.gate.recipes.map((recipe) => {
+          const recipeData = summary.recipeById.get(recipe.recipeId);
+          const image = recipeData
+            ? summary.imageBySourceKey.get(recipeData.sourceKey)
+            : null;
+          return (
           <details className="data-health-recipe" key={recipe.recipeId}>
             <summary>
               <span>
                 <strong>{recipe.recipeName}</strong>
                 <small>{recipe.readyRequiredIngredientCount} / {recipe.requiredIngredientCount} verplichte ingrediënten READY</small>
+                <small>
+                  Afbeelding: {image ? IMAGE_STATUS_LABELS[image.status] : "Niet gecontroleerd"}
+                </small>
               </span>
               <b data-ready={recipe.ready}>{recipe.ready ? "READY" : "NOT READY"}</b>
             </summary>
+            {image ? (
+              <div className="data-health-image-detail" data-accepted={image.accepted}>
+                <strong>{IMAGE_STATUS_LABELS[image.status]}</strong>
+                <span>Afbeelding aanwezig: {image.imagePresent ? "ja" : "nee"}</span>
+                <span>
+                  Beeldbron: {image.provenance === "controlled-generated" ? "eigen gecontroleerde beeldset" : "geen"}
+                </span>
+                <span>Match met receptnaam: {image.recipeNameMatch ? "ja" : "nee"}</span>
+                <span>
+                  Hoofdingrediënten: {image.primaryIngredientMatchCount} / {image.primaryIngredientCount} passend
+                </span>
+                <span>Categoriecontext: {image.categoryMatch ? "passend" : "niet bepalend"}</span>
+                <span>Fallback nodig: {image.fallbackNeeded ? "ja" : "nee"}</span>
+                {image.primaryIngredientNames.length > 0 ? (
+                  <span>Hoofdcomponenten: {image.primaryIngredientNames.join(", ")}</span>
+                ) : null}
+                {image.issues.length > 0 ? (
+                  <span>{image.issues.map((issue) => IMAGE_ISSUE_LABELS[issue]).join(" · ")}</span>
+                ) : null}
+              </div>
+            ) : null}
             <ul>
               {recipe.ingredients.map((ingredient) => (
                 <li key={`${recipe.recipeId}:${ingredient.ingredientId}:${ingredient.sourceKey}`} data-ready={ingredient.ready}>
@@ -239,7 +327,8 @@ export function DataHealthView() {
               ))}
             </ul>
           </details>
-        ))}
+          );
+        })}
       </section>
       <p className="data-health-timestamp">
         Actueel gecontroleerd: {new Date(result.checkedAt).toLocaleString("nl-NL")}

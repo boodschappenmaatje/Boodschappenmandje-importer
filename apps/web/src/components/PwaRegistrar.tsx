@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export const SERVICE_WORKER_RELEASE = "pwa11-ui-images-budget-2026-09-15";
+export const SERVICE_WORKER_RELEASE = "pwa11-image-quality-gate-2026-09-17";
 
 export function PwaRegistrar() {
   useEffect(() => {

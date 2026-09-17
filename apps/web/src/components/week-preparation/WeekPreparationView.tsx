@@ -277,7 +277,20 @@ export function WeekPreparationView() {
                     preparation.ingredients,
                   );
                   const dishTitle = mealMix?.dishName ?? day.recipe?.name ?? "Gerecht";
-                  const dishImage = recipeImageFor(day.recipe?.sourceKey, day.category);
+                  const dishImage = recipeImageFor(
+                    day.recipe && day.category !== "freeChoice"
+                      ? {
+                          recipeSourceKey: day.recipe.sourceKey,
+                          recipeName: dishTitle,
+                          categories: [day.category],
+                          ingredients: dayIngredients.map((ingredient) => ({
+                            sourceKey: ingredient.sourceKey,
+                            name: ingredient.name,
+                            optional: ingredient.optional,
+                          })),
+                        }
+                      : null,
+                  );
                   const dishNeedsReview = incompleteDayIndexes.has(day.dayIndex);
                   return (
                     <li key={day.dayIndex}>

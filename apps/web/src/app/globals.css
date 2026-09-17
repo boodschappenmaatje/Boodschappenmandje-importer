@@ -3824,6 +3824,37 @@ body {
 .data-health-origins span { color: var(--color-muted); font-size: .7rem; }
 .data-health-origins strong { font-size: 1.05rem; }
 
+.data-health-image-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.data-health-image-summary > div,
+.data-health-image-detail {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--color-background);
+}
+
+.data-health-image-summary span,
+.data-health-image-detail span {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.data-health-image-detail {
+  margin: 0 14px 12px;
+  border-left: 3px solid var(--color-warning);
+}
+
+.data-health-image-detail[data-accepted="true"] {
+  border-left-color: var(--color-success);
+}
+
 .data-health-recipe { padding: 0; overflow: hidden; }
 .data-health-recipe > summary {
   display: flex;

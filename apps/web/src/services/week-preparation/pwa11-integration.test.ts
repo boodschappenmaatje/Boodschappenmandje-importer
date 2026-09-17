@@ -4,6 +4,7 @@ import recipeSource from "../../../../../data/recipes.json";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { completeShoppingListFromWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
+import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import {
   applyProductToRequirement,
   isReliableIngredientMatch,
@@ -485,6 +486,45 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       remainingCents: 8952,
       isComplete: true,
     });
+  });
+
+  it("houdt Recipe Readiness los van een ontbrekende gecontroleerde gerechtfoto", async () => {
+    const futureRecipe: Recipe = {
+      ...RECIPE,
+      id: "recipe-future-pasta",
+      sourceKey: "toekomstige-pasta-zonder-beeld",
+      name: "Toekomstige pasta zonder gecontroleerde foto",
+      normalizedName: "toekomstige pasta zonder gecontroleerde foto",
+    };
+    const futureCatalog: RecipeCatalog = {
+      ...CATALOG,
+      recipes: [futureRecipe],
+      relations: CATALOG.relations.map((relation) => ({
+        ...relation,
+        recipeId: futureRecipe.id,
+      })),
+    };
+    const generated = await generatePreparedWeek(
+      preparedWeek(),
+      { async loadCatalog() { return futureCatalog; } },
+      catalogRepository([BEEF, ONIONS]),
+      NOW,
+    );
+
+    expect(generated.status).toBe("generated");
+    expect(generated.days[0].recipeId).toBe(futureRecipe.id);
+    expect(
+      recipeImageFor({
+        recipeSourceKey: futureRecipe.sourceKey,
+        recipeName: futureRecipe.name,
+        categories: ["pasta"],
+        ingredients: generated.ingredients.map((ingredient) => ({
+          sourceKey: ingredient.sourceKey,
+          name: ingredient.name,
+          optional: ingredient.optional,
+        })),
+      }),
+    ).toBeNull();
   });
 
   it("zet een gerecht met een ontbrekende verplichte match niet automatisch in de week", async () => {

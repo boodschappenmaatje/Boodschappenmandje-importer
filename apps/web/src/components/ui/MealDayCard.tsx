@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { DishImage } from "@/components/ui/DishImage";
 import { formatCents } from "@/services/budget/budget-engine";
-import { recipeImageFor } from "@/services/week-preparation/recipe-images";
+import {
+  recipeImageFor,
+  type RecipeImageIngredientContext,
+} from "@/services/week-preparation/recipe-images";
 import type { MealCategory } from "@/types/week-preparation";
 
 export function MealDayCard({
@@ -12,6 +15,7 @@ export function MealDayCard({
   complete,
   recipeSourceKey,
   category,
+  ingredients,
   active = false,
 }: {
   day: string;
@@ -20,9 +24,19 @@ export function MealDayCard({
   complete: boolean;
   recipeSourceKey: string | null;
   category: MealCategory;
+  ingredients: readonly RecipeImageIngredientContext[];
   active?: boolean;
 }) {
-  const image = recipeImageFor(recipeSourceKey, category);
+  const image = recipeImageFor(
+    recipeSourceKey && category !== "freeChoice"
+      ? {
+          recipeSourceKey,
+          recipeName: title,
+          categories: [category],
+          ingredients,
+        }
+      : null,
+  );
 
   return (
     <Link
