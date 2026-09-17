@@ -20,7 +20,7 @@ const KNOWN_CATEGORY_SIGNALS: Record<string, string[]> = {
   "Vis": ["vis", "zalm", "tonijn", "kabeljauw", "garnaal"],
   "Groente": ["groente", "spinazie", "tomaat", "ui", "wortel", "kool", "paprika", "sla"],
   "Fruit": ["fruit", "appel", "banaan", "peer", "citroen"],
-  "Zuivel & eieren": ["zuivel", "melk", "kaas", "room", "yoghurt", "ei"],
+  "Zuivel & eieren": ["zuivel", "melk", "kaas", "feta", "room", "yoghurt", "ei"],
   "Pasta, rijst & granen": ["pasta", "rijst", "graan", "spaghetti", "macaroni", "noedel"],
   "Brood": ["brood", "bol", "wrap", "tortilla"],
   "Snacks": ["snack", "chips", "friet", "pizza", "nugget"],
@@ -28,13 +28,24 @@ const KNOWN_CATEGORY_SIGNALS: Record<string, string[]> = {
   "Sauzen & smaakmakers": ["saus", "smaakmaker", "kruiden", "pesto", "jus"],
   "Vegetarische proteïne": ["vegetarisch", "plantaardig", "vegan", "tofu", "falafel"],
   "Maaltijdcomponenten": ["maaltijd", "wereldgerecht", "pizza", "soep", "mix"],
+  "Drinken": [
+    "drank",
+    "frisdrank",
+    "sap",
+    "fruitdrank",
+    "vruchtensap",
+    "smoothie",
+    "limonade",
+  ],
 };
 
-const CATEGORY_COMPATIBILITY: Record<string, string[]> = {
-  "Pasta, rijst & granen": ["Brood"],
-  "Aardappel & zetmeel": ["Snacks"],
-  "Maaltijdcomponenten": ["Snacks", "Pasta, rijst & granen"],
-  "Vegetarische proteïne": ["Vlees"],
+const INCOMPATIBLE_CATEGORIES: Record<string, string[]> = {
+  "Vlees": ["Groente", "Fruit", "Vis"],
+  "Vis": ["Vlees", "Groente", "Fruit"],
+  "Groente": ["Vlees", "Vis", "Sauzen & smaakmakers", "Maaltijdcomponenten", "Drinken"],
+  "Fruit": ["Vlees", "Vis", "Sauzen & smaakmakers", "Maaltijdcomponenten", "Drinken"],
+  "Zuivel & eieren": ["Vlees", "Vis", "Groente", "Fruit"],
+  "Brood": ["Vlees", "Vis", "Groente", "Fruit"],
 };
 
 function normalize(value: string | null): string {
@@ -52,6 +63,17 @@ function containsTerm(value: string, term: string): boolean {
   return (` ${value} `).includes(` ${term} `) || value.startsWith(`${term} `);
 }
 
+function containsCategorySignal(value: string, signal: string): boolean {
+  const normalizedSignal = normalize(signal);
+  return normalize(value)
+    .split(" ")
+    .some(
+      (token) =>
+        token === normalizedSignal ||
+        (normalizedSignal.length >= 4 && token.startsWith(normalizedSignal)),
+    );
+}
+
 function categoryConflicts(
   ingredient: RecipeIngredientDefinition,
   product: Product,
@@ -64,27 +86,57 @@ function categoryConflicts(
   );
   if (!classification) return false;
 
-  const expected = expectedSignals.some((signal) =>
-    containsTerm(classification, normalize(signal)),
+  const categorySegments = product.category?.split("/") ?? [];
+  const categorySpecificSegments =
+    categorySegments.length > 1 ? categorySegments.slice(1) : categorySegments;
+  const contextWithoutProductType = normalize(
+    [product.name, categorySegments.at(-1)].filter(Boolean).join(" "),
+  );
+  const productSpecificClassification = normalize(
+    [
+      product.name,
+      product.productType,
+      categorySegments.at(-1),
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const plantClassification = normalize(
+    [
+      product.name,
+      product.productType,
+      ...categorySpecificSegments,
+    ]
+      .filter(Boolean)
+      .join(" "),
   );
   if (
     ingredient.category === "Vlees" &&
-    ["vegetarisch", "plantaardig", "vegan"].some((signal) =>
-      containsTerm(`${classification} ${normalize(product.name)}`, signal),
+    ["vegetarisch", "plantaardig", "vegan", "vega"].some((signal) =>
+      containsTerm(plantClassification, signal),
     )
   ) {
     return true;
   }
-  if (expected) return false;
+  const incompatibleCategories = new Set(
+    INCOMPATIBLE_CATEGORIES[ingredient.category] ?? [],
+  );
+  const incompatibleSignals = Object.entries(KNOWN_CATEGORY_SIGNALS)
+    .filter(([category]) => incompatibleCategories.has(category))
+    .flatMap(([, signals]) => signals);
+  const hasIncompatibleSpecificContext = incompatibleSignals.some((signal) =>
+    containsCategorySignal(contextWithoutProductType, signal),
+  );
+  if (hasIncompatibleSpecificContext) return true;
 
-  const compatibleCategories = new Set(CATEGORY_COMPATIBILITY[ingredient.category] ?? []);
-  const belongsToOtherKnownCategory = Object.entries(KNOWN_CATEGORY_SIGNALS)
-    .filter(([category]) => category !== ingredient.category)
-    .filter(([category]) => !compatibleCategories.has(category))
-    .some(([, signals]) =>
-      signals.some((signal) => containsTerm(classification, normalize(signal))),
-    );
-  return belongsToOtherKnownCategory;
+  const hasExpectedSpecificContext = expectedSignals.some((signal) =>
+    containsCategorySignal(contextWithoutProductType, signal),
+  );
+  if (hasExpectedSpecificContext) return false;
+
+  return incompatibleSignals.some((signal) =>
+    containsCategorySignal(productSpecificClassification, signal),
+  );
 }
 
 function reliableTermMatch(
@@ -94,15 +146,7 @@ function reliableTermMatch(
   const terms = [...new Set([ingredient.name, ...ingredient.aliases].map(normalize))]
     .filter(Boolean);
   const name = normalize(product.name);
-  const productType = normalize(product.productType);
-  const category = normalize(product.category);
-
-  return terms.some(
-    (term) =>
-      containsTerm(name, term) ||
-      containsTerm(productType, term) ||
-      containsTerm(category, term),
-  );
+  return terms.some((term) => containsTerm(name, term));
 }
 
 const MEAL_MIX_STOP_WORDS = new Set([
@@ -200,13 +244,21 @@ function capacityFromText(
   }
 
   if (unit === "ml") {
-    return dimensionCapacity(/ml|cl|dl|l|liter|litre/, {
+    return dimensionCapacity(/milliliters?|ml|centiliters?|cl|deciliters?|dl|liters?|litres?|l/, {
+      milliliter: 1,
+      milliliters: 1,
       ml: 1,
+      centiliter: 10,
+      centiliters: 10,
       cl: 10,
+      deciliter: 100,
+      deciliters: 100,
       dl: 100,
       l: 1000,
       liter: 1000,
+      liters: 1000,
       litre: 1000,
+      litres: 1000,
     });
   }
 
@@ -276,12 +328,19 @@ export function selectIngredientProduct(
   ingredient: RecipeIngredientDefinition,
   products: Product[],
   brandConstraint: MealMixBrand | null = inferMealMixBrand(ingredient),
+  requiredUnit: WeekIngredientUnit | null = null,
 ): Product | null {
-  return (
-    products
-      .filter((product) =>
-        isReliableIngredientMatch(ingredient, product, brandConstraint),
+  const reliable = products.filter((product) =>
+    isReliableIngredientMatch(ingredient, product, brandConstraint),
+  );
+  const compatiblePackages = requiredUnit
+    ? reliable.filter(
+        (product) => productPackageCapacity(product, requiredUnit) !== null,
       )
+    : [];
+  const candidates = compatiblePackages.length > 0 ? compatiblePackages : reliable;
+  return (
+    candidates
       .toSorted(
         (left, right) =>
           matchScore(ingredient, right) - matchScore(ingredient, left) ||
@@ -425,6 +484,7 @@ export async function searchIngredientProduct(
   repository: CatalogRepository,
   ingredient: RecipeIngredientDefinition,
   brandConstraint: MealMixBrand | null,
+  requiredUnit: WeekIngredientUnit | null = null,
 ): Promise<IngredientMatchDiagnostics> {
   const terms = [...new Set([ingredient.name, ...ingredient.aliases])]
     .map((term) => term.trim())
@@ -439,6 +499,7 @@ export async function searchIngredientProduct(
       ingredient,
       [...found.values()],
       brandConstraint,
+      requiredUnit,
     );
     if (match) {
       return {
@@ -450,7 +511,12 @@ export async function searchIngredientProduct(
   }
 
   const candidates = [...found.values()];
-  const product = selectIngredientProduct(ingredient, candidates, brandConstraint);
+  const product = selectIngredientProduct(
+    ingredient,
+    candidates,
+    brandConstraint,
+    requiredUnit,
+  );
   return {
     product,
     candidates,
@@ -495,6 +561,7 @@ export async function matchWeekIngredientsWithDiagnostics(
         repository,
         ingredient,
         requirement.brandConstraint ?? inferMealMixBrand(ingredient),
+        requirement.kind === "mealMix" ? null : requirement.unit,
       );
       result[index] = {
         ...diagnostic,

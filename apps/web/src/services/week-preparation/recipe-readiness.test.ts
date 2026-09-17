@@ -5,6 +5,7 @@ import {
   applyProductToRequirement,
   isReliableIngredientMatch,
   productPackageCapacity,
+  selectIngredientProduct,
 } from "@/services/week-preparation/product-matching";
 import {
   evaluateRecipeReadiness,
@@ -195,7 +196,7 @@ describe("Recipe Readiness Gate", () => {
       label: "categorieconflict",
       products: [product({ id: "product-spinach", sku: "871000003", name: "Spinazie fijn gehakt", category: "Groente", productType: "Spinazie" })],
       reason: "category_mismatch",
-      origin: "softwareOrMatching",
+      origin: "catalogCoverage",
     },
     {
       label: "ontbrekende prijs",
@@ -422,12 +423,124 @@ describe("generieke matching en verpakkingseenheden", () => {
     expect(isReliableIngredientMatch(ingredient, catalogProduct)).toBe(true);
   });
 
+  it("behandelt de Hoogvliet-hoofdcategorie niet als vegetarisch productkenmerk", () => {
+    const meatTaxonomy = "Vlees, vis, vegetarisch/Rund-en varkensvlees/Gehakt";
+    const realBeef = product({
+      id: "product-taxonomy-beef",
+      sku: "871000012",
+      name: "Hoogvliet Rundergehakt",
+      category: meatTaxonomy,
+      productType: "Gehakt",
+    });
+    const plantBased = product({
+      id: "product-taxonomy-plant",
+      sku: "871000013",
+      name: "Redefine Plantaardig gehakt",
+      category: "Vlees, vis, vegetarisch/Vegetarisch/Gehakt",
+      productType: "Gehakt",
+    });
+
+    expect(isReliableIngredientMatch(BEEF, realBeef)).toBe(true);
+    expect(isReliableIngredientMatch(BEEF, plantBased)).toBe(false);
+  });
+
+  it("wijst semantisch verkeerde maaltijd- en drankmatches generiek af", () => {
+    const fruitIngredient: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-mango",
+      name: "mango",
+      normalizedName: "mango",
+      category: "Fruit",
+      aliases: ["mango"],
+    };
+    const mangoDrink = product({
+      id: "product-mango-drink",
+      sku: "871000014",
+      name: "Maaza Mango",
+      category: "Frisdrank, sappen/Sappen, siropen/Fruitdrank, vruchtensappen",
+      productType: "Sap",
+    });
+    const springOnion: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-spring-onion",
+      name: "bosui",
+      normalizedName: "bosui",
+      category: "Groente",
+      aliases: ["bosui", "lente-ui"],
+    };
+    const soup = product({
+      id: "product-soup",
+      sku: "871000015",
+      name: "Chinese tomatensoep met lente-ui",
+      category: "Maaltijden/Soepen/Maaltijdsoep",
+      productType: "Soep",
+    });
+
+    expect(isReliableIngredientMatch(fruitIngredient, mangoDrink)).toBe(false);
+    expect(isReliableIngredientMatch(springOnion, soup)).toBe(false);
+  });
+
+  it("laat een specifieke categorie zwaarder wegen dan een grof producttype", () => {
+    const cheese: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-cheese",
+      name: "geraspte kaas",
+      normalizedName: "geraspte kaas",
+      category: "Zuivel & eieren",
+      aliases: ["geraspte kaas"],
+    };
+    const catalogProduct = product({
+      id: "product-cheese",
+      sku: "871000018",
+      name: "Melkan Geraspte kaas belegen",
+      category: "Kaas, vleeswaren, tapas/Kaas/Buitenlandse kaas/Specialiteiten",
+      productType: "Vleeswaren",
+      packageText: "175 gram",
+      weightGrams: 175,
+    });
+
+    expect(isReliableIngredientMatch(cheese, catalogProduct)).toBe(true);
+  });
+
+  it("geeft bij gelijke matches voorrang aan een berekenbare verpakking", () => {
+    const lettuce: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-lettuce",
+      name: "ijsbergsla",
+      normalizedName: "ijsbergsla",
+      category: "Groente",
+      aliases: ["ijsbergsla"],
+    };
+    const onePiece = product({
+      id: "product-lettuce-piece",
+      sku: "871000016",
+      name: "IJsbergsla",
+      category: "Aardappelen, groente, fruit/Groente/Sla",
+      productType: "Groente",
+      packageText: "1 stuk",
+      weightGrams: null,
+    });
+    const grams = product({
+      id: "product-lettuce-grams",
+      sku: "871000017",
+      name: "IJsbergsla fijn",
+      category: "Aardappelen, groente, fruit/Groente/Sla",
+      productType: "Groente",
+      packageText: "200 gram",
+      weightGrams: 200,
+    });
+
+    expect(selectIngredientProduct(lettuce, [onePiece, grams], null, "g")?.id)
+      .toBe(grams.id);
+  });
+
   it.each([
     ["200 g", "g", 200],
     ["500 g", "g", 500],
     ["1 kg", "g", 1000],
     ["1 kg", "kg", 1],
     ["1 l", "ml", 1000],
+    ["250 milliliter", "ml", 250],
     ["1 l", "l", 1],
     ["8 stuks", "piece", 8],
   ] as const)("leest %s betrouwbaar voor %s", (packageText, unit, expected) => {

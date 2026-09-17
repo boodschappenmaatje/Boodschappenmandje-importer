@@ -81,7 +81,6 @@ function issueOrigin(
   }
   if (
     reason === "matcher_failed" ||
-    reason === "category_mismatch" ||
     reason === "product_reference_invalid"
   ) {
     return "softwareOrMatching";
