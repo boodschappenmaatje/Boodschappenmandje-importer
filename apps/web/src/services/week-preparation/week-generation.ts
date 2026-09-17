@@ -137,6 +137,13 @@ function recipeSelectionKey(days: WeekPreparation["days"]): string {
   return days.map((day) => day.recipeId ?? "free").join(":");
 }
 
+function duplicateRecipeCount(days: WeekPreparation["days"]): number {
+  const recipeIds = days
+    .map((day) => day.recipeId)
+    .filter((recipeId): recipeId is string => recipeId !== null);
+  return recipeIds.length - new Set(recipeIds).size;
+}
+
 function candidateDays(
   preparation: WeekPreparation,
   catalog: RecipeCatalog,
@@ -417,86 +424,243 @@ function selectWeekWithinMealBudget(
     duplicates: number;
     mealCostCents: number;
   };
-  let states: State[] = [{ days: [], rank: 0, duplicates: 0, mealCostCents: 0 }];
   let candidateCount = 0;
   let rejectedCount = 0;
   const beamWidth = 192;
+  const evaluatedPlanCache = new Map<string, EvaluatedPlan>();
 
-  for (const day of preparation.days) {
-    if (day.freeChoice) {
-      states = states.map((state) => ({
-        ...state,
-        days: [...state.days, { ...day, recipeId: null, recipe: null, status: "freeChoice" }],
-      }));
-      continue;
-    }
-    const candidates = candidatesByDay.get(day.dayIndex) ?? [];
-    const nextStates: State[] = [];
-    for (const state of states) {
-      const usedIds = new Set(state.days.map((item) => item.recipeId).filter(Boolean));
-      candidates.forEach((recipe, rank) => {
-        candidateCount += 1;
-        const days = [...state.days, selectedDay(day, recipe)];
-        const requirements = aggregateWeekIngredients(days, preparation.numberOfPeople!, catalog);
-        const ingredients = applyReadinessProducts(requirements, readiness);
-        const evaluation = evaluateMealBudget(
-          preparation.budgetCents,
-          preparation.mealBudgetCents,
-          ingredients,
-          list,
-          now,
-        );
-        if (!mealBudgetAllowsPlan(evaluation)) {
-          rejectedCount += 1;
-          return;
+  const evaluateSelection = (days: WeekPreparation["days"]): EvaluatedPlan => {
+    const key = recipeSelectionKey(days);
+    const cached = evaluatedPlanCache.get(key);
+    if (cached) return cached;
+    const evaluated = evaluatePlan(days, preparation, catalog, readiness, list, now);
+    evaluatedPlanCache.set(key, evaluated);
+    return evaluated;
+  };
+
+  const selectionRank = (days: WeekPreparation["days"]): number =>
+    days.reduce((total, day) => {
+      if (!day.recipeId) return total;
+      const rank = (candidatesByDay.get(day.dayIndex) ?? [])
+        .findIndex((recipe) => recipe.id === day.recipeId);
+      return total + Math.max(0, rank);
+    }, 0);
+
+  const uniqueVariationSeeds = (): State[] => {
+    const dayOrders = [
+      autoDays,
+      [...autoDays].reverse(),
+      [...autoDays].toSorted((left, right) =>
+        (candidatesByDay.get(left.dayIndex)?.length ?? 0) -
+        (candidatesByDay.get(right.dayIndex)?.length ?? 0) ||
+        left.dayIndex - right.dayIndex
+      ),
+    ];
+    const standaloneCost = new Map<string, number>();
+    const costFor = (
+      day: WeekPreparation["days"][number],
+      recipe: RecipeCatalog["recipes"][number],
+    ): number => {
+      const key = `${day.dayIndex}:${recipe.id}`;
+      const cached = standaloneCost.get(key);
+      if (cached !== undefined) return cached;
+      const cost = evaluateSelection([selectedDay(day, recipe)])
+        .evaluation.mealPlanKnownCostCents;
+      standaloneCost.set(key, cost);
+      return cost;
+    };
+    const seeds = new Map<string, WeekPreparation["days"]>();
+
+    for (const dayOrder of dayOrders) {
+      for (const sortByCost of [false, true]) {
+        for (const offset of [0, 1, 2, 3]) {
+          const selectedByDay = new Map<number, RecipeCatalog["recipes"][number]>();
+          const usedRecipeIds = new Set<string>();
+          for (const day of dayOrder) {
+            const ranked = candidatesByDay.get(day.dayIndex) ?? [];
+            const ordered = sortByCost
+              ? ranked.toSorted((left, right) =>
+                  costFor(day, left) - costFor(day, right) ||
+                  ranked.indexOf(left) - ranked.indexOf(right)
+                )
+              : ranked;
+            const rotated = [
+              ...ordered.slice(offset % Math.max(1, ordered.length)),
+              ...ordered.slice(0, offset % Math.max(1, ordered.length)),
+            ];
+            const recipe = rotated.find((candidate) => !usedRecipeIds.has(candidate.id));
+            if (!recipe) break;
+            selectedByDay.set(day.dayIndex, recipe);
+            usedRecipeIds.add(recipe.id);
+          }
+          if (selectedByDay.size !== autoDays.length) continue;
+          const days = preparation.days.map((day) => {
+            if (day.freeChoice) {
+              return { ...day, recipeId: null, recipe: null, status: "freeChoice" as const };
+            }
+            return selectedDay(day, selectedByDay.get(day.dayIndex)!);
+          });
+          seeds.set(recipeSelectionKey(days), days);
         }
-        nextStates.push({
-          days,
-          rank: state.rank + rank,
-          duplicates: state.duplicates + (usedIds.has(recipe.id) ? 1 : 0),
-          mealCostCents: evaluation.mealPlanKnownCostCents,
-        });
-      });
-    }
-    const unique = new Map<string, State>();
-    for (const state of nextStates) {
-      const signature = state.days.map((item) => item.recipeId ?? "free").join(":");
-      const current = unique.get(signature);
-      if (!current || state.duplicates < current.duplicates || state.rank < current.rank) {
-        unique.set(signature, state);
       }
     }
-    const uniqueStates = [...unique.values()];
-    const preferenceLane = uniqueStates
-      .toSorted((left, right) => left.duplicates - right.duplicates || left.rank - right.rank)
-      .slice(0, beamWidth);
-    const costLane = uniqueStates
-      .toSorted((left, right) =>
-        left.mealCostCents - right.mealCostCents ||
-        left.duplicates - right.duplicates ||
-        left.rank - right.rank
-      )
-      .slice(0, beamWidth);
-    const retained = new Map<string, State>();
-    for (const state of [...preferenceLane, ...costLane]) {
-      retained.set(recipeSelectionKey(state.days), state);
-    }
-    states = [...retained.values()];
-    if (states.length === 0) break;
-  }
 
-  const evaluated = states.map((state) => {
-    const requirements = aggregateWeekIngredients(state.days, preparation.numberOfPeople!, catalog);
-    const ingredients = applyReadinessProducts(requirements, readiness);
-    const evaluation = evaluateMealBudget(
-      preparation.budgetCents,
-      preparation.mealBudgetCents,
-      ingredients,
-      list,
-      now,
+    const improved = new Map<string, State>();
+    for (const seed of seeds.values()) {
+      let current = seed;
+      let currentEvaluation = evaluateSelection(current);
+      for (let pass = 0; pass < 3; pass += 1) {
+        let changed = false;
+        for (const day of autoDays) {
+          const usedByOtherDays = new Set(
+            current
+              .filter((currentDay) => currentDay.dayIndex !== day.dayIndex)
+              .map((currentDay) => currentDay.recipeId)
+              .filter((recipeId): recipeId is string => recipeId !== null),
+          );
+          let bestDays = current;
+          let bestEvaluation = currentEvaluation;
+          for (const recipe of candidatesByDay.get(day.dayIndex) ?? []) {
+            if (usedByOtherDays.has(recipe.id)) continue;
+            const nextDays = current.map((currentDay) =>
+              currentDay.dayIndex === day.dayIndex
+                ? selectedDay(currentDay, recipe)
+                : currentDay
+            );
+            const nextEvaluation = evaluateSelection(nextDays);
+            if (
+              nextEvaluation.evaluation.mealPlanKnownCostCents <
+              bestEvaluation.evaluation.mealPlanKnownCostCents
+            ) {
+              bestDays = nextDays;
+              bestEvaluation = nextEvaluation;
+            }
+          }
+          if (bestDays !== current) {
+            current = bestDays;
+            currentEvaluation = bestEvaluation;
+            changed = true;
+          }
+        }
+        if (!changed) break;
+      }
+      if (!mealBudgetAllowsPlan(currentEvaluation.evaluation)) continue;
+      const state: State = {
+        days: current,
+        rank: selectionRank(current),
+        duplicates: 0,
+        mealCostCents: currentEvaluation.evaluation.mealPlanKnownCostCents,
+      };
+      improved.set(recipeSelectionKey(current), state);
+    }
+    return [...improved.values()];
+  };
+
+  const searchWithDuplicateLimit = (duplicateLimit: number): State[] => {
+    let states: State[] = [{ days: [], rank: 0, duplicates: 0, mealCostCents: 0 }];
+
+    for (const day of preparation.days) {
+      if (day.freeChoice) {
+        states = states.map((state) => ({
+          ...state,
+          days: [...state.days, { ...day, recipeId: null, recipe: null, status: "freeChoice" }],
+        }));
+        continue;
+      }
+      const candidates = candidatesByDay.get(day.dayIndex) ?? [];
+      const nextStates: State[] = [];
+      for (const state of states) {
+        const usedIds = new Set(state.days.map((item) => item.recipeId).filter(Boolean));
+        candidates.forEach((recipe, rank) => {
+          const duplicates = state.duplicates + (usedIds.has(recipe.id) ? 1 : 0);
+          if (duplicates > duplicateLimit) return;
+          candidateCount += 1;
+          const days = [...state.days, selectedDay(day, recipe)];
+          const requirements = aggregateWeekIngredients(days, preparation.numberOfPeople!, catalog);
+          const ingredients = applyReadinessProducts(requirements, readiness);
+          const evaluation = evaluateMealBudget(
+            preparation.budgetCents,
+            preparation.mealBudgetCents,
+            ingredients,
+            list,
+            now,
+          );
+          if (!mealBudgetAllowsPlan(evaluation)) {
+            rejectedCount += 1;
+            return;
+          }
+          nextStates.push({
+            days,
+            rank: state.rank + rank,
+            duplicates,
+            mealCostCents: evaluation.mealPlanKnownCostCents,
+          });
+        });
+      }
+      const unique = new Map<string, State>();
+      for (const state of nextStates) {
+        const signature = recipeSelectionKey(state.days);
+        const current = unique.get(signature);
+        if (
+          !current ||
+          state.duplicates < current.duplicates ||
+          (state.duplicates === current.duplicates && state.rank < current.rank)
+        ) {
+          unique.set(signature, state);
+        }
+      }
+      const uniqueStates = [...unique.values()];
+      const preferenceLane = uniqueStates
+        .toSorted((left, right) =>
+          left.duplicates - right.duplicates ||
+          left.rank - right.rank ||
+          left.mealCostCents - right.mealCostCents
+        )
+        .slice(0, beamWidth);
+      const variationCostLane = uniqueStates
+        .toSorted((left, right) =>
+          left.duplicates - right.duplicates ||
+          left.mealCostCents - right.mealCostCents ||
+          left.rank - right.rank
+        )
+        .slice(0, beamWidth);
+      const costLane = uniqueStates
+        .toSorted((left, right) =>
+          left.mealCostCents - right.mealCostCents ||
+          left.duplicates - right.duplicates ||
+          left.rank - right.rank
+        )
+        .slice(0, beamWidth);
+      const retained = new Map<string, State>();
+      for (const state of [...preferenceLane, ...variationCostLane, ...costLane]) {
+        retained.set(recipeSelectionKey(state.days), state);
+      }
+      states = [...retained.values()];
+      if (states.length === 0) break;
+    }
+
+    const completed = states.filter((state) => state.days.length === preparation.days.length);
+    if (duplicateLimit !== 0 || completed.length > 0) return completed;
+    const unique = new Map(
+      completed.map((state) => [recipeSelectionKey(state.days), state]),
     );
-    return { ...state, ingredients, evaluation };
-  }).filter((state) => state.days.length === preparation.days.length && mealBudgetAllowsPlan(state.evaluation));
+    for (const state of uniqueVariationSeeds()) {
+      unique.set(recipeSelectionKey(state.days), state);
+    }
+    return [...unique.values()];
+  };
+
+  type EvaluatedState = State & EvaluatedPlan;
+  let evaluated: EvaluatedState[] = [];
+  const maximumDuplicates = Math.max(0, autoDays.length - 1);
+  for (let duplicateLimit = 0; duplicateLimit <= maximumDuplicates; duplicateLimit += 1) {
+    const states = searchWithDuplicateLimit(duplicateLimit);
+    evaluated = states.map((state) => {
+      const { ingredients, evaluation } = evaluateSelection(state.days);
+      return { ...state, ingredients, evaluation };
+    }).filter((state) => mealBudgetAllowsPlan(state.evaluation));
+    if (evaluated.length > 0) break;
+  }
 
   let best = evaluated.toSorted((left, right) => {
     const leftWeekPenalty = left.evaluation.weekBudgetStatus === "overBudget" ? 1 : 0;
@@ -508,7 +672,7 @@ function selectWeekWithinMealBudget(
     best = {
       ...lowest.plan,
       rank: Number.MAX_SAFE_INTEGER,
-      duplicates: 0,
+      duplicates: duplicateRecipeCount(lowest.plan.days),
       mealCostCents: lowest.plan.evaluation.mealPlanKnownCostCents,
     };
   }

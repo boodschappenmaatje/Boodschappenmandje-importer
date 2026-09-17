@@ -11,6 +11,7 @@ import {
 } from "@/services/week-preparation/week-preparation";
 import type { Product, Recipe } from "@/types/catalog";
 import type { ActiveShoppingList } from "@/types/shopping-list";
+import type { MealCategory } from "@/types/week-preparation";
 
 const NOW = new Date("2026-09-17T12:00:00Z");
 
@@ -119,6 +120,109 @@ function prepared(mealBudgetCents: number) {
   week = setMealBudgetCents(week, mealBudgetCents, NOW);
   week = setCategoryCount(week, "pasta", 1, NOW);
   return prepareWeek(week, { knownSubtotalCents: 0, unpricedItemCount: 0 }, NOW);
+}
+
+function preparedDays(mealBudgetCents: number, categories: MealCategory[]) {
+  let week = createWeekPreparation(
+    { schemaVersion: 1, budgetCents: 10_000, people: 4, days: categories.length },
+    { knownSubtotalCents: 0, unpricedItemCount: 0 },
+    NOW,
+    `week-${mealBudgetCents}-${categories.join("-")}`,
+  );
+  week = setMealBudgetCents(week, mealBudgetCents, NOW);
+  for (const category of new Set(categories)) {
+    week = setCategoryCount(
+      week,
+      category,
+      categories.filter((item) => item === category).length,
+      NOW,
+    );
+  }
+  return prepareWeek(week, { knownSubtotalCents: 0, unpricedItemCount: 0 }, NOW);
+}
+
+function fixture(
+  definitions: Array<{
+    id: string;
+    name: string;
+    price: number | null;
+    preparationMinutes?: number;
+  }>,
+): { recipeRepository: RecipeRepository; catalogRepository: CatalogRepository } {
+  const recipes = definitions.map((definition) => ({
+    ...recipe(definition.id, definition.name, "economical"),
+    preparationMinutes: definition.preparationMinutes ?? 20,
+  }));
+  const ingredients = definitions.map((definition) => ({
+    id: `ingredient-${definition.id}`,
+    sourceKey: `ingredient-${definition.id}`,
+    name: `ingrediënt ${definition.id}`,
+    normalizedName: `ingredient ${definition.id}`,
+    defaultUnit: "grams",
+    category: "Pasta",
+    aliases: [`ingrediënt ${definition.id}`],
+  }));
+  const relations = definitions.map((definition, index) => ({
+    id: `relation-${definition.id}`,
+    recipeId: definition.id,
+    ingredientId: `ingredient-${definition.id}`,
+    amountPerPerson: 125,
+    unit: "g" as const,
+    position: index,
+  }));
+  const products = definitions.flatMap((definition) =>
+    definition.price === null
+      ? []
+      : [product(
+          `product-${definition.id}`,
+          `Hoogvliet ingrediënt ${definition.id}`,
+          definition.price,
+        )],
+  );
+  const catalog: RecipeCatalog = { recipes, ingredients, relations };
+  return {
+    recipeRepository: {
+      async loadCatalog() { return catalog; },
+    },
+    catalogRepository: {
+      async getPage() {
+        return { products, priceStatus: "complete", page: 1, pageSize: 100, hasMore: false };
+      },
+      async getByIds(ids) {
+        return { products: products.filter((item) => ids.includes(item.id)), priceStatus: "complete" };
+      },
+      async query(request = {}) {
+        const term = request.term?.toLocaleLowerCase("nl-NL") ?? "";
+        const matches = products.filter((item) =>
+          item.name.toLocaleLowerCase("nl-NL").includes(term)
+        );
+        return {
+          products: matches,
+          priceStatus: "complete",
+          page: 1,
+          pageSize: 100,
+          hasMore: false,
+          query: { term, category: null, brand: null, offersOnly: false, maxPrice: null, sort: "relevance" },
+        };
+      },
+      async search(term) {
+        const normalized = term.toLocaleLowerCase("nl-NL");
+        return {
+          products: products.filter((item) =>
+            item.name.toLocaleLowerCase("nl-NL").includes(normalized)
+          ),
+          priceStatus: "complete",
+        };
+      },
+      async getFilterOptions() { return { categories: ["Pasta"], brands: ["Hoogvliet"] }; },
+    },
+  };
+}
+
+function selectedRecipeIds(result: Awaited<ReturnType<typeof generatePreparedWeek>>): string[] {
+  return result.days
+    .map((day) => day.recipeId)
+    .filter((recipeId): recipeId is string => recipeId !== null);
 }
 
 describe("budgetbewuste READY-receptselectie", () => {
@@ -275,5 +379,115 @@ describe("budgetbewuste READY-receptselectie", () => {
       mealBudgetStatus: "exactlyMealBudget",
       mealPlanKnownCostCents: 200,
     });
+  });
+
+  it("kiest bij zeven dagen eerst een volledig unieke READY-combinatie binnen budget", async () => {
+    const repositories = fixture(
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `recipe-variation-${index + 1}`,
+        name: `Pasta variatie ${index + 1}`,
+        price: 1,
+      })),
+    );
+    const result = await generatePreparedWeek(
+      preparedDays(5_000, Array.from({ length: 7 }, () => "pasta" as const)),
+      repositories.recipeRepository,
+      repositories.catalogRepository,
+      NOW,
+      emptyList(),
+    );
+    const ids = selectedRecipeIds(result);
+
+    expect(result.status).toBe("generated");
+    expect(ids).toHaveLength(7);
+    expect(new Set(ids)).toHaveLength(7);
+    expect(result.generation?.mealPlanKnownCostCents).toBe(700);
+  });
+
+  it("staat één dubbel READY-gerecht toe wanneer de unieke combinatie te duur is", async () => {
+    const result = await generatePreparedWeek(
+      preparedDays(400, ["pasta", "pasta"]),
+      recipeRepository,
+      catalogRepository,
+      NOW,
+      emptyList(),
+    );
+    const ids = selectedRecipeIds(result);
+
+    expect(result.status).toBe("generated");
+    expect(ids).toEqual([CHEAP.id, CHEAP.id]);
+    expect(result.generation?.mealPlanKnownCostCents).toBe(400);
+  });
+
+  it("kiest de unieke combinatie zodra die exact binnen het maaltijd-budget past", async () => {
+    const result = await generatePreparedWeek(
+      preparedDays(800, ["pasta", "pasta"]),
+      recipeRepository,
+      catalogRepository,
+      NOW,
+      emptyList(),
+    );
+    const ids = selectedRecipeIds(result);
+
+    expect(result.status).toBe("generated");
+    expect(new Set(ids)).toHaveLength(2);
+    expect(result.generation?.mealPlanKnownCostCents).toBe(800);
+  });
+
+  it("gebruikt liever een dubbel READY-recept dan een uniek NOT READY alternatief", async () => {
+    const repositories = fixture([
+      { id: "recipe-ready-pasta", name: "Pasta compleet", price: 2 },
+      { id: "recipe-incomplete-pasta", name: "Pasta zonder product", price: null },
+    ]);
+    const result = await generatePreparedWeek(
+      preparedDays(400, ["pasta", "pasta"]),
+      repositories.recipeRepository,
+      repositories.catalogRepository,
+      NOW,
+      emptyList(),
+    );
+    const ids = selectedRecipeIds(result);
+
+    expect(result.status).toBe("generated");
+    expect(ids).toEqual(["recipe-ready-pasta", "recipe-ready-pasta"]);
+  });
+
+  it("verandert geen categorie om een dubbel gerecht te vermijden", async () => {
+    const repositories = fixture([
+      { id: "recipe-shared", name: "Pasta rijst basis", price: 2 },
+      { id: "recipe-wrong-category", name: "Hamburger alternatief", price: 2, preparationMinutes: 35 },
+    ]);
+    const result = await generatePreparedWeek(
+      preparedDays(400, ["pasta", "rice"]),
+      repositories.recipeRepository,
+      repositories.catalogRepository,
+      NOW,
+      emptyList(),
+    );
+
+    expect(result.status).toBe("generated");
+    expect(result.days.map((day) => day.category)).toEqual(["pasta", "rice"]);
+    expect(selectedRecipeIds(result)).toEqual(["recipe-shared", "recipe-shared"]);
+  });
+
+  it("minimaliseert het aantal herhalingen wanneer volledige uniciteit onmogelijk is", async () => {
+    const repositories = fixture([
+      { id: "recipe-one", name: "Pasta één", price: 1 },
+      { id: "recipe-two", name: "Pasta twee", price: 1 },
+      { id: "recipe-three", name: "Pasta drie", price: 1 },
+    ]);
+    const result = await generatePreparedWeek(
+      preparedDays(1_000, ["pasta", "pasta", "pasta", "pasta"]),
+      repositories.recipeRepository,
+      repositories.catalogRepository,
+      NOW,
+      emptyList(),
+    );
+    const ids = selectedRecipeIds(result);
+
+    expect(result.status).toBe("generated");
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids)).toHaveLength(3);
+    expect(ids.length - new Set(ids).size).toBe(1);
   });
 });
