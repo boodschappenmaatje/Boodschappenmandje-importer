@@ -10,6 +10,15 @@ export class SourceBlockedError extends Error {
   constructor(message) {
     super(message);
     this.name = "SourceBlockedError";
+    this.code = "source_challenge";
+  }
+}
+
+export class SourceUnavailableError extends SourceBlockedError {
+  constructor(message) {
+    super(message);
+    this.name = "SourceUnavailableError";
+    this.code = "source_unavailable";
   }
 }
 
@@ -128,11 +137,12 @@ export function searchURL(term, pageNumber = 0) {
 export function classifySourcePageEvidence(evidence = {}) {
   if (evidence.captcha || evidence.denied) return "blocked";
   if (evidence.hasExpectedContent) return "ready";
-  if (evidence.hasIncapsula
-    && Number(evidence.bodyTextLength ?? 0) < 120
-    && Number(evidence.htmlLength ?? 0) < 10_000) {
-    return "security_check";
-  }
+  if (evidence.hasExplicitEmptyState) return "empty";
+  // De bron kan na de initiële loader een volledige websiteschil renderen,
+  // terwijl de productdata nog steeds door de normale broncontrole wordt
+  // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
+  // geldige productresponse; alleen de verwachte inhoud is dat.
+  if (evidence.hasIncapsula) return "security_check";
   return "empty";
 }
 
@@ -143,6 +153,7 @@ async function readSourcePageEvidence(page, expectedSelector = null) {
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
       hasExpectedContent: Boolean(selector && document.querySelector(selector)),
+      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|niets gevonden|0 resultaten/.test(text),
       hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
@@ -231,7 +242,7 @@ async function extractSearchCandidates(page) {
 
 async function searchOnce(page, term, pageNumber = 0, options = {}) {
   await page.goto(searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
-  await waitForSourceContent(page, ".product-tile, .pagination-total", options);
+  await waitForSourceContent(page, ".product-tile", options);
   return extractSearchCandidates(page);
 }
 
@@ -247,8 +258,12 @@ async function searchUsingVisibleForm(page, term, options = {}) {
   await input.fill(term);
   await input.press("Enter");
   await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
-  await waitForSourceContent(page, ".product-tile, .pagination-total", options);
+  await waitForSourceContent(page, ".product-tile", options);
   return extractSearchCandidates(page);
+}
+
+export function nextEmptySourceSearchCount(previousCount, rawCandidateCount) {
+  return Number(rawCandidateCount) > 0 ? 0 : Math.max(0, Math.trunc(previousCount ?? 0)) + 1;
 }
 
 export function normalizedSearchTokens(value) {
@@ -734,6 +749,7 @@ export async function collectProducts(config, logger = console, options = {}) {
   const growthMode = config.updateMode === "growth";
   const initialPageCursor = Math.max(0, Math.trunc(options.initialPageCursor ?? 0));
   let resumePageCursor = initialPageCursor;
+  let consecutiveEmptySourceSearches = 0;
   const stats = {
     configuredSearchTerms: config.searchTerms.length,
     searchedTerms: 0,
@@ -760,6 +776,7 @@ export async function collectProducts(config, logger = console, options = {}) {
     searchErrors: 0,
     searchRetries: 0,
     sourceSecurityChecks: 0,
+    sourceEmptySearches: 0,
     validationFailures: {},
     stopReason: null,
     lastSearchedTerm: null,
@@ -849,6 +866,21 @@ export async function collectProducts(config, logger = console, options = {}) {
             logger.info(`Hoogvliet-veiligheidscontrole bij '${term}'; wachten binnen dezelfde browsersessie.`);
           },
         });
+        consecutiveEmptySourceSearches = nextEmptySourceSearchCount(
+          consecutiveEmptySourceSearches,
+          pageResult.rawCandidates,
+        );
+        if (pageResult.rawCandidates === 0) stats.sourceEmptySearches += 1;
+        if (consecutiveEmptySourceSearches >= 3) {
+          const error = new SourceUnavailableError(
+            `Drie opeenvolgende zoekroutes leverden geen productdata op; laatste zoekterm: ${term}.`,
+          );
+          logger.error(
+            `Bronstatus | status=${error.code} | opeenvolgende_lege_zoekroutes=${consecutiveEmptySourceSearches}`
+              + ` | laatste_term=${term}`,
+          );
+          throw error;
+        }
         resumePageCursor = 0;
         stats.nextPageCursor = pageResult.nextPage;
         candidates = config.preferNewProducts === false
@@ -884,7 +916,13 @@ export async function collectProducts(config, logger = console, options = {}) {
           termStats.existingSkipped = discovery.existingOccurrences;
         }
       } catch (error) {
-        if (error instanceof SourceBlockedError) throw error;
+        if (error instanceof SourceBlockedError) {
+          logger.error(
+            `Bronstatus | status=${error.code ?? "source_unavailable"} | zoekterm=${term}`
+              + ` | detail=${error.message}`,
+          );
+          throw error;
+        }
         stats.searchErrors += 1;
         termStats.errors += 1;
         resumePageCursor = 0;

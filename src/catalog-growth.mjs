@@ -1,4 +1,4 @@
-import { collectProducts } from "./hoogvliet.mjs";
+import { collectProducts, SourceBlockedError } from "./hoogvliet.mjs";
 import {
   fetchCatalogDiscoveryState,
   fetchExistingPriceStates,
@@ -18,6 +18,22 @@ function cents(value) {
   return Number.isFinite(Number(value)) && Number(value) > 0
     ? Math.round(Number(value) * 100)
     : null;
+}
+
+export const CATALOG_SOURCE_UNAVAILABLE_MESSAGE =
+  "Catalogusupdate kon niet worden uitgevoerd. De bestaande catalogus blijft beschikbaar.";
+
+export function catalogImportFailure(error, actualGrowth = 0) {
+  const sourceStatus = error instanceof SourceBlockedError
+    ? (error.code ?? "source_unavailable")
+    : null;
+  return {
+    sourceStatus,
+    publicSummary: sourceStatus
+      ? CATALOG_SOURCE_UNAVAILABLE_MESSAGE
+      : `partial_growth_target_not_reached; werkelijke_groei=${actualGrowth}; `
+        + (error instanceof Error ? error.message : "Onbekende importfout"),
+  };
 }
 
 const DISCOVERY_TOKEN_STOPWORDS = new Set([
@@ -340,6 +356,12 @@ export async function runCatalogGrowth(config, logger = console) {
       .then((skus) => skus.size)
       .catch(() => totalUniqueProductsBefore);
     const actualGrowth = Math.max(0, totalUniqueProductsAfter - totalUniqueProductsBefore);
+    const failure = catalogImportFailure(error, actualGrowth);
+    logger.error(
+      `Catalogusbronstatus | status=${failure.sourceStatus ?? "import_error"}`
+        + ` | werkelijke_groei=${actualGrowth}`
+        + ` | detail=${error instanceof Error ? error.message : "Onbekende importfout"}`,
+    );
     await finishCatalogImportRun(config, run, {
       status: actualGrowth > 0 ? "partial" : "failed",
       processedCount: stats.processedProducts ?? 0,
@@ -349,8 +371,7 @@ export async function runCatalogGrowth(config, logger = console) {
       skippedCount: stats.invalidProductsSkipped ?? 0,
       errorCount: Math.max(1, (stats.productErrors ?? 0) + writeErrors.length),
       totalUniqueProductsAfter,
-      errorSummary: `partial_growth_target_not_reached; werkelijke_groei=${actualGrowth}; `
-        + (error instanceof Error ? error.message : "Onbekende importfout"),
+      errorSummary: failure.publicSummary,
     }).catch((finishError) => {
       logger.error(`Runstatus kon niet worden afgesloten: ${finishError instanceof Error ? finishError.message : "onbekend"}`);
     });

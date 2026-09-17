@@ -4,7 +4,9 @@ import test from "node:test";
 import { catalogBatches, loadConfig, limits } from "../src/config.mjs";
 import {
   buildDynamicDiscoveryTerms,
+  catalogImportFailure,
   catalogGrowthMode,
+  CATALOG_SOURCE_UNAVAILABLE_MESSAGE,
   classifyCatalogOutcomes,
   formatCatalogGrowthSummary,
   importRunStatus,
@@ -33,6 +35,7 @@ import {
   isRelevantCandidate,
   isValidProductURL,
   isValidSKU,
+  nextEmptySourceSearchCount,
   parseOfferPeriod,
   parsePriceText,
   prioritizeCandidates,
@@ -40,6 +43,7 @@ import {
   searchURL,
   selectPriceShard,
   selectPriceShardWindow,
+  SourceBlockedError,
   withTransientNavigationRetry,
   waitForSourceContent,
   resolvedProductTypeForRefresh,
@@ -140,6 +144,32 @@ test("een lege Incapsula-loader wordt als tijdelijke bronbeveiliging herkend", (
     htmlLength: 704779,
   }), "ready");
   assert.equal(classifySourcePageEvidence({ captcha: true }), "blocked");
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: false,
+    hasIncapsula: true,
+    bodyTextLength: 1800,
+    htmlLength: 700000,
+  }), "security_check");
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: false,
+    hasExplicitEmptyState: true,
+    hasIncapsula: true,
+  }), "empty");
+});
+
+test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resetten de teller", () => {
+  assert.equal(nextEmptySourceSearchCount(0, 0), 1);
+  assert.equal(nextEmptySourceSearchCount(1, 0), 2);
+  assert.equal(nextEmptySourceSearchCount(2, 0), 3);
+  assert.equal(nextEmptySourceSearchCount(3, 4), 0);
+});
+
+test("bronproblemen krijgen een consumentveilige catalogusstatus", () => {
+  const error = new SourceBlockedError("Technische broncontrole met interne details");
+  const failure = catalogImportFailure(error, 0);
+  assert.equal(failure.sourceStatus, "source_challenge");
+  assert.equal(failure.publicSummary, CATALOG_SOURCE_UNAVAILABLE_MESSAGE);
+  assert.doesNotMatch(failure.publicSummary, /Incapsula|Imperva|HTTP|challenge/i);
 });
 
 test("de importer laat een normale Incapsula-controle in dezelfde sessie uitlopen", async () => {

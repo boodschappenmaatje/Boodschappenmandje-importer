@@ -1,9 +1,6 @@
 name: Hoogvliet import proof of concept
 
 on:
-  push:
-    branches:
-      - fix/hoogvliet-import-source-readiness
   workflow_dispatch:
     inputs:
       update_mode:
@@ -134,13 +131,6 @@ jobs:
               echo "Onbekend automatisch updateschema" >&2
               exit 1
             fi
-          elif [[ "${{ github.event_name }}" == "push" ]]; then
-            update_mode="growth"
-            catalog_batch="growth"
-            price_shard="0"
-            max_products="10"
-            advance_discovery_state="0"
-            discovery_state_key="source-readiness-test-20260917"
           else
             update_mode="${{ inputs.update_mode }}"
             catalog_batch="${{ inputs.catalog_batch }}"
