@@ -2,6 +2,7 @@ import {
   SHOPPING_LIST_SCHEMA_VERSION,
   type ActiveShoppingList,
   type ShoppingListItem,
+  type ShoppingListQuantityContributions,
   type ShoppingListItemSource,
   type ShoppingListPriceReference,
 } from "@/types/shopping-list";
@@ -12,7 +13,7 @@ import {
 
 const ACTIVE_LIST_KEY = "active";
 
-interface StoredActiveShoppingListV1 {
+interface StoredActiveShoppingListV2 {
   key: typeof ACTIVE_LIST_KEY;
   schemaVersion: typeof SHOPPING_LIST_SCHEMA_VERSION;
   list: ActiveShoppingList;
@@ -53,7 +54,29 @@ function isItemSource(value: unknown): value is ShoppingListItemSource {
     "weekPreparation",
     "recipe",
     "suggestion",
+    "recurring",
   ].includes(String(value));
+}
+
+function isQuantityContributions(
+  value: unknown,
+): value is ShoppingListQuantityContributions {
+  return (
+    isRecord(value) &&
+    Number.isInteger(value.persistentQuantity) &&
+    Number(value.persistentQuantity) >= 0 &&
+    Array.isArray(value.mealPlans) &&
+    value.mealPlans.every(
+      (contribution) =>
+        isRecord(contribution) &&
+        (contribution.weekPreparationId === null ||
+          typeof contribution.weekPreparationId === "string") &&
+        Number.isInteger(contribution.quantity) &&
+        Number(contribution.quantity) > 0 &&
+        Array.isArray(contribution.usedIn) &&
+        contribution.usedIn.every((item) => typeof item === "string"),
+    )
+  );
 }
 
 function isPriceReference(value: unknown): value is ShoppingListPriceReference {
@@ -75,6 +98,38 @@ function isPriceReference(value: unknown): value is ShoppingListPriceReference {
 
 function isShoppingListItem(value: unknown): value is ShoppingListItem {
   if (!isRecord(value)) return false;
+  const contributions = value.quantityContributions;
+  return (
+    typeof value.productId === "string" &&
+    isNullableString(value.sku) &&
+    typeof value.name === "string" &&
+    isNullableString(value.brand) &&
+    isNullableString(value.packageText) &&
+    isNullableString(value.imageUrl) &&
+    Number.isInteger(value.quantity) &&
+    Number(value.quantity) >= 1 &&
+    isQuantityContributions(contributions) &&
+    Number(value.quantity) ===
+      contributions.persistentQuantity +
+        contributions.mealPlans.reduce(
+          (total, contribution) => total + contribution.quantity,
+          0,
+        ) &&
+    (value.price === null || isPriceReference(value.price)) &&
+    Array.isArray(value.sources) &&
+    value.sources.every(isItemSource) &&
+    Array.isArray(value.usedIn) &&
+    value.usedIn.every((item) => typeof item === "string") &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string"
+  );
+}
+
+function isLegacyShoppingListItem(value: unknown): value is Omit<
+  ShoppingListItem,
+  "quantityContributions"
+> {
+  if (!isRecord(value)) return false;
   return (
     typeof value.productId === "string" &&
     isNullableString(value.sku) &&
@@ -94,6 +149,50 @@ function isShoppingListItem(value: unknown): value is ShoppingListItem {
   );
 }
 
+function migrateLegacyItem(
+  item: Omit<ShoppingListItem, "quantityContributions">,
+): ShoppingListItem {
+  const hasMealPlanSource = item.sources.some((source) =>
+    ["weekPreparation", "recipe"].includes(source),
+  );
+  const retainedSources = item.sources.filter(
+    (source) => !["weekPreparation", "recipe"].includes(source),
+  );
+  const isPureMealPlan = hasMealPlanSource && retainedSources.length === 0;
+  return {
+    ...item,
+    sources: isPureMealPlan ? item.sources : retainedSources,
+    usedIn: isPureMealPlan ? item.usedIn : [],
+    quantityContributions: {
+      persistentQuantity: isPureMealPlan ? 0 : item.quantity,
+      mealPlans: isPureMealPlan
+        ? [{ weekPreparationId: null, quantity: item.quantity, usedIn: item.usedIn }]
+        : [],
+    },
+  };
+}
+
+function migrateStoredV1(value: Record<string, unknown>): ActiveShoppingList | null {
+  const list = value.list;
+  if (
+    value.key !== ACTIVE_LIST_KEY ||
+    !isRecord(list) ||
+    list.schemaVersion !== 1 ||
+    typeof list.startedAt !== "string" ||
+    typeof list.updatedAt !== "string" ||
+    !Array.isArray(list.items) ||
+    !list.items.every(isLegacyShoppingListItem)
+  ) {
+    return null;
+  }
+  return {
+    schemaVersion: SHOPPING_LIST_SCHEMA_VERSION,
+    startedAt: list.startedAt,
+    updatedAt: list.updatedAt,
+    items: list.items.map(migrateLegacyItem),
+  };
+}
+
 export function decodeStoredActiveShoppingList(
   value: unknown,
 ): ActiveShoppingList | null {
@@ -102,6 +201,11 @@ export function decodeStoredActiveShoppingList(
   }
   if (!isRecord(value)) {
     throw new ShoppingListStorageError("invalid-data");
+  }
+  if (value.schemaVersion === 1) {
+    const migrated = migrateStoredV1(value);
+    if (!migrated) throw new ShoppingListStorageError("invalid-data");
+    return migrated;
   }
   if (value.schemaVersion !== SHOPPING_LIST_SCHEMA_VERSION) {
     throw new ShoppingListStorageError("unsupported-version");
@@ -125,7 +229,7 @@ export function decodeStoredActiveShoppingList(
 
 export function encodeStoredActiveShoppingList(
   list: ActiveShoppingList,
-): StoredActiveShoppingListV1 {
+): StoredActiveShoppingListV2 {
   return {
     key: ACTIVE_LIST_KEY,
     schemaVersion: SHOPPING_LIST_SCHEMA_VERSION,

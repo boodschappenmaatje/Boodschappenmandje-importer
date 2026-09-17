@@ -18,6 +18,7 @@ const baseItem: ShoppingListItem = {
   packageText: "500 gram",
   imageUrl: null,
   quantity: 10,
+  quantityContributions: { persistentQuantity: 10, mealPlans: [] },
   price: {
     productId: "product-1",
     sku: "sku-1",

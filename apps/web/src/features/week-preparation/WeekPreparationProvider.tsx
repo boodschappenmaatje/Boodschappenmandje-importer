@@ -13,6 +13,7 @@ import {
 
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
+import { calculateBudget } from "@/services/budget/budget-engine";
 import {
   createCatalogRepository,
   type CatalogRepository,
@@ -57,7 +58,7 @@ interface WeekPreparationContextValue {
   persistenceWarning: string | null;
   actionMessage: string | null;
   startPreparation: () => void;
-  startNewPreparation: () => void;
+  startNewPreparation: () => Promise<void>;
   setNumberOfPeople: (value: number | null) => void;
   setNumberOfDays: (value: number | null) => void;
   setBudgetCents: (value: number) => void;
@@ -286,6 +287,30 @@ export function WeekPreparationProvider({
     replace(updateMealBudgetCents(fresh, previousMealBudget));
   }, [budgetSettings, currentListContext, replace]);
 
+  const startNewPreparation = useCallback(async () => {
+    generationRunRef.current += 1;
+    refreshedWeekRef.current = null;
+    setActionMessage(null);
+    const current = preparationRef.current;
+    const previousMealBudget = current?.mealBudgetCents ?? null;
+    const cleanedList = current
+      ? await shoppingList.removeMealPlanForWeek(current.id)
+      : shoppingList.list;
+    const cleanedBudget = cleanedList
+      ? calculateBudget(null, cleanedList)
+      : null;
+    const fresh = createWeekPreparation(
+      budgetSettings,
+      cleanedBudget
+        ? {
+            knownSubtotalCents: cleanedBudget.knownSubtotalCents,
+            unpricedItemCount: cleanedBudget.unpricedItemCount,
+          }
+        : currentListContext(),
+    );
+    replace(updateMealBudgetCents(fresh, previousMealBudget));
+  }, [budgetSettings, currentListContext, replace, shoppingList]);
+
   const setNumberOfPeople = useCallback(
     (value: number | null) => {
       setBudgetPeople(value);
@@ -431,7 +456,10 @@ export function WeekPreparationProvider({
           return;
         }
         const before = calculateWeekBudgetSummary(validation.preparation, list);
-        await shoppingList.completeFromWeek(validation.preparation.ingredients);
+        await shoppingList.completeFromWeek(
+          validation.preparation.ingredients,
+          validation.preparation.id,
+        );
         setActionMessage(
           before.newPackageCount > 0
             ? `${before.newPackageCount} ${before.newPackageCount === 1 ? "verpakking is" : "verpakkingen zijn"} aan je lijst toegevoegd.`
@@ -459,7 +487,7 @@ export function WeekPreparationProvider({
       persistenceWarning,
       actionMessage,
       startPreparation: createFreshPreparation,
-      startNewPreparation: createFreshPreparation,
+      startNewPreparation,
       setNumberOfPeople,
       setNumberOfDays,
       setBudgetCents,
@@ -486,6 +514,7 @@ export function WeekPreparationProvider({
       setNumberOfDays,
       setNumberOfPeople,
       setPreference,
+      startNewPreparation,
       status,
     ],
   );

@@ -1,13 +1,25 @@
 import type { PriceFreshness, UUID } from "@/types/catalog";
 
-export const SHOPPING_LIST_SCHEMA_VERSION = 1 as const;
+export const SHOPPING_LIST_SCHEMA_VERSION = 2 as const;
 
 export type ShoppingListItemSource =
   | "manual"
   | "catalog"
   | "weekPreparation"
   | "recipe"
-  | "suggestion";
+  | "suggestion"
+  | "recurring";
+
+export interface ShoppingListMealPlanContribution {
+  weekPreparationId: string | null;
+  quantity: number;
+  usedIn: string[];
+}
+
+export interface ShoppingListQuantityContributions {
+  persistentQuantity: number;
+  mealPlans: ShoppingListMealPlanContribution[];
+}
 
 export interface ShoppingListPriceReference {
   productId: UUID;
@@ -29,6 +41,7 @@ export interface ShoppingListItem {
   packageText: string | null;
   imageUrl: string | null;
   quantity: number;
+  quantityContributions: ShoppingListQuantityContributions;
   price: ShoppingListPriceReference | null;
   sources: ShoppingListItemSource[];
   usedIn: string[];

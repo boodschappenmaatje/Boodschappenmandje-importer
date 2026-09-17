@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 interface NewWeekControlProps {
-  onStartNew: () => void;
+  onStartNew: () => Promise<void>;
   initiallyConfirming?: boolean;
 }
 
@@ -12,6 +12,7 @@ export function NewWeekControl({
   initiallyConfirming = false,
 }: NewWeekControlProps) {
   const [confirming, setConfirming] = useState(initiallyConfirming);
+  const [starting, setStarting] = useState(false);
 
   return (
     <section className="dashboard-card new-week-card" aria-labelledby="new-week-title">
@@ -23,19 +24,30 @@ export function NewWeekControl({
           aria-label="Nieuwe week starten bevestigen"
         >
           <p>
-            Je huidige weekvoorbereiding wordt vervangen. Je actieve boodschappenlijst blijft staan.
+            Je huidige week wordt vervangen. Handmatige boodschappen blijven staan;
+            boodschappen die alleen voor deze maaltijdweek nodig waren worden opgeruimd.
           </p>
           <div>
             <button
               type="button"
-              onClick={() => {
-                onStartNew();
-                setConfirming(false);
+              disabled={starting}
+              onClick={async () => {
+                setStarting(true);
+                try {
+                  await onStartNew();
+                  setConfirming(false);
+                } finally {
+                  setStarting(false);
+                }
               }}
             >
-              Ja, start nieuwe week
+              {starting ? "Nieuwe week starten…" : "Ja, start nieuwe week"}
             </button>
-            <button type="button" onClick={() => setConfirming(false)}>
+            <button
+              type="button"
+              disabled={starting}
+              onClick={() => setConfirming(false)}
+            >
               Annuleren
             </button>
           </div>
@@ -52,4 +64,3 @@ export function NewWeekControl({
     </section>
   );
 }
-

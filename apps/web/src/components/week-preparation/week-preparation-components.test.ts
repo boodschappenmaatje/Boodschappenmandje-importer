@@ -498,13 +498,13 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
   it("vraagt bevestiging voordat een bestaande voorbereiding wordt vervangen", () => {
     const html = renderToStaticMarkup(
       createElement(NewWeekControl, {
-        onStartNew: () => undefined,
+        onStartNew: async () => undefined,
         initiallyConfirming: true,
       }),
     );
     expect(html).toContain("Nieuwe week starten bevestigen");
-    expect(html).toContain("Je huidige weekvoorbereiding wordt vervangen");
-    expect(html).toContain("Je actieve boodschappenlijst blijft staan");
+    expect(html).toContain("Je huidige week wordt vervangen");
+    expect(html).toContain("Handmatige boodschappen blijven staan");
     expect(html).toContain("Ja, start nieuwe week");
     expect(html).toContain("Annuleren");
   });

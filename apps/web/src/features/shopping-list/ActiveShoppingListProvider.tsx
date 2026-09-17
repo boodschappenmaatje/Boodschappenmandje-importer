@@ -24,6 +24,7 @@ import {
   decreaseQuantity,
   increaseQuantity,
   refreshShoppingListFromCatalog,
+  removeMealPlanContributionsForWeek,
   removeShoppingListItem,
   restoreShoppingListItem,
 } from "@/services/shopping-list/shopping-list";
@@ -44,7 +45,13 @@ interface ActiveShoppingListContextValue {
   persistenceWarning: string | null;
   lastRemoved: RemovedShoppingListItem | null;
   addProduct: (product: Product) => Promise<void>;
-  completeFromWeek: (requirements: WeekIngredientRequirement[]) => Promise<void>;
+  completeFromWeek: (
+    requirements: WeekIngredientRequirement[],
+    weekPreparationId: string,
+  ) => Promise<void>;
+  removeMealPlanForWeek: (
+    weekPreparationId: string,
+  ) => Promise<ActiveShoppingList | null>;
   increase: (productId: string) => Promise<void>;
   decrease: (productId: string) => Promise<void>;
   remove: (productId: string) => Promise<void>;
@@ -186,13 +193,34 @@ export function ActiveShoppingListProvider({
   );
 
   const completeFromWeek = useCallback(
-    async (requirements: WeekIngredientRequirement[]) => {
+    async (
+      requirements: WeekIngredientRequirement[],
+      weekPreparationId: string,
+    ) => {
       setLastRemoved(null);
       await commit((current) =>
-        completeShoppingListFromWeek(current, requirements),
+        completeShoppingListFromWeek(current, requirements, weekPreparationId),
       );
     },
     [commit],
+  );
+
+  const removeMealPlanForWeek = useCallback(
+    async (weekPreparationId: string): Promise<ActiveShoppingList | null> => {
+      const current = listRef.current;
+      if (!current) return null;
+      setLastRemoved(null);
+      const next = removeMealPlanContributionsForWeek(
+        current,
+        weekPreparationId,
+      );
+      if (next === current) return current;
+      listRef.current = next;
+      setList(next);
+      await persist(next);
+      return next;
+    },
+    [persist],
   );
 
   const increase = useCallback(
@@ -254,6 +282,7 @@ export function ActiveShoppingListProvider({
       lastRemoved,
       addProduct,
       completeFromWeek,
+      removeMealPlanForWeek,
       increase,
       decrease,
       remove,
@@ -271,6 +300,7 @@ export function ActiveShoppingListProvider({
       list,
       persistenceWarning,
       quantityFor,
+      removeMealPlanForWeek,
       remove,
       status,
       total,

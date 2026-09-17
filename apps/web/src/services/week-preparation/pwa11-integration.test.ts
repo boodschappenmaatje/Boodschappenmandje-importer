@@ -429,7 +429,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     });
     const baseList = completeShoppingListFromWeek(
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
         startedAt: NOW.toISOString(),
         updatedAt: NOW.toISOString(),
         items: [{
@@ -440,6 +440,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
           packageText: manualProduct.packageText,
           imageUrl: null,
           quantity: 1,
+          quantityContributions: { persistentQuantity: 1, mealPlans: [] },
           price: {
             productId: manualProduct.id,
             sku: manualProduct.sku,
@@ -456,11 +457,13 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
         }],
       },
       generated.ingredients,
+      generated.id,
       NOW,
     );
     const secondRun = completeShoppingListFromWeek(
       baseList,
       generated.ingredients,
+      generated.id,
       new Date("2026-09-15T13:00:00Z"),
     );
     expect(secondRun).toEqual(baseList);
@@ -475,7 +478,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     const budget = calculateWeekBudgetSummary(
       generated,
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
         startedAt: NOW.toISOString(),
         updatedAt: NOW.toISOString(),
         items: [],
@@ -555,17 +558,22 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
     expect(generated.ingredients).toEqual([]);
 
     const originalList: ActiveShoppingList = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       startedAt: NOW.toISOString(),
       updatedAt: NOW.toISOString(),
       items: [],
     };
-    expect(completeShoppingListFromWeek(originalList, generated.ingredients, NOW)).toEqual(
-      originalList,
-    );
+    expect(
+      completeShoppingListFromWeek(
+        originalList,
+        generated.ingredients,
+        generated.id,
+        NOW,
+      ),
+    ).toEqual(originalList);
   });
 
-  it("behoudt een handmatig hoger aantal en verhoogt alleen bij echte extra weekbehoefte", () => {
+  it("houdt handmatige en weekgebonden hoeveelheden als afzonderlijke bijdragen bij", () => {
     const requirement = applyProductToRequirement(
       {
         ingredientId: INGREDIENTS[0].id,
@@ -588,7 +596,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       BEEF,
     );
     const list: ActiveShoppingList = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       startedAt: NOW.toISOString(),
       updatedAt: NOW.toISOString(),
       items: [{
@@ -599,6 +607,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
         packageText: BEEF.packageText,
         imageUrl: null,
         quantity: 3,
+        quantityContributions: { persistentQuantity: 3, mealPlans: [] },
         price: null,
         sources: ["manual"],
         usedIn: [],
@@ -606,8 +615,21 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
         updatedAt: NOW.toISOString(),
       }],
     };
-    const completed = completeShoppingListFromWeek(list, [requirement], NOW);
-    expect(completed.items[0].quantity).toBe(3);
+    const completed = completeShoppingListFromWeek(
+      list,
+      [requirement],
+      "week-mixed",
+      NOW,
+    );
+    expect(completed.items[0].quantity).toBe(5);
+    expect(completed.items[0].quantityContributions).toEqual({
+      persistentQuantity: 3,
+      mealPlans: [{
+        weekPreparationId: "week-mixed",
+        quantity: 2,
+        usedIn: ["Spaghetti bolognese"],
+      }],
+    });
     expect(completed.items[0].sources).toEqual(["manual", "weekPreparation", "recipe"]);
   });
 
