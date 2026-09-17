@@ -60,7 +60,8 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
       existingListUnpricedCount: 0,
       status: "draft",
       listStrategy: "preserveAndComplete",
-      schemaVersion: 4,
+      schemaVersion: 5,
+      customizations: [],
       mealBudgetCents: null,
     });
   });

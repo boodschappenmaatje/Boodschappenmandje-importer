@@ -87,6 +87,7 @@ export function createWeekPreparation(
     days: [],
     ingredients: [],
     generation: null,
+    customizations: [],
     status: "draft",
     listStrategy: "preserveAndComplete",
   };
@@ -145,11 +146,12 @@ export function updateWeekSettings(
       days: [],
       ingredients: [],
       generation: null,
+      customizations: [],
       status: "draft",
     };
   }
   return requiredSettingMissing
-    ? { ...next, ingredients: [], generation: null, status: "draft" }
+    ? { ...next, ingredients: [], generation: null, customizations: [], status: "draft" }
     : next;
 }
 
@@ -195,6 +197,7 @@ export function setCategoryCount(
     days: [],
     ingredients: [],
     generation: null,
+    customizations: [],
     status: "draft",
   });
 }

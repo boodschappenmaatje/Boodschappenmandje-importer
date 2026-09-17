@@ -2,7 +2,9 @@ import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
+  applyProductToRequirement,
   combinedProductPurchaseQuantity,
+  isReliableIngredientMatch,
 } from "@/services/week-preparation/product-matching";
 import {
   applyReadinessProducts,
@@ -56,6 +58,74 @@ interface EvaluatedPlan {
   days: WeekPreparation["days"];
   ingredients: WeekIngredientRequirement[];
   evaluation: MealBudgetEvaluation;
+}
+
+async function applyStoredProductOverrides(
+  preparation: WeekPreparation,
+  ingredients: WeekIngredientRequirement[],
+  catalog: RecipeCatalog,
+  catalogRepository: CatalogRepository,
+): Promise<WeekIngredientRequirement[]> {
+  const overrides = preparation.customizations.flatMap((customization) =>
+    customization.productOverrides.map((override) => ({
+      ...override,
+      dayIndex: customization.dayIndex,
+    })),
+  );
+  if (overrides.length === 0) return ingredients;
+
+  const productIds = [...new Set(overrides.map((override) => override.productId))];
+  const result = await catalogRepository.getByIds(productIds);
+  const products = new Map(result.products.map((product) => [product.id, product]));
+  const ingredientDefinitions = new Map(
+    catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+  );
+
+  return ingredients.flatMap((requirement) => {
+    const applicable = overrides.filter(
+      (override) =>
+        override.ingredientId === requirement.ingredientId &&
+        requirement.usedIn.some((use) => use.dayIndex === override.dayIndex),
+    );
+    if (applicable.length === 0) return [requirement];
+
+    const ingredient = ingredientDefinitions.get(requirement.ingredientId);
+    const overrideByDay = new Map(
+      applicable.map((override) => [override.dayIndex, override]),
+    );
+    const groups = Map.groupBy(
+      requirement.usedIn,
+      (use) => overrideByDay.get(use.dayIndex)?.productId ?? "base",
+    );
+
+    return [...groups.entries()].map(([productId, uses]) => {
+      const requiredQuantity = uses.reduce(
+        (total, use) => total + use.requiredQuantity,
+        0,
+      );
+      const scoped = { ...requirement, requiredQuantity, usedIn: uses };
+      if (productId === "base") {
+        return {
+          ...scoped,
+          purchaseQuantity: scoped.packageCapacity
+            ? Math.max(1, Math.ceil(requiredQuantity / scoped.packageCapacity))
+            : null,
+        };
+      }
+      const product = products.get(productId) ?? null;
+      const validProduct =
+        ingredient &&
+        product &&
+        isReliableIngredientMatch(
+          ingredient,
+          product,
+          requirement.brandConstraint,
+        )
+          ? product
+          : null;
+      return applyProductToRequirement(scoped, validProduct);
+    });
+  });
 }
 
 function generationSummary(
@@ -847,7 +917,12 @@ export async function revalidatePreparedWeek(
     preparation.numberOfPeople,
     catalog,
   );
-  const ingredients = applyReadinessProducts(requirements, readiness);
+  const ingredients = await applyStoredProductOverrides(
+    preparation,
+    applyReadinessProducts(requirements, readiness),
+    catalog,
+    catalogRepository,
+  );
   const generatedAt = now.toISOString();
   const refreshed = { ...preparation, ingredients };
   const mealBudget = evaluateMealBudget(
@@ -1101,6 +1176,41 @@ export function recalculateMealBudgetSummary(
       isMealBudgetComplete: evaluation.isMealBudgetComplete,
     },
     status: finalStatus(preparation, preparation.ingredients, evaluation),
+    updatedAt: now.toISOString(),
+  };
+}
+
+/**
+ * Rebuilds every derived week value after a deliberate, already validated
+ * selection change. Keeping this here ensures PWA 12 uses the exact same
+ * package aggregation and integer-cent budget engine as normal generation.
+ */
+export function rebuildPreparedWeekSelection(
+  preparation: WeekPreparation,
+  days: WeekPreparation["days"],
+  ingredients: WeekIngredientRequirement[],
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): WeekPreparation {
+  const evaluation = evaluateMealBudget(
+    preparation.budgetCents,
+    preparation.mealBudgetCents,
+    ingredients,
+    list,
+    now,
+  );
+  const next = { ...preparation, days, ingredients };
+  return {
+    ...next,
+    generation: {
+      ...generationSummary(ingredients, now.toISOString(), evaluation),
+      readinessByCategory: preparation.generation?.readinessByCategory,
+      lowestCompleteMealPlanCostCents:
+        preparation.generation?.lowestCompleteMealPlanCostCents,
+      lowestCompleteMealPlanCostReliable:
+        preparation.generation?.lowestCompleteMealPlanCostReliable,
+    },
+    status: finalStatus(next, ingredients, evaluation),
     updatedAt: now.toISOString(),
   };
 }

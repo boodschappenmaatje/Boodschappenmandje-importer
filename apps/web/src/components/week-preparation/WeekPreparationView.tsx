@@ -5,6 +5,10 @@ import { useState, type FormEvent } from "react";
 import { Icon } from "@/components/Icon";
 import { DishImage } from "@/components/ui/DishImage";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
+import {
+  MealReplacementControl,
+  ProductAlternativeControl,
+} from "@/components/week-preparation/MealCustomizationControls";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
@@ -387,6 +391,9 @@ export function WeekPreparationView() {
                       : null,
                   );
                   const dishNeedsReview = incompleteDayIndexes.has(day.dayIndex);
+                  const customization = preparation.customizations.find(
+                    (item) => item.dayIndex === day.dayIndex,
+                  );
                   return (
                     <li key={day.dayIndex}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
@@ -428,6 +435,7 @@ export function WeekPreparationView() {
                                 />
                                 <span className="recipe-summary-title">
                                   <strong>{dishTitle}</strong>
+                                  {customization ? <small className="customized-badge">Aangepast</small> : null}
                                   {mealMix ? <small>met {mealMix.brand} Wereldgerechten</small> : null}
                                 </span>
                               </span>
@@ -455,6 +463,12 @@ export function WeekPreparationView() {
                                 ? `Geschatte kosten gerecht: ${formatCents(dishCost.knownCostCents)}`
                                 : `${formatCents(dishCost.knownCostCents)} bekend · nog ${dishCost.missingProductCount} ${dishCost.missingProductCount === 1 ? "product" : "producten"} niet compleet`}
                             </p>
+                            {!dishNeedsReview ? (
+                              <MealReplacementControl
+                                dayIndex={day.dayIndex}
+                                currentRecipeName={dishTitle}
+                              />
+                            ) : null}
                             <ul className="recipe-ingredients">
                               {dayIngredients.map((ingredient) => {
                                 const use = ingredient.usedIn.find(
@@ -509,6 +523,13 @@ export function WeekPreparationView() {
                                         ) : (
                                           <span>Aantal nog niet zeker</span>
                                         )}
+                                        {ingredient.kind === "ingredient" && ingredient.price && packages !== null ? (
+                                          <ProductAlternativeControl
+                                            dayIndex={day.dayIndex}
+                                            ingredientId={ingredient.ingredientId}
+                                            currentProductName={ingredient.product.name}
+                                          />
+                                        ) : null}
                                       </div>
                                     </div>
                                   ) : (

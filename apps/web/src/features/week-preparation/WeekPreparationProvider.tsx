@@ -27,6 +27,14 @@ import {
   type RecipeRepository,
 } from "@/services/week-preparation/recipe-repository";
 import {
+  findProductAlternatives as loadProductAlternatives,
+  findRecipeAlternatives as loadRecipeAlternatives,
+  replaceWeekProduct,
+  replaceWeekRecipe,
+  type ProductAlternative,
+  type RecipeAlternative,
+} from "@/services/week-preparation/meal-customization";
+import {
   calculateWeekBudgetSummary,
   generatePreparedWeek,
   markWeekGenerating,
@@ -69,6 +77,18 @@ interface WeekPreparationContextValue {
   retryGeneration: () => void;
   completeShoppingList: () => void;
   changeDayCategory: (dayIndex: number, category: MealCategory) => void;
+  customizationBusy: boolean;
+  findRecipeAlternatives: (dayIndex: number) => Promise<RecipeAlternative[]>;
+  replaceRecipe: (dayIndex: number, recipeId: string) => Promise<boolean>;
+  findProductAlternatives: (
+    dayIndex: number,
+    ingredientId: string,
+  ) => Promise<ProductAlternative[]>;
+  replaceProduct: (
+    dayIndex: number,
+    ingredientId: string,
+    productId: string,
+  ) => Promise<boolean>;
 }
 
 const WeekPreparationContext =
@@ -106,11 +126,13 @@ export function WeekPreparationProvider({
   );
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [customizationBusy, setCustomizationBusy] = useState(false);
   const preparationRef = useRef<WeekPreparation | null>(initialPreparation ?? null);
   const storageRef = useRef<WeekPreparationStorage | null>(suppliedStorage ?? null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const generationRunRef = useRef(0);
   const refreshedWeekRef = useRef<string | null>(null);
+  const customizationRunRef = useRef(false);
 
   const recipeRepository = useCallback(
     () => suppliedRecipeRepository ?? createRecipeRepository(),
@@ -480,6 +502,177 @@ export function WeekPreparationProvider({
     [runGeneration],
   );
 
+  const currentList = useCallback(
+    () => shoppingList.list ?? undefined,
+    [shoppingList.list],
+  );
+
+  const syncValidatedCustomization = useCallback(
+    async (next: WeekPreparation): Promise<boolean> => {
+      const list = shoppingList.list;
+      const alreadyCompleted = Boolean(
+        list?.items.some((item) =>
+          item.quantityContributions.mealPlans.some(
+            (contribution) => contribution.weekPreparationId === next.id,
+          ),
+        ),
+      );
+      try {
+        // Synchroniseer eerst de lijst. Bij een opslagfout blijft de zichtbare
+        // week daardoor volledig ongewijzigd in plaats van half aangepast.
+        if (alreadyCompleted) {
+          await shoppingList.completeFromWeek(next.ingredients, next.id);
+        }
+        replace(next);
+        setActionMessage(
+          alreadyCompleted
+            ? "Gerecht en boodschappenlijst zijn bijgewerkt."
+            : "Je gerecht is aangepast.",
+        );
+        return true;
+      } catch {
+        setActionMessage(
+          "Aanpassen lukte nu niet. Je huidige gerecht en lijst zijn behouden.",
+        );
+        return false;
+      }
+    },
+    [replace, shoppingList],
+  );
+
+  const findRecipeAlternatives = useCallback(
+    async (dayIndex: number): Promise<RecipeAlternative[]> => {
+      const current = preparationRef.current;
+      if (!current) return [];
+      setActionMessage(null);
+      try {
+        return await loadRecipeAlternatives(
+          current,
+          dayIndex,
+          recipeRepository(),
+          catalogRepository(),
+          currentList(),
+        );
+      } catch {
+        setActionMessage(
+          "Alternatieven laden lukt nu niet. Je huidige gerecht blijft staan.",
+        );
+        return [];
+      }
+    },
+    [catalogRepository, currentList, recipeRepository],
+  );
+
+  const replaceRecipe = useCallback(
+    async (dayIndex: number, recipeId: string): Promise<boolean> => {
+      if (customizationRunRef.current) return false;
+      const current = preparationRef.current;
+      if (!current) return false;
+      customizationRunRef.current = true;
+      setCustomizationBusy(true);
+      setActionMessage("Gerecht en actuele prijzen worden gecontroleerd…");
+      try {
+        const result = await replaceWeekRecipe(
+          current,
+          dayIndex,
+          recipeId,
+          recipeRepository(),
+          catalogRepository(),
+          currentList(),
+        );
+        if (!result.ok) {
+          setActionMessage(
+            result.reason === "over_meal_budget"
+              ? "Dit gerecht past niet binnen je maaltijd-budget. Kies een ander gerecht."
+              : "Dit gerecht is niet meer compleet beschikbaar. Er is niets gewijzigd.",
+          );
+          return false;
+        }
+        return await syncValidatedCustomization(result.preparation);
+      } catch {
+        setActionMessage(
+          "Aanpassen lukt nu niet. Je huidige gerecht en lijst zijn behouden.",
+        );
+        return false;
+      } finally {
+        customizationRunRef.current = false;
+        setCustomizationBusy(false);
+      }
+    },
+    [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
+  );
+
+  const findProductAlternatives = useCallback(
+    async (
+      dayIndex: number,
+      ingredientId: string,
+    ): Promise<ProductAlternative[]> => {
+      const current = preparationRef.current;
+      if (!current) return [];
+      setActionMessage(null);
+      try {
+        return await loadProductAlternatives(
+          current,
+          dayIndex,
+          ingredientId,
+          recipeRepository(),
+          catalogRepository(),
+          currentList(),
+        );
+      } catch {
+        setActionMessage(
+          "Productalternatieven laden lukt nu niet. Je huidige keuze blijft staan.",
+        );
+        return [];
+      }
+    },
+    [catalogRepository, currentList, recipeRepository],
+  );
+
+  const replaceProduct = useCallback(
+    async (
+      dayIndex: number,
+      ingredientId: string,
+      productId: string,
+    ): Promise<boolean> => {
+      if (customizationRunRef.current) return false;
+      const current = preparationRef.current;
+      if (!current) return false;
+      customizationRunRef.current = true;
+      setCustomizationBusy(true);
+      setActionMessage("Product en budget worden gecontroleerd…");
+      try {
+        const result = await replaceWeekProduct(
+          current,
+          dayIndex,
+          ingredientId,
+          productId,
+          recipeRepository(),
+          catalogRepository(),
+          currentList(),
+        );
+        if (!result.ok) {
+          setActionMessage(
+            result.reason === "over_meal_budget"
+              ? "Dit product past niet binnen je maaltijd-budget."
+              : "Dit is geen betrouwbaar alternatief voor dit ingrediënt.",
+          );
+          return false;
+        }
+        return await syncValidatedCustomization(result.preparation);
+      } catch {
+        setActionMessage(
+          "Aanpassen lukt nu niet. Je huidige product en lijst zijn behouden.",
+        );
+        return false;
+      } finally {
+        customizationRunRef.current = false;
+        setCustomizationBusy(false);
+      }
+    },
+    [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
+  );
+
   const value = useMemo<WeekPreparationContextValue>(
     () => ({
       status,
@@ -498,17 +691,27 @@ export function WeekPreparationProvider({
       retryGeneration,
       completeShoppingList,
       changeDayCategory,
+      customizationBusy,
+      findRecipeAlternatives,
+      replaceRecipe,
+      findProductAlternatives,
+      replaceProduct,
     }),
     [
       actionMessage,
       adjustCategory,
       changeDayCategory,
+      customizationBusy,
       completeShoppingList,
       confirmPreparation,
       createFreshPreparation,
       persistenceWarning,
       preparation,
       retryGeneration,
+      findProductAlternatives,
+      findRecipeAlternatives,
+      replaceProduct,
+      replaceRecipe,
       setBudgetCents,
       setMealBudgetCents,
       setNumberOfDays,

@@ -280,7 +280,8 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
+      customizations: [],
       mealBudgetCents: null,
       id: "week-legacy",
       ingredients: [],
@@ -353,7 +354,8 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
+      customizations: [],
       mealBudgetCents: null,
       days: [{ recipe: { sourceKey: "spaghetti-bolognese" } }],
       ingredients: [{
@@ -414,7 +416,8 @@ describe("PWA 10 lokale persistentie", () => {
       preparation: legacy,
     });
     expect(migrated).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 5,
+      customizations: [],
       mealBudgetCents: null,
       days: current.days,
       generation: {

@@ -11,15 +11,58 @@ import {
   type WeekIngredientRequirement,
   type WeekPreferences,
   type WeekPreparation,
+  type WeekMealCustomization,
 } from "@/types/week-preparation";
 import { mealMixProfileForIngredient } from "@/services/week-preparation/meal-mix-profiles";
 
 const ACTIVE_PREPARATION_KEY = "active";
 
-interface StoredWeekPreparationV4 {
+interface StoredWeekPreparationV5 {
   key: typeof ACTIVE_PREPARATION_KEY;
   schemaVersion: typeof WEEK_PREPARATION_SCHEMA_VERSION;
   preparation: WeekPreparation;
+}
+
+function isRecipeReference(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.sourceKey === "string" &&
+    typeof value.name === "string"
+  );
+}
+
+function isCustomization(value: unknown): value is WeekMealCustomization {
+  return (
+    isRecord(value) &&
+    Number.isInteger(value.dayIndex) &&
+    Number(value.dayIndex) >= 0 &&
+    Number(value.dayIndex) <= 6 &&
+    isRecipeReference(value.baseRecipe) &&
+    (value.replacementRecipe === null || isRecipeReference(value.replacementRecipe)) &&
+    Array.isArray(value.productOverrides) &&
+    value.productOverrides.every(
+      (override) =>
+        isRecord(override) &&
+        typeof override.ingredientId === "string" &&
+        typeof override.productId === "string" &&
+        typeof override.sku === "string" &&
+        typeof override.updatedAt === "string",
+    ) &&
+    Array.isArray(value.ingredientOverrides) &&
+    value.ingredientOverrides.every(
+      (override) =>
+        isRecord(override) &&
+        typeof override.ingredientId === "string" &&
+        typeof override.substituteIngredientId === "string" &&
+        typeof override.substituteSourceKey === "string" &&
+        typeof override.quantityMultiplier === "number" &&
+        Number.isFinite(override.quantityMultiplier) &&
+        Number(override.quantityMultiplier) > 0 &&
+        typeof override.updatedAt === "string",
+    ) &&
+    typeof value.updatedAt === "string"
+  );
 }
 
 export type WeekPreparationStorageErrorCode =
@@ -329,9 +372,21 @@ function isPreparation(value: unknown): value is WeekPreparation {
     Array.isArray(value.ingredients) &&
     value.ingredients.every(isIngredient) &&
     isGeneration(value.generation) &&
+    Array.isArray(value.customizations) &&
+    value.customizations.every(isCustomization) &&
     ["draft", "readyForGeneration", "generating", "generated", "generationPartial", "generationError"].includes(String(value.status)) &&
     value.listStrategy === "preserveAndComplete"
   );
+}
+
+function migrateV4Preparation(value: unknown): WeekPreparation | null {
+  if (!isRecord(value) || value.schemaVersion !== 4) return null;
+  const migrated = {
+    ...value,
+    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    customizations: [],
+  };
+  return isPreparation(migrated) ? migrated : null;
 }
 
 function migrateV1Preparation(value: unknown): WeekPreparation | null {
@@ -396,6 +451,7 @@ function migrateV1Preparation(value: unknown): WeekPreparation | null {
     days,
     ingredients: [],
     generation: null,
+    customizations: [],
     status: value.status as "draft" | "readyForGeneration",
     listStrategy: "preserveAndComplete",
   };
@@ -422,6 +478,11 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
     if (!migrated) throw new WeekPreparationStorageError("invalid-data");
     return migrated;
   }
+  if (value.schemaVersion === 4) {
+    const migrated = migrateV4Preparation(value.preparation);
+    if (!migrated) throw new WeekPreparationStorageError("invalid-data");
+    return migrated;
+  }
   if (value.schemaVersion !== WEEK_PREPARATION_SCHEMA_VERSION) {
     throw new WeekPreparationStorageError("unsupported-version");
   }
@@ -433,7 +494,7 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
 
 export function encodeStoredWeekPreparation(
   preparation: WeekPreparation,
-): StoredWeekPreparationV4 {
+): StoredWeekPreparationV5 {
   return {
     key: ACTIVE_PREPARATION_KEY,
     schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
