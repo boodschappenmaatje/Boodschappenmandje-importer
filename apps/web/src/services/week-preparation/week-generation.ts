@@ -2,6 +2,7 @@ import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
+  applyManualProductToRequirement,
   applyProductToRequirement,
   combinedProductPurchaseQuantity,
   isReliableIngredientMatch,
@@ -60,7 +61,48 @@ interface EvaluatedPlan {
   evaluation: MealBudgetEvaluation;
 }
 
-async function applyStoredProductOverrides(
+function manualAdditionRequirement(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  addition: WeekPreparation["customizations"][number]["manualProductAdditions"][number],
+  product: Awaited<ReturnType<CatalogRepository["getByIds"]>>["products"][number] | null,
+): WeekIngredientRequirement | null {
+  const day = preparation.days.find((item) => item.dayIndex === dayIndex);
+  if (!day?.recipe) return null;
+  const base: WeekIngredientRequirement = {
+    ingredientId: addition.id,
+    sourceKey: "manualProductAddition",
+    name: product?.name ?? addition.product.name,
+    unit: "piece",
+    optional: false,
+    servingsBase: 1,
+    kind: "ingredient",
+    brandConstraint: null,
+    requiredQuantity: addition.quantity,
+    purchaseQuantity: addition.quantity,
+    packageCapacity: 1,
+    usedIn: [{
+      recipeId: day.recipe.id,
+      recipeName: day.recipe.name,
+      dayIndex,
+      requiredQuantity: addition.quantity,
+    }],
+    product: addition.product,
+    price: addition.price,
+    productMatchMissing: false,
+    packageCalculationMissing: false,
+  };
+  return product
+    ? applyManualProductToRequirement(base, product, addition.quantity)
+    : {
+        ...base,
+        product: null,
+        price: null,
+        productMatchMissing: true,
+      };
+}
+
+async function applyStoredCustomizations(
   preparation: WeekPreparation,
   ingredients: WeekIngredientRequirement[],
   catalog: RecipeCatalog,
@@ -72,16 +114,25 @@ async function applyStoredProductOverrides(
       dayIndex: customization.dayIndex,
     })),
   );
-  if (overrides.length === 0) return ingredients;
+  const additions = preparation.customizations.flatMap((customization) =>
+    customization.manualProductAdditions.map((addition) => ({
+      ...addition,
+      dayIndex: customization.dayIndex,
+    })),
+  );
+  if (overrides.length === 0 && additions.length === 0) return ingredients;
 
-  const productIds = [...new Set(overrides.map((override) => override.productId))];
+  const productIds = [...new Set([
+    ...overrides.map((override) => override.productId),
+    ...additions.map((addition) => addition.product.productId),
+  ])];
   const result = await catalogRepository.getByIds(productIds);
   const products = new Map(result.products.map((product) => [product.id, product]));
   const ingredientDefinitions = new Map(
     catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
   );
 
-  return ingredients.flatMap((requirement) => {
+  const overridden = ingredients.flatMap((requirement) => {
     const applicable = overrides.filter(
       (override) =>
         override.ingredientId === requirement.ingredientId &&
@@ -112,7 +163,19 @@ async function applyStoredProductOverrides(
             : null,
         };
       }
+      const override = overrideByDay.get(uses[0]!.dayIndex)!;
       const product = products.get(productId) ?? null;
+      if (override.selectionSource === "manualSearch") {
+        const quantity = override.quantity ?? 1;
+        if (
+          product &&
+          product.supermarket === "Hoogvliet" &&
+          product.isAvailable !== false
+        ) {
+          return applyManualProductToRequirement(scoped, product, quantity);
+        }
+        return applyProductToRequirement(scoped, null);
+      }
       const validProduct =
         ingredient &&
         product &&
@@ -126,6 +189,48 @@ async function applyStoredProductOverrides(
       return applyProductToRequirement(scoped, validProduct);
     });
   });
+
+  return [
+    ...overridden,
+    ...additions.flatMap((addition) => {
+      const requirement = manualAdditionRequirement(
+        preparation,
+        addition.dayIndex,
+        addition,
+        (() => {
+          const product = products.get(addition.product.productId) ?? null;
+          return product?.supermarket === "Hoogvliet" && product.isAvailable !== false
+            ? product
+            : null;
+        })(),
+      );
+      return requirement ? [requirement] : [];
+    }),
+  ];
+}
+
+function approvedBudgetOverrideAllowsPlan(
+  preparation: WeekPreparation,
+  evaluation: MealBudgetEvaluation,
+): boolean {
+  if (!evaluation.isMealBudgetComplete) return false;
+  const approvals = preparation.customizations.flatMap((customization) => [
+    ...customization.productOverrides.map((override) => override.budgetDecision),
+    ...customization.manualProductAdditions.map((addition) => addition.budgetDecision),
+  ]).filter(
+    (decision) => decision.mode === "userApprovedBudgetOverride",
+  );
+  return approvals.length > 0;
+}
+
+function budgetAllowsPreparedWeek(
+  preparation: WeekPreparation,
+  evaluation: MealBudgetEvaluation,
+): boolean {
+  return (
+    mealBudgetAllowsPlan(evaluation) ||
+    approvedBudgetOverrideAllowsPlan(preparation, evaluation)
+  );
 }
 
 function generationSummary(
@@ -406,7 +511,7 @@ function finalStatus(
         item.price === null),
   );
   const budgetGap =
-    evaluation !== undefined && !mealBudgetAllowsPlan(evaluation);
+    evaluation !== undefined && !budgetAllowsPreparedWeek(preparation, evaluation);
   return hasRecipeGap || hasIngredientGap || budgetGap
     ? "generationPartial"
     : "generated";
@@ -917,7 +1022,7 @@ export async function revalidatePreparedWeek(
     preparation.numberOfPeople,
     catalog,
   );
-  const ingredients = await applyStoredProductOverrides(
+  const ingredients = await applyStoredCustomizations(
     preparation,
     applyReadinessProducts(requirements, readiness),
     catalog,
@@ -951,7 +1056,7 @@ export async function revalidatePreparedWeek(
     ready:
       !hasDayGap &&
       next.status === "generated" &&
-      mealBudgetAllowsPlan(mealBudget),
+      budgetAllowsPreparedWeek(next, mealBudget),
     preparation: next,
   };
 }

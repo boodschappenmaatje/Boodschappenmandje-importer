@@ -5,9 +5,14 @@ import {
   completeShoppingListFromWeek,
   addCatalogProduct,
   createEmptyActiveShoppingList,
+  removeMealPlanContributionsForWeek,
 } from "@/services/shopping-list/shopping-list";
 import {
+  commitManualProductChoice,
+  findProductAlternatives,
   findRecipeAlternatives,
+  previewManualProductChoice,
+  replaceWeekProduct,
   replaceWeekRecipe,
 } from "@/services/week-preparation/meal-customization";
 import {
@@ -106,6 +111,8 @@ const products = [
   product("product-rice", "G'woon rijst", 119),
   product("product-tomato", "G'woon tomaten", 99),
 ];
+const BOOMSTAM = product("product-boomstam", "G'woon boomstammetjes", 699);
+const LUXE_SPAGHETTI = product("product-luxe-spaghetti", "G'woon spaghetti luxe", 199);
 
 const recipeRepository: RecipeRepository = { async loadCatalog() { return catalog; } };
 function repositoryFor(currentProducts: () => Product[] = () => products): CatalogRepository {
@@ -360,7 +367,7 @@ describe("PWA 12 maaltijdcustomization", () => {
       structuredClone(encodeStoredWeekPreparation(result.preparation)),
     );
     expect(reopened).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       budgetCents: 10_000,
       mealBudgetCents: 500,
       days: [{ recipeId: MACARONI.id }],
@@ -370,5 +377,395 @@ describe("PWA 12 maaltijdcustomization", () => {
       }],
     });
     expect(reopened?.days.some((day) => day.recipeId === SPAGHETTI.id)).toBe(false);
+  });
+
+  it("houdt de harde budgetgrens voor automatische productvoorstellen intact", async () => {
+    const automaticRepository = repositoryFor(() => [...products, BOOMSTAM]);
+    const original = await preparedWeek();
+    const alternatives = await findProductAlternatives(
+      original,
+      0,
+      "ingredient-spaghetti",
+      recipeRepository,
+      automaticRepository,
+      list,
+      NOW,
+    );
+    expect(alternatives.some((item) => item.product.id === BOOMSTAM.id)).toBe(false);
+
+    const semanticButExpensive = product(
+      "product-expensive-spaghetti",
+      "G'woon spaghetti voordeel",
+      699,
+    );
+    const expensiveRepository = repositoryFor(() => [...products, semanticButExpensive]);
+    const expensiveAlternatives = await findProductAlternatives(
+      original,
+      0,
+      "ingredient-spaghetti",
+      recipeRepository,
+      expensiveRepository,
+      list,
+      NOW,
+    );
+    expect(expensiveAlternatives.find((item) => item.product.id === semanticButExpensive.id))
+      .toMatchObject({ withinMealBudget: false });
+    await expect(
+      replaceWeekProduct(
+        original,
+        0,
+        "ingredient-spaghetti",
+        semanticButExpensive.id,
+        recipeRepository,
+        expensiveRepository,
+        list,
+        NOW,
+      ),
+    ).resolves.toEqual({ ok: false, reason: "over_meal_budget" });
+  });
+
+  it("berekent exacte dubbele budgetimpact en vereist expliciete toestemming boven budget", async () => {
+    const original = { ...await preparedWeek(), budgetCents: 700 };
+    const snapshot = structuredClone(original);
+    const choice = {
+      action: "replaceIngredient" as const,
+      dayIndex: 0,
+      ingredientId: "ingredient-spaghetti",
+      productId: BOOMSTAM.id,
+      quantity: 1,
+    };
+    const preview = previewManualProductChoice(original, choice, BOOMSTAM, list, NOW);
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.preview.impact).toMatchObject({
+      currentMealPlanCostCents: 248,
+      nextMealPlanCostCents: 798,
+      mealPlanDifferenceCents: 550,
+      mealBudgetOverageCents: 298,
+      currentTotalWeekCostCents: 248,
+      nextTotalWeekCostCents: 798,
+      totalWeekDifferenceCents: 550,
+      weekBudgetOverageCents: 98,
+      requiresBudgetOverride: true,
+    });
+    expect(original).toEqual(snapshot);
+
+    const cancelled = commitManualProductChoice(
+      original,
+      choice,
+      BOOMSTAM,
+      false,
+      list,
+      NOW,
+    );
+    expect(cancelled).toMatchObject({ ok: false, reason: "budget_override_required" });
+    expect(original).toEqual(snapshot);
+
+    const approved = commitManualProductChoice(
+      original,
+      choice,
+      BOOMSTAM,
+      true,
+      list,
+      NOW,
+    );
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) return;
+    expect(approved.preparation.customizations[0].productOverrides[0])
+      .toMatchObject({
+        selectionSource: "manualSearch",
+        quantity: 1,
+        budgetDecision: {
+          mode: "userApprovedBudgetOverride",
+          approvedMealPlanCostCents: 798,
+          approvedTotalWeekCostCents: 798,
+        },
+      });
+  });
+
+  it("staat een bewuste inhoudelijk andere keuze toe en rapporteert goedkoper of duurder binnen budget", async () => {
+    const original = await preparedWeek();
+    const unrelatedChoice = {
+      action: "replaceIngredient" as const,
+      dayIndex: 0,
+      ingredientId: "ingredient-spaghetti",
+      productId: "product-rice",
+      quantity: 1,
+    };
+    const cheaper = commitManualProductChoice(
+      original,
+      unrelatedChoice,
+      products.find((item) => item.id === "product-rice")!,
+      false,
+      list,
+      NOW,
+    );
+    expect(cheaper.ok).toBe(true);
+    if (!cheaper.ok) return;
+    expect(cheaper.impact).toMatchObject({
+      mealPlanDifferenceCents: -30,
+      nextMealPlanCostCents: 218,
+      requiresBudgetOverride: false,
+    });
+    expect(cheaper.preparation.ingredients.find(
+      (item) => item.ingredientId === "ingredient-spaghetti",
+    )?.product?.productId).toBe("product-rice");
+
+    const dearer = previewManualProductChoice(
+      original,
+      { ...unrelatedChoice, productId: LUXE_SPAGHETTI.id },
+      LUXE_SPAGHETTI,
+      list,
+      NOW,
+    );
+    expect(dearer.ok && dearer.preview.impact).toMatchObject({
+      mealPlanDifferenceCents: 50,
+      nextMealPlanCostCents: 298,
+      mealBudgetOverageCents: 0,
+      requiresBudgetOverride: false,
+    });
+  });
+
+  it("voegt een vrij product met quantity en typed provenance aan het gerecht en de lijst toe", async () => {
+    const original = { ...await preparedWeek(), mealBudgetCents: 2_000 };
+    const result = commitManualProductChoice(
+      original,
+      {
+        action: "addToMeal",
+        dayIndex: 0,
+        ingredientId: null,
+        productId: BOOMSTAM.id,
+        quantity: 2,
+      },
+      BOOMSTAM,
+      false,
+      list,
+      NOW,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.preparation.customizations[0].manualProductAdditions[0])
+      .toMatchObject({
+        id: `manual-addition:0:${BOOMSTAM.id}`,
+        quantity: 2,
+        budgetDecision: { mode: "userConfirmedManualChoice" },
+      });
+    expect(result.preparation.ingredients.find(
+      (item) => item.ingredientId === `manual-addition:0:${BOOMSTAM.id}`,
+    )).toMatchObject({
+      purchaseQuantity: 2,
+      product: { productId: BOOMSTAM.id },
+      usedIn: [{ recipeId: SPAGHETTI.id, recipeName: SPAGHETTI.name, dayIndex: 0 }],
+    });
+    const synchronized = completeShoppingListFromWeek(
+      list,
+      result.preparation.ingredients,
+      result.preparation.id,
+      NOW,
+    );
+    expect(synchronized.items.find((item) => item.productId === BOOMSTAM.id))
+      .toMatchObject({
+        quantity: 2,
+        usedIn: [SPAGHETTI.name],
+        quantityContributions: {
+          persistentQuantity: 0,
+          mealPlans: [{ weekPreparationId: original.id, quantity: 2 }],
+        },
+      });
+    const reopened = decodeStoredWeekPreparation(
+      structuredClone(encodeStoredWeekPreparation(result.preparation)),
+    );
+    expect(reopened?.customizations[0].manualProductAdditions[0])
+      .toMatchObject({ quantity: 2, product: { productId: BOOMSTAM.id } });
+    const validation = await revalidatePreparedWeek(
+      reopened!,
+      recipeRepository,
+      repositoryFor(() => [...products, BOOMSTAM]),
+      NOW,
+      list,
+    );
+    expect(validation.ready).toBe(true);
+    expect(validation.preparation.ingredients.find(
+      (item) => item.ingredientId === `manual-addition:0:${BOOMSTAM.id}`,
+    )).toMatchObject({ purchaseQuantity: 2, usedIn: [{ dayIndex: 0 }] });
+  });
+
+  it("synchroniseert handmatige vervanging idempotent en behoudt mixed manual/mealPlan", async () => {
+    const original = { ...await preparedWeek(), mealBudgetCents: 2_000 };
+    const manualList = addCatalogProduct(
+      createEmptyActiveShoppingList(NOW),
+      BOOMSTAM,
+      "manual",
+      NOW,
+    );
+    const completedOriginal = completeShoppingListFromWeek(
+      manualList,
+      original.ingredients,
+      original.id,
+      NOW,
+    );
+    const result = commitManualProductChoice(
+      original,
+      {
+        action: "replaceIngredient",
+        dayIndex: 0,
+        ingredientId: "ingredient-spaghetti",
+        productId: BOOMSTAM.id,
+        quantity: 1,
+      },
+      BOOMSTAM,
+      false,
+      completedOriginal,
+      NOW,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const synchronized = completeShoppingListFromWeek(
+      completedOriginal,
+      result.preparation.ingredients,
+      result.preparation.id,
+      NOW,
+    );
+    expect(synchronized.items.some((item) => item.productId === "product-spaghetti"))
+      .toBe(false);
+    expect(synchronized.items.find((item) => item.productId === BOOMSTAM.id))
+      .toMatchObject({
+        quantity: 2,
+        sources: ["manual", "weekPreparation", "recipe"],
+        usedIn: [SPAGHETTI.name],
+        quantityContributions: {
+          persistentQuantity: 1,
+          mealPlans: [{ weekPreparationId: original.id, quantity: 1 }],
+        },
+      });
+    expect(completeShoppingListFromWeek(
+      synchronized,
+      result.preparation.ingredients,
+      result.preparation.id,
+      NOW,
+    )).toEqual(synchronized);
+
+    const cleaned = removeMealPlanContributionsForWeek(
+      synchronized,
+      original.id,
+      NOW,
+    );
+    expect(cleaned.items.find((item) => item.productId === BOOMSTAM.id))
+      .toMatchObject({
+        quantity: 1,
+        sources: ["manual"],
+        usedIn: [],
+        quantityContributions: { persistentQuantity: 1, mealPlans: [] },
+      });
+    expect(cleaned.items.some((item) => item.productId === "product-tomato"))
+      .toBe(false);
+  });
+
+  it("bewaart handmatige quantity, usedIn en budgettoestemming bij heropenen en revalidatie", async () => {
+    const original = await preparedWeek();
+    const result = commitManualProductChoice(
+      original,
+      {
+        action: "replaceIngredient",
+        dayIndex: 0,
+        ingredientId: "ingredient-spaghetti",
+        productId: BOOMSTAM.id,
+        quantity: 2,
+      },
+      BOOMSTAM,
+      true,
+      list,
+      NOW,
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const reopened = decodeStoredWeekPreparation(
+      structuredClone(encodeStoredWeekPreparation(result.preparation)),
+    );
+    expect(reopened?.customizations[0].productOverrides[0]).toMatchObject({
+      quantity: 2,
+      selectionSource: "manualSearch",
+      budgetDecision: { mode: "userApprovedBudgetOverride" },
+    });
+    const liveRepository = repositoryFor(() => [...products, BOOMSTAM]);
+    const validation = await revalidatePreparedWeek(
+      reopened!,
+      recipeRepository,
+      liveRepository,
+      NOW,
+      list,
+    );
+    expect(validation.ready).toBe(true);
+    expect(validation.preparation.status).toBe("generated");
+    expect(validation.preparation.ingredients.find(
+      (item) => item.ingredientId === "ingredient-spaghetti",
+    )).toMatchObject({
+      purchaseQuantity: 2,
+      product: { productId: BOOMSTAM.id },
+      usedIn: [{ dayIndex: 0, requiredQuantity: 2 }],
+    });
+
+    const changedPrice = product(
+      BOOMSTAM.id,
+      BOOMSTAM.name,
+      799,
+    );
+    const refreshed = await revalidatePreparedWeek(
+      validation.preparation,
+      recipeRepository,
+      repositoryFor(() => [...products, changedPrice]),
+      NOW,
+      list,
+    );
+    expect(refreshed.ready).toBe(true);
+    expect(refreshed.preparation.generation).toMatchObject({
+      mealPlanKnownCostCents: 1_697,
+      mealBudgetStatus: "overMealBudget",
+    });
+
+    const unavailable = await revalidatePreparedWeek(
+      validation.preparation,
+      recipeRepository,
+      repositoryFor(() => [
+        ...products,
+        { ...BOOMSTAM, isAvailable: false },
+      ]),
+      NOW,
+      list,
+    );
+    expect(unavailable.ready).toBe(false);
+    expect(unavailable.preparation.ingredients.find(
+      (item) => item.ingredientId === "ingredient-spaghetti",
+    )).toMatchObject({ product: null, productMatchMissing: true });
+  });
+
+  it("weigert handmatige gerechtproducten voor Vrije keuze zonder mutatie", async () => {
+    const original = await preparedWeek();
+    const freeChoice = {
+      ...original,
+      days: [{
+        dayIndex: 0,
+        category: "freeChoice" as const,
+        freeChoice: true,
+        recipeId: null,
+        recipe: null,
+        status: "freeChoice" as const,
+      }],
+    };
+    const snapshot = structuredClone(freeChoice);
+    expect(previewManualProductChoice(
+      freeChoice,
+      {
+        action: "addToMeal",
+        dayIndex: 0,
+        ingredientId: null,
+        productId: BOOMSTAM.id,
+        quantity: 1,
+      },
+      BOOMSTAM,
+      list,
+      NOW,
+    )).toEqual({ ok: false, reason: "day_not_found" });
+    expect(freeChoice).toEqual(snapshot);
   });
 });

@@ -27,13 +27,20 @@ import {
   type RecipeRepository,
 } from "@/services/week-preparation/recipe-repository";
 import {
+  commitManualProductChoice,
   findProductAlternatives as loadProductAlternatives,
   findRecipeAlternatives as loadRecipeAlternatives,
+  previewManualProductChoice,
   replaceWeekProduct,
   replaceWeekRecipe,
+  type ManualProductChoice,
+  type ManualProductBudgetImpact,
+  type ManualProductChoicePreview,
+  type ManualProductPreviewResult,
   type ProductAlternative,
   type RecipeAlternative,
 } from "@/services/week-preparation/meal-customization";
+import type { Product } from "@/types/catalog";
 import {
   calculateWeekBudgetSummary,
   generatePreparedWeek,
@@ -89,6 +96,43 @@ interface WeekPreparationContextValue {
     ingredientId: string,
     productId: string,
   ) => Promise<boolean>;
+  searchCatalogProducts: (term: string, signal?: AbortSignal) => Promise<Product[]>;
+  previewManualProduct: (
+    choice: ManualProductChoice,
+    product: Product,
+  ) => ManualProductPreviewResult;
+  applyManualProduct: (
+    choice: ManualProductChoice,
+    expectedImpact: ManualProductBudgetImpact,
+    approveBudgetOverride: boolean,
+  ) => Promise<ManualProductApplyResult>;
+}
+
+export type ManualProductApplyResult =
+  | { applied: true }
+  | {
+      applied: false;
+      revalidatedPreview?: ManualProductChoicePreview;
+    };
+
+function sameBudgetImpact(
+  left: ManualProductBudgetImpact,
+  right: ManualProductBudgetImpact,
+): boolean {
+  return (
+    left.currentMealPlanCostCents === right.currentMealPlanCostCents &&
+    left.nextMealPlanCostCents === right.nextMealPlanCostCents &&
+    left.mealPlanDifferenceCents === right.mealPlanDifferenceCents &&
+    left.mealBudgetCents === right.mealBudgetCents &&
+    left.mealBudgetOverageCents === right.mealBudgetOverageCents &&
+    left.currentTotalWeekCostCents === right.currentTotalWeekCostCents &&
+    left.nextTotalWeekCostCents === right.nextTotalWeekCostCents &&
+    left.totalWeekDifferenceCents === right.totalWeekDifferenceCents &&
+    left.weekBudgetCents === right.weekBudgetCents &&
+    left.weekBudgetOverageCents === right.weekBudgetOverageCents &&
+    left.weekBudgetRemainingCents === right.weekBudgetRemainingCents &&
+    left.requiresBudgetOverride === right.requiresBudgetOverride
+  );
 }
 
 const WeekPreparationContext =
@@ -673,6 +717,132 @@ export function WeekPreparationProvider({
     [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
   );
 
+  const searchCatalogProducts = useCallback(
+    async (term: string, signal?: AbortSignal): Promise<Product[]> => {
+      const result = await catalogRepository().query({
+        term,
+        page: 1,
+        pageSize: 12,
+        sort: "relevance",
+        signal,
+      });
+      return result.products;
+    },
+    [catalogRepository],
+  );
+
+  const previewManualProduct = useCallback(
+    (
+      choice: ManualProductChoice,
+      product: Product,
+    ): ManualProductPreviewResult => {
+      const current = preparationRef.current;
+      if (!current) return { ok: false, reason: "day_not_found" };
+      return previewManualProductChoice(
+        current,
+        choice,
+        product,
+        currentList(),
+      );
+    },
+    [currentList],
+  );
+
+  const applyManualProduct = useCallback(
+    async (
+      choice: ManualProductChoice,
+      expectedImpact: ManualProductBudgetImpact,
+      approveBudgetOverride: boolean,
+    ): Promise<ManualProductApplyResult> => {
+      if (customizationRunRef.current) return { applied: false };
+      const current = preparationRef.current;
+      if (!current) return { applied: false };
+      customizationRunRef.current = true;
+      setCustomizationBusy(true);
+      setActionMessage("Product, recept en budget worden opnieuw gecontroleerd…");
+      try {
+        const currentProduct = await catalogRepository().getByIds([
+          choice.productId,
+        ]);
+        const product = currentProduct.products.find(
+          (item) => item.id === choice.productId && item.isAvailable !== false,
+        );
+        if (!product) {
+          setActionMessage(
+            "Dit product is niet meer actueel beschikbaar. Er is niets gewijzigd.",
+          );
+          return { applied: false };
+        }
+        const livePreview = previewManualProductChoice(
+          current,
+          choice,
+          product,
+          currentList(),
+        );
+        if (!livePreview.ok) {
+          setActionMessage("Deze productkeuze kon niet veilig worden toegepast.");
+          return { applied: false };
+        }
+        if (!sameBudgetImpact(expectedImpact, livePreview.preview.impact)) {
+          setActionMessage(
+            "De prijs of je budget is gewijzigd. Controleer de nieuwe bedragen en bevestig opnieuw.",
+          );
+          return {
+            applied: false,
+            revalidatedPreview: livePreview.preview,
+          };
+        }
+        const committed = commitManualProductChoice(
+          current,
+          choice,
+          product,
+          approveBudgetOverride,
+          currentList(),
+        );
+        if (!committed.ok) {
+          setActionMessage(
+            committed.reason === "budget_override_required"
+              ? "Bevestig eerst bewust dat je deze budgetoverschrijding accepteert."
+              : "Deze productkeuze kon niet veilig worden toegepast.",
+          );
+          return committed.preview
+            ? { applied: false, revalidatedPreview: committed.preview }
+            : { applied: false };
+        }
+        const validation = await revalidatePreparedWeek(
+          committed.preparation,
+          recipeRepository(),
+          catalogRepository(),
+          new Date(),
+          currentList(),
+        );
+        if (!validation.ready) {
+          setActionMessage(
+            "Het gerecht of product is intussen gewijzigd. Er is niets aangepast.",
+          );
+          return { applied: false };
+        }
+        return await syncValidatedCustomization(validation.preparation)
+          ? { applied: true }
+          : { applied: false };
+      } catch {
+        setActionMessage(
+          "Aanpassen lukt nu niet. Je huidige gerecht en lijst zijn behouden.",
+        );
+        return { applied: false };
+      } finally {
+        customizationRunRef.current = false;
+        setCustomizationBusy(false);
+      }
+    },
+    [
+      catalogRepository,
+      currentList,
+      recipeRepository,
+      syncValidatedCustomization,
+    ],
+  );
+
   const value = useMemo<WeekPreparationContextValue>(
     () => ({
       status,
@@ -696,6 +866,9 @@ export function WeekPreparationProvider({
       replaceRecipe,
       findProductAlternatives,
       replaceProduct,
+      searchCatalogProducts,
+      previewManualProduct,
+      applyManualProduct,
     }),
     [
       actionMessage,
@@ -712,6 +885,9 @@ export function WeekPreparationProvider({
       findRecipeAlternatives,
       replaceProduct,
       replaceRecipe,
+      searchCatalogProducts,
+      previewManualProduct,
+      applyManualProduct,
       setBudgetCents,
       setMealBudgetCents,
       setNumberOfDays,

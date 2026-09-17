@@ -17,10 +17,28 @@ import { mealMixProfileForIngredient } from "@/services/week-preparation/meal-mi
 
 const ACTIVE_PREPARATION_KEY = "active";
 
-interface StoredWeekPreparationV5 {
+interface StoredWeekPreparationV6 {
   key: typeof ACTIVE_PREPARATION_KEY;
   schemaVersion: typeof WEEK_PREPARATION_SCHEMA_VERSION;
   preparation: WeekPreparation;
+}
+
+function isBudgetDecision(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.mode !== "string") return false;
+  if (
+    value.mode === "automaticPlanValidation" ||
+    value.mode === "userConfirmedManualChoice"
+  ) {
+    return true;
+  }
+  return (
+    value.mode === "userApprovedBudgetOverride" &&
+    typeof value.approvedAt === "string" &&
+    Number.isSafeInteger(value.approvedMealPlanCostCents) &&
+    Number(value.approvedMealPlanCostCents) >= 0 &&
+    Number.isSafeInteger(value.approvedTotalWeekCostCents) &&
+    Number(value.approvedTotalWeekCostCents) >= 0
+  );
 }
 
 function isRecipeReference(value: unknown): boolean {
@@ -47,6 +65,14 @@ function isCustomization(value: unknown): value is WeekMealCustomization {
         typeof override.ingredientId === "string" &&
         typeof override.productId === "string" &&
         typeof override.sku === "string" &&
+        (override.quantity === null ||
+          (Number.isInteger(override.quantity) &&
+            Number(override.quantity) >= 1 &&
+            Number(override.quantity) <= 99)) &&
+        ["automaticSuggestion", "manualSearch"].includes(
+          String(override.selectionSource),
+        ) &&
+        isBudgetDecision(override.budgetDecision) &&
         typeof override.updatedAt === "string",
     ) &&
     Array.isArray(value.ingredientOverrides) &&
@@ -60,6 +86,19 @@ function isCustomization(value: unknown): value is WeekMealCustomization {
         Number.isFinite(override.quantityMultiplier) &&
         Number(override.quantityMultiplier) > 0 &&
         typeof override.updatedAt === "string",
+    ) &&
+    Array.isArray(value.manualProductAdditions) &&
+    value.manualProductAdditions.every(
+      (addition) =>
+        isRecord(addition) &&
+        typeof addition.id === "string" &&
+        isProductReference(addition.product) &&
+        isPriceSnapshot(addition.price) &&
+        Number.isInteger(addition.quantity) &&
+        Number(addition.quantity) >= 1 &&
+        Number(addition.quantity) <= 99 &&
+        isBudgetDecision(addition.budgetDecision) &&
+        typeof addition.updatedAt === "string",
     ) &&
     typeof value.updatedAt === "string"
   );
@@ -389,6 +428,38 @@ function migrateV4Preparation(value: unknown): WeekPreparation | null {
   return isPreparation(migrated) ? migrated : null;
 }
 
+function migrateV5Preparation(value: unknown): WeekPreparation | null {
+  if (!isRecord(value) || value.schemaVersion !== 5) return null;
+  const customizations = Array.isArray(value.customizations)
+    ? value.customizations.map((customization) => {
+        if (!isRecord(customization)) return customization;
+        const productOverrides = Array.isArray(customization.productOverrides)
+          ? customization.productOverrides.map((override) =>
+              isRecord(override)
+                ? {
+                    ...override,
+                    quantity: null,
+                    selectionSource: "automaticSuggestion",
+                    budgetDecision: { mode: "automaticPlanValidation" },
+                  }
+                : override,
+            )
+          : customization.productOverrides;
+        return {
+          ...customization,
+          productOverrides,
+          manualProductAdditions: [],
+        };
+      })
+    : value.customizations;
+  const migrated = {
+    ...value,
+    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    customizations,
+  };
+  return isPreparation(migrated) ? migrated : null;
+}
+
 function migrateV1Preparation(value: unknown): WeekPreparation | null {
   if (!isRecord(value) || value.schemaVersion !== 1) return null;
   if (
@@ -483,6 +554,11 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
     if (!migrated) throw new WeekPreparationStorageError("invalid-data");
     return migrated;
   }
+  if (value.schemaVersion === 5) {
+    const migrated = migrateV5Preparation(value.preparation);
+    if (!migrated) throw new WeekPreparationStorageError("invalid-data");
+    return migrated;
+  }
   if (value.schemaVersion !== WEEK_PREPARATION_SCHEMA_VERSION) {
     throw new WeekPreparationStorageError("unsupported-version");
   }
@@ -494,7 +570,7 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
 
 export function encodeStoredWeekPreparation(
   preparation: WeekPreparation,
-): StoredWeekPreparationV5 {
+): StoredWeekPreparationV6 {
   return {
     key: ACTIVE_PREPARATION_KEY,
     schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,

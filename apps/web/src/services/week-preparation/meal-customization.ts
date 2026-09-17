@@ -1,9 +1,11 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
+import { removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { evaluateMealBudget, mealBudgetAllowsPlan } from "@/services/week-preparation/meal-budget";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import {
   applyProductToRequirement,
+  applyManualProductToRequirement,
   isReliableIngredientMatch,
   productPackageCapacity,
 } from "@/services/week-preparation/product-matching";
@@ -32,6 +34,7 @@ import type {
   RecipeMealCategory,
   SelectedRecipeReference,
   WeekIngredientRequirement,
+  WeekBudgetDecision,
   WeekMealCustomization,
   WeekPreparation,
 } from "@/types/week-preparation";
@@ -66,6 +69,59 @@ export interface ProductAlternative {
   withinMealBudget: boolean;
   preparation: WeekPreparation;
 }
+
+export type ManualProductAction = "replaceIngredient" | "addToMeal";
+
+export interface ManualProductChoice {
+  action: ManualProductAction;
+  dayIndex: number;
+  ingredientId: string | null;
+  productId: string;
+  quantity: number;
+}
+
+export interface ManualProductBudgetImpact {
+  currentMealPlanCostCents: number;
+  nextMealPlanCostCents: number;
+  mealPlanDifferenceCents: number;
+  mealBudgetCents: number | null;
+  mealBudgetOverageCents: number;
+  currentTotalWeekCostCents: number;
+  nextTotalWeekCostCents: number;
+  totalWeekDifferenceCents: number;
+  weekBudgetCents: number | null;
+  weekBudgetOverageCents: number;
+  weekBudgetRemainingCents: number | null;
+  requiresBudgetOverride: boolean;
+}
+
+export interface ManualProductChoicePreview {
+  choice: ManualProductChoice;
+  product: Product;
+  currentIngredientName: string | null;
+  impact: ManualProductBudgetImpact;
+  preparation: WeekPreparation;
+}
+
+export type ManualProductChoiceFailure =
+  | "day_not_found"
+  | "ingredient_not_found"
+  | "product_not_found"
+  | "product_price_missing"
+  | "invalid_quantity"
+  | "budget_override_required";
+
+export type ManualProductPreviewResult =
+  | { ok: true; preview: ManualProductChoicePreview }
+  | { ok: false; reason: ManualProductChoiceFailure };
+
+export type ManualProductCommitResult =
+  | { ok: true; preparation: WeekPreparation; impact: ManualProductBudgetImpact }
+  | {
+      ok: false;
+      reason: ManualProductChoiceFailure;
+      preview?: ManualProductChoicePreview;
+    };
 
 export type CustomizationFailure =
   | "day_not_found"
@@ -111,6 +167,7 @@ function customizationForRecipe(
       : recipeReference(recipe),
     productOverrides: [],
     ingredientOverrides: [],
+    manualProductAdditions: [],
     updatedAt: now.toISOString(),
   };
 }
@@ -125,7 +182,8 @@ function withCustomization(
   const isOriginal =
     customization.replacementRecipe === null &&
     customization.productOverrides.length === 0 &&
-    customization.ingredientOverrides.length === 0;
+    customization.ingredientOverrides.length === 0 &&
+    customization.manualProductAdditions.length === 0;
   return isOriginal ? retained : [...retained, customization];
 }
 
@@ -442,6 +500,7 @@ export async function findProductAlternatives(
         replacementRecipe: null,
         productOverrides: [],
         ingredientOverrides: [],
+        manualProductAdditions: [],
         updatedAt: now.toISOString(),
       };
       const customization: WeekMealCustomization = {
@@ -454,6 +513,9 @@ export async function findProductAlternatives(
             ingredientId,
             productId: product.id,
             sku: product.sku,
+            quantity: null,
+            selectionSource: "automaticSuggestion",
+            budgetDecision: { mode: "automaticPlanValidation" },
             updatedAt: now.toISOString(),
           },
         ],
@@ -506,4 +568,385 @@ export async function replaceWeekProduct(
   return alternative.withinMealBudget
     ? { ok: true, preparation: alternative.preparation }
     : { ok: false, reason: "over_meal_budget" };
+}
+
+function validManualQuantity(quantity: number): boolean {
+  return Number.isInteger(quantity) && quantity >= 1 && quantity <= 99;
+}
+
+function customizationForDay(
+  preparation: WeekPreparation,
+  day: PreparedDay,
+  now: Date,
+): WeekMealCustomization | null {
+  if (!day.recipe) return null;
+  return preparation.customizations.find(
+    (item) => item.dayIndex === day.dayIndex,
+  ) ?? {
+    dayIndex: day.dayIndex,
+    baseRecipe: day.recipe,
+    replacementRecipe: null,
+    productOverrides: [],
+    ingredientOverrides: [],
+    manualProductAdditions: [],
+    updatedAt: now.toISOString(),
+  };
+}
+
+function splitRequirementForManualProduct(
+  requirements: WeekIngredientRequirement[],
+  dayIndex: number,
+  ingredientId: string,
+  product: Product,
+  quantity: number,
+): WeekIngredientRequirement[] {
+  return requirements.flatMap((requirement) => {
+    if (requirement.ingredientId !== ingredientId) return [requirement];
+    const selectedUses = requirement.usedIn.filter(
+      (use) => use.dayIndex === dayIndex,
+    );
+    if (selectedUses.length === 0) return [requirement];
+    const otherUses = requirement.usedIn.filter(
+      (use) => use.dayIndex !== dayIndex,
+    );
+    const selected = applyManualProductToRequirement(
+      {
+        ...requirement,
+        usedIn: selectedUses,
+      },
+      product,
+      quantity,
+    );
+    if (otherUses.length === 0) return [selected];
+    const otherQuantity = otherUses.reduce(
+      (total, use) => total + use.requiredQuantity,
+      0,
+    );
+    return [
+      {
+        ...requirement,
+        requiredQuantity: otherQuantity,
+        purchaseQuantity: requirement.packageCapacity
+          ? Math.max(1, Math.ceil(otherQuantity / requirement.packageCapacity))
+          : null,
+        usedIn: otherUses,
+      },
+      selected,
+    ];
+  });
+}
+
+function manualAdditionId(dayIndex: number, productId: string): string {
+  return `manual-addition:${dayIndex}:${productId}`;
+}
+
+function manualAdditionRequirement(
+  day: PreparedDay,
+  product: Product,
+  quantity: number,
+): WeekIngredientRequirement | null {
+  if (!day.recipe) return null;
+  return applyManualProductToRequirement(
+    {
+      ingredientId: manualAdditionId(day.dayIndex, product.id),
+      sourceKey: "manualProductAddition",
+      name: product.name,
+      unit: "piece",
+      optional: false,
+      servingsBase: 1,
+      kind: "ingredient",
+      brandConstraint: null,
+      requiredQuantity: quantity,
+      purchaseQuantity: null,
+      packageCapacity: null,
+      usedIn: [{
+        recipeId: day.recipe.id,
+        recipeName: day.recipe.name,
+        dayIndex: day.dayIndex,
+        requiredQuantity: quantity,
+      }],
+      product: null,
+      price: null,
+      productMatchMissing: false,
+      packageCalculationMissing: false,
+    },
+    product,
+    quantity,
+  );
+}
+
+function budgetImpact(
+  preparation: WeekPreparation,
+  next: WeekPreparation,
+  list: ActiveShoppingList,
+  now: Date,
+): ManualProductBudgetImpact {
+  const baselineList = removeMealPlanContributionsForWeek(
+    list,
+    preparation.id,
+    now,
+  );
+  const current = evaluateMealBudget(
+    preparation.budgetCents,
+    preparation.mealBudgetCents,
+    preparation.ingredients,
+    baselineList,
+    now,
+  );
+  const updated = evaluateMealBudget(
+    next.budgetCents,
+    next.mealBudgetCents,
+    next.ingredients,
+    baselineList,
+    now,
+  );
+  const mealBudgetOverageCents = next.mealBudgetCents === null
+    ? 0
+    : Math.max(0, updated.mealPlanKnownCostCents - next.mealBudgetCents);
+  const weekBudgetOverageCents = next.budgetCents === null
+    ? 0
+    : Math.max(0, updated.totalKnownWeekCostCents - next.budgetCents);
+  return {
+    currentMealPlanCostCents: current.mealPlanKnownCostCents,
+    nextMealPlanCostCents: updated.mealPlanKnownCostCents,
+    mealPlanDifferenceCents:
+      updated.mealPlanKnownCostCents - current.mealPlanKnownCostCents,
+    mealBudgetCents: next.mealBudgetCents,
+    mealBudgetOverageCents,
+    currentTotalWeekCostCents: current.totalKnownWeekCostCents,
+    nextTotalWeekCostCents: updated.totalKnownWeekCostCents,
+    totalWeekDifferenceCents:
+      updated.totalKnownWeekCostCents - current.totalKnownWeekCostCents,
+    weekBudgetCents: next.budgetCents,
+    weekBudgetOverageCents,
+    weekBudgetRemainingCents: next.budgetCents === null
+      ? null
+      : Math.max(0, next.budgetCents - updated.totalKnownWeekCostCents),
+    requiresBudgetOverride:
+      mealBudgetOverageCents > 0 || weekBudgetOverageCents > 0,
+  };
+}
+
+export function previewManualProductChoice(
+  preparation: WeekPreparation,
+  choice: ManualProductChoice,
+  product: Product,
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): ManualProductPreviewResult {
+  if (!validManualQuantity(choice.quantity)) {
+    return { ok: false, reason: "invalid_quantity" };
+  }
+  if (product.id !== choice.productId) {
+    return { ok: false, reason: "product_not_found" };
+  }
+  const day = preparation.days.find(
+    (item) => item.dayIndex === choice.dayIndex,
+  );
+  if (!day || day.freeChoice || !day.recipe) {
+    return { ok: false, reason: "day_not_found" };
+  }
+  const currentCustomization = customizationForDay(preparation, day, now);
+  if (!currentCustomization) {
+    return { ok: false, reason: "day_not_found" };
+  }
+  const timestamp = now.toISOString();
+  const manualDecision: WeekBudgetDecision = {
+    mode: "userConfirmedManualChoice",
+  };
+  let ingredients: WeekIngredientRequirement[];
+  let customization: WeekMealCustomization;
+  let currentIngredientName: string | null = null;
+
+  if (choice.action === "replaceIngredient") {
+    if (!choice.ingredientId) {
+      return { ok: false, reason: "ingredient_not_found" };
+    }
+    const requirement = requirementForDay(
+      preparation,
+      choice.dayIndex,
+      choice.ingredientId,
+    );
+    if (!requirement) {
+      return { ok: false, reason: "ingredient_not_found" };
+    }
+    currentIngredientName = requirement.name;
+    ingredients = splitRequirementForManualProduct(
+      preparation.ingredients,
+      choice.dayIndex,
+      choice.ingredientId,
+      product,
+      choice.quantity,
+    );
+    customization = {
+      ...currentCustomization,
+      productOverrides: [
+        ...currentCustomization.productOverrides.filter(
+          (item) => item.ingredientId !== choice.ingredientId,
+        ),
+        {
+          ingredientId: choice.ingredientId,
+          productId: product.id,
+          sku: product.sku,
+          quantity: choice.quantity,
+          selectionSource: "manualSearch",
+          budgetDecision: manualDecision,
+          updatedAt: timestamp,
+        },
+      ],
+      updatedAt: timestamp,
+    };
+  } else {
+    const addition = manualAdditionRequirement(day, product, choice.quantity);
+    if (!addition || !addition.product || !addition.price) {
+      return { ok: false, reason: "product_price_missing" };
+    }
+    const additionId = manualAdditionId(choice.dayIndex, product.id);
+    ingredients = [
+      ...preparation.ingredients.filter(
+        (item) => item.ingredientId !== additionId,
+      ),
+      addition,
+    ];
+    customization = {
+      ...currentCustomization,
+      manualProductAdditions: [
+        ...currentCustomization.manualProductAdditions.filter(
+          (item) => item.id !== additionId,
+        ),
+        {
+          id: additionId,
+          product: addition.product,
+          price: addition.price,
+          quantity: choice.quantity,
+          budgetDecision: manualDecision,
+          updatedAt: timestamp,
+        },
+      ],
+      updatedAt: timestamp,
+    };
+  }
+
+  const selectedRequirement = ingredients.find(
+    (item) =>
+      item.product?.productId === product.id &&
+      item.usedIn.some((use) => use.dayIndex === choice.dayIndex),
+  );
+  if (!selectedRequirement?.price) {
+    return { ok: false, reason: "product_price_missing" };
+  }
+  const customized = {
+    ...preparation,
+    customizations: withCustomization(preparation, customization),
+  };
+  const baselineList = removeMealPlanContributionsForWeek(
+    list,
+    preparation.id,
+    now,
+  );
+  const next = rebuildPreparedWeekSelection(
+    customized,
+    customized.days,
+    ingredients,
+    baselineList,
+    now,
+  );
+  const impact = budgetImpact(preparation, next, list, now);
+  return {
+    ok: true,
+    preview: {
+      choice,
+      product,
+      currentIngredientName,
+      impact,
+      preparation: next,
+    },
+  };
+}
+
+function applyBudgetDecision(
+  preview: ManualProductChoicePreview,
+  decision: WeekBudgetDecision,
+  list: ActiveShoppingList,
+  now: Date,
+): WeekPreparation {
+  const { choice } = preview;
+  const customizations = preview.preparation.customizations.map(
+    (customization) => {
+      if (customization.dayIndex !== choice.dayIndex) return customization;
+      if (choice.action === "replaceIngredient") {
+        return {
+          ...customization,
+          productOverrides: customization.productOverrides.map((override) =>
+            override.ingredientId === choice.ingredientId
+              ? { ...override, budgetDecision: decision }
+              : override,
+          ),
+        };
+      }
+      const additionId = manualAdditionId(choice.dayIndex, choice.productId);
+      return {
+        ...customization,
+        manualProductAdditions: customization.manualProductAdditions.map(
+          (addition) =>
+            addition.id === additionId
+              ? { ...addition, budgetDecision: decision }
+              : addition,
+        ),
+      };
+    },
+  );
+  const updated = { ...preview.preparation, customizations };
+  const baselineList = removeMealPlanContributionsForWeek(
+    list,
+    updated.id,
+    now,
+  );
+  return rebuildPreparedWeekSelection(
+    updated,
+    updated.days,
+    updated.ingredients,
+    baselineList,
+    now,
+  );
+}
+
+export function commitManualProductChoice(
+  preparation: WeekPreparation,
+  choice: ManualProductChoice,
+  product: Product,
+  approveBudgetOverride: boolean,
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): ManualProductCommitResult {
+  const result = previewManualProductChoice(
+    preparation,
+    choice,
+    product,
+    list,
+    now,
+  );
+  if (!result.ok) return result;
+  if (result.preview.impact.requiresBudgetOverride && !approveBudgetOverride) {
+    return {
+      ok: false,
+      reason: "budget_override_required",
+      preview: result.preview,
+    };
+  }
+  const decision: WeekBudgetDecision = result.preview.impact.requiresBudgetOverride
+    ? {
+        mode: "userApprovedBudgetOverride",
+        approvedAt: now.toISOString(),
+        approvedMealPlanCostCents:
+          result.preview.impact.nextMealPlanCostCents,
+        approvedTotalWeekCostCents:
+          result.preview.impact.nextTotalWeekCostCents,
+      }
+    : { mode: "userConfirmedManualChoice" };
+  return {
+    ok: true,
+    preparation: applyBudgetDecision(result.preview, decision, list, now),
+    impact: result.preview.impact,
+  };
 }

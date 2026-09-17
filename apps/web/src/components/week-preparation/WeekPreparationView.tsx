@@ -394,6 +394,11 @@ export function WeekPreparationView() {
                   const customization = preparation.customizations.find(
                     (item) => item.dayIndex === day.dayIndex,
                   );
+                  const ingredientOptions = dayIngredients.map((ingredient) => ({
+                    ingredientId: ingredient.ingredientId,
+                    name: ingredient.name,
+                    productName: ingredient.product?.name ?? "Nog geen product",
+                  }));
                   return (
                     <li key={day.dayIndex}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
@@ -467,6 +472,7 @@ export function WeekPreparationView() {
                               <MealReplacementControl
                                 dayIndex={day.dayIndex}
                                 currentRecipeName={dishTitle}
+                                ingredients={ingredientOptions}
                               />
                             ) : null}
                             <ul className="recipe-ingredients">
@@ -523,11 +529,12 @@ export function WeekPreparationView() {
                                         ) : (
                                           <span>Aantal nog niet zeker</span>
                                         )}
-                                        {ingredient.kind === "ingredient" && ingredient.price && packages !== null ? (
+                                        {ingredient.price && packages !== null ? (
                                           <ProductAlternativeControl
                                             dayIndex={day.dayIndex}
                                             ingredientId={ingredient.ingredientId}
                                             currentProductName={ingredient.product.name}
+                                            ingredients={ingredientOptions}
                                           />
                                         ) : null}
                                       </div>

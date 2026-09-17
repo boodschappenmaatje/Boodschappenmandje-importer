@@ -1,7 +1,7 @@
 import type { PriceFreshness, UUID } from "@/types/catalog";
 import type { BudgetStatus } from "@/types/budget";
 
-export const WEEK_PREPARATION_SCHEMA_VERSION = 5 as const;
+export const WEEK_PREPARATION_SCHEMA_VERSION = 6 as const;
 
 export const MEAL_CATEGORIES = [
   "dutch",
@@ -51,10 +51,27 @@ export interface SelectedRecipeReference {
   name: string;
 }
 
+export type WeekProductSelectionSource =
+  | "automaticSuggestion"
+  | "manualSearch";
+
+export type WeekBudgetDecision =
+  | { mode: "automaticPlanValidation" }
+  | { mode: "userConfirmedManualChoice" }
+  | {
+      mode: "userApprovedBudgetOverride";
+      approvedAt: string;
+      approvedMealPlanCostCents: number;
+      approvedTotalWeekCostCents: number;
+    };
+
 export interface WeekProductOverride {
   ingredientId: UUID;
   productId: UUID;
   sku: string;
+  quantity: number | null;
+  selectionSource: WeekProductSelectionSource;
+  budgetDecision: WeekBudgetDecision;
   updatedAt: string;
 }
 
@@ -66,12 +83,22 @@ export interface WeekIngredientOverride {
   updatedAt: string;
 }
 
+export interface WeekManualProductAddition {
+  id: string;
+  product: WeekProductReference;
+  price: WeekPriceSnapshot;
+  quantity: number;
+  budgetDecision: WeekBudgetDecision;
+  updatedAt: string;
+}
+
 export interface WeekMealCustomization {
   dayIndex: number;
   baseRecipe: SelectedRecipeReference;
   replacementRecipe: SelectedRecipeReference | null;
   productOverrides: WeekProductOverride[];
   ingredientOverrides: WeekIngredientOverride[];
+  manualProductAdditions: WeekManualProductAddition[];
   updatedAt: string;
 }
 

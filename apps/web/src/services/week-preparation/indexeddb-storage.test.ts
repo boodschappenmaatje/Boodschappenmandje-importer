@@ -280,7 +280,7 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       customizations: [],
       mealBudgetCents: null,
       id: "week-legacy",
@@ -354,7 +354,7 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       customizations: [],
       mealBudgetCents: null,
       days: [{ recipe: { sourceKey: "spaghetti-bolognese" } }],
@@ -416,7 +416,7 @@ describe("PWA 10 lokale persistentie", () => {
       preparation: legacy,
     });
     expect(migrated).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       customizations: [],
       mealBudgetCents: null,
       days: current.days,
@@ -426,6 +426,52 @@ describe("PWA 10 lokale persistentie", () => {
         mealBudgetStatus: "noMealBudget",
         isMealBudgetComplete: false,
       },
+    });
+  });
+
+  it("migreert PWA 12 schema v5 naar typed automatische provenance", () => {
+    const current = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v5-customization",
+    );
+    const legacy = structuredClone({
+      ...current,
+      customizations: [{
+        dayIndex: 0,
+        baseRecipe: {
+          id: "recipe-spaghetti",
+          sourceKey: "spaghetti-bolognese",
+          name: "Spaghetti bolognese",
+        },
+        replacementRecipe: null,
+        productOverrides: [{
+          ingredientId: "ingredient-spaghetti",
+          productId: "product-spaghetti",
+          sku: "sku-product-spaghetti",
+          updatedAt: NOW.toISOString(),
+        }],
+        ingredientOverrides: [],
+        updatedAt: NOW.toISOString(),
+      }],
+    }) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 5;
+
+    expect(decodeStoredWeekPreparation({
+      key: "active",
+      schemaVersion: 5,
+      preparation: legacy,
+    })).toMatchObject({
+      schemaVersion: 6,
+      customizations: [{
+        productOverrides: [{
+          quantity: null,
+          selectionSource: "automaticSuggestion",
+          budgetDecision: { mode: "automaticPlanValidation" },
+        }],
+        manualProductAdditions: [],
+      }],
     });
   });
 });
