@@ -42,7 +42,7 @@ describe("boodschappenlijstopslag", () => {
     expect(stored.list.schemaVersion).toBe(SHOPPING_LIST_SCHEMA_VERSION);
   });
 
-  it("laadt een bestaande PWA 7-lijst zonder reset of schemawijziging", async () => {
+  it("laadt een bestaande lijst zonder reset en bewaart de huidige schema-versie", async () => {
     const storage = new MemoryStorage();
     const existingProduct: Product = {
       id: "existing-product",
@@ -69,7 +69,7 @@ describe("boodschappenlijstopslag", () => {
 
     await storage.save(existingList);
     await expect(storage.load()).resolves.toEqual(existingList);
-    expect((await storage.load())?.schemaVersion).toBe(1);
+    expect((await storage.load())?.schemaVersion).toBe(2);
   });
 
   it("overschrijft onbekende toekomstige opslagversies niet stilzwijgend", () => {
@@ -84,5 +84,104 @@ describe("boodschappenlijstopslag", () => {
         code: "unsupported-version",
       }),
     );
+  });
+
+  it("migreert een v1 handmatig item naar een blijvende hoeveelheid", () => {
+    const migrated = decodeStoredActiveShoppingList({
+      key: "active",
+      schemaVersion: 1,
+      list: {
+        schemaVersion: 1,
+        startedAt: "2026-09-15T10:00:00Z",
+        updatedAt: "2026-09-15T10:00:00Z",
+        items: [{
+          productId: "manual-product",
+          sku: "manual-sku",
+          name: "Handmatig product",
+          brand: null,
+          packageText: "1 stuk",
+          imageUrl: null,
+          quantity: 2,
+          price: null,
+          sources: ["manual"],
+          usedIn: [],
+          createdAt: "2026-09-15T10:00:00Z",
+          updatedAt: "2026-09-15T10:00:00Z",
+        }],
+      },
+    });
+    expect(migrated).toMatchObject({
+      schemaVersion: 2,
+      items: [{
+        quantity: 2,
+        quantityContributions: { persistentQuantity: 2, mealPlans: [] },
+      }],
+    });
+  });
+
+  it("migreert een puur v1-weekitem naar een veilig opruimbare legacy-bijdrage", () => {
+    const migrated = decodeStoredActiveShoppingList({
+      key: "active",
+      schemaVersion: 1,
+      list: {
+        schemaVersion: 1,
+        startedAt: "2026-09-15T10:00:00Z",
+        updatedAt: "2026-09-15T10:00:00Z",
+        items: [{
+          productId: "meal-product",
+          sku: "meal-sku",
+          name: "Maaltijdproduct",
+          brand: null,
+          packageText: "500 g",
+          imageUrl: null,
+          quantity: 2,
+          price: null,
+          sources: ["weekPreparation", "recipe"],
+          usedIn: ["Oud gerecht"],
+          createdAt: "2026-09-15T10:00:00Z",
+          updatedAt: "2026-09-15T10:00:00Z",
+        }],
+      },
+    });
+    expect(migrated?.items[0].quantityContributions).toEqual({
+      persistentQuantity: 0,
+      mealPlans: [{
+        weekPreparationId: null,
+        quantity: 2,
+        usedIn: ["Oud gerecht"],
+      }],
+    });
+  });
+
+  it("behoudt een onreconstrueerbaar gemengd v1-aantal conservatief als gebruikershoeveelheid", () => {
+    const migrated = decodeStoredActiveShoppingList({
+      key: "active",
+      schemaVersion: 1,
+      list: {
+        schemaVersion: 1,
+        startedAt: "2026-09-15T10:00:00Z",
+        updatedAt: "2026-09-15T10:00:00Z",
+        items: [{
+          productId: "mixed-product",
+          sku: "mixed-sku",
+          name: "Gemengd product",
+          brand: null,
+          packageText: "1 kg",
+          imageUrl: null,
+          quantity: 3,
+          price: null,
+          sources: ["manual", "weekPreparation", "recipe"],
+          usedIn: ["Oud gerecht"],
+          createdAt: "2026-09-15T10:00:00Z",
+          updatedAt: "2026-09-15T10:00:00Z",
+        }],
+      },
+    });
+    expect(migrated?.items[0]).toMatchObject({
+      quantity: 3,
+      sources: ["manual"],
+      usedIn: [],
+      quantityContributions: { persistentQuantity: 3, mealPlans: [] },
+    });
   });
 });

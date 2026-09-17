@@ -856,8 +856,8 @@ export function WeekPreparationView() {
       </section>
 
       <NewWeekControl
-        onStartNew={() => {
-          week.startNewPreparation();
+        onStartNew={async () => {
+          await week.startNewPreparation();
           setBudgetDraft(null);
           setMealBudgetDraft(null);
         }}

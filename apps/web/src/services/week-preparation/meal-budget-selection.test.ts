@@ -107,7 +107,7 @@ const catalogRepository: CatalogRepository = {
 };
 
 function emptyList(): ActiveShoppingList {
-  return { schemaVersion: 1, startedAt: NOW.toISOString(), updatedAt: NOW.toISOString(), items: [] };
+  return { schemaVersion: 2, startedAt: NOW.toISOString(), updatedAt: NOW.toISOString(), items: [] };
 }
 
 function prepared(mealBudgetCents: number) {

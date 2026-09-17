@@ -33,7 +33,7 @@ import type {
 } from "@/types/week-preparation";
 
 const EMPTY_LIST: ActiveShoppingList = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   startedAt: "1970-01-01T00:00:00.000Z",
   updatedAt: "1970-01-01T00:00:00.000Z",
   items: [],

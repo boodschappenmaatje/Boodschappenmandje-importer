@@ -50,6 +50,7 @@ function item(
     packageText: null,
     imageUrl: null,
     quantity,
+    quantityContributions: { persistentQuantity: quantity, mealPlans: [] },
     price:
       amount === null
         ? null
@@ -67,7 +68,7 @@ function item(
 
 function list(...items: ShoppingListItem[]): ActiveShoppingList {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     startedAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
     items,

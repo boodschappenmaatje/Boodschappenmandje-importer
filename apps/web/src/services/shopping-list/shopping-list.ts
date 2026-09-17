@@ -7,6 +7,8 @@ import {
   type ActiveShoppingList,
   type RemovedShoppingListItem,
   type ShoppingListItem,
+  type ShoppingListMealPlanContribution,
+  type ShoppingListQuantityContributions,
   type ShoppingListItemSource,
   type ShoppingListPriceReference,
   type ShoppingListTotal,
@@ -36,6 +38,76 @@ function uniqueStrings(current: string[], additions: string[]): string[] {
 
 function recipeSources(current: ShoppingListItemSource[]): ShoppingListItemSource[] {
   return uniqueSources(uniqueSources(current, "weekPreparation"), "recipe");
+}
+
+const MEAL_PLAN_SOURCES = new Set<ShoppingListItemSource>([
+  "weekPreparation",
+  "recipe",
+]);
+
+function persistentSources(
+  sources: ShoppingListItemSource[],
+): ShoppingListItemSource[] {
+  return sources.filter((source) => !MEAL_PLAN_SOURCES.has(source));
+}
+
+function mealPlanQuantity(
+  contributions: ShoppingListMealPlanContribution[],
+): number {
+  return contributions.reduce((total, contribution) => total + contribution.quantity, 0);
+}
+
+function mealPlanUsedIn(
+  contributions: ShoppingListMealPlanContribution[],
+): string[] {
+  return contributions.reduce<string[]>(
+    (current, contribution) => uniqueStrings(current, contribution.usedIn),
+    [],
+  );
+}
+
+function sourcesForContributions(
+  current: ShoppingListItemSource[],
+  contributions: ShoppingListQuantityContributions,
+): ShoppingListItemSource[] {
+  const retained =
+    contributions.persistentQuantity > 0 ? persistentSources(current) : [];
+  return contributions.mealPlans.length > 0 ? recipeSources(retained) : retained;
+}
+
+function rebuildContributedItem(
+  item: ShoppingListItem,
+  contributions: ShoppingListQuantityContributions,
+): ShoppingListItem | null {
+  const quantity =
+    contributions.persistentQuantity + mealPlanQuantity(contributions.mealPlans);
+  if (quantity < 1) return null;
+  return {
+    ...item,
+    quantity,
+    quantityContributions: contributions,
+    sources: sourcesForContributions(item.sources, contributions),
+    usedIn: mealPlanUsedIn(contributions.mealPlans),
+  };
+}
+
+function mergeMealPlanContributions(
+  current: ShoppingListMealPlanContribution[],
+  additions: ShoppingListMealPlanContribution[],
+): ShoppingListMealPlanContribution[] {
+  const merged = new Map<string, ShoppingListMealPlanContribution>();
+  for (const contribution of [...current, ...additions]) {
+    const key = contribution.weekPreparationId ?? "legacy";
+    const existing = merged.get(key);
+    merged.set(key, existing
+      ? {
+          ...existing,
+          quantity: existing.quantity + contribution.quantity,
+          usedIn: uniqueStrings(existing.usedIn, contribution.usedIn),
+        }
+      : contribution);
+  }
+  return [...merged.values()];
 }
 
 function priceReference(product: Product): ShoppingListPriceReference | null {
@@ -106,6 +178,11 @@ export function addCatalogProduct(
       packageText: product.packageText,
       imageUrl: product.imageUrl,
       quantity: existing.quantity + 1,
+      quantityContributions: {
+        ...existing.quantityContributions,
+        persistentQuantity:
+          existing.quantityContributions.persistentQuantity + 1,
+      },
       price: priceReference(product) ?? existing.price,
       sources: uniqueSources(existing.sources, source),
       updatedAt: timestamp,
@@ -121,6 +198,7 @@ export function addCatalogProduct(
     packageText: product.packageText,
     imageUrl: product.imageUrl,
     quantity: 1,
+    quantityContributions: { persistentQuantity: 1, mealPlans: [] },
     price: priceReference(product),
     sources: [source],
     usedIn: [],
@@ -138,6 +216,7 @@ export function addCatalogProduct(
 export function completeShoppingListFromWeek(
   list: ActiveShoppingList,
   requirements: WeekIngredientRequirement[],
+  weekPreparationId: string,
   now: Date | string = new Date(),
 ): ActiveShoppingList {
   const timestamp = nowIso(now);
@@ -171,16 +250,75 @@ export function completeShoppingListFromWeek(
   }
 
   let changed = false;
-  const items = [...list.items];
+  const remaining = new Map(grouped);
+  const items = list.items.flatMap((existing) => {
+    const group = remaining.get(existing.productId);
+    remaining.delete(existing.productId);
+    const retainedMealPlans = existing.quantityContributions.mealPlans.filter(
+      (contribution) =>
+        contribution.weekPreparationId !== weekPreparationId &&
+        contribution.weekPreparationId !== null,
+    );
+    let contributions: ShoppingListQuantityContributions = {
+      ...existing.quantityContributions,
+      mealPlans: retainedMealPlans,
+    };
+    let productUpdate: Partial<ShoppingListItem> = {};
 
-  for (const group of grouped.values()) {
-    const { requirement, requirements, usedIn } = group;
-    const quantity = combinedProductPurchaseQuantity(requirements);
+    if (group) {
+      const { requirement, requirements: groupedRequirements, usedIn } = group;
+      const product = requirement.product;
+      if (!product) return [existing];
+      if (existing.sku !== null && existing.sku !== product.sku) {
+        throw new ShoppingListIdentityError();
+      }
+      const quantity = combinedProductPurchaseQuantity(groupedRequirements);
+      const price: ShoppingListPriceReference | null = requirement.price
+        ? {
+            productId: product.productId,
+            sku: product.sku,
+            amount: requirement.price.amountCents / 100,
+            isOffer: requirement.price.isOffer,
+            updatedAt: requirement.price.updatedAt,
+            freshness: requirement.price.freshness,
+            provider: product.supermarket,
+          }
+        : null;
+      contributions = {
+        ...contributions,
+        mealPlans: [
+          ...retainedMealPlans,
+          { weekPreparationId, quantity, usedIn },
+        ],
+      };
+      productUpdate = {
+        sku: existing.sku ?? product.sku,
+        name: product.name,
+        brand: product.brand,
+        packageText: product.packageText,
+        imageUrl: product.imageUrl,
+        price: price ?? existing.price,
+      };
+    }
+
+    const rebuilt = rebuildContributedItem(
+      { ...existing, ...productUpdate },
+      contributions,
+    );
+    if (!rebuilt) {
+      changed = true;
+      return [];
+    }
+    if (JSON.stringify(rebuilt) === JSON.stringify(existing)) return [existing];
+    changed = true;
+    return [{ ...rebuilt, updatedAt: timestamp }];
+  });
+
+  for (const group of remaining.values()) {
+    const { requirement, requirements: groupedRequirements, usedIn } = group;
     const product = requirement.product;
     if (!product) continue;
-    const existingIndex = items.findIndex(
-      (item) => item.productId === product.productId,
-    );
+    const quantity = combinedProductPurchaseQuantity(groupedRequirements);
     const price: ShoppingListPriceReference | null = requirement.price
       ? {
           productId: product.productId,
@@ -192,32 +330,6 @@ export function completeShoppingListFromWeek(
           provider: product.supermarket,
         }
       : null;
-
-    if (existingIndex >= 0) {
-      const existing = items[existingIndex];
-      if (existing.sku !== null && existing.sku !== product.sku) {
-        throw new ShoppingListIdentityError();
-      }
-      const next: ShoppingListItem = {
-        ...existing,
-        sku: existing.sku ?? product.sku,
-        name: product.name,
-        brand: product.brand,
-        packageText: product.packageText,
-        imageUrl: product.imageUrl,
-        quantity: Math.max(existing.quantity, quantity),
-        price: price ?? existing.price,
-        sources: recipeSources(existing.sources),
-        usedIn: uniqueStrings(existing.usedIn, usedIn),
-        updatedAt: existing.updatedAt,
-      };
-      if (JSON.stringify(next) !== JSON.stringify(existing)) {
-        items[existingIndex] = { ...next, updatedAt: timestamp };
-        changed = true;
-      }
-      continue;
-    }
-
     items.push({
       productId: product.productId,
       sku: product.sku,
@@ -226,6 +338,10 @@ export function completeShoppingListFromWeek(
       packageText: product.packageText,
       imageUrl: product.imageUrl,
       quantity,
+      quantityContributions: {
+        persistentQuantity: 0,
+        mealPlans: [{ weekPreparationId, quantity, usedIn }],
+      },
       price,
       sources: ["weekPreparation", "recipe"],
       usedIn,
@@ -235,6 +351,32 @@ export function completeShoppingListFromWeek(
     changed = true;
   }
 
+  return changed ? { ...list, items, updatedAt: timestamp } : list;
+}
+
+export function removeMealPlanContributionsForWeek(
+  list: ActiveShoppingList,
+  weekPreparationId: string,
+  now: Date | string = new Date(),
+): ActiveShoppingList {
+  const timestamp = nowIso(now);
+  let changed = false;
+  const items = list.items.flatMap((item) => {
+    const retainedMealPlans = item.quantityContributions.mealPlans.filter(
+      (contribution) =>
+        contribution.weekPreparationId !== weekPreparationId &&
+        contribution.weekPreparationId !== null,
+    );
+    if (retainedMealPlans.length === item.quantityContributions.mealPlans.length) {
+      return [item];
+    }
+    changed = true;
+    const rebuilt = rebuildContributedItem(item, {
+      ...item.quantityContributions,
+      mealPlans: retainedMealPlans,
+    });
+    return rebuilt ? [{ ...rebuilt, updatedAt: timestamp }] : [];
+  });
   return changed ? { ...list, items, updatedAt: timestamp } : list;
 }
 
@@ -266,14 +408,40 @@ function updateQuantity(
   }
 
   const current = list.items[index];
-  const quantity = Math.max(1, current.quantity + delta);
-  if (quantity === current.quantity) {
+  if (delta < 0 && current.quantity <= 1) {
     return list;
+  }
+
+  const contributions: ShoppingListQuantityContributions = {
+    persistentQuantity: current.quantityContributions.persistentQuantity,
+    mealPlans: current.quantityContributions.mealPlans.map((item) => ({ ...item })),
+  };
+  if (delta > 0) {
+    contributions.persistentQuantity += delta;
+  } else if (contributions.persistentQuantity > 0) {
+    contributions.persistentQuantity = Math.max(
+      0,
+      contributions.persistentQuantity + delta,
+    );
+  } else {
+    const adjustable = contributions.mealPlans.findIndex(
+      (contribution) => contribution.quantity > 0,
+    );
+    if (adjustable < 0) return list;
+    contributions.mealPlans[adjustable] = {
+      ...contributions.mealPlans[adjustable],
+      quantity: contributions.mealPlans[adjustable].quantity + delta,
+    };
+    contributions.mealPlans = contributions.mealPlans.filter(
+      (contribution) => contribution.quantity > 0,
+    );
   }
 
   const timestamp = nowIso(now);
   const items = [...list.items];
-  items[index] = { ...current, quantity, updatedAt: timestamp };
+  const rebuilt = rebuildContributedItem(current, contributions);
+  if (!rebuilt) return list;
+  items[index] = { ...rebuilt, updatedAt: timestamp };
   return { ...list, items, updatedAt: timestamp };
 }
 
@@ -319,12 +487,24 @@ export function restoreShoppingListItem(
     }
 
     const items = [...list.items];
-    items[existingIndex] = {
-      ...existing,
-      quantity: existing.quantity + removed.item.quantity,
-      sources: removed.item.sources.reduce(uniqueSources, existing.sources),
-      updatedAt: timestamp,
+    const contributions: ShoppingListQuantityContributions = {
+      persistentQuantity:
+        existing.quantityContributions.persistentQuantity +
+        removed.item.quantityContributions.persistentQuantity,
+      mealPlans: mergeMealPlanContributions(
+        existing.quantityContributions.mealPlans,
+        removed.item.quantityContributions.mealPlans,
+      ),
     };
+    const rebuilt = rebuildContributedItem(
+      {
+        ...existing,
+        sources: removed.item.sources.reduce(uniqueSources, existing.sources),
+      },
+      contributions,
+    );
+    if (!rebuilt) return list;
+    items[existingIndex] = { ...rebuilt, updatedAt: timestamp };
     return { ...list, items, updatedAt: timestamp };
   }
 

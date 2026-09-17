@@ -60,6 +60,7 @@ function item(productId: string, quantity: number, price = 2): ShoppingListItem 
     packageText: "500 g",
     imageUrl: null,
     quantity,
+    quantityContributions: { persistentQuantity: quantity, mealPlans: [] },
     price: {
       productId,
       sku: `sku-${productId}`,
@@ -78,7 +79,7 @@ function item(productId: string, quantity: number, price = 2): ShoppingListItem 
 
 function list(items: ShoppingListItem[] = []): ActiveShoppingList {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     startedAt: NOW.toISOString(),
     updatedAt: NOW.toISOString(),
     items,
