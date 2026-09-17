@@ -228,6 +228,37 @@ function generatedWithoutControlledImage(): WeekPreparation {
   };
 }
 
+function generatedWithReplacementImage(): WeekPreparation {
+  const preparation = generated();
+  return {
+    ...preparation,
+    days: preparation.days.map((day, index) =>
+      index === 0
+        ? {
+            ...day,
+            recipeId: "recipe-spinazie-ei-aardappel",
+            recipe: {
+              id: "recipe-spinazie-ei-aardappel",
+              sourceKey: "spinazie-ei-aardappel",
+              name: "Aardappelen, spinazie en ei",
+            },
+          }
+        : day,
+    ),
+    ingredients: preparation.ingredients.map((ingredient) => ({
+      ...ingredient,
+      ingredientId: "ingredient-spinazie",
+      sourceKey: "spinach",
+      name: "spinazie",
+      usedIn: ingredient.usedIn.map((use) => ({
+        ...use,
+        recipeId: "recipe-spinazie-ei-aardappel",
+        recipeName: "Aardappelen, spinazie en ei",
+      })),
+    })),
+  };
+}
+
 function render(
   component: ReturnType<typeof createElement>,
   preparation: WeekPreparation | null,
@@ -363,6 +394,17 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(weekHtml).toContain("recipe-detail-hero");
     expect(homeHtml).not.toContain("future-recipe-without-image.webp");
     expect(weekHtml).not.toContain("future-recipe-without-image.webp");
+  });
+
+  it("gebruikt op Home, weekmenu en detail exact dezelfde gevalideerde replacement", () => {
+    const homeHtml = render(createElement(HomePage), generatedWithReplacementImage());
+    const weekHtml = render(createElement(PrepareWeekPage), generatedWithReplacementImage());
+
+    expect(homeHtml).toContain("dutch-potatoes-spinach-egg.webp");
+    expect(weekHtml).toContain("dutch-potatoes-spinach-egg.webp");
+    expect(homeHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
+    expect(weekHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
+    expect(weekHtml).toContain("recipe-detail-hero");
   });
 
   it("vraagt bevestiging voordat een bestaande voorbereiding wordt vervangen", () => {

@@ -75,6 +75,20 @@ export const DISH_IMAGE_KEYS = [
   "healthy-salmon-rice-bowl",
   "healthy-vegetable-soup",
   "healthy-salmon-traybake",
+  "dutch-tartare-potatoes-green-beans",
+  "vegetarian-wraps-chickpea-corn",
+  "dutch-sausage-potatoes-green-beans",
+  "dutch-sauerkraut-stamppot-sausage",
+  "dutch-potatoes-carrots-chicken",
+  "dutch-potatoes-spinach-egg",
+  "world-fried-rice-egg-vegetables",
+  "world-beef-broccoli-rice",
+  "world-meatballs-sweet-sour-rice",
+  "world-tofu-rice-vegetables",
+  "world-teriyaki-beef-mushrooms",
+  "vegetarian-lentil-curry-spinach-rice",
+  "vegetarian-noodle-bowl-tofu",
+  "oven-chicken-pesto-potatoes-tomato",
 ] as const;
 
 export type DishImageKey = (typeof DISH_IMAGE_KEYS)[number];
@@ -87,25 +101,25 @@ export const RECIPE_IMAGE_KEYS = {
   "spaghetti-bolognese": "pasta-spaghetti-bolognese",
   "chicken-rice": "healthy-chicken-stirfry-rice",
   "beef-wraps": "world-beef-burrito",
-  "tartare-potatoes": "dutch-potatoes-broccoli-meatball",
+  "tartare-potatoes": "dutch-tartare-potatoes-green-beans",
   "fish-fries": "comfort-fishsticks-fries",
   macaroni: "pasta-macaroni",
   "chickpea-curry": "vegetarian-chickpea-curry",
   "vegetarian-chili": "vegetarian-chili-rice",
-  "vegetarian-wraps": "world-beef-burrito",
+  "vegetarian-wraps": "vegetarian-wraps-chickpea-corn",
   "noodles-egg": "vegetarian-noodles-egg",
   "soup-bread": "healthy-vegetable-soup",
   "pizza-night": "comfort-pizza",
   "cauliflower-potatoes": "dutch-cauliflower-potatoes-egg",
   "lentil-pasta": "pasta-lentil-spinach-pesto",
-  "sausage-potatoes": "dutch-potatoes-beans-chicken",
+  "sausage-potatoes": "dutch-sausage-potatoes-green-beans",
   "hutspot-gehaktbal": "dutch-hutspot-meatball",
   "boerenkool-rookworst": "dutch-boerenkool-sausage",
-  "zuurkool-rookworst": "oven-sauerkraut-beef",
+  "zuurkool-rookworst": "dutch-sauerkraut-stamppot-sausage",
   "andijvie-spekjes": "dutch-andijvie-bacon",
   "broccoli-gehaktbal": "dutch-potatoes-broccoli-meatball",
-  "worteltjes-kip": "dutch-potatoes-beans-chicken",
-  "spinazie-ei-aardappel": "dutch-cauliflower-potatoes-egg",
+  "worteltjes-kip": "dutch-potatoes-carrots-chicken",
+  "spinazie-ei-aardappel": "dutch-potatoes-spinach-egg",
   "rode-kool-hachee": "dutch-red-cabbage-stew",
   "doperwten-kipschnitzel": "dutch-peas-chicken-schnitzel",
   "krieltjes-bonen-kip": "dutch-baby-potatoes-beans-chicken",
@@ -117,7 +131,7 @@ export const RECIPE_IMAGE_KEYS = {
   "zuurkool-gehakt-ovenschotel": "oven-sauerkraut-beef",
   "shepherds-pie": "oven-shepherds-pie",
   "vis-broccoli-ovenschotel": "oven-fish-broccoli",
-  "kip-pesto-ovenschotel": "pasta-oven-mozzarella",
+  "kip-pesto-ovenschotel": "oven-chicken-pesto-potatoes-tomato",
   "vegetarische-aardappelschotel": "oven-potato-gratin-vegburger",
   "aardappelgratin-bonen-vegburger": "oven-potato-gratin-vegburger",
   "andijvie-aardappel-kaas": "oven-potato-gratin-vegburger",
@@ -161,28 +175,28 @@ export const RECIPE_IMAGE_KEYS = {
   "teriyaki-kip-rijst": "world-teriyaki-chicken",
   "tikka-masala-kip": "world-tikka-masala",
   "mexicaanse-rijst-bonen": "vegetarian-chili-rice",
-  "gebakken-rijst-ei": "world-nasi-chicken",
-  "runderreepjes-broccoli-rijst": "healthy-chicken-stirfry-rice",
+  "gebakken-rijst-ei": "world-fried-rice-egg-vegetables",
+  "runderreepjes-broccoli-rijst": "world-beef-broccoli-rice",
   "zalm-rijstbowl": "healthy-salmon-rice-bowl",
-  "gehaktballen-zoetzuur-rijst": "world-sweet-sour-chicken",
+  "gehaktballen-zoetzuur-rijst": "world-meatballs-sweet-sour-rice",
   "chili-con-carne-rijst": "vegetarian-chili-rice",
   "mango-kipcurry": "world-chicken-curry-rice",
-  "tofu-rijst-groente": "vegetarian-couscous",
+  "tofu-rijst-groente": "world-tofu-rice-vegetables",
   "knorr-burritos": "world-beef-burrito",
   "knorr-kip-siam": "healthy-chicken-stirfry-rice",
   "knorr-hokkien-mie": "world-bami-chicken",
   "knorr-surinaamse-roti": "world-surinamese-roti",
   "knorr-griekse-kofta": "world-greek-kofta",
   "knorr-kip-madras": "world-chicken-curry-rice",
-  "knorr-japanse-teriyaki": "world-teriyaki-chicken",
+  "knorr-japanse-teriyaki": "world-teriyaki-beef-mushrooms",
   "knorr-lasagne-bolognese": "pasta-lasagne-bolognese",
   "couscous-kikkererwten": "vegetarian-couscous",
   "quinoa-feta-groente": "vegetable-quinoa-feta",
   "veggieburger-zoete-friet": "oven-potato-gratin-vegburger",
   "shakshuka-brood": "vegetarian-shakshuka",
-  "linzencurry-rijst": "vegetarian-chickpea-curry",
+  "linzencurry-rijst": "vegetarian-lentil-curry-spinach-rice",
   "falafel-pita": "vegetarian-falafel-pita",
-  "vegetarische-noedelbowl": "vegetarian-noodles-egg",
+  "vegetarische-noedelbowl": "vegetarian-noodle-bowl-tofu",
   "zalm-traybake": "healthy-salmon-traybake",
 } as const satisfies Record<string, DishImageKey>;
 
@@ -382,6 +396,15 @@ export interface DishImageAsset {
   key: DishImageKey;
   src: `/images/dishes/${DishImageKey}.webp`;
   source: "recipe";
+  metadata: RecipeImageAssetMetadata;
+}
+
+export interface RecipeImageAssetMetadata {
+  recipeId: string;
+  sourceType: "generated";
+  status: "approved";
+  version: number;
+  updatedAt: string;
 }
 
 interface DishImageProfile {
@@ -391,11 +414,37 @@ interface DishImageProfile {
   provenance: "controlled-generated";
 }
 
-function imageAsset(key: DishImageKey): DishImageAsset {
+export const AI_GENERATED_RECIPE_IMAGE_IDS = [
+  "tartare-potatoes",
+  "vegetarian-wraps",
+  "sausage-potatoes",
+  "zuurkool-rookworst",
+  "worteltjes-kip",
+  "spinazie-ei-aardappel",
+  "gebakken-rijst-ei",
+  "runderreepjes-broccoli-rijst",
+  "gehaktballen-zoetzuur-rijst",
+  "tofu-rijst-groente",
+  "knorr-japanse-teriyaki",
+  "linzencurry-rijst",
+  "vegetarische-noedelbowl",
+  "kip-pesto-ovenschotel",
+] as const;
+
+const AI_GENERATED_RECIPE_IDS = new Set<string>(AI_GENERATED_RECIPE_IMAGE_IDS);
+
+function imageAsset(key: DishImageKey, recipeId: string): DishImageAsset {
   return {
     key,
     src: `/images/dishes/${key}.webp`,
     source: "recipe",
+    metadata: {
+      recipeId,
+      sourceType: "generated",
+      status: "approved",
+      version: AI_GENERATED_RECIPE_IDS.has(recipeId) ? 2 : 1,
+      updatedAt: "2026-09-17",
+    },
   };
 }
 
@@ -627,8 +676,11 @@ export function recipeImageFor(
 ): DishImageAsset | null {
   if (!context) return null;
   const result = evaluateRecipeImageQuality(context);
-  return result.accepted && result.imageKey ? imageAsset(result.imageKey) : null;
+  return result.accepted && result.imageKey
+    ? imageAsset(result.imageKey, context.recipeSourceKey)
+    : null;
 }
 
 export const SPECIFIC_RECIPE_IMAGE_COUNT = Object.keys(RECIPE_IMAGE_KEYS).length;
 export const CATEGORY_FALLBACK_IMAGE_COUNT = 0;
+export const AI_GENERATED_RECIPE_IMAGE_COUNT = AI_GENERATED_RECIPE_IMAGE_IDS.length;

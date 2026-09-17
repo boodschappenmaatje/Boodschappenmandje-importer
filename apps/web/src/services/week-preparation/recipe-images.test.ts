@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  AI_GENERATED_RECIPE_IMAGE_COUNT,
+  AI_GENERATED_RECIPE_IMAGE_IDS,
   CATEGORY_FALLBACK_IMAGE_COUNT,
   DISH_IMAGE_KEYS,
   RECIPE_IMAGE_KEYS,
@@ -103,12 +105,12 @@ describe("Recipe Image Quality Gate", () => {
     expect(scan.summary).toEqual({
       total: 100,
       imagePresent: 100,
-      verified: 84,
+      verified: 98,
       likelyMatch: 2,
-      needsReview: 1,
-      mismatch: 13,
+      needsReview: 0,
+      mismatch: 0,
       missing: 0,
-      fallbackNeeded: 14,
+      fallbackNeeded: 0,
     });
     expect(scan.recipes).toHaveLength(100);
     expect(
@@ -127,10 +129,11 @@ describe("Recipe Image Quality Gate", () => {
     }
   });
 
-  it("wijst de bloemkoolfoto af voor aardappelen, spinazie en ei", () => {
-    const result = evaluateRecipeImageQuality(
-      contextForRecipe("spinazie-ei-aardappel"),
-    );
+  it("wijst in de generieke gate een bloemkoolfoto af voor aardappelen, spinazie en ei", () => {
+    const result = evaluateRecipeImageQuality({
+      ...contextForRecipe("spinazie-ei-aardappel"),
+      recipeSourceKey: "cauliflower-potatoes",
+    });
 
     expect(result).toMatchObject({
       imageKey: "dutch-cauliflower-potatoes-egg",
@@ -139,7 +142,29 @@ describe("Recipe Image Quality Gate", () => {
       fallbackNeeded: true,
     });
     expect(result.issues).toContain("primary_ingredient_conflict");
-    expect(recipeImageFor(contextForRecipe("spinazie-ei-aardappel"))).toBeNull();
+  });
+
+  it("koppelt alle 14 gegen de gate gevalideerde AI-replacements aan de stabiele recipe-id", () => {
+    expect(AI_GENERATED_RECIPE_IMAGE_COUNT).toBe(14);
+
+    for (const recipeId of AI_GENERATED_RECIPE_IMAGE_IDS) {
+      const context = contextForRecipe(recipeId);
+      const result = evaluateRecipeImageQuality(context);
+      const asset = recipeImageFor(context);
+
+      expect(result.accepted, recipeId).toBe(true);
+      expect(result.fallbackNeeded, recipeId).toBe(false);
+      expect(asset, recipeId).toMatchObject({
+        source: "recipe",
+        metadata: {
+          recipeId,
+          sourceType: "generated",
+          status: "approved",
+          version: 2,
+          updatedAt: "2026-09-17",
+        },
+      });
+    }
   });
 
   it.each([
