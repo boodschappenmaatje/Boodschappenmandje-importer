@@ -211,6 +211,57 @@ function incompleteGenerated(): WeekPreparation {
   };
 }
 
+function budgetFailed(): WeekPreparation {
+  const preparation = ready();
+  return {
+    ...preparation,
+    status: "generationPartial",
+    ingredients: [],
+    generation: {
+      generatedAt: NOW.toISOString(),
+      knownPurchaseCostCents: 0,
+      mealPlanKnownCostCents: 0,
+      mealBudgetRemainingCents: null,
+      nonMealReservedCents: 5_000,
+      totalKnownWeekCostCents: 2_463,
+      mealBudgetStatus: "noValidMealPlanWithinBudget",
+      weekBudgetStatus: "underBudget",
+      isMealBudgetComplete: false,
+      mealBudgetCandidateCount: 120,
+      mealBudgetRejectedCount: 48,
+      readinessByCategory: [
+        { category: "dutch", candidateCount: 32, readyCount: 17 },
+        { category: "pasta", candidateCount: 19, readyCount: 10 },
+        { category: "rice", candidateCount: 17, readyCount: 9 },
+        { category: "quick", candidateCount: 52, readyCount: 21 },
+        { category: "comfort", candidateCount: 50, readyCount: 21 },
+      ],
+      lowestCompleteMealPlanCostCents: 5_734,
+      lowestCompleteMealPlanCostReliable: true,
+      matchedProductCount: 0,
+      missingProductMatchCount: 0,
+      missingPackageCalculationCount: 0,
+      missingPriceCount: 0,
+    },
+  };
+}
+
+function readinessFailed(): WeekPreparation {
+  const preparation = budgetFailed();
+  return {
+    ...preparation,
+    generation: {
+      ...preparation.generation!,
+      mealBudgetStatus: "incompleteValidation",
+      readinessByCategory: preparation.generation!.readinessByCategory!.map((item) =>
+        item.category === "pasta" ? { ...item, readyCount: 0 } : item,
+      ),
+      lowestCompleteMealPlanCostCents: null,
+      lowestCompleteMealPlanCostReliable: true,
+    },
+  };
+}
+
 function generatedWithoutControlledImage(): WeekPreparation {
   const preparation = generated();
   return {
@@ -361,6 +412,32 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
       "Enkele producten zijn nog niet compleet bekend; het uiteindelijke bedrag kan hoger worden.",
     );
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Maak mijn lijst compleet<\/button>/);
+  });
+
+  it("toont budgetfalen niet als ontbrekende READY recepten per categorie", () => {
+    const html = render(createElement(PrepareWeekPage), budgetFailed());
+
+    expect(html).toContain("Voor deze week is minimaal ongeveer € 57,34 nodig.");
+    expect(html).toContain("Verhoog je maaltijd-budget met € 7,34");
+    expect(html).toContain(
+      "Er zijn complete gerechten beschikbaar, maar deze week past nog niet binnen je maaltijd-budget.",
+    );
+    expect(html).not.toContain(
+      "Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie.",
+    );
+    expect(html).toContain("Er is nog geen complete maaltijdweek binnen dit budget.");
+    expect(html).toContain("Nog niet gepland");
+  });
+
+  it("reserveert de beschikbaarheidsmelding voor een categorie met nul READY recepten", () => {
+    const html = render(createElement(PrepareWeekPage), readinessFailed());
+    expect(html).toContain(
+      "Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie.",
+    );
+    expect(html).toContain(
+      "Voor deze categorie zijn complete gerechten beschikbaar. De week is nog niet volledig samengesteld.",
+    );
+    expect(html).not.toContain("geen complete maaltijdweek beschikbaar");
   });
 
   it("maakt Home dynamisch voor geen week, draft en ready", () => {

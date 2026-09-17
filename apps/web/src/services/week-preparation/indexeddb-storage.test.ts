@@ -147,6 +147,11 @@ describe("PWA 10 lokale persistentie", () => {
         isMealBudgetComplete: true,
         mealBudgetCandidateCount: 1,
         mealBudgetRejectedCount: 0,
+        readinessByCategory: [
+          { category: "pasta", candidateCount: 19, readyCount: 10 },
+        ],
+        lowestCompleteMealPlanCostCents: 898,
+        lowestCompleteMealPlanCostReliable: true,
         matchedProductCount: 1,
         missingProductMatchCount: 0,
         missingPackageCalculationCount: 0,

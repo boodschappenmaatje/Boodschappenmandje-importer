@@ -118,10 +118,19 @@ export interface WeekGenerationSummary {
   isMealBudgetComplete: boolean;
   mealBudgetCandidateCount: number;
   mealBudgetRejectedCount: number;
+  readinessByCategory?: WeekCategoryReadinessSummary[];
+  lowestCompleteMealPlanCostCents?: number | null;
+  lowestCompleteMealPlanCostReliable?: boolean;
   matchedProductCount: number;
   missingProductMatchCount: number;
   missingPackageCalculationCount: number;
   missingPriceCount: number;
+}
+
+export interface WeekCategoryReadinessSummary {
+  category: RecipeMealCategory;
+  candidateCount: number;
+  readyCount: number;
 }
 
 export interface WeekPreparation {

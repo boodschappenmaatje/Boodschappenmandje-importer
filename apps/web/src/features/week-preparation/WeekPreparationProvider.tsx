@@ -324,6 +324,16 @@ export function WeekPreparationProvider({
 
   const setMealBudgetCents = useCallback(
     (value: number) => {
+      const current = preparationRef.current;
+      if (
+        current &&
+        current.generation?.mealBudgetStatus === "noValidMealPlanWithinBudget" &&
+        current.days.every((day) => day.freeChoice || day.recipeId === null)
+      ) {
+        const updated = updateMealBudgetCents(current, value);
+        void runGeneration({ ...updated, status: "readyForGeneration" });
+        return;
+      }
       commit((current) => {
         const updated = updateMealBudgetCents(current, value);
         return shoppingList.list
@@ -331,7 +341,7 @@ export function WeekPreparationProvider({
           : updated;
       });
     },
-    [commit, shoppingList.list],
+    [commit, runGeneration, shoppingList.list],
   );
 
   const adjustCategory = useCallback(
@@ -370,6 +380,13 @@ export function WeekPreparationProvider({
       current.status === "readyForGeneration"
     ) {
       void runGeneration(current);
+      return;
+    }
+    if (
+      current.generation?.mealBudgetStatus === "noValidMealPlanWithinBudget" &&
+      current.days.every((day) => day.freeChoice || day.recipeId === null)
+    ) {
+      void runGeneration({ ...current, status: "readyForGeneration" });
       return;
     }
     if (["generated", "generationPartial"].includes(current.status)) {

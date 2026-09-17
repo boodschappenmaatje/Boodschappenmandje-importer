@@ -147,6 +147,14 @@ export function WeekPreparationView() {
   const weekBudget = shoppingList.list
     ? calculateWeekBudgetSummary(preparation, shoppingList.list)
     : null;
+  const budgetSelectionFailed =
+    preparation.generation?.mealBudgetStatus === "noValidMealPlanWithinBudget";
+  const categoryReadiness = new Map(
+    (preparation.generation?.readinessByCategory ?? []).map((item) => [
+      item.category,
+      item,
+    ]),
+  );
   const incompleteDayIndexes = new Set(
     preparation.days
       .filter((day) => {
@@ -274,9 +282,32 @@ export function WeekPreparationView() {
                     Met {formatCents(preparation.mealBudgetCents ?? 0)} is er op dit
                     moment geen complete maaltijdweek beschikbaar voor deze verdeling.
                   </p>
-                  <p>
-                    Verhoog het maaltijd-budget, pas je weekverdeling aan of kies minder dagen.
-                  </p>
+                  {preparation.generation.lowestCompleteMealPlanCostCents !== null &&
+                  preparation.generation.lowestCompleteMealPlanCostCents !== undefined ? (
+                    preparation.generation.lowestCompleteMealPlanCostReliable ? (
+                      <>
+                        <p>
+                          Voor deze week is minimaal ongeveer {formatCents(preparation.generation.lowestCompleteMealPlanCostCents)} nodig.
+                        </p>
+                        <p>
+                          Verhoog je maaltijd-budget met {formatCents(Math.max(0, preparation.generation.lowestCompleteMealPlanCostCents - (preparation.mealBudgetCents ?? 0)))} of pas je weekverdeling aan.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p>
+                          De goedkoopste complete combinatie die we hebben doorgerekend kost {formatCents(preparation.generation.lowestCompleteMealPlanCostCents)}.
+                        </p>
+                        <p>
+                          Met {formatCents(Math.max(0, preparation.generation.lowestCompleteMealPlanCostCents - (preparation.mealBudgetCents ?? 0)))} meer kan deze combinatie wel worden gepland. Mogelijk is een andere combinatie nog voordeliger.
+                        </p>
+                      </>
+                    )
+                  ) : (
+                    <p>
+                      Verhoog het maaltijd-budget, pas je weekverdeling aan of kies minder dagen.
+                    </p>
+                  )}
                 </div>
               ) : preparation.generation?.mealBudgetStatus === "overMealBudget" ? (
                 <div className="week-generation-warning" role="status">
@@ -324,6 +355,10 @@ export function WeekPreparationView() {
 
               <ol className="prepared-days recipe-days">
                 {preparation.days.map((day) => {
+                  const readiness =
+                    day.category === "freeChoice"
+                      ? undefined
+                      : categoryReadiness.get(day.category);
                   const dayIngredients = day.recipeId
                     ? preparation.ingredients.filter((ingredient) =>
                         ingredient.usedIn.some((use) => use.dayIndex === day.dayIndex),
@@ -490,7 +525,11 @@ export function WeekPreparationView() {
                         </div>
                       ) : (
                         <p className="shopping-item-price-missing">
-                          Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie.
+                          {budgetSelectionFailed && (readiness?.readyCount ?? 1) > 0
+                            ? "Er zijn complete gerechten beschikbaar, maar deze week past nog niet binnen je maaltijd-budget."
+                            : readiness && readiness.readyCount > 0
+                              ? "Voor deze categorie zijn complete gerechten beschikbaar. De week is nog niet volledig samengesteld."
+                            : "Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie."}
                         </p>
                       )}
                     </li>
@@ -502,7 +541,26 @@ export function WeekPreparationView() {
                 <div className="week-cost-overview" aria-label="Weekkosten en budget">
                   <div><span>Weekbudget</span><strong>{weekBudget.budgetCents === null ? "Niet ingesteld" : formatCents(weekBudget.budgetCents)}</strong></div>
                   <div><span>Maaltijd-budget</span><strong>{preparation.mealBudgetCents === null ? "Niet ingesteld" : `max. ${formatCents(preparation.mealBudgetCents)}`}</strong></div>
-                  <div><span>Geplande maaltijden</span><strong>{formatCents(preparation.generation?.mealPlanKnownCostCents ?? 0)}</strong></div>
+                  <div>
+                    <span>Geplande maaltijden</span>
+                    <strong>
+                      {budgetSelectionFailed
+                        ? "Nog niet gepland"
+                        : formatCents(preparation.generation?.mealPlanKnownCostCents ?? 0)}
+                    </strong>
+                  </div>
+                  {budgetSelectionFailed &&
+                  preparation.generation?.lowestCompleteMealPlanCostCents !== null &&
+                  preparation.generation?.lowestCompleteMealPlanCostCents !== undefined ? (
+                    <div>
+                      <span>
+                        {preparation.generation.lowestCompleteMealPlanCostReliable
+                          ? "Minimaal nodig"
+                          : "Goedkoopste doorgerekend"}
+                      </span>
+                      <strong>{formatCents(preparation.generation.lowestCompleteMealPlanCostCents)}</strong>
+                    </div>
+                  ) : null}
                   <div>
                     <span>Over binnen maaltijd-budget</span>
                     <strong>
@@ -549,13 +607,13 @@ export function WeekPreparationView() {
               </button>
               {listCompletionBlocked ? (
                 <p id="list-completion-readiness" className="week-list-readiness" role="status">
-                  {incompleteDishCount > 0
-                    ? `Controleer eerst ${incompleteDishCount} ${incompleteDishCount === 1 ? "onvolledig gerecht" : "onvolledige gerechten"}.`
-                    : preparation.generation?.mealBudgetStatus === "overMealBudget"
+                  {preparation.generation?.mealBudgetStatus === "noValidMealPlanWithinBudget"
+                    ? "Er is nog geen complete maaltijdweek binnen dit budget."
+                    : incompleteDishCount > 0
+                      ? `Controleer eerst ${incompleteDishCount} ${incompleteDishCount === 1 ? "onvolledig gerecht" : "onvolledige gerechten"}.`
+                      : preparation.generation?.mealBudgetStatus === "overMealBudget"
                       ? "Je huidige maaltijden passen niet binnen je maaltijd-budget."
-                      : preparation.generation?.mealBudgetStatus === "noValidMealPlanWithinBudget"
-                        ? "Er is nog geen complete maaltijdweek binnen dit budget."
-                        : "Wacht tot alle gerechten en het maaltijd-budget compleet zijn gecontroleerd."}
+                      : "Wacht tot alle gerechten en het maaltijd-budget compleet zijn gecontroleerd."}
                 </p>
               ) : null}
               {week.actionMessage ? <p className="week-action-message" role="status">{week.actionMessage}</p> : null}

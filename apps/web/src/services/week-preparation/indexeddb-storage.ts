@@ -276,6 +276,26 @@ function isGeneration(value: unknown): boolean {
       typeof value.isMealBudgetComplete === "boolean" &&
       Number.isInteger(value.mealBudgetCandidateCount) && Number(value.mealBudgetCandidateCount) >= 0 &&
       Number.isInteger(value.mealBudgetRejectedCount) && Number(value.mealBudgetRejectedCount) >= 0 &&
+      (value.readinessByCategory === undefined ||
+        (Array.isArray(value.readinessByCategory) &&
+          value.readinessByCategory.every(
+            (item) =>
+              isRecord(item) &&
+              MEAL_CATEGORIES.filter((category) => category !== "freeChoice").includes(
+                item.category as Exclude<MealCategory, "freeChoice">,
+              ) &&
+              Number.isInteger(item.candidateCount) &&
+              Number(item.candidateCount) >= 0 &&
+              Number.isInteger(item.readyCount) &&
+              Number(item.readyCount) >= 0 &&
+              Number(item.readyCount) <= Number(item.candidateCount),
+          ))) &&
+      (value.lowestCompleteMealPlanCostCents === undefined ||
+        value.lowestCompleteMealPlanCostCents === null ||
+        (Number.isSafeInteger(value.lowestCompleteMealPlanCostCents) &&
+          Number(value.lowestCompleteMealPlanCostCents) >= 0)) &&
+      (value.lowestCompleteMealPlanCostReliable === undefined ||
+        typeof value.lowestCompleteMealPlanCostReliable === "boolean") &&
       ["matchedProductCount", "missingProductMatchCount", "missingPackageCalculationCount", "missingPriceCount"].every(
         (field) =>
           Number.isInteger(value[field]) && Number(value[field]) >= 0,

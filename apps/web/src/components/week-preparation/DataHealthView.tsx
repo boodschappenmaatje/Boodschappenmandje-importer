@@ -246,7 +246,24 @@ export function DataHealthView() {
             <div><span>Beoordeelde kandidaten</span><strong>{week.preparation.generation.mealBudgetCandidateCount}</strong></div>
             <div><span>Budget-afwijzingen</span><strong>{week.preparation.generation.mealBudgetRejectedCount}</strong></div>
             <div><span>Weekkosten kandidaat</span><strong>{formatCents(week.preparation.generation.mealPlanKnownCostCents)}</strong></div>
+            {week.preparation.generation.lowestCompleteMealPlanCostCents !== null &&
+            week.preparation.generation.lowestCompleteMealPlanCostCents !== undefined ? (
+              <div>
+                <span>{week.preparation.generation.lowestCompleteMealPlanCostReliable ? "Exact minimum" : "Goedkoopste doorgerekend"}</span>
+                <strong>{formatCents(week.preparation.generation.lowestCompleteMealPlanCostCents)}</strong>
+              </div>
+            ) : null}
           </div>
+          {week.preparation.generation.readinessByCategory?.length ? (
+            <ul className="data-health-coverage">
+              {week.preparation.generation.readinessByCategory.map((item) => (
+                <li key={item.category} data-ready={item.readyCount > 0}>
+                  <span>{MEAL_CATEGORY_LABELS[item.category]}</span>
+                  <strong>{item.readyCount} / {item.candidateCount} READY bij selectie</strong>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       ) : null}
 
