@@ -18,9 +18,33 @@ export interface CatalogImportRun {
   durationSeconds: number | null;
 }
 
+export type CatalogDailyJobStatus =
+  | "pending"
+  | "running"
+  | "retry_scheduled"
+  | "target_reached"
+  | "daily_target_partial"
+  | "failed_requires_attention";
+
+export interface CatalogDailyJob {
+  id: string;
+  jobDate: string;
+  targetNewProducts: number;
+  newProductsCollected: number;
+  remainingTarget: number;
+  status: CatalogDailyJobStatus;
+  attemptCount: number;
+  startedAt: string;
+  lastAttemptAt: string | null;
+  nextRetryAt: string | null;
+  completedAt: string | null;
+  lastPublicMessage: string | null;
+}
+
 export interface CatalogStatus {
   totalUniqueProducts: number;
   targetLabel: "10.000+";
   progressPercent: number;
   latestRun: CatalogImportRun | null;
+  dailyJob: CatalogDailyJob | null;
 }

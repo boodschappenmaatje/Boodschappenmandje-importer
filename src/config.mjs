@@ -71,6 +71,8 @@ const DEFAULT_SATURATION_MIN_CANDIDATES = 40;
 const DEFAULT_SATURATION_YIELD_PERCENT = 5;
 const DEFAULT_PRICE_SHARD_COUNT = 7;
 const SAFE_PRICE_SHARD_COUNT = 31;
+const DEFAULT_DAILY_GROWTH_TARGET = 400;
+const DEFAULT_DAILY_END_HOUR = 23;
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -180,6 +182,18 @@ export function loadConfig(env = process.env) {
       .trim()
       .replace(/[^a-z0-9_-]/gi, "-")
       .slice(0, 80) || "daily-catalog-growth",
+    dailyImportStateKey: (env.DAILY_IMPORT_STATE_KEY ?? "daily-catalog-growth")
+      .trim()
+      .replace(/[^a-z0-9_-]/gi, "-")
+      .slice(0, 80) || "daily-catalog-growth",
+    dailyTargetNewProducts: Math.min(
+      positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
+      SAFE_NEW_PRODUCT_LIMIT,
+    ),
+    dailyEndHour: Math.min(
+      23,
+      positiveInteger(env.DAILY_IMPORT_END_HOUR, DEFAULT_DAILY_END_HOUR),
+    ),
     advanceDiscoveryState: env.ADVANCE_DISCOVERY_STATE !== "0"
       && env.ADVANCE_DISCOVERY_STATE !== "false",
     preferNewProducts: env.PREFER_NEW_PRODUCTS !== "0"
@@ -218,4 +232,6 @@ export const limits = Object.freeze({
   safeNavigationRetries: SAFE_NAVIGATION_RETRIES,
   defaultPriceShardCount: DEFAULT_PRICE_SHARD_COUNT,
   safePriceShardCount: SAFE_PRICE_SHARD_COUNT,
+  defaultDailyGrowthTarget: DEFAULT_DAILY_GROWTH_TARGET,
+  defaultDailyEndHour: DEFAULT_DAILY_END_HOUR,
 });

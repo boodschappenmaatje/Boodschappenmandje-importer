@@ -375,6 +375,19 @@ export async function runCatalogGrowth(config, logger = console) {
     }).catch((finishError) => {
       logger.error(`Runstatus kon niet worden afgesloten: ${finishError instanceof Error ? finishError.message : "onbekend"}`);
     });
+    if (error && typeof error === "object") {
+      Object.assign(error, {
+        actualGrowth,
+        catalogAttemptMetrics: {
+          candidatesViewed: stats.uniqueSKUsDiscovered ?? 0,
+          updatedCount: 0,
+          unchangedCount: 0,
+          skippedCount: stats.invalidProductsSkipped ?? 0,
+          invalidCount: stats.invalidProductsSkipped ?? 0,
+          sourceErrors: stats.searchErrors ?? 1,
+        },
+      });
+    }
     throw error;
   }
 }
