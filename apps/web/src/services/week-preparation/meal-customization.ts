@@ -263,10 +263,10 @@ export async function findRecipeAlternatives(
         now,
       ),
     )
+    .filter((alternative) => alternative.withinMealBudget)
     .toSorted(
       (left, right) =>
         Number(left.alreadyUsedInWeek) - Number(right.alreadyUsedInWeek) ||
-        Number(!left.withinMealBudget) - Number(!right.withinMealBudget) ||
         left.alternativeDishCostCents - right.alternativeDishCostCents ||
         left.recipe.name.localeCompare(right.recipe.name, "nl-NL"),
     );
