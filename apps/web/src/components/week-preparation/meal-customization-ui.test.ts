@@ -14,6 +14,14 @@ const styles = readFileSync(
   new URL("../../app/globals.css", import.meta.url),
   "utf8",
 );
+const catalogSearch = readFileSync(
+  new URL("../catalog/CatalogSearchView.tsx", import.meta.url),
+  "utf8",
+);
+const layout = readFileSync(
+  new URL("../../app/layout.tsx", import.meta.url),
+  "utf8",
+);
 
 describe("PWA 12 compacte iPhone-customization", () => {
   it("houdt gerecht vervangen en handmatig toevoegen als twee duidelijke acties", () => {
@@ -57,5 +65,23 @@ describe("PWA 12 compacte iPhone-customization", () => {
     expect(provider).toContain("budgetOverrideReapprovalPreview(");
     expect(provider).toContain("reapproveCurrentBudgetOverride(");
     expect(provider).toContain("De prijs of hoeveelheid is gewijzigd");
+  });
+
+  it("gebruikt voor Producten, ingrediënt vervangen en toevoegen hetzelfde mobiele zoekveld", () => {
+    expect(catalogSearch).toContain("<CatalogSearchField");
+    expect(controls).toContain("<CatalogSearchField");
+    expect(controls).toContain('className="manual-catalog-search-field"');
+    expect(controls).toContain("fixedIngredientId={ingredientId}");
+    expect(controls).toContain("ingredients={ingredients} onClose");
+  });
+
+  it("voorkomt iPhone focus-zoom en horizontale overflow zonder toegankelijkheids-hack", () => {
+    expect(styles).toMatch(/\.manual-catalog-search-field input\s*\{[^}]*font-size:\s*16px/);
+    expect(styles).toMatch(/\.catalog-search-field input\s*\{[^}]*font-size:\s*16px/);
+    expect(styles).toMatch(/\.manual-product-flow\s*\{[^}]*overflow-x:\s*hidden/);
+    expect(styles).toMatch(/\.compact-product-list\s*\{[^}]*overflow-x:\s*hidden/);
+    expect(layout).toContain('width: "device-width"');
+    expect(layout).toContain("initialScale: 1");
+    expect(layout).not.toMatch(/userScalable|user-scalable|maximumScale/);
   });
 });

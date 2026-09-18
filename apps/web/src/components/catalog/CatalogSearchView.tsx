@@ -11,6 +11,7 @@ import {
 
 import { CatalogFilterSheet } from "@/components/catalog/CatalogFilterSheet";
 import { CatalogProductCard } from "@/components/catalog/CatalogProductCard";
+import { CatalogSearchField } from "@/components/catalog/CatalogSearchField";
 import { Icon } from "@/components/Icon";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import {
@@ -225,32 +226,16 @@ export function CatalogSearchView() {
   return (
     <section className="catalog-search" aria-labelledby="catalog-heading">
       <div className="catalog-search-toolbar">
-        <label className="catalog-search-field">
-          <Icon name="products" size={20} />
-          <span className="visually-hidden">Zoek producten</span>
-          <input
-            type="search"
-            value={draftTerm}
-            placeholder="Zoek producten"
-            aria-label="Zoek producten op naam, merk, verpakking of categorie"
-            autoComplete="off"
-            enterKeyHint="search"
-            onChange={(event) => setDraftTerm(event.target.value)}
-          />
-          {draftTerm ? (
-            <button
-              className="catalog-search-clear"
-              type="button"
-              aria-label="Wis zoekterm"
-              onClick={() => {
-                setDraftTerm("");
-                updateQuery({ ...query, term: "" });
-              }}
-            >
-              ×
-            </button>
-          ) : null}
-        </label>
+        <CatalogSearchField
+          value={draftTerm}
+          placeholder="Zoek producten"
+          ariaLabel="Zoek producten op naam, merk, verpakking of categorie"
+          onChange={(event) => setDraftTerm(event.target.value)}
+          onClear={() => {
+            setDraftTerm("");
+            updateQuery({ ...query, term: "" });
+          }}
+        />
         <button
           className="catalog-filter-button"
           type="button"

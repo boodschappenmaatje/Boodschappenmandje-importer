@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { CatalogSearchField } from "@/components/catalog/CatalogSearchField";
 import { Icon } from "@/components/Icon";
 import { DishImage } from "@/components/ui/DishImage";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
@@ -134,11 +135,14 @@ function ManualProductFlow({
       </div>
       {!selected ? (
         <>
-          <label className="manual-product-search">
+          <div className="manual-product-search">
             <span>Zoek in de actuele Hoogvliet-catalogus</span>
-            <input
-              type="search"
+            <CatalogSearchField
+              className="manual-catalog-search-field"
               value={query}
+              placeholder="Bijvoorbeeld boomstam"
+              ariaLabel="Zoek producten op naam, merk, verpakking of categorie"
+              autoFocus
               onChange={(event) => {
                 const value = event.target.value;
                 setQuery(value);
@@ -147,10 +151,13 @@ function ManualProductFlow({
                   setSearchState("prompt");
                 }
               }}
-              placeholder="Bijvoorbeeld boomstam"
-              autoFocus
+              onClear={() => {
+                setQuery("");
+                setProducts([]);
+                setSearchState("prompt");
+              }}
             />
-          </label>
+          </div>
           {searchState === "prompt" ? <p role="status">Typ minimaal 2 tekens.</p> : null}
           {searchState === "searching" ? <p role="status">Actuele producten zoeken…</p> : null}
           {searchState === "error" ? <p role="status">Zoeken lukt nu niet. Probeer het opnieuw.</p> : null}
