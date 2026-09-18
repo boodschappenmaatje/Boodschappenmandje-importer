@@ -28,9 +28,11 @@ import {
 } from "@/services/week-preparation/recipe-repository";
 import {
   commitManualProductChoice,
+  commitExplicitRecipeChoice,
   findProductAlternatives as loadProductAlternatives,
   findRecipeAlternatives as loadRecipeAlternatives,
   previewManualProductChoice,
+  previewExplicitRecipeChoice,
   replaceWeekProduct,
   replaceWeekRecipe,
   type ManualProductChoice,
@@ -39,16 +41,20 @@ import {
   type ManualProductPreviewResult,
   type ProductAlternative,
   type RecipeAlternative,
+  type ExplicitRecipeChoicePreview,
 } from "@/services/week-preparation/meal-customization";
 import type { Product } from "@/types/catalog";
 import {
   calculateWeekBudgetSummary,
+  budgetOverrideReapprovalPreview,
   generatePreparedWeek,
   markWeekGenerating,
   markWeekGenerationFailed,
   recalculateMealBudgetSummary,
   refreshGeneratedWeek,
   revalidatePreparedWeek,
+  reapproveCurrentBudgetOverride,
+  type BudgetOverrideReapprovalPreview,
 } from "@/services/week-preparation/week-generation";
 import {
   changePreparedDayCategory,
@@ -83,10 +89,19 @@ interface WeekPreparationContextValue {
   confirmPreparation: () => void;
   retryGeneration: () => void;
   completeShoppingList: () => void;
+  pendingBudgetReapproval: BudgetOverrideReapprovalPreview | null;
+  approvePendingBudgetReapproval: () => void;
+  cancelPendingBudgetReapproval: () => void;
   changeDayCategory: (dayIndex: number, category: MealCategory) => void;
   customizationBusy: boolean;
   findRecipeAlternatives: (dayIndex: number) => Promise<RecipeAlternative[]>;
   replaceRecipe: (dayIndex: number, recipeId: string) => Promise<boolean>;
+  applyExplicitRecipe: (
+    dayIndex: number,
+    recipeId: string,
+    expectedImpact: ManualProductBudgetImpact,
+    approveBudgetOverride: boolean,
+  ) => Promise<ExplicitRecipeApplyResult>;
   findProductAlternatives: (
     dayIndex: number,
     ingredientId: string,
@@ -114,6 +129,18 @@ export type ManualProductApplyResult =
       applied: false;
       revalidatedPreview?: ManualProductChoicePreview;
     };
+
+export type ExplicitRecipeApplyResult =
+  | { applied: true }
+  | {
+      applied: false;
+      revalidatedPreview?: ExplicitRecipeChoicePreview;
+    };
+
+interface PendingBudgetReapproval {
+  preparation: WeekPreparation;
+  preview: BudgetOverrideReapprovalPreview;
+}
 
 function sameBudgetImpact(
   left: ManualProductBudgetImpact,
@@ -171,6 +198,8 @@ export function WeekPreparationProvider({
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [customizationBusy, setCustomizationBusy] = useState(false);
+  const [pendingBudgetReapproval, setPendingBudgetReapproval] =
+    useState<PendingBudgetReapproval | null>(null);
   const preparationRef = useRef<WeekPreparation | null>(initialPreparation ?? null);
   const storageRef = useRef<WeekPreparationStorage | null>(suppliedStorage ?? null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -231,6 +260,7 @@ export function WeekPreparationProvider({
     async (base: WeekPreparation) => {
       const run = generationRunRef.current + 1;
       generationRunRef.current = run;
+      setPendingBudgetReapproval(null);
       setActionMessage(null);
       replace(markWeekGenerating(base));
       try {
@@ -306,6 +336,17 @@ export function WeekPreparationProvider({
     )
       .then((refreshed) => {
         if (active && preparationRef.current?.id === refreshed.id) {
+          const reapproval = budgetOverrideReapprovalPreview(refreshed);
+          if (reapproval) {
+            setPendingBudgetReapproval({
+              preparation: refreshed,
+              preview: reapproval,
+            });
+            setActionMessage(
+              "De actuele prijs of hoeveelheid is gewijzigd. Controleer de bedragen en bevestig opnieuw.",
+            );
+            return;
+          }
           replace(refreshed);
         }
       })
@@ -347,6 +388,7 @@ export function WeekPreparationProvider({
   const createFreshPreparation = useCallback(() => {
     generationRunRef.current += 1;
     refreshedWeekRef.current = null;
+    setPendingBudgetReapproval(null);
     setActionMessage(null);
     const previousMealBudget = preparationRef.current?.mealBudgetCents ?? null;
     const fresh = createWeekPreparation(budgetSettings, currentListContext());
@@ -356,6 +398,7 @@ export function WeekPreparationProvider({
   const startNewPreparation = useCallback(async () => {
     generationRunRef.current += 1;
     refreshedWeekRef.current = null;
+    setPendingBudgetReapproval(null);
     setActionMessage(null);
     const current = preparationRef.current;
     const previousMealBudget = current?.mealBudgetCents ?? null;
@@ -504,6 +547,7 @@ export function WeekPreparationProvider({
     ) {
       return;
     }
+    setPendingBudgetReapproval(null);
     setActionMessage("Je gerechten worden nog één keer gecontroleerd…");
     void revalidatePreparedWeek(
       current,
@@ -514,13 +558,27 @@ export function WeekPreparationProvider({
     )
       .then(async (validation) => {
         if (preparationRef.current?.id !== validation.preparation.id) return;
-        replace(validation.preparation);
         if (!validation.ready) {
+          const reapproval = budgetOverrideReapprovalPreview(
+            validation.preparation,
+          );
+          if (reapproval) {
+            setPendingBudgetReapproval({
+              preparation: validation.preparation,
+              preview: reapproval,
+            });
+            setActionMessage(
+              "De prijs of hoeveelheid is gewijzigd. Controleer de actuele bedragen en bevestig opnieuw.",
+            );
+            return;
+          }
+          replace(validation.preparation);
           setActionMessage(
             "Je lijst is niet aangepast. Eén of meer gerechten moeten eerst opnieuw worden gecontroleerd.",
           );
           return;
         }
+        replace(validation.preparation);
         const before = calculateWeekBudgetSummary(validation.preparation, list);
         await shoppingList.completeFromWeek(
           validation.preparation.ingredients,
@@ -534,6 +592,95 @@ export function WeekPreparationProvider({
       })
       .catch(() => setActionMessage("Je lijst aanvullen lukte nu niet."));
   }, [catalogRepository, recipeRepository, replace, shoppingList]);
+
+  const cancelPendingBudgetReapproval = useCallback(() => {
+    setPendingBudgetReapproval(null);
+    setActionMessage("Er is niets gewijzigd.");
+  }, []);
+
+  const approvePendingBudgetReapproval = useCallback(() => {
+    const pending = pendingBudgetReapproval;
+    const list = shoppingList.list;
+    if (
+      !pending ||
+      !list ||
+      customizationRunRef.current ||
+      preparationRef.current?.id !== pending.preparation.id
+    ) {
+      return;
+    }
+    const approved = reapproveCurrentBudgetOverride(
+      pending.preparation,
+      pending.preview,
+    );
+    if (!approved) {
+      setPendingBudgetReapproval(null);
+      setActionMessage(
+        "De keuze is opnieuw gewijzigd. Open het gerecht en controleer de actuele bedragen.",
+      );
+      return;
+    }
+    customizationRunRef.current = true;
+    setCustomizationBusy(true);
+    setActionMessage("Actuele prijzen, gerecht en lijst worden opnieuw gecontroleerd…");
+    void revalidatePreparedWeek(
+      approved,
+      recipeRepository(),
+      catalogRepository(),
+      new Date(),
+      list,
+    )
+      .then(async (validation) => {
+        if (preparationRef.current?.id !== validation.preparation.id) return;
+        if (!validation.ready) {
+          const nextReapproval = budgetOverrideReapprovalPreview(
+            validation.preparation,
+          );
+          if (nextReapproval) {
+            setPendingBudgetReapproval({
+              preparation: validation.preparation,
+              preview: nextReapproval,
+            });
+            setActionMessage(
+              "De prijs is opnieuw gewijzigd. Controleer het nieuwe bedrag en bevestig opnieuw.",
+            );
+            return;
+          }
+          setPendingBudgetReapproval(null);
+          setActionMessage(
+            "De lijst is niet aangepast: het product of gerecht is niet meer compleet beschikbaar.",
+          );
+          return;
+        }
+        const before = calculateWeekBudgetSummary(validation.preparation, list);
+        await shoppingList.completeFromWeek(
+          validation.preparation.ingredients,
+          validation.preparation.id,
+        );
+        replace(validation.preparation);
+        setPendingBudgetReapproval(null);
+        setActionMessage(
+          before.newPackageCount > 0
+            ? `${before.newPackageCount} ${before.newPackageCount === 1 ? "verpakking is" : "verpakkingen zijn"} aan je lijst toegevoegd.`
+            : "Je lijst bevatte deze boodschappen al.",
+        );
+      })
+      .catch(() =>
+        setActionMessage(
+          "Opnieuw bevestigen lukte nu niet. Je lijst is niet aangepast.",
+        ),
+      )
+      .finally(() => {
+        customizationRunRef.current = false;
+        setCustomizationBusy(false);
+      });
+  }, [
+    catalogRepository,
+    pendingBudgetReapproval,
+    recipeRepository,
+    replace,
+    shoppingList,
+  ]);
 
   const changeDayCategory = useCallback(
     (dayIndex: number, category: MealCategory) => {
@@ -567,6 +714,7 @@ export function WeekPreparationProvider({
         if (alreadyCompleted) {
           await shoppingList.completeFromWeek(next.ingredients, next.id);
         }
+        setPendingBudgetReapproval(null);
         replace(next);
         setActionMessage(
           alreadyCompleted
@@ -638,6 +786,88 @@ export function WeekPreparationProvider({
           "Aanpassen lukt nu niet. Je huidige gerecht en lijst zijn behouden.",
         );
         return false;
+      } finally {
+        customizationRunRef.current = false;
+        setCustomizationBusy(false);
+      }
+    },
+    [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
+  );
+
+  const applyExplicitRecipe = useCallback(
+    async (
+      dayIndex: number,
+      recipeId: string,
+      expectedImpact: ManualProductBudgetImpact,
+      approveBudgetOverride: boolean,
+    ): Promise<ExplicitRecipeApplyResult> => {
+      if (customizationRunRef.current) return { applied: false };
+      const current = preparationRef.current;
+      if (!current) return { applied: false };
+      customizationRunRef.current = true;
+      setCustomizationBusy(true);
+      setActionMessage("Gerecht, actuele prijzen en budget worden opnieuw gecontroleerd…");
+      try {
+        const livePreview = await previewExplicitRecipeChoice(
+          current,
+          dayIndex,
+          recipeId,
+          recipeRepository(),
+          catalogRepository(),
+          currentList(),
+        );
+        if (!livePreview.ok) {
+          setActionMessage(
+            "Dit gerecht is niet meer compleet beschikbaar. Er is niets gewijzigd.",
+          );
+          return { applied: false };
+        }
+        if (!sameBudgetImpact(expectedImpact, livePreview.preview.alternative.impact)) {
+          setActionMessage(
+            "De prijs of je budget is gewijzigd. Controleer de nieuwe bedragen en bevestig opnieuw.",
+          );
+          return { applied: false, revalidatedPreview: livePreview.preview };
+        }
+        const committed = await commitExplicitRecipeChoice(
+          current,
+          dayIndex,
+          recipeId,
+          approveBudgetOverride,
+          recipeRepository(),
+          catalogRepository(),
+          currentList(),
+        );
+        if (!committed.ok) {
+          setActionMessage(
+            committed.reason === "budget_override_required"
+              ? "Bevestig eerst bewust dat je deze budgetoverschrijding accepteert."
+              : "Dit gerecht is niet meer compleet beschikbaar. Er is niets gewijzigd.",
+          );
+          return committed.preview
+            ? { applied: false, revalidatedPreview: committed.preview }
+            : { applied: false };
+        }
+        const validation = await revalidatePreparedWeek(
+          committed.preparation,
+          recipeRepository(),
+          catalogRepository(),
+          new Date(),
+          currentList(),
+        );
+        if (!validation.ready) {
+          setActionMessage(
+            "Het gerecht of de prijs is intussen gewijzigd. Controleer de bedragen opnieuw.",
+          );
+          return { applied: false };
+        }
+        return await syncValidatedCustomization(validation.preparation)
+          ? { applied: true }
+          : { applied: false };
+      } catch {
+        setActionMessage(
+          "Aanpassen lukt nu niet. Je huidige gerecht en lijst zijn behouden.",
+        );
+        return { applied: false };
       } finally {
         customizationRunRef.current = false;
         setCustomizationBusy(false);
@@ -860,10 +1090,14 @@ export function WeekPreparationProvider({
       confirmPreparation,
       retryGeneration,
       completeShoppingList,
+      pendingBudgetReapproval: pendingBudgetReapproval?.preview ?? null,
+      approvePendingBudgetReapproval,
+      cancelPendingBudgetReapproval,
       changeDayCategory,
       customizationBusy,
       findRecipeAlternatives,
       replaceRecipe,
+      applyExplicitRecipe,
       findProductAlternatives,
       replaceProduct,
       searchCatalogProducts,
@@ -876,6 +1110,9 @@ export function WeekPreparationProvider({
       changeDayCategory,
       customizationBusy,
       completeShoppingList,
+      pendingBudgetReapproval,
+      approvePendingBudgetReapproval,
+      cancelPendingBudgetReapproval,
       confirmPreparation,
       createFreshPreparation,
       persistenceWarning,
@@ -885,6 +1122,7 @@ export function WeekPreparationProvider({
       findRecipeAlternatives,
       replaceProduct,
       replaceRecipe,
+      applyExplicitRecipe,
       searchCatalogProducts,
       previewManualProduct,
       applyManualProduct,

@@ -34,6 +34,7 @@ import {
   calculateDishCostSummary,
   calculateWeekBudgetSummary,
   dayReadinessIssueCount,
+  hasValidUserApprovedBudgetOverride,
 } from "@/services/week-preparation/week-generation";
 import {
   MEAL_CATEGORIES,
@@ -177,13 +178,18 @@ export function WeekPreparationView() {
       .map((day) => day.dayIndex),
   );
   const incompleteDishCount = incompleteDayIndexes.size;
+  const approvedBudgetOverride = hasValidUserApprovedBudgetOverride(preparation);
+  const mealBudgetCompletionAllowed =
+    ["withinMealBudget", "exactlyMealBudget"].includes(
+      preparation.generation?.mealBudgetStatus ?? "noMealBudget",
+    ) || approvedBudgetOverride;
   const listCompletionBlocked =
     preparation.status !== "generated" ||
     incompleteDishCount > 0 ||
     !preparation.generation?.isMealBudgetComplete ||
-    !["withinMealBudget", "exactlyMealBudget"].includes(
-      preparation.generation?.mealBudgetStatus ?? "noMealBudget",
-    );
+    !mealBudgetCompletionAllowed;
+  const completionActionBlocked =
+    listCompletionBlocked || week.pendingBudgetReapproval !== null;
 
   function saveBudget(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -315,8 +321,16 @@ export function WeekPreparationView() {
                 </div>
               ) : preparation.generation?.mealBudgetStatus === "overMealBudget" ? (
                 <div className="week-generation-warning" role="status">
-                  <p>Je huidige maaltijden passen niet meer binnen je maaltijd-budget.</p>
-                  <p>Je opgeslagen gerechten zijn niet automatisch vervangen.</p>
+                  <p>
+                    Je maaltijdkosten zijn {formatCents(
+                      Math.max(
+                        0,
+                        preparation.generation.mealPlanKnownCostCents -
+                          (preparation.mealBudgetCents ?? 0),
+                      ),
+                    )} boven je maaltijd-budget.
+                  </p>
+                  <p>{approvedBudgetOverride ? "Door jou goedgekeurde keuze." : "Bevestig de gewijzigde keuze opnieuw; je opgeslagen gerechten zijn niet automatisch vervangen."}</p>
                 </div>
               ) : null}
               {preparation.generation &&
@@ -590,9 +604,11 @@ export function WeekPreparationView() {
                     </div>
                   ) : null}
                   <div>
-                    <span>Over binnen maaltijd-budget</span>
+                    <span>{preparation.generation?.mealBudgetStatus === "overMealBudget" ? "Boven maaltijd-budget" : "Over binnen maaltijd-budget"}</span>
                     <strong>
-                      {preparation.generation?.mealBudgetRemainingCents !== null &&
+                      {preparation.generation?.mealBudgetStatus === "overMealBudget"
+                        ? formatCents(Math.max(0, (preparation.generation?.mealPlanKnownCostCents ?? 0) - (preparation.mealBudgetCents ?? 0)))
+                        : preparation.generation?.mealBudgetRemainingCents !== null &&
                       preparation.generation?.mealBudgetRemainingCents !== undefined
                         ? formatCents(preparation.generation.mealBudgetRemainingCents)
                         : "Nog niet definitief"}
@@ -628,7 +644,7 @@ export function WeekPreparationView() {
                 className="primary-action"
                 type="button"
                 onClick={week.completeShoppingList}
-                disabled={listCompletionBlocked}
+                disabled={completionActionBlocked}
                 aria-describedby={listCompletionBlocked ? "list-completion-readiness" : undefined}
               >
                 Maak mijn lijst compleet
@@ -640,9 +656,45 @@ export function WeekPreparationView() {
                     : incompleteDishCount > 0
                       ? `Controleer eerst ${incompleteDishCount} ${incompleteDishCount === 1 ? "onvolledig gerecht" : "onvolledige gerechten"}.`
                       : preparation.generation?.mealBudgetStatus === "overMealBudget"
-                      ? "Je huidige maaltijden passen niet binnen je maaltijd-budget."
+                      ? "Deze budgetoverschrijding moet eerst opnieuw door jou worden bevestigd."
                       : "Wacht tot alle gerechten en het maaltijd-budget compleet zijn gecontroleerd."}
                 </p>
+              ) : null}
+              {week.pendingBudgetReapproval ? (
+                <div className="customization-confirm" role="alert">
+                  <strong>Let op: controleer de actuele budgetimpact</strong>
+                  <p>
+                    {week.pendingBudgetReapproval.mealPlanDifferenceCents === 0
+                      ? "De maaltijdkosten zijn opnieuw berekend."
+                      : `Sinds je vorige toestemming zijn je maaltijden ${formatCents(Math.abs(week.pendingBudgetReapproval.mealPlanDifferenceCents))} ${week.pendingBudgetReapproval.mealPlanDifferenceCents < 0 ? "goedkoper" : "duurder"}.`}
+                  </p>
+                  <p>
+                    Nieuwe maaltijdkosten: {formatCents(week.pendingBudgetReapproval.currentMealPlanCostCents)}
+                    {week.pendingBudgetReapproval.mealBudgetCents === null
+                      ? ""
+                      : ` / ${formatCents(week.pendingBudgetReapproval.mealBudgetCents)}`}
+                  </p>
+                  {week.pendingBudgetReapproval.mealBudgetOverageCents > 0 ? (
+                    <p className="budget-impact-warning">
+                      Je komt {formatCents(week.pendingBudgetReapproval.mealBudgetOverageCents)} boven je maaltijd-budget.
+                    </p>
+                  ) : null}
+                  {week.pendingBudgetReapproval.weekBudgetOverageCents > 0 ? (
+                    <p className="budget-impact-warning">
+                      Hierdoor kom je ook {formatCents(week.pendingBudgetReapproval.weekBudgetOverageCents)} boven je totale weekbudget.
+                    </p>
+                  ) : week.pendingBudgetReapproval.weekBudgetRemainingCents !== null ? (
+                    <p>
+                      Je totale weekbudget blijft nog {formatCents(week.pendingBudgetReapproval.weekBudgetRemainingCents)} onder de grens.
+                    </p>
+                  ) : null}
+                  <div className="customization-confirm-actions">
+                    <button type="button" onClick={week.cancelPendingBudgetReapproval} disabled={week.customizationBusy}>Annuleren</button>
+                    <button className="primary-action compact-action" type="button" onClick={week.approvePendingBudgetReapproval} disabled={week.customizationBusy}>
+                      {week.customizationBusy ? "Controleren…" : "Toch gebruiken"}
+                    </button>
+                  </div>
+                </div>
               ) : null}
               {week.actionMessage ? <p className="week-action-message" role="status">{week.actionMessage}</p> : null}
             </>

@@ -35,8 +35,10 @@ import type {
   SelectedRecipeReference,
   WeekIngredientRequirement,
   WeekBudgetDecision,
+  WeekBudgetMutation,
   WeekMealCustomization,
   WeekPreparation,
+  WeekProductSelectionSource,
 } from "@/types/week-preparation";
 
 const EMPTY_LIST: ActiveShoppingList = {
@@ -56,6 +58,7 @@ export interface RecipeAlternative {
   mealBudgetCents: number | null;
   withinMealBudget: boolean;
   alreadyUsedInWeek: boolean;
+  impact: ManualProductBudgetImpact;
   preparation: WeekPreparation;
 }
 
@@ -78,7 +81,30 @@ export interface ManualProductChoice {
   ingredientId: string | null;
   productId: string;
   quantity: number;
+  selectionSource: WeekProductSelectionSource;
 }
+
+export interface ExplicitRecipeChoicePreview {
+  dayIndex: number;
+  recipeId: string;
+  alternative: RecipeAlternative;
+}
+
+export type ExplicitRecipeChoiceResult =
+  | { ok: true; preview: ExplicitRecipeChoicePreview }
+  | { ok: false; reason: CustomizationFailure };
+
+export type ExplicitRecipeCommitResult =
+  | {
+      ok: true;
+      preparation: WeekPreparation;
+      impact: ManualProductBudgetImpact;
+    }
+  | {
+      ok: false;
+      reason: CustomizationFailure | "budget_override_required";
+      preview?: ExplicitRecipeChoicePreview;
+    };
 
 export interface ManualProductBudgetImpact {
   currentMealPlanCostCents: number;
@@ -108,6 +134,7 @@ export type ManualProductChoiceFailure =
   | "ingredient_not_found"
   | "product_not_found"
   | "product_price_missing"
+  | "source_unavailable"
   | "invalid_quantity"
   | "budget_override_required";
 
@@ -165,6 +192,7 @@ function customizationForRecipe(
     replacementRecipe: recipe.id === (current?.baseRecipe.id ?? day.recipeId)
       ? null
       : recipeReference(recipe),
+    recipeBudgetDecision: { mode: "automaticPlanValidation" },
     productOverrides: [],
     ingredientOverrides: [],
     manualProductAdditions: [],
@@ -271,6 +299,13 @@ function buildAlternative(
     list,
     now,
   );
+  const nextPreparation = {
+    ...next,
+    customizations: withCustomization(
+      preparation,
+      customizationForRecipe(preparation, day, recipe, now),
+    ),
+  };
   return {
     recipe: recipeReference(recipe),
     category: day.category as RecipeMealCategory,
@@ -283,13 +318,8 @@ function buildAlternative(
     alreadyUsedInWeek: preparation.days.some(
       (item) => item.dayIndex !== day.dayIndex && item.recipeId === recipe.id,
     ),
-    preparation: {
-      ...next,
-      customizations: withCustomization(
-        preparation,
-        customizationForRecipe(preparation, day, recipe, now),
-      ),
-    },
+    impact: budgetImpact(preparation, nextPreparation, list, now),
+    preparation: nextPreparation,
   };
 }
 
@@ -321,13 +351,125 @@ export async function findRecipeAlternatives(
         now,
       ),
     )
-    .filter((alternative) => alternative.withinMealBudget)
     .toSorted(
       (left, right) =>
+        Number(!left.withinMealBudget) - Number(!right.withinMealBudget) ||
         Number(left.alreadyUsedInWeek) - Number(right.alreadyUsedInWeek) ||
         left.alternativeDishCostCents - right.alternativeDishCostCents ||
         left.recipe.name.localeCompare(right.recipe.name, "nl-NL"),
     );
+}
+
+export async function previewExplicitRecipeChoice(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  recipeId: string,
+  recipeRepository: RecipeRepository,
+  catalogRepository: CatalogRepository,
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): Promise<ExplicitRecipeChoiceResult> {
+  const context = await loadedRecipeContext(
+    preparation,
+    dayIndex,
+    recipeRepository,
+    catalogRepository,
+  );
+  if (!context) return { ok: false, reason: "current_recipe_missing" };
+  const recipe = context.catalog.recipes.find((item) => item.id === recipeId);
+  if (!recipe) return { ok: false, reason: "recipe_not_ready" };
+  if (!context.rankedRecipes.some((item) => item.id === recipe.id)) {
+    return {
+      ok: false,
+      reason: suitableRecipes(
+        [recipe],
+        context.day.category as Exclude<PreparedDay["category"], "freeChoice">,
+        preparation.preferences,
+      ).length === 0
+        ? "wrong_category"
+        : "recipe_not_ready",
+    };
+  }
+  return {
+    ok: true,
+    preview: {
+      dayIndex,
+      recipeId,
+      alternative: buildAlternative(
+        preparation,
+        context.day,
+        recipe,
+        context.catalog,
+        context.readiness,
+        list,
+        now,
+      ),
+    },
+  };
+}
+
+function recipeMutation(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  recipeId: string,
+): WeekBudgetMutation {
+  return {
+    kind: "replaceRecipe",
+    weekPreparationId: preparation.id,
+    dayIndex,
+    recipeId,
+  };
+}
+
+export async function commitExplicitRecipeChoice(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  recipeId: string,
+  approveBudgetOverride: boolean,
+  recipeRepository: RecipeRepository,
+  catalogRepository: CatalogRepository,
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): Promise<ExplicitRecipeCommitResult> {
+  const result = await previewExplicitRecipeChoice(
+    preparation,
+    dayIndex,
+    recipeId,
+    recipeRepository,
+    catalogRepository,
+    list,
+    now,
+  );
+  if (!result.ok) return result;
+  const { alternative } = result.preview;
+  if (alternative.impact.requiresBudgetOverride && !approveBudgetOverride) {
+    return {
+      ok: false,
+      reason: "budget_override_required",
+      preview: result.preview,
+    };
+  }
+  const decision: WeekBudgetDecision = alternative.impact.requiresBudgetOverride
+    ? {
+        mode: "userApprovedBudgetOverride",
+        approvedAt: now.toISOString(),
+        approvedMealPlanCostCents: alternative.impact.nextMealPlanCostCents,
+        approvedTotalWeekCostCents: alternative.impact.nextTotalWeekCostCents,
+        approvedMealBudgetCents: alternative.impact.mealBudgetCents,
+        approvedWeekBudgetCents: alternative.impact.weekBudgetCents,
+        approvedMutation: recipeMutation(preparation, dayIndex, recipeId),
+      }
+    : { mode: "userConfirmedManualChoice" };
+  const customizations = alternative.preparation.customizations.map(
+    (customization) => customization.dayIndex === dayIndex
+      ? { ...customization, recipeBudgetDecision: decision }
+      : customization,
+  );
+  return {
+    ok: true,
+    preparation: { ...alternative.preparation, customizations },
+    impact: alternative.impact,
+  };
 }
 
 export async function replaceWeekRecipe(
@@ -498,6 +640,7 @@ export async function findProductAlternatives(
         dayIndex,
         baseRecipe: preparation.days.find((item) => item.dayIndex === dayIndex)!.recipe!,
         replacementRecipe: null,
+        recipeBudgetDecision: { mode: "automaticPlanValidation" },
         productOverrides: [],
         ingredientOverrides: [],
         manualProductAdditions: [],
@@ -515,6 +658,7 @@ export async function findProductAlternatives(
             sku: product.sku,
             quantity: null,
             selectionSource: "automaticSuggestion",
+            applicationMode: "automaticPlanValidation",
             budgetDecision: { mode: "automaticPlanValidation" },
             updatedAt: now.toISOString(),
           },
@@ -586,6 +730,7 @@ function customizationForDay(
     dayIndex: day.dayIndex,
     baseRecipe: day.recipe,
     replacementRecipe: null,
+    recipeBudgetDecision: { mode: "automaticPlanValidation" },
     productOverrides: [],
     ingredientOverrides: [],
     manualProductAdditions: [],
@@ -740,6 +885,9 @@ export function previewManualProductChoice(
   if (product.id !== choice.productId) {
     return { ok: false, reason: "product_not_found" };
   }
+  if (product.supermarket !== "Hoogvliet" || product.isAvailable === false) {
+    return { ok: false, reason: "source_unavailable" };
+  }
   const day = preparation.days.find(
     (item) => item.dayIndex === choice.dayIndex,
   );
@@ -789,7 +937,8 @@ export function previewManualProductChoice(
           productId: product.id,
           sku: product.sku,
           quantity: choice.quantity,
-          selectionSource: "manualSearch",
+          selectionSource: choice.selectionSource,
+          applicationMode: "explicitUserChoice",
           budgetDecision: manualDecision,
           updatedAt: timestamp,
         },
@@ -819,6 +968,8 @@ export function previewManualProductChoice(
           product: addition.product,
           price: addition.price,
           quantity: choice.quantity,
+          selectionSource: choice.selectionSource,
+          applicationMode: "explicitUserChoice",
           budgetDecision: manualDecision,
           updatedAt: timestamp,
         },
@@ -861,6 +1012,29 @@ export function previewManualProductChoice(
       impact,
       preparation: next,
     },
+  };
+}
+
+function productMutation(
+  preparation: WeekPreparation,
+  choice: ManualProductChoice,
+): WeekBudgetMutation {
+  if (choice.action === "replaceIngredient") {
+    return {
+      kind: "replaceIngredient",
+      weekPreparationId: preparation.id,
+      dayIndex: choice.dayIndex,
+      ingredientId: choice.ingredientId!,
+      productId: choice.productId,
+      quantity: choice.quantity,
+    };
+  }
+  return {
+    kind: "addToMeal",
+    weekPreparationId: preparation.id,
+    dayIndex: choice.dayIndex,
+    productId: choice.productId,
+    quantity: choice.quantity,
   };
 }
 
@@ -942,6 +1116,9 @@ export function commitManualProductChoice(
           result.preview.impact.nextMealPlanCostCents,
         approvedTotalWeekCostCents:
           result.preview.impact.nextTotalWeekCostCents,
+        approvedMealBudgetCents: result.preview.impact.mealBudgetCents,
+        approvedWeekBudgetCents: result.preview.impact.weekBudgetCents,
+        approvedMutation: productMutation(preparation, choice),
       }
     : { mode: "userConfirmedManualChoice" };
   return {

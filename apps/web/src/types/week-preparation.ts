@@ -55,6 +55,33 @@ export type WeekProductSelectionSource =
   | "automaticSuggestion"
   | "manualSearch";
 
+export type WeekProductApplicationMode =
+  | "automaticPlanValidation"
+  | "explicitUserChoice";
+
+export type WeekBudgetMutation =
+  | {
+      kind: "replaceIngredient";
+      weekPreparationId: string;
+      dayIndex: number;
+      ingredientId: UUID;
+      productId: UUID;
+      quantity: number;
+    }
+  | {
+      kind: "addToMeal";
+      weekPreparationId: string;
+      dayIndex: number;
+      productId: UUID;
+      quantity: number;
+    }
+  | {
+      kind: "replaceRecipe";
+      weekPreparationId: string;
+      dayIndex: number;
+      recipeId: UUID;
+    };
+
 export type WeekBudgetDecision =
   | { mode: "automaticPlanValidation" }
   | { mode: "userConfirmedManualChoice" }
@@ -63,6 +90,9 @@ export type WeekBudgetDecision =
       approvedAt: string;
       approvedMealPlanCostCents: number;
       approvedTotalWeekCostCents: number;
+      approvedMealBudgetCents: number | null;
+      approvedWeekBudgetCents: number | null;
+      approvedMutation: WeekBudgetMutation;
     };
 
 export interface WeekProductOverride {
@@ -71,6 +101,7 @@ export interface WeekProductOverride {
   sku: string;
   quantity: number | null;
   selectionSource: WeekProductSelectionSource;
+  applicationMode: WeekProductApplicationMode;
   budgetDecision: WeekBudgetDecision;
   updatedAt: string;
 }
@@ -88,6 +119,8 @@ export interface WeekManualProductAddition {
   product: WeekProductReference;
   price: WeekPriceSnapshot;
   quantity: number;
+  selectionSource: WeekProductSelectionSource;
+  applicationMode: WeekProductApplicationMode;
   budgetDecision: WeekBudgetDecision;
   updatedAt: string;
 }
@@ -96,6 +129,7 @@ export interface WeekMealCustomization {
   dayIndex: number;
   baseRecipe: SelectedRecipeReference;
   replacementRecipe: SelectedRecipeReference | null;
+  recipeBudgetDecision: WeekBudgetDecision;
   productOverrides: WeekProductOverride[];
   ingredientOverrides: WeekIngredientOverride[];
   manualProductAdditions: WeekManualProductAddition[];

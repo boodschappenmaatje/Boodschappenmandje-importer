@@ -8,6 +8,7 @@ import {
   removeMealPlanContributionsForWeek,
 } from "@/services/shopping-list/shopping-list";
 import {
+  commitExplicitRecipeChoice,
   commitManualProductChoice,
   findProductAlternatives,
   findRecipeAlternatives,
@@ -23,7 +24,11 @@ import type {
   RecipeCatalog,
   RecipeRepository,
 } from "@/services/week-preparation/recipe-repository";
-import { revalidatePreparedWeek } from "@/services/week-preparation/week-generation";
+import {
+  budgetOverrideReapprovalPreview,
+  reapproveCurrentBudgetOverride,
+  revalidatePreparedWeek,
+} from "@/services/week-preparation/week-generation";
 import { createWeekPreparation } from "@/services/week-preparation/week-preparation";
 import type { Product, Recipe } from "@/types/catalog";
 import type { ActiveShoppingList } from "@/types/shopping-list";
@@ -156,17 +161,19 @@ async function preparedWeek() {
 }
 
 describe("PWA 12 maaltijdcustomization", () => {
-  it("biedt alleen actuele READY alternatieven uit dezelfde categorie aan", async () => {
+  it("biedt actuele READY alternatieven uit dezelfde categorie met budgetstatus aan", async () => {
     const alternatives = await findRecipeAlternatives(
       await preparedWeek(), 0, recipeRepository, catalogRepository, list, NOW,
     );
     expect(alternatives.map((item) => item.recipe.id)).toEqual([
       MACARONI.id,
       PENNE.id,
+      EXPENSIVE.id,
     ]);
     expect(alternatives[0]).toMatchObject({ withinMealBudget: true, alreadyUsedInWeek: false });
     expect(alternatives.map((item) => item.recipe.id)).not.toContain(SPAGHETTI.id);
-    expect(alternatives.map((item) => item.recipe.id)).not.toContain(EXPENSIVE.id);
+    expect(alternatives.find((item) => item.recipe.id === EXPENSIVE.id))
+      .toMatchObject({ withinMealBudget: false });
     expect(alternatives.map((item) => item.recipe.id)).not.toContain(RICE.id);
     expect(alternatives.map((item) => item.recipe.id)).not.toContain(NOT_READY.id);
   });
@@ -206,6 +213,67 @@ describe("PWA 12 maaltijdcustomization", () => {
         original, 0, EXPENSIVE.id, recipeRepository, catalogRepository, list, NOW,
       ),
     ).resolves.toEqual({ ok: false, reason: "over_meal_budget" });
+  });
+
+  it("scheidt een automatische blokkade van een expliciet gekozen receptalternatief", async () => {
+    const original = await preparedWeek();
+    await expect(
+      replaceWeekRecipe(
+        original, 0, EXPENSIVE.id, recipeRepository, catalogRepository, list, NOW,
+      ),
+    ).resolves.toEqual({ ok: false, reason: "over_meal_budget" });
+
+    const cancelled = await commitExplicitRecipeChoice(
+      original,
+      0,
+      EXPENSIVE.id,
+      false,
+      recipeRepository,
+      catalogRepository,
+      list,
+      NOW,
+    );
+    expect(cancelled).toMatchObject({
+      ok: false,
+      reason: "budget_override_required",
+      preview: { alternative: { withinMealBudget: false } },
+    });
+    expect(original.customizations).toEqual([]);
+
+    const approved = await commitExplicitRecipeChoice(
+      original,
+      0,
+      EXPENSIVE.id,
+      true,
+      recipeRepository,
+      catalogRepository,
+      list,
+      NOW,
+    );
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) return;
+    expect(approved.preparation.customizations[0]).toMatchObject({
+      replacementRecipe: { id: EXPENSIVE.id },
+      recipeBudgetDecision: {
+        mode: "userApprovedBudgetOverride",
+        approvedMutation: {
+          kind: "replaceRecipe",
+          weekPreparationId: original.id,
+          dayIndex: 0,
+          recipeId: EXPENSIVE.id,
+        },
+      },
+    });
+    const validation = await revalidatePreparedWeek(
+      approved.preparation,
+      recipeRepository,
+      catalogRepository,
+      NOW,
+      list,
+    );
+    expect(validation.ready).toBe(true);
+    expect(validation.preparation.generation?.mealBudgetStatus)
+      .toBe("overMealBudget");
   });
 
   it("hervalidateert actuele prijzen bij bevestigen en weigert een stale alternatief", async () => {
@@ -424,6 +492,97 @@ describe("PWA 12 maaltijdcustomization", () => {
     ).resolves.toEqual({ ok: false, reason: "over_meal_budget" });
   });
 
+  it("behandelt een aangetikt automatisch voorstel als expliciete gebruikerskeuze", async () => {
+    const original = await preparedWeek();
+    const semanticButExpensive = product(
+      "product-expensive-spaghetti-explicit",
+      "G'woon spaghetti voordeel",
+      799,
+    );
+    const choice = {
+      action: "replaceIngredient" as const,
+      dayIndex: 0,
+      ingredientId: "ingredient-spaghetti",
+      productId: semanticButExpensive.id,
+      quantity: 1,
+      selectionSource: "automaticSuggestion" as const,
+    };
+    const cancelled = commitManualProductChoice(
+      original,
+      choice,
+      semanticButExpensive,
+      false,
+      list,
+      NOW,
+    );
+    expect(cancelled).toMatchObject({
+      ok: false,
+      reason: "budget_override_required",
+    });
+    expect(original.customizations).toEqual([]);
+
+    const approved = commitManualProductChoice(
+      original,
+      choice,
+      semanticButExpensive,
+      true,
+      list,
+      NOW,
+    );
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) return;
+    expect(approved.preparation.customizations[0].productOverrides[0])
+      .toMatchObject({
+        selectionSource: "automaticSuggestion",
+        applicationMode: "explicitUserChoice",
+        budgetDecision: {
+          mode: "userApprovedBudgetOverride",
+          approvedMutation: {
+            kind: "replaceIngredient",
+            weekPreparationId: original.id,
+            dayIndex: 0,
+            ingredientId: "ingredient-spaghetti",
+            productId: semanticButExpensive.id,
+            quantity: 1,
+          },
+        },
+      });
+    const validation = await revalidatePreparedWeek(
+      approved.preparation,
+      recipeRepository,
+      repositoryFor(() => [...products, semanticButExpensive]),
+      NOW,
+      list,
+    );
+    expect(validation.ready).toBe(true);
+    expect(validation.preparation.status).toBe("generated");
+    expect(validation.preparation.generation?.mealBudgetStatus)
+      .toBe("overMealBudget");
+    expect(budgetOverrideReapprovalPreview(validation.preparation)).toBeNull();
+    const completed = completeShoppingListFromWeek(
+      list,
+      validation.preparation.ingredients,
+      validation.preparation.id,
+      NOW,
+    );
+    expect(completeShoppingListFromWeek(
+      completed,
+      validation.preparation.ingredients,
+      validation.preparation.id,
+      NOW,
+    )).toEqual(completed);
+    const secondValidation = await revalidatePreparedWeek(
+      validation.preparation,
+      recipeRepository,
+      repositoryFor(() => [...products, semanticButExpensive]),
+      NOW,
+      completed,
+    );
+    expect(secondValidation.ready).toBe(true);
+    expect(budgetOverrideReapprovalPreview(secondValidation.preparation))
+      .toBeNull();
+  });
+
   it("berekent exacte dubbele budgetimpact en vereist expliciete toestemming boven budget", async () => {
     const original = { ...await preparedWeek(), budgetCents: 700 };
     const snapshot = structuredClone(original);
@@ -433,6 +592,7 @@ describe("PWA 12 maaltijdcustomization", () => {
       ingredientId: "ingredient-spaghetti",
       productId: BOOMSTAM.id,
       quantity: 1,
+      selectionSource: "manualSearch" as const,
     };
     const preview = previewManualProductChoice(original, choice, BOOMSTAM, list, NOW);
     expect(preview.ok).toBe(true);
@@ -474,11 +634,20 @@ describe("PWA 12 maaltijdcustomization", () => {
     expect(approved.preparation.customizations[0].productOverrides[0])
       .toMatchObject({
         selectionSource: "manualSearch",
+        applicationMode: "explicitUserChoice",
         quantity: 1,
         budgetDecision: {
           mode: "userApprovedBudgetOverride",
           approvedMealPlanCostCents: 798,
           approvedTotalWeekCostCents: 798,
+          approvedMutation: {
+            kind: "replaceIngredient",
+            weekPreparationId: original.id,
+            dayIndex: 0,
+            ingredientId: "ingredient-spaghetti",
+            productId: BOOMSTAM.id,
+            quantity: 1,
+          },
         },
       });
   });
@@ -491,6 +660,7 @@ describe("PWA 12 maaltijdcustomization", () => {
       ingredientId: "ingredient-spaghetti",
       productId: "product-rice",
       quantity: 1,
+      selectionSource: "manualSearch" as const,
     };
     const cheaper = commitManualProductChoice(
       original,
@@ -536,6 +706,7 @@ describe("PWA 12 maaltijdcustomization", () => {
         ingredientId: null,
         productId: BOOMSTAM.id,
         quantity: 2,
+        selectionSource: "manualSearch",
       },
       BOOMSTAM,
       false,
@@ -612,6 +783,7 @@ describe("PWA 12 maaltijdcustomization", () => {
         ingredientId: "ingredient-spaghetti",
         productId: BOOMSTAM.id,
         quantity: 1,
+        selectionSource: "manualSearch",
       },
       BOOMSTAM,
       false,
@@ -671,6 +843,7 @@ describe("PWA 12 maaltijdcustomization", () => {
         ingredientId: "ingredient-spaghetti",
         productId: BOOMSTAM.id,
         quantity: 2,
+        selectionSource: "manualSearch",
       },
       BOOMSTAM,
       true,
@@ -685,6 +858,7 @@ describe("PWA 12 maaltijdcustomization", () => {
     expect(reopened?.customizations[0].productOverrides[0]).toMatchObject({
       quantity: 2,
       selectionSource: "manualSearch",
+      applicationMode: "explicitUserChoice",
       budgetDecision: { mode: "userApprovedBudgetOverride" },
     });
     const liveRepository = repositoryFor(() => [...products, BOOMSTAM]);
@@ -717,11 +891,32 @@ describe("PWA 12 maaltijdcustomization", () => {
       NOW,
       list,
     );
-    expect(refreshed.ready).toBe(true);
+    expect(refreshed.ready).toBe(false);
     expect(refreshed.preparation.generation).toMatchObject({
       mealPlanKnownCostCents: 1_697,
       mealBudgetStatus: "overMealBudget",
     });
+    const reapproval = budgetOverrideReapprovalPreview(refreshed.preparation);
+    expect(reapproval).toMatchObject({
+      mutation: { quantity: 2, productId: BOOMSTAM.id },
+      previouslyApprovedMealPlanCostCents: 1_497,
+      currentMealPlanCostCents: 1_697,
+      mealPlanDifferenceCents: 200,
+    });
+    const reapproved = reapproveCurrentBudgetOverride(
+      refreshed.preparation,
+      reapproval!,
+      new Date("2026-09-17T12:05:00Z"),
+    );
+    expect(reapproved).not.toBeNull();
+    const afterReapproval = await revalidatePreparedWeek(
+      reapproved!,
+      recipeRepository,
+      repositoryFor(() => [...products, changedPrice]),
+      NOW,
+      list,
+    );
+    expect(afterReapproval.ready).toBe(true);
 
     const unavailable = await revalidatePreparedWeek(
       validation.preparation,
@@ -737,6 +932,50 @@ describe("PWA 12 maaltijdcustomization", () => {
     expect(unavailable.preparation.ingredients.find(
       (item) => item.ingredientId === "ingredient-spaghetti",
     )).toMatchObject({ product: null, productMatchMissing: true });
+  });
+
+  it("laat een goedkeuring voor één verpakking niet vijf verpakkingen goedkeuren", async () => {
+    const original = await preparedWeek();
+    const approved = commitManualProductChoice(
+      original,
+      {
+        action: "replaceIngredient",
+        dayIndex: 0,
+        ingredientId: "ingredient-spaghetti",
+        productId: BOOMSTAM.id,
+        quantity: 1,
+        selectionSource: "manualSearch",
+      },
+      BOOMSTAM,
+      true,
+      list,
+      NOW,
+    );
+    expect(approved.ok).toBe(true);
+    if (!approved.ok) return;
+    const quantityChanged = structuredClone(approved.preparation);
+    quantityChanged.customizations[0].productOverrides[0].quantity = 5;
+
+    const validation = await revalidatePreparedWeek(
+      quantityChanged,
+      recipeRepository,
+      repositoryFor(() => [...products, BOOMSTAM]),
+      NOW,
+      list,
+    );
+    expect(validation.ready).toBe(false);
+    expect(validation.preparation.generation).toMatchObject({
+      mealPlanKnownCostCents: 3_594,
+      mealBudgetStatus: "overMealBudget",
+    });
+    expect(budgetOverrideReapprovalPreview(validation.preparation))
+      .toMatchObject({
+        mutation: {
+          kind: "replaceIngredient",
+          productId: BOOMSTAM.id,
+          quantity: 5,
+        },
+      });
   });
 
   it("weigert handmatige gerechtproducten voor Vrije keuze zonder mutatie", async () => {
@@ -761,6 +1000,7 @@ describe("PWA 12 maaltijdcustomization", () => {
         ingredientId: null,
         productId: BOOMSTAM.id,
         quantity: 1,
+        selectionSource: "manualSearch",
       },
       BOOMSTAM,
       list,

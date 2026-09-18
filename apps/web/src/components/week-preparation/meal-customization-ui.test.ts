@@ -46,7 +46,16 @@ describe("PWA 12 compacte iPhone-customization", () => {
 
   it("muteert pas na de definitieve knop en laat annuleren alleen de flow sluiten", () => {
     expect(controls).toContain("week.applyManualProduct(");
+    expect(controls).toContain('selectionSource: "automaticSuggestion"');
+    expect(controls).toContain("week.applyExplicitRecipe(");
     expect(controls).toContain("onClick={onClose} disabled={week.customizationBusy}>Annuleren");
+    expect(controls).not.toContain("Dit automatische alternatief blijft geblokkeerd");
     expect(controls).not.toContain("userApprovedBudgetOverride");
+  });
+
+  it("hervalidateert dezelfde expliciete mutatie en vraagt bij prijswijziging opnieuw toestemming", () => {
+    expect(provider).toContain("budgetOverrideReapprovalPreview(");
+    expect(provider).toContain("reapproveCurrentBudgetOverride(");
+    expect(provider).toContain("De prijs of hoeveelheid is gewijzigd");
   });
 });

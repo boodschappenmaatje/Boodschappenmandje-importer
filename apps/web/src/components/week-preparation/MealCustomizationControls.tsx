@@ -11,6 +11,7 @@ import { resolveCurrentPrice } from "@/services/catalog/price";
 import type {
   ManualProductAction,
   ManualProductChoice,
+  ManualProductChoicePreview,
   ProductAlternative,
   RecipeAlternative,
 } from "@/services/week-preparation/meal-customization";
@@ -103,6 +104,7 @@ function ManualProductFlow({
       ingredientId: action === "replaceIngredient" ? ingredientId : null,
       productId: selected.id,
       quantity,
+      selectionSource: "manualSearch",
     };
   }, [action, dayIndex, ingredientId, quantity, selected]);
   const preview = useMemo(
@@ -254,8 +256,16 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
   }
   async function confirm() {
     if (!pending) return;
-    if (await week.replaceRecipe(dayIndex, pending.recipe.id)) {
+    const result = await week.applyExplicitRecipe(
+      dayIndex,
+      pending.recipe.id,
+      pending.impact,
+      pending.impact.requiresBudgetOverride,
+    );
+    if (result.applied) {
       setOpen(false); setPending(null); setAlternatives([]);
+    } else if (result.revalidatedPreview) {
+      setPending(result.revalidatedPreview.alternative);
     }
   }
 
@@ -278,7 +288,7 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
                       <button type="button" className="meal-alternative-card" onClick={() => setPending(alternative)} aria-pressed={pending?.recipe.id === alternative.recipe.id}>
                         <DishImage asset={image} className="meal-alternative-image" sizes="52px" title={alternative.recipe.name} />
                         <span><strong>{alternative.recipe.name}</strong><small>{formatCents(alternative.alternativeDishCostCents)} · {signedDifference(alternative.differenceCents)}</small></span>
-                        <small>Binnen budget</small>
+                        <small>{alternative.withinMealBudget ? "Binnen budget" : "Boven budget"}</small>
                       </button>
                     </li>
                   );
@@ -292,7 +302,9 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
               <strong>{currentRecipeName} → {pending.recipe.name}</strong>
               <p>{differenceSentence(pending.differenceCents)}</p>
               <p>Nieuwe maaltijdkosten: {formatCents(pending.nextMealPlanCostCents)}{pending.mealBudgetCents === null ? "" : ` / ${formatCents(pending.mealBudgetCents)}`}</p>
-              <div className="customization-confirm-actions"><button type="button" onClick={() => setPending(null)} disabled={week.customizationBusy}>Annuleren</button><button className="primary-action compact-action" type="button" onClick={confirm} disabled={!pending.withinMealBudget || week.customizationBusy}>Bevestig vervanging</button></div>
+              {pending.impact.mealBudgetOverageCents > 0 ? <p className="budget-impact-warning"><strong>Let op:</strong> je komt {formatCents(pending.impact.mealBudgetOverageCents)} boven je maaltijd-budget.</p> : null}
+              {pending.impact.weekBudgetOverageCents > 0 ? <p className="budget-impact-warning">Hierdoor kom je ook {formatCents(pending.impact.weekBudgetOverageCents)} boven je totale weekbudget.</p> : pending.impact.weekBudgetRemainingCents !== null ? <p>Je totale weekbudget blijft nog {formatCents(pending.impact.weekBudgetRemainingCents)} onder de grens.</p> : null}
+              <div className="customization-confirm-actions"><button type="button" onClick={() => setPending(null)} disabled={week.customizationBusy}>Annuleren</button><button className="primary-action compact-action" type="button" onClick={confirm} disabled={week.customizationBusy}>{pending.impact.requiresBudgetOverride ? "Toch gebruiken" : "Bevestig vervanging"}</button></div>
             </div>
           ) : null}
         </div>
@@ -316,17 +328,43 @@ export function ProductAlternativeControl({ dayIndex, ingredientId, currentProdu
   const [showAll, setShowAll] = useState(false);
   const [alternatives, setAlternatives] = useState<ProductAlternative[]>([]);
   const [pending, setPending] = useState<ProductAlternative | null>(null);
+  const [revalidatedPreview, setRevalidatedPreview] = useState<ManualProductChoicePreview | null>(null);
+
+  const pendingChoice = useMemo<ManualProductChoice | null>(() => pending ? {
+    action: "replaceIngredient",
+    dayIndex,
+    ingredientId,
+    productId: pending.product.id,
+    quantity: pending.packageCount,
+    selectionSource: "automaticSuggestion",
+  } : null, [dayIndex, ingredientId, pending]);
+  const pendingPreviewResult = useMemo(
+    () => pending && pendingChoice
+      ? week.previewManualProduct(pendingChoice, pending.product)
+      : null,
+    [pending, pendingChoice, week],
+  );
+  const pendingPreview = revalidatedPreview ??
+    (pendingPreviewResult?.ok ? pendingPreviewResult.preview : null);
 
   async function toggle() {
-    if (open) { setOpen(false); setPending(null); return; }
+    if (open) { setOpen(false); setPending(null); setRevalidatedPreview(null); return; }
     setOpen(true); setLoading(true);
     setAlternatives(await week.findProductAlternatives(dayIndex, ingredientId));
     setLoading(false);
   }
   async function confirm() {
-    if (!pending || !pending.withinMealBudget) return;
-    if (await week.replaceProduct(dayIndex, ingredientId, pending.product.id)) {
+    if (!pendingChoice || !pendingPreview) return;
+    const result = await week.applyManualProduct(
+      pendingChoice,
+      pendingPreview.impact,
+      pendingPreview.impact.requiresBudgetOverride,
+    );
+    if (result.applied) {
       setOpen(false); setPending(null); setAlternatives([]);
+      setRevalidatedPreview(null);
+    } else if (result.revalidatedPreview) {
+      setRevalidatedPreview(result.revalidatedPreview);
     }
   }
 
@@ -340,7 +378,7 @@ export function ProductAlternativeControl({ dayIndex, ingredientId, currentProdu
               <ul className="compact-product-list">
                 {alternatives.slice(0, showAll ? alternatives.length : INITIAL_ALTERNATIVE_COUNT).map((alternative) => (
                   <li key={alternative.product.id}>
-                    <button type="button" onClick={() => setPending(alternative)} aria-pressed={pending?.product.id === alternative.product.id}>
+                    <button type="button" onClick={() => { setPending(alternative); setRevalidatedPreview(null); }} aria-pressed={pending?.product.id === alternative.product.id}>
                       <ProductImage product={alternative.product} />
                       <span><strong>{alternative.product.name}</strong><small>{alternative.product.packageText ?? "Verpakking"} · {formatCents(alternative.totalCostCents)}</small></span>
                       <span className="compact-budget-status"><strong>{signedDifference(alternative.differenceCents)}</strong><small>{alternative.withinMealBudget ? "Binnen budget" : "Boven budget"}</small></span>
@@ -355,13 +393,14 @@ export function ProductAlternativeControl({ dayIndex, ingredientId, currentProdu
             </>
           )}
           {alternatives.length === 0 && !loading ? <button type="button" className="text-action" onClick={() => setManualOpen(true)}>Zelf zoeken</button> : null}
-          {pending ? (
-            <div className="customization-confirm">
+          {pending && pendingPreview ? (
+            <div className="customization-confirm" role={pendingPreview.impact.requiresBudgetOverride ? "alert" : "status"}>
               <strong>{currentProductName} → {pending.product.name}</strong>
-              <p>{differenceSentence(pending.differenceCents)}</p>
-              <p>Nieuwe maaltijdkosten: {formatCents(pending.nextMealPlanCostCents)}{pending.mealBudgetCents === null ? "" : ` / ${formatCents(pending.mealBudgetCents)}`}</p>
-              {!pending.withinMealBudget ? <p className="budget-impact-warning">Dit automatische alternatief blijft geblokkeerd door je maaltijd-budget.</p> : null}
-              <div className="customization-confirm-actions"><button type="button" onClick={() => setPending(null)}>Annuleren</button><button className="primary-action compact-action" type="button" onClick={confirm} disabled={!pending.withinMealBudget || week.customizationBusy}>Bevestigen</button></div>
+              <p>{differenceSentence(pendingPreview.impact.mealPlanDifferenceCents)}</p>
+              <p>Nieuwe maaltijdkosten: {formatCents(pendingPreview.impact.nextMealPlanCostCents)}{pendingPreview.impact.mealBudgetCents === null ? "" : ` / ${formatCents(pendingPreview.impact.mealBudgetCents)}`}</p>
+              {pendingPreview.impact.mealBudgetOverageCents > 0 ? <p className="budget-impact-warning"><strong>Let op:</strong> je komt {formatCents(pendingPreview.impact.mealBudgetOverageCents)} boven je maaltijd-budget.</p> : pendingPreview.impact.mealBudgetCents !== null ? <p>Blijft binnen je maaltijd-budget.</p> : null}
+              {pendingPreview.impact.weekBudgetOverageCents > 0 ? <p className="budget-impact-warning">Hierdoor kom je ook {formatCents(pendingPreview.impact.weekBudgetOverageCents)} boven je totale weekbudget.</p> : pendingPreview.impact.weekBudgetRemainingCents !== null ? <p>Je totale weekbudget blijft nog {formatCents(pendingPreview.impact.weekBudgetRemainingCents)} onder de grens.</p> : null}
+              <div className="customization-confirm-actions"><button type="button" onClick={() => { setPending(null); setRevalidatedPreview(null); }} disabled={week.customizationBusy}>Annuleren</button><button className="primary-action compact-action" type="button" onClick={confirm} disabled={week.customizationBusy}>{week.customizationBusy ? "Controleren…" : pendingPreview.impact.requiresBudgetOverride ? "Toch gebruiken" : "Bevestigen"}</button></div>
             </div>
           ) : null}
           {manualOpen ? <ManualProductFlow dayIndex={dayIndex} ingredients={ingredients} fixedIngredientId={ingredientId} onClose={() => setManualOpen(false)} /> : null}
