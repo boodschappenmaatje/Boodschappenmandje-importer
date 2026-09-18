@@ -48,6 +48,16 @@ const EMPTY_LIST: ActiveShoppingList = {
   items: [],
 };
 
+export function listWithoutCurrentWeekMealPlan(
+  list: ActiveShoppingList | undefined,
+  weekPreparationId: string,
+  now: Date = new Date(),
+): ActiveShoppingList | undefined {
+  return list
+    ? removeMealPlanContributionsForWeek(list, weekPreparationId, now)
+    : undefined;
+}
+
 export interface RecipeAlternative {
   recipe: SelectedRecipeReference;
   category: RecipeMealCategory;
@@ -826,11 +836,11 @@ function budgetImpact(
   list: ActiveShoppingList,
   now: Date,
 ): ManualProductBudgetImpact {
-  const baselineList = removeMealPlanContributionsForWeek(
+  const baselineList = listWithoutCurrentWeekMealPlan(
     list,
     preparation.id,
     now,
-  );
+  ) ?? EMPTY_LIST;
   const current = evaluateMealBudget(
     preparation.budgetCents,
     preparation.mealBudgetCents,

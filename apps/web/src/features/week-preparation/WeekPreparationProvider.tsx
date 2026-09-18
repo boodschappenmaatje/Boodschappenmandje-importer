@@ -31,6 +31,7 @@ import {
   commitExplicitRecipeChoice,
   findProductAlternatives as loadProductAlternatives,
   findRecipeAlternatives as loadRecipeAlternatives,
+  listWithoutCurrentWeekMealPlan,
   previewManualProductChoice,
   previewExplicitRecipeChoice,
   replaceWeekProduct,
@@ -722,7 +723,11 @@ export function WeekPreparationProvider({
             : "Je gerecht is aangepast.",
         );
         return true;
-      } catch {
+      } catch (error) {
+        console.error("[week-preparation] customization sync failed", {
+          weekPreparationId: next.id,
+          error,
+        });
         setActionMessage(
           "Aanpassen lukte nu niet. Je huidige gerecht en lijst zijn behouden.",
         );
@@ -808,13 +813,20 @@ export function WeekPreparationProvider({
       setCustomizationBusy(true);
       setActionMessage("Gerecht, actuele prijzen en budget worden opnieuw gecontroleerd…");
       try {
+        const validationNow = new Date();
+        const validationList = listWithoutCurrentWeekMealPlan(
+          currentList(),
+          current.id,
+          validationNow,
+        );
         const livePreview = await previewExplicitRecipeChoice(
           current,
           dayIndex,
           recipeId,
           recipeRepository(),
           catalogRepository(),
-          currentList(),
+          validationList,
+          validationNow,
         );
         if (!livePreview.ok) {
           setActionMessage(
@@ -835,7 +847,8 @@ export function WeekPreparationProvider({
           approveBudgetOverride,
           recipeRepository(),
           catalogRepository(),
-          currentList(),
+          validationList,
+          validationNow,
         );
         if (!committed.ok) {
           setActionMessage(
@@ -851,8 +864,8 @@ export function WeekPreparationProvider({
           committed.preparation,
           recipeRepository(),
           catalogRepository(),
-          new Date(),
-          currentList(),
+          validationNow,
+          validationList,
         );
         if (!validation.ready) {
           setActionMessage(
@@ -863,7 +876,12 @@ export function WeekPreparationProvider({
         return await syncValidatedCustomization(validation.preparation)
           ? { applied: true }
           : { applied: false };
-      } catch {
+      } catch (error) {
+        console.error("[week-preparation] explicit recipe replacement failed", {
+          dayIndex,
+          recipeId,
+          error,
+        });
         setActionMessage(
           "Aanpassen lukt nu niet. Je huidige gerecht en lijst zijn behouden.",
         );

@@ -61,6 +61,26 @@ describe("PWA 12 compacte iPhone-customization", () => {
     expect(controls).not.toContain("userApprovedBudgetOverride");
   });
 
+  it("bereikt voor beide gerecht-CTA's dezelfde mutation en voorkomt dubbele taps", () => {
+    expect(controls).toContain("if (!pending || confirmingRef.current) return");
+    expect(controls).toContain("confirmingRef.current = true");
+    expect(controls).toContain("await week.applyExplicitRecipe(");
+    expect(controls).toContain("pending.impact.requiresBudgetOverride");
+    expect(controls).toContain("disabled={confirming || week.customizationBusy}");
+    expect(controls).toContain('"Controleren…"');
+    expect(controls).toContain('"Toch gebruiken"');
+    expect(controls).toContain('"Bevestig vervanging"');
+  });
+
+  it("houdt de selectie vast tot succes en toont een fout in plaats van stil te stoppen", () => {
+    expect(controls).toContain("if (result.applied)");
+    expect(controls).toContain("setOpen(false); setPending(null); setAlternatives([])");
+    expect(controls).toContain('role="alert">{replacementFeedback}');
+    expect(controls).toContain("Je huidige gerecht is behouden");
+    expect(provider).toContain("listWithoutCurrentWeekMealPlan(");
+    expect(provider).toContain("explicit recipe replacement failed");
+  });
+
   it("hervalidateert dezelfde expliciete mutatie en vraagt bij prijswijziging opnieuw toestemming", () => {
     expect(provider).toContain("budgetOverrideReapprovalPreview(");
     expect(provider).toContain("reapproveCurrentBudgetOverride(");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CatalogSearchField } from "@/components/catalog/CatalogSearchField";
 import { Icon } from "@/components/Icon";
@@ -254,25 +254,44 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
   const [showAll, setShowAll] = useState(false);
   const [alternatives, setAlternatives] = useState<RecipeAlternative[]>([]);
   const [pending, setPending] = useState<RecipeAlternative | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [replacementFeedback, setReplacementFeedback] = useState<string | null>(null);
+  const confirmingRef = useRef(false);
 
   async function toggle() {
-    if (open) { setOpen(false); setPending(null); return; }
+    if (open) { setOpen(false); setPending(null); setReplacementFeedback(null); return; }
     setManualOpen(false); setOpen(true); setLoading(true);
+    setReplacementFeedback(null);
     setAlternatives(await week.findRecipeAlternatives(dayIndex));
     setLoading(false);
   }
   async function confirm() {
-    if (!pending) return;
-    const result = await week.applyExplicitRecipe(
-      dayIndex,
-      pending.recipe.id,
-      pending.impact,
-      pending.impact.requiresBudgetOverride,
-    );
-    if (result.applied) {
-      setOpen(false); setPending(null); setAlternatives([]);
-    } else if (result.revalidatedPreview) {
-      setPending(result.revalidatedPreview.alternative);
+    if (!pending || confirmingRef.current) return;
+    confirmingRef.current = true;
+    setConfirming(true);
+    setReplacementFeedback(null);
+    try {
+      const result = await week.applyExplicitRecipe(
+        dayIndex,
+        pending.recipe.id,
+        pending.impact,
+        pending.impact.requiresBudgetOverride,
+      );
+      if (result.applied) {
+        setOpen(false); setPending(null); setAlternatives([]);
+      } else if (result.revalidatedPreview) {
+        setPending(result.revalidatedPreview.alternative);
+        setReplacementFeedback(
+          "De actuele bedragen zijn gewijzigd. Controleer ze en bevestig opnieuw.",
+        );
+      } else {
+        setReplacementFeedback(
+          "Vervangen lukte nu niet. Je huidige gerecht is behouden.",
+        );
+      }
+    } finally {
+      confirmingRef.current = false;
+      setConfirming(false);
     }
   }
 
@@ -292,7 +311,7 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
                   const image = recipeImageFor({ recipeSourceKey: alternative.recipe.sourceKey, recipeName: alternative.recipe.name, categories: [alternative.category], ingredients: [] });
                   return (
                     <li key={alternative.recipe.id}>
-                      <button type="button" className="meal-alternative-card" onClick={() => setPending(alternative)} aria-pressed={pending?.recipe.id === alternative.recipe.id}>
+                      <button type="button" className="meal-alternative-card" onClick={() => { setPending(alternative); setReplacementFeedback(null); }} aria-pressed={pending?.recipe.id === alternative.recipe.id}>
                         <DishImage asset={image} className="meal-alternative-image" sizes="52px" title={alternative.recipe.name} />
                         <span><strong>{alternative.recipe.name}</strong><small>{formatCents(alternative.alternativeDishCostCents)} · {signedDifference(alternative.differenceCents)}</small></span>
                         <small>{alternative.withinMealBudget ? "Binnen budget" : "Boven budget"}</small>
@@ -311,7 +330,8 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
               <p>Nieuwe maaltijdkosten: {formatCents(pending.nextMealPlanCostCents)}{pending.mealBudgetCents === null ? "" : ` / ${formatCents(pending.mealBudgetCents)}`}</p>
               {pending.impact.mealBudgetOverageCents > 0 ? <p className="budget-impact-warning"><strong>Let op:</strong> je komt {formatCents(pending.impact.mealBudgetOverageCents)} boven je maaltijd-budget.</p> : null}
               {pending.impact.weekBudgetOverageCents > 0 ? <p className="budget-impact-warning">Hierdoor kom je ook {formatCents(pending.impact.weekBudgetOverageCents)} boven je totale weekbudget.</p> : pending.impact.weekBudgetRemainingCents !== null ? <p>Je totale weekbudget blijft nog {formatCents(pending.impact.weekBudgetRemainingCents)} onder de grens.</p> : null}
-              <div className="customization-confirm-actions"><button type="button" onClick={() => setPending(null)} disabled={week.customizationBusy}>Annuleren</button><button className="primary-action compact-action" type="button" onClick={confirm} disabled={week.customizationBusy}>{pending.impact.requiresBudgetOverride ? "Toch gebruiken" : "Bevestig vervanging"}</button></div>
+              {replacementFeedback ? <p className="budget-impact-warning" role="alert">{replacementFeedback}</p> : null}
+              <div className="customization-confirm-actions"><button type="button" onClick={() => { setPending(null); setReplacementFeedback(null); }} disabled={confirming || week.customizationBusy}>Annuleren</button><button className="primary-action compact-action" type="button" onClick={confirm} disabled={confirming || week.customizationBusy}>{confirming || week.customizationBusy ? "Controleren…" : pending.impact.requiresBudgetOverride ? "Toch gebruiken" : "Bevestig vervanging"}</button></div>
             </div>
           ) : null}
         </div>

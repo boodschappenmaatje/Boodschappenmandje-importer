@@ -12,6 +12,7 @@ import {
   commitManualProductChoice,
   findProductAlternatives,
   findRecipeAlternatives,
+  listWithoutCurrentWeekMealPlan,
   previewManualProductChoice,
   replaceWeekProduct,
   replaceWeekRecipe,
@@ -417,6 +418,117 @@ describe("PWA 12 maaltijdcustomization", () => {
         NOW,
       ),
     ).toEqual(synchronized);
+  });
+
+  it("bevestigt een gerecht binnen budget tegen de lijst zonder oude weekbijdragen", async () => {
+    const original = { ...await preparedWeek(), budgetCents: 300 };
+    const completedOriginal = completeShoppingListFromWeek(
+      createEmptyActiveShoppingList(NOW),
+      original.ingredients,
+      original.id,
+      NOW,
+    );
+    const committed = await commitExplicitRecipeChoice(
+      original,
+      0,
+      MACARONI.id,
+      false,
+      recipeRepository,
+      catalogRepository,
+      listWithoutCurrentWeekMealPlan(completedOriginal, original.id, NOW),
+      NOW,
+    );
+    expect(committed.ok).toBe(true);
+    if (!committed.ok) return;
+
+    const validated = await revalidatePreparedWeek(
+      committed.preparation,
+      recipeRepository,
+      catalogRepository,
+      NOW,
+      listWithoutCurrentWeekMealPlan(completedOriginal, original.id, NOW),
+    );
+    expect(validated.ready).toBe(true);
+    expect(validated.preparation.days[0].recipeId).toBe(MACARONI.id);
+
+    const synchronized = completeShoppingListFromWeek(
+      completedOriginal,
+      validated.preparation.ingredients,
+      validated.preparation.id,
+      NOW,
+    );
+    expect(synchronized.items.some((item) => item.productId === "product-spaghetti"))
+      .toBe(false);
+    expect(synchronized.items.find((item) => item.productId === "product-macaroni"))
+      .toMatchObject({ usedIn: [MACARONI.name] });
+    expect(completeShoppingListFromWeek(
+      synchronized,
+      validated.preparation.ingredients,
+      validated.preparation.id,
+      NOW,
+    )).toEqual(synchronized);
+  });
+
+  it("past een expliciet goedgekeurde gerechtoverschrijding na definitieve revalidatie toe", async () => {
+    const original = await preparedWeek();
+    const completedOriginal = completeShoppingListFromWeek(
+      createEmptyActiveShoppingList(NOW),
+      original.ingredients,
+      original.id,
+      NOW,
+    );
+    const baselineList = listWithoutCurrentWeekMealPlan(
+      completedOriginal,
+      original.id,
+      NOW,
+    );
+    const committed = await commitExplicitRecipeChoice(
+      original,
+      0,
+      EXPENSIVE.id,
+      true,
+      recipeRepository,
+      catalogRepository,
+      baselineList,
+      NOW,
+    );
+    expect(committed.ok).toBe(true);
+    if (!committed.ok) return;
+
+    const withOldWeekStillCounted = await revalidatePreparedWeek(
+      committed.preparation,
+      recipeRepository,
+      catalogRepository,
+      NOW,
+      completedOriginal,
+    );
+    expect(withOldWeekStillCounted.ready).toBe(false);
+
+    const validated = await revalidatePreparedWeek(
+      committed.preparation,
+      recipeRepository,
+      catalogRepository,
+      NOW,
+      baselineList,
+    );
+    expect(validated.ready).toBe(true);
+    expect(validated.preparation.days[0].recipeId).toBe(EXPENSIVE.id);
+    expect(validated.preparation.generation?.mealBudgetStatus)
+      .toBe("overMealBudget");
+    expect(validated.preparation.customizations[0].recipeBudgetDecision)
+      .toMatchObject({
+        mode: "userApprovedBudgetOverride",
+        approvedMutation: {
+          kind: "replaceRecipe",
+          weekPreparationId: original.id,
+          dayIndex: 0,
+          recipeId: EXPENSIVE.id,
+        },
+      });
+    const reopened = decodeStoredWeekPreparation(
+      structuredClone(encodeStoredWeekPreparation(validated.preparation)),
+    );
+    expect(reopened?.days[0].recipeId).toBe(EXPENSIVE.id);
   });
 
   it("bewaart de vervanging bij sluiten en heropenen zonder het oude gerecht terug te zetten", async () => {
