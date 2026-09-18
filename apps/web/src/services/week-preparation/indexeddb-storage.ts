@@ -11,15 +11,144 @@ import {
   type WeekIngredientRequirement,
   type WeekPreferences,
   type WeekPreparation,
+  type WeekMealCustomization,
 } from "@/types/week-preparation";
 import { mealMixProfileForIngredient } from "@/services/week-preparation/meal-mix-profiles";
 
 const ACTIVE_PREPARATION_KEY = "active";
 
-interface StoredWeekPreparationV4 {
+interface StoredWeekPreparationV6 {
   key: typeof ACTIVE_PREPARATION_KEY;
   schemaVersion: typeof WEEK_PREPARATION_SCHEMA_VERSION;
   preparation: WeekPreparation;
+}
+
+function isBudgetMutation(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    typeof value.kind !== "string" ||
+    typeof value.weekPreparationId !== "string" ||
+    !Number.isInteger(value.dayIndex) ||
+    Number(value.dayIndex) < 0 ||
+    Number(value.dayIndex) > 6
+  ) {
+    return false;
+  }
+  if (value.kind === "replaceRecipe") {
+    return typeof value.recipeId === "string";
+  }
+  if (value.kind === "addToMeal") {
+    return (
+      typeof value.productId === "string" &&
+      Number.isInteger(value.quantity) &&
+      Number(value.quantity) >= 1 &&
+      Number(value.quantity) <= 99
+    );
+  }
+  return (
+    value.kind === "replaceIngredient" &&
+    typeof value.ingredientId === "string" &&
+    typeof value.productId === "string" &&
+    Number.isInteger(value.quantity) &&
+    Number(value.quantity) >= 1 &&
+    Number(value.quantity) <= 99
+  );
+}
+
+function isBudgetDecision(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.mode !== "string") return false;
+  if (
+    value.mode === "automaticPlanValidation" ||
+    value.mode === "userConfirmedManualChoice"
+  ) {
+    return true;
+  }
+  return (
+    value.mode === "userApprovedBudgetOverride" &&
+    typeof value.approvedAt === "string" &&
+    Number.isSafeInteger(value.approvedMealPlanCostCents) &&
+    Number(value.approvedMealPlanCostCents) >= 0 &&
+    Number.isSafeInteger(value.approvedTotalWeekCostCents) &&
+    Number(value.approvedTotalWeekCostCents) >= 0 &&
+    (value.approvedMealBudgetCents === null ||
+      (Number.isSafeInteger(value.approvedMealBudgetCents) &&
+        Number(value.approvedMealBudgetCents) >= 0)) &&
+    (value.approvedWeekBudgetCents === null ||
+      (Number.isSafeInteger(value.approvedWeekBudgetCents) &&
+        Number(value.approvedWeekBudgetCents) > 0)) &&
+    isBudgetMutation(value.approvedMutation)
+  );
+}
+
+function isRecipeReference(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.sourceKey === "string" &&
+    typeof value.name === "string"
+  );
+}
+
+function isCustomization(value: unknown): value is WeekMealCustomization {
+  return (
+    isRecord(value) &&
+    Number.isInteger(value.dayIndex) &&
+    Number(value.dayIndex) >= 0 &&
+    Number(value.dayIndex) <= 6 &&
+    isRecipeReference(value.baseRecipe) &&
+    (value.replacementRecipe === null || isRecipeReference(value.replacementRecipe)) &&
+    Array.isArray(value.productOverrides) &&
+    value.productOverrides.every(
+      (override) =>
+        isRecord(override) &&
+        typeof override.ingredientId === "string" &&
+        typeof override.productId === "string" &&
+        typeof override.sku === "string" &&
+        (override.quantity === null ||
+          (Number.isInteger(override.quantity) &&
+            Number(override.quantity) >= 1 &&
+            Number(override.quantity) <= 99)) &&
+        ["automaticSuggestion", "manualSearch"].includes(
+          String(override.selectionSource),
+        ) &&
+        ["automaticPlanValidation", "explicitUserChoice"].includes(
+          String(override.applicationMode),
+        ) &&
+        isBudgetDecision(override.budgetDecision) &&
+        typeof override.updatedAt === "string",
+    ) &&
+    Array.isArray(value.ingredientOverrides) &&
+    value.ingredientOverrides.every(
+      (override) =>
+        isRecord(override) &&
+        typeof override.ingredientId === "string" &&
+        typeof override.substituteIngredientId === "string" &&
+        typeof override.substituteSourceKey === "string" &&
+        typeof override.quantityMultiplier === "number" &&
+        Number.isFinite(override.quantityMultiplier) &&
+        Number(override.quantityMultiplier) > 0 &&
+        typeof override.updatedAt === "string",
+    ) &&
+    Array.isArray(value.manualProductAdditions) &&
+    value.manualProductAdditions.every(
+      (addition) =>
+        isRecord(addition) &&
+        typeof addition.id === "string" &&
+        isProductReference(addition.product) &&
+        isPriceSnapshot(addition.price) &&
+        Number.isInteger(addition.quantity) &&
+        Number(addition.quantity) >= 1 &&
+        Number(addition.quantity) <= 99 &&
+        ["automaticSuggestion", "manualSearch"].includes(
+          String(addition.selectionSource),
+        ) &&
+        addition.applicationMode === "explicitUserChoice" &&
+        isBudgetDecision(addition.budgetDecision) &&
+        typeof addition.updatedAt === "string",
+    ) &&
+    isBudgetDecision(value.recipeBudgetDecision) &&
+    typeof value.updatedAt === "string"
+  );
 }
 
 export type WeekPreparationStorageErrorCode =
@@ -329,9 +458,191 @@ function isPreparation(value: unknown): value is WeekPreparation {
     Array.isArray(value.ingredients) &&
     value.ingredients.every(isIngredient) &&
     isGeneration(value.generation) &&
+    Array.isArray(value.customizations) &&
+    value.customizations.every(isCustomization) &&
     ["draft", "readyForGeneration", "generating", "generated", "generationPartial", "generationError"].includes(String(value.status)) &&
     value.listStrategy === "preserveAndComplete"
   );
+}
+
+function migrateV4Preparation(value: unknown): WeekPreparation | null {
+  if (!isRecord(value) || value.schemaVersion !== 4) return null;
+  const migrated = {
+    ...value,
+    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    customizations: [],
+  };
+  return isPreparation(migrated) ? migrated : null;
+}
+
+function migrateV5Preparation(value: unknown): WeekPreparation | null {
+  if (!isRecord(value) || value.schemaVersion !== 5) return null;
+  const customizations = Array.isArray(value.customizations)
+    ? value.customizations.map((customization) => {
+        if (!isRecord(customization)) return customization;
+        const productOverrides = Array.isArray(customization.productOverrides)
+          ? customization.productOverrides.map((override) =>
+              isRecord(override)
+                ? {
+                    ...override,
+                    quantity: null,
+                    selectionSource: "automaticSuggestion",
+                    applicationMode: "automaticPlanValidation",
+                    budgetDecision: { mode: "automaticPlanValidation" },
+                  }
+                : override,
+            )
+          : customization.productOverrides;
+        return {
+          ...customization,
+          recipeBudgetDecision: { mode: "automaticPlanValidation" },
+          productOverrides,
+          manualProductAdditions: [],
+        };
+      })
+    : value.customizations;
+  const migrated = {
+    ...value,
+    schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,
+    customizations,
+  };
+  return isPreparation(migrated) ? migrated : null;
+}
+
+function normalizeBudgetDecision(
+  value: unknown,
+  approvedMutation: Record<string, unknown> | null,
+  approvedMealBudgetCents: unknown,
+  approvedWeekBudgetCents: unknown,
+): unknown {
+  if (isRecord(value) && value.mode === "userApprovedBudgetOverride") {
+    return {
+      ...value,
+      approvedMutation: value.approvedMutation ?? approvedMutation,
+      approvedMealBudgetCents:
+        value.approvedMealBudgetCents === undefined
+          ? approvedMealBudgetCents
+          : value.approvedMealBudgetCents,
+      approvedWeekBudgetCents:
+        value.approvedWeekBudgetCents === undefined
+          ? approvedWeekBudgetCents
+          : value.approvedWeekBudgetCents,
+    };
+  }
+  return value;
+}
+
+function normalizeV6Preparation(value: unknown): unknown {
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== WEEK_PREPARATION_SCHEMA_VERSION ||
+    typeof value.id !== "string" ||
+    !Array.isArray(value.customizations)
+  ) {
+    return value;
+  }
+  const weekPreparationId = value.id;
+  const customizations = value.customizations.map((rawCustomization) => {
+    if (!isRecord(rawCustomization)) return rawCustomization;
+    const dayIndex = Number(rawCustomization.dayIndex);
+    const replacementRecipe = isRecord(rawCustomization.replacementRecipe)
+      ? rawCustomization.replacementRecipe
+      : null;
+    const recipeMutation =
+      Number.isInteger(dayIndex) && typeof replacementRecipe?.id === "string"
+        ? {
+            kind: "replaceRecipe",
+            weekPreparationId,
+            dayIndex,
+            recipeId: replacementRecipe.id,
+          }
+        : null;
+    const productOverrides = Array.isArray(rawCustomization.productOverrides)
+      ? rawCustomization.productOverrides.map((rawOverride) => {
+          if (!isRecord(rawOverride)) return rawOverride;
+          const quantity = Number(rawOverride.quantity);
+          const mutation =
+            Number.isInteger(dayIndex) &&
+            typeof rawOverride.ingredientId === "string" &&
+            typeof rawOverride.productId === "string" &&
+            Number.isInteger(quantity) &&
+            quantity >= 1
+              ? {
+                  kind: "replaceIngredient",
+                  weekPreparationId,
+                  dayIndex,
+                  ingredientId: rawOverride.ingredientId,
+                  productId: rawOverride.productId,
+                  quantity,
+                }
+              : null;
+          const selectionSource = rawOverride.selectionSource === "manualSearch"
+            ? "manualSearch"
+            : "automaticSuggestion";
+          return {
+            ...rawOverride,
+            selectionSource,
+            applicationMode: rawOverride.applicationMode ??
+              (selectionSource === "manualSearch"
+                ? "explicitUserChoice"
+                : "automaticPlanValidation"),
+            budgetDecision: normalizeBudgetDecision(
+              rawOverride.budgetDecision,
+              mutation,
+              value.mealBudgetCents,
+              value.budgetCents,
+            ),
+          };
+        })
+      : rawCustomization.productOverrides;
+    const manualProductAdditions = Array.isArray(rawCustomization.manualProductAdditions)
+      ? rawCustomization.manualProductAdditions.map((rawAddition) => {
+          if (!isRecord(rawAddition)) return rawAddition;
+          const quantity = Number(rawAddition.quantity);
+          const product = isRecord(rawAddition.product) ? rawAddition.product : null;
+          const mutation =
+            Number.isInteger(dayIndex) &&
+            typeof product?.productId === "string" &&
+            Number.isInteger(quantity) &&
+            quantity >= 1
+              ? {
+                  kind: "addToMeal",
+                  weekPreparationId,
+                  dayIndex,
+                  productId: product.productId,
+                  quantity,
+                }
+              : null;
+          return {
+            ...rawAddition,
+            selectionSource: rawAddition.selectionSource === "automaticSuggestion"
+              ? "automaticSuggestion"
+              : "manualSearch",
+            applicationMode: "explicitUserChoice",
+            budgetDecision: normalizeBudgetDecision(
+              rawAddition.budgetDecision,
+              mutation,
+              value.mealBudgetCents,
+              value.budgetCents,
+            ),
+          };
+        })
+      : rawCustomization.manualProductAdditions;
+    return {
+      ...rawCustomization,
+      recipeBudgetDecision: normalizeBudgetDecision(
+        rawCustomization.recipeBudgetDecision ?? {
+          mode: "automaticPlanValidation",
+        },
+        recipeMutation,
+        value.mealBudgetCents,
+        value.budgetCents,
+      ),
+      productOverrides,
+      manualProductAdditions,
+    };
+  });
+  return { ...value, customizations };
 }
 
 function migrateV1Preparation(value: unknown): WeekPreparation | null {
@@ -396,6 +707,7 @@ function migrateV1Preparation(value: unknown): WeekPreparation | null {
     days,
     ingredients: [],
     generation: null,
+    customizations: [],
     status: value.status as "draft" | "readyForGeneration",
     listStrategy: "preserveAndComplete",
   };
@@ -422,18 +734,29 @@ export function decodeStoredWeekPreparation(value: unknown): WeekPreparation | n
     if (!migrated) throw new WeekPreparationStorageError("invalid-data");
     return migrated;
   }
+  if (value.schemaVersion === 4) {
+    const migrated = migrateV4Preparation(value.preparation);
+    if (!migrated) throw new WeekPreparationStorageError("invalid-data");
+    return migrated;
+  }
+  if (value.schemaVersion === 5) {
+    const migrated = migrateV5Preparation(value.preparation);
+    if (!migrated) throw new WeekPreparationStorageError("invalid-data");
+    return migrated;
+  }
   if (value.schemaVersion !== WEEK_PREPARATION_SCHEMA_VERSION) {
     throw new WeekPreparationStorageError("unsupported-version");
   }
-  if (!isPreparation(value.preparation)) {
+  const normalized = normalizeV6Preparation(value.preparation);
+  if (!isPreparation(normalized)) {
     throw new WeekPreparationStorageError("invalid-data");
   }
-  return value.preparation;
+  return normalized;
 }
 
 export function encodeStoredWeekPreparation(
   preparation: WeekPreparation,
-): StoredWeekPreparationV4 {
+): StoredWeekPreparationV6 {
   return {
     key: ACTIVE_PREPARATION_KEY,
     schemaVersion: WEEK_PREPARATION_SCHEMA_VERSION,

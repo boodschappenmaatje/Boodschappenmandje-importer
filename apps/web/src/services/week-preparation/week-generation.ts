@@ -2,7 +2,10 @@ import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
+  applyManualProductToRequirement,
+  applyProductToRequirement,
   combinedProductPurchaseQuantity,
+  isReliableIngredientMatch,
 } from "@/services/week-preparation/product-matching";
 import {
   applyReadinessProducts,
@@ -28,6 +31,8 @@ import type {
   WeekGenerationSummary,
   WeekCategoryReadinessSummary,
   WeekIngredientRequirement,
+  WeekBudgetDecision,
+  WeekBudgetMutation,
   WeekPreparation,
   WeekPreparationStatus,
 } from "@/types/week-preparation";
@@ -56,6 +61,437 @@ interface EvaluatedPlan {
   days: WeekPreparation["days"];
   ingredients: WeekIngredientRequirement[];
   evaluation: MealBudgetEvaluation;
+}
+
+function manualAdditionRequirement(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  addition: WeekPreparation["customizations"][number]["manualProductAdditions"][number],
+  product: Awaited<ReturnType<CatalogRepository["getByIds"]>>["products"][number] | null,
+): WeekIngredientRequirement | null {
+  const day = preparation.days.find((item) => item.dayIndex === dayIndex);
+  if (!day?.recipe) return null;
+  const base: WeekIngredientRequirement = {
+    ingredientId: addition.id,
+    sourceKey: "manualProductAddition",
+    name: product?.name ?? addition.product.name,
+    unit: "piece",
+    optional: false,
+    servingsBase: 1,
+    kind: "ingredient",
+    brandConstraint: null,
+    requiredQuantity: addition.quantity,
+    purchaseQuantity: addition.quantity,
+    packageCapacity: 1,
+    usedIn: [{
+      recipeId: day.recipe.id,
+      recipeName: day.recipe.name,
+      dayIndex,
+      requiredQuantity: addition.quantity,
+    }],
+    product: addition.product,
+    price: addition.price,
+    productMatchMissing: false,
+    packageCalculationMissing: false,
+  };
+  return product
+    ? applyManualProductToRequirement(base, product, addition.quantity)
+    : {
+        ...base,
+        product: null,
+        price: null,
+        productMatchMissing: true,
+      };
+}
+
+async function applyStoredCustomizations(
+  preparation: WeekPreparation,
+  ingredients: WeekIngredientRequirement[],
+  catalog: RecipeCatalog,
+  catalogRepository: CatalogRepository,
+): Promise<WeekIngredientRequirement[]> {
+  const overrides = preparation.customizations.flatMap((customization) =>
+    customization.productOverrides.map((override) => ({
+      ...override,
+      dayIndex: customization.dayIndex,
+    })),
+  );
+  const additions = preparation.customizations.flatMap((customization) =>
+    customization.manualProductAdditions.map((addition) => ({
+      ...addition,
+      dayIndex: customization.dayIndex,
+    })),
+  );
+  if (overrides.length === 0 && additions.length === 0) return ingredients;
+
+  const productIds = [...new Set([
+    ...overrides.map((override) => override.productId),
+    ...additions.map((addition) => addition.product.productId),
+  ])];
+  const result = await catalogRepository.getByIds(productIds);
+  const products = new Map(result.products.map((product) => [product.id, product]));
+  const ingredientDefinitions = new Map(
+    catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+  );
+
+  const overridden = ingredients.flatMap((requirement) => {
+    const applicable = overrides.filter(
+      (override) =>
+        override.ingredientId === requirement.ingredientId &&
+        requirement.usedIn.some((use) => use.dayIndex === override.dayIndex),
+    );
+    if (applicable.length === 0) return [requirement];
+
+    const ingredient = ingredientDefinitions.get(requirement.ingredientId);
+    const overrideByDay = new Map(
+      applicable.map((override) => [override.dayIndex, override]),
+    );
+    const groups = Map.groupBy(
+      requirement.usedIn,
+      (use) => overrideByDay.get(use.dayIndex)?.productId ?? "base",
+    );
+
+    return [...groups.entries()].map(([productId, uses]) => {
+      const requiredQuantity = uses.reduce(
+        (total, use) => total + use.requiredQuantity,
+        0,
+      );
+      const scoped = { ...requirement, requiredQuantity, usedIn: uses };
+      if (productId === "base") {
+        return {
+          ...scoped,
+          purchaseQuantity: scoped.packageCapacity
+            ? Math.max(1, Math.ceil(requiredQuantity / scoped.packageCapacity))
+            : null,
+        };
+      }
+      const override = overrideByDay.get(uses[0]!.dayIndex)!;
+      const product = products.get(productId) ?? null;
+      if (override.selectionSource === "manualSearch") {
+        const quantity = override.quantity ?? 1;
+        if (
+          product &&
+          product.supermarket === "Hoogvliet" &&
+          product.isAvailable !== false
+        ) {
+          return applyManualProductToRequirement(scoped, product, quantity);
+        }
+        return applyProductToRequirement(scoped, null);
+      }
+      const validProduct =
+        ingredient &&
+        product &&
+        isReliableIngredientMatch(
+          ingredient,
+          product,
+          requirement.brandConstraint,
+        )
+          ? product
+          : null;
+      return applyProductToRequirement(scoped, validProduct);
+    });
+  });
+
+  return [
+    ...overridden,
+    ...additions.flatMap((addition) => {
+      const requirement = manualAdditionRequirement(
+        preparation,
+        addition.dayIndex,
+        addition,
+        (() => {
+          const product = products.get(addition.product.productId) ?? null;
+          return product?.supermarket === "Hoogvliet" && product.isAvailable !== false
+            ? product
+            : null;
+        })(),
+      );
+      return requirement ? [requirement] : [];
+    }),
+  ];
+}
+
+interface ApprovalCostSnapshot {
+  isMealBudgetComplete: boolean;
+  mealPlanKnownCostCents: number;
+  totalKnownWeekCostCents: number;
+}
+
+interface ScopedApproval {
+  decision: Extract<WeekBudgetDecision, { mode: "userApprovedBudgetOverride" }>;
+  mutationMatches: boolean;
+  currentMutation: WeekBudgetMutation | null;
+}
+
+function mutationMatches(
+  expected: WeekBudgetMutation,
+  actual: WeekBudgetMutation,
+): boolean {
+  if (
+    expected.kind !== actual.kind ||
+    expected.weekPreparationId !== actual.weekPreparationId ||
+    expected.dayIndex !== actual.dayIndex
+  ) {
+    return false;
+  }
+  if (expected.kind === "replaceRecipe" && actual.kind === "replaceRecipe") {
+    return expected.recipeId === actual.recipeId;
+  }
+  if (expected.kind === "addToMeal" && actual.kind === "addToMeal") {
+    return (
+      expected.productId === actual.productId &&
+      expected.quantity === actual.quantity
+    );
+  }
+  return (
+    expected.kind === "replaceIngredient" &&
+    actual.kind === "replaceIngredient" &&
+    expected.ingredientId === actual.ingredientId &&
+    expected.productId === actual.productId &&
+    expected.quantity === actual.quantity
+  );
+}
+
+function scopedApprovals(preparation: WeekPreparation): ScopedApproval[] {
+  return preparation.customizations.flatMap((customization) => {
+    const approvals: ScopedApproval[] = [];
+    if (customization.recipeBudgetDecision.mode === "userApprovedBudgetOverride") {
+      const currentMutation: WeekBudgetMutation | null =
+        customization.replacementRecipe === null
+          ? null
+          : {
+              kind: "replaceRecipe",
+              weekPreparationId: preparation.id,
+              dayIndex: customization.dayIndex,
+              recipeId: customization.replacementRecipe.id,
+            };
+      approvals.push({
+        decision: customization.recipeBudgetDecision,
+        mutationMatches: currentMutation !== null &&
+          mutationMatches(
+            customization.recipeBudgetDecision.approvedMutation,
+            currentMutation,
+          ),
+        currentMutation,
+      });
+    }
+    for (const override of customization.productOverrides) {
+      if (override.budgetDecision.mode !== "userApprovedBudgetOverride") continue;
+      const currentMutation: WeekBudgetMutation | null = override.quantity === null
+        ? null
+        : {
+            kind: "replaceIngredient",
+            weekPreparationId: preparation.id,
+            dayIndex: customization.dayIndex,
+            ingredientId: override.ingredientId,
+            productId: override.productId,
+            quantity: override.quantity,
+          };
+      approvals.push({
+        decision: override.budgetDecision,
+        mutationMatches:
+          override.applicationMode === "explicitUserChoice" &&
+          currentMutation !== null &&
+          mutationMatches(override.budgetDecision.approvedMutation, currentMutation),
+        currentMutation,
+      });
+    }
+    for (const addition of customization.manualProductAdditions) {
+      if (addition.budgetDecision.mode !== "userApprovedBudgetOverride") continue;
+      const currentMutation: WeekBudgetMutation = {
+        kind: "addToMeal",
+        weekPreparationId: preparation.id,
+        dayIndex: customization.dayIndex,
+        productId: addition.product.productId,
+        quantity: addition.quantity,
+      };
+      approvals.push({
+        decision: addition.budgetDecision,
+        mutationMatches:
+          addition.applicationMode === "explicitUserChoice" &&
+          mutationMatches(addition.budgetDecision.approvedMutation, currentMutation),
+        currentMutation,
+      });
+    }
+    return approvals;
+  });
+}
+
+function approvedBudgetOverrideAllowsPlan(
+  preparation: WeekPreparation,
+  evaluation: ApprovalCostSnapshot,
+): boolean {
+  if (!evaluation.isMealBudgetComplete) return false;
+  const latest = scopedApprovals(preparation).toSorted(
+    (left, right) =>
+      right.decision.approvedAt.localeCompare(left.decision.approvedAt),
+  )[0];
+  return Boolean(
+    latest?.mutationMatches &&
+    preparation.mealBudgetCents === latest.decision.approvedMealBudgetCents &&
+    preparation.budgetCents === latest.decision.approvedWeekBudgetCents &&
+    evaluation.mealPlanKnownCostCents <=
+      latest.decision.approvedMealPlanCostCents &&
+    evaluation.totalKnownWeekCostCents <=
+      latest.decision.approvedTotalWeekCostCents,
+  );
+}
+
+export function hasValidUserApprovedBudgetOverride(
+  preparation: WeekPreparation,
+): boolean {
+  const generation = preparation.generation;
+  return Boolean(
+    generation && approvedBudgetOverrideAllowsPlan(preparation, generation),
+  );
+}
+
+export function hasStoredUserApprovedBudgetOverride(
+  preparation: WeekPreparation,
+): boolean {
+  return scopedApprovals(preparation).length > 0;
+}
+
+export interface BudgetOverrideReapprovalPreview {
+  mutation: WeekBudgetMutation;
+  previouslyApprovedMealPlanCostCents: number;
+  currentMealPlanCostCents: number;
+  mealPlanDifferenceCents: number;
+  mealBudgetCents: number | null;
+  mealBudgetOverageCents: number;
+  previouslyApprovedTotalWeekCostCents: number;
+  currentTotalWeekCostCents: number;
+  totalWeekDifferenceCents: number;
+  weekBudgetCents: number | null;
+  weekBudgetOverageCents: number;
+  weekBudgetRemainingCents: number | null;
+}
+
+export function budgetOverrideReapprovalPreview(
+  preparation: WeekPreparation,
+): BudgetOverrideReapprovalPreview | null {
+  const generation = preparation.generation;
+  if (
+    !generation?.isMealBudgetComplete ||
+    (generation.mealBudgetStatus !== "overMealBudget" &&
+      generation.weekBudgetStatus !== "overBudget") ||
+    approvedBudgetOverrideAllowsPlan(preparation, generation)
+  ) {
+    return null;
+  }
+  const latest = scopedApprovals(preparation).toSorted(
+    (left, right) =>
+      right.decision.approvedAt.localeCompare(left.decision.approvedAt),
+  )[0];
+  if (!latest?.currentMutation) return null;
+  const mealBudgetOverageCents = preparation.mealBudgetCents === null
+    ? 0
+    : Math.max(
+        0,
+        generation.mealPlanKnownCostCents - preparation.mealBudgetCents,
+      );
+  const weekBudgetOverageCents = preparation.budgetCents === null
+    ? 0
+    : Math.max(
+        0,
+        generation.totalKnownWeekCostCents - preparation.budgetCents,
+      );
+  return {
+    mutation: latest.currentMutation,
+    previouslyApprovedMealPlanCostCents:
+      latest.decision.approvedMealPlanCostCents,
+    currentMealPlanCostCents: generation.mealPlanKnownCostCents,
+    mealPlanDifferenceCents:
+      generation.mealPlanKnownCostCents -
+      latest.decision.approvedMealPlanCostCents,
+    mealBudgetCents: preparation.mealBudgetCents,
+    mealBudgetOverageCents,
+    previouslyApprovedTotalWeekCostCents:
+      latest.decision.approvedTotalWeekCostCents,
+    currentTotalWeekCostCents: generation.totalKnownWeekCostCents,
+    totalWeekDifferenceCents:
+      generation.totalKnownWeekCostCents -
+      latest.decision.approvedTotalWeekCostCents,
+    weekBudgetCents: preparation.budgetCents,
+    weekBudgetOverageCents,
+    weekBudgetRemainingCents: preparation.budgetCents === null
+      ? null
+      : Math.max(
+          0,
+          preparation.budgetCents - generation.totalKnownWeekCostCents,
+        ),
+  };
+}
+
+export function reapproveCurrentBudgetOverride(
+  preparation: WeekPreparation,
+  preview: BudgetOverrideReapprovalPreview,
+  now: Date = new Date(),
+): WeekPreparation | null {
+  const currentPreview = budgetOverrideReapprovalPreview(preparation);
+  if (
+    !currentPreview ||
+    !mutationMatches(currentPreview.mutation, preview.mutation) ||
+    currentPreview.currentMealPlanCostCents !== preview.currentMealPlanCostCents ||
+    currentPreview.currentTotalWeekCostCents !== preview.currentTotalWeekCostCents
+  ) {
+    return null;
+  }
+  const decision: WeekBudgetDecision = {
+    mode: "userApprovedBudgetOverride",
+    approvedAt: now.toISOString(),
+    approvedMealPlanCostCents: currentPreview.currentMealPlanCostCents,
+    approvedTotalWeekCostCents: currentPreview.currentTotalWeekCostCents,
+    approvedMealBudgetCents: preparation.mealBudgetCents,
+    approvedWeekBudgetCents: preparation.budgetCents,
+    approvedMutation: currentPreview.mutation,
+  };
+  const customizations = preparation.customizations.map((customization) => {
+    const mutation = currentPreview.mutation;
+    if (customization.dayIndex !== mutation.dayIndex) {
+      return customization;
+    }
+    if (mutation.kind === "replaceRecipe") {
+      return { ...customization, recipeBudgetDecision: decision };
+    }
+    if (mutation.kind === "replaceIngredient") {
+      return {
+        ...customization,
+        productOverrides: customization.productOverrides.map((override) =>
+          override.ingredientId === mutation.ingredientId &&
+          override.productId === mutation.productId &&
+          override.quantity === mutation.quantity
+            ? { ...override, budgetDecision: decision }
+            : override,
+        ),
+      };
+    }
+    return {
+      ...customization,
+      manualProductAdditions: customization.manualProductAdditions.map(
+        (addition) =>
+          addition.product.productId === mutation.productId &&
+          addition.quantity === mutation.quantity
+            ? { ...addition, budgetDecision: decision }
+            : addition,
+      ),
+    };
+  });
+  return { ...preparation, customizations, updatedAt: now.toISOString() };
+}
+
+function budgetAllowsPreparedWeek(
+  preparation: WeekPreparation,
+  evaluation: MealBudgetEvaluation,
+): boolean {
+  const approvedChoiceNeedsValidation =
+    hasStoredUserApprovedBudgetOverride(preparation) &&
+    (evaluation.mealBudgetStatus === "overMealBudget" ||
+      evaluation.weekBudgetStatus === "overBudget");
+  if (approvedChoiceNeedsValidation) {
+    return approvedBudgetOverrideAllowsPlan(preparation, evaluation);
+  }
+  return mealBudgetAllowsPlan(evaluation);
 }
 
 function generationSummary(
@@ -336,7 +772,7 @@ function finalStatus(
         item.price === null),
   );
   const budgetGap =
-    evaluation !== undefined && !mealBudgetAllowsPlan(evaluation);
+    evaluation !== undefined && !budgetAllowsPreparedWeek(preparation, evaluation);
   return hasRecipeGap || hasIngredientGap || budgetGap
     ? "generationPartial"
     : "generated";
@@ -847,7 +1283,12 @@ export async function revalidatePreparedWeek(
     preparation.numberOfPeople,
     catalog,
   );
-  const ingredients = applyReadinessProducts(requirements, readiness);
+  const ingredients = await applyStoredCustomizations(
+    preparation,
+    applyReadinessProducts(requirements, readiness),
+    catalog,
+    catalogRepository,
+  );
   const generatedAt = now.toISOString();
   const refreshed = { ...preparation, ingredients };
   const mealBudget = evaluateMealBudget(
@@ -876,7 +1317,7 @@ export async function revalidatePreparedWeek(
     ready:
       !hasDayGap &&
       next.status === "generated" &&
-      mealBudgetAllowsPlan(mealBudget),
+      budgetAllowsPreparedWeek(next, mealBudget),
     preparation: next,
   };
 }
@@ -1101,6 +1542,41 @@ export function recalculateMealBudgetSummary(
       isMealBudgetComplete: evaluation.isMealBudgetComplete,
     },
     status: finalStatus(preparation, preparation.ingredients, evaluation),
+    updatedAt: now.toISOString(),
+  };
+}
+
+/**
+ * Rebuilds every derived week value after a deliberate, already validated
+ * selection change. Keeping this here ensures PWA 12 uses the exact same
+ * package aggregation and integer-cent budget engine as normal generation.
+ */
+export function rebuildPreparedWeekSelection(
+  preparation: WeekPreparation,
+  days: WeekPreparation["days"],
+  ingredients: WeekIngredientRequirement[],
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): WeekPreparation {
+  const evaluation = evaluateMealBudget(
+    preparation.budgetCents,
+    preparation.mealBudgetCents,
+    ingredients,
+    list,
+    now,
+  );
+  const next = { ...preparation, days, ingredients };
+  return {
+    ...next,
+    generation: {
+      ...generationSummary(ingredients, now.toISOString(), evaluation),
+      readinessByCategory: preparation.generation?.readinessByCategory,
+      lowestCompleteMealPlanCostCents:
+        preparation.generation?.lowestCompleteMealPlanCostCents,
+      lowestCompleteMealPlanCostReliable:
+        preparation.generation?.lowestCompleteMealPlanCostReliable,
+    },
+    status: finalStatus(next, ingredients, evaluation),
     updatedAt: now.toISOString(),
   };
 }

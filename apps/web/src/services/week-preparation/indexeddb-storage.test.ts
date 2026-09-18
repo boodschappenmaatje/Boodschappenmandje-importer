@@ -280,7 +280,8 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 6,
+      customizations: [],
       mealBudgetCents: null,
       id: "week-legacy",
       ingredients: [],
@@ -353,7 +354,8 @@ describe("PWA 10 lokale persistentie", () => {
         preparation: legacy,
       }),
     ).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 6,
+      customizations: [],
       mealBudgetCents: null,
       days: [{ recipe: { sourceKey: "spaghetti-bolognese" } }],
       ingredients: [{
@@ -414,7 +416,8 @@ describe("PWA 10 lokale persistentie", () => {
       preparation: legacy,
     });
     expect(migrated).toMatchObject({
-      schemaVersion: 4,
+      schemaVersion: 6,
+      customizations: [],
       mealBudgetCents: null,
       days: current.days,
       generation: {
@@ -423,6 +426,119 @@ describe("PWA 10 lokale persistentie", () => {
         mealBudgetStatus: "noMealBudget",
         isMealBudgetComplete: false,
       },
+    });
+  });
+
+  it("migreert PWA 12 schema v5 naar typed automatische provenance", () => {
+    const current = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v5-customization",
+    );
+    const legacy = structuredClone({
+      ...current,
+      customizations: [{
+        dayIndex: 0,
+        baseRecipe: {
+          id: "recipe-spaghetti",
+          sourceKey: "spaghetti-bolognese",
+          name: "Spaghetti bolognese",
+        },
+        replacementRecipe: null,
+        productOverrides: [{
+          ingredientId: "ingredient-spaghetti",
+          productId: "product-spaghetti",
+          sku: "sku-product-spaghetti",
+          updatedAt: NOW.toISOString(),
+        }],
+        ingredientOverrides: [],
+        updatedAt: NOW.toISOString(),
+      }],
+    }) as unknown as Record<string, unknown>;
+    legacy.schemaVersion = 5;
+
+    expect(decodeStoredWeekPreparation({
+      key: "active",
+      schemaVersion: 5,
+      preparation: legacy,
+    })).toMatchObject({
+      schemaVersion: 6,
+      customizations: [{
+        productOverrides: [{
+          quantity: null,
+          selectionSource: "automaticSuggestion",
+          applicationMode: "automaticPlanValidation",
+          budgetDecision: { mode: "automaticPlanValidation" },
+        }],
+        manualProductAdditions: [],
+        recipeBudgetDecision: { mode: "automaticPlanValidation" },
+      }],
+    });
+  });
+
+  it("normaliseert bestaande IndexedDB v6-goedkeuringen zonder gebruikerskeuze te verliezen", () => {
+    const base = createWeekPreparation(
+      { ...SETTINGS, days: 1 },
+      { knownSubtotalCents: 0, unpricedItemCount: 0 },
+      NOW,
+      "week-v6-existing-approval",
+    );
+    const legacy = structuredClone({
+      ...base,
+      mealBudgetCents: 500,
+      customizations: [{
+        dayIndex: 0,
+        baseRecipe: {
+          id: "recipe-spaghetti",
+          sourceKey: "spaghetti-bolognese",
+          name: "Spaghetti bolognese",
+        },
+        replacementRecipe: null,
+        productOverrides: [{
+          ingredientId: "ingredient-spaghetti",
+          productId: "product-boomstam",
+          sku: "sku-product-boomstam",
+          quantity: 1,
+          selectionSource: "manualSearch",
+          budgetDecision: {
+            mode: "userApprovedBudgetOverride",
+            approvedAt: NOW.toISOString(),
+            approvedMealPlanCostCents: 6_221,
+            approvedTotalWeekCostCents: 6_221,
+          },
+          updatedAt: NOW.toISOString(),
+        }],
+        ingredientOverrides: [],
+        manualProductAdditions: [],
+        updatedAt: NOW.toISOString(),
+      }],
+    });
+
+    expect(decodeStoredWeekPreparation({
+      key: "active",
+      schemaVersion: 6,
+      preparation: legacy,
+    })).toMatchObject({
+      customizations: [{
+        recipeBudgetDecision: { mode: "automaticPlanValidation" },
+        productOverrides: [{
+          applicationMode: "explicitUserChoice",
+          budgetDecision: {
+            mode: "userApprovedBudgetOverride",
+            approvedMealBudgetCents: 500,
+            approvedWeekBudgetCents: 10_000,
+            approvedMutation: {
+              kind: "replaceIngredient",
+              weekPreparationId: "week-v6-existing-approval",
+              dayIndex: 0,
+              ingredientId: "ingredient-spaghetti",
+              productId: "product-boomstam",
+              quantity: 1,
+            },
+          },
+        }],
+      }],
     });
   });
 });

@@ -410,6 +410,61 @@ export function applyProductToRequirement(
   };
 }
 
+/**
+ * Applies an explicit user choice as an exact number of packages. Unlike the
+ * automatic matcher this deliberately does not infer semantic compatibility
+ * or a gram/ml requirement: the user chose both the product and quantity.
+ */
+export function applyManualProductToRequirement(
+  requirement: WeekIngredientRequirement,
+  product: Product,
+  quantity: number,
+): WeekIngredientRequirement {
+  const safeQuantity = Math.max(1, Math.min(99, Math.trunc(quantity)));
+  const resolvedPrice =
+    product.currentPrice?.productId === product.id
+      ? resolveCurrentPrice(product.currentPrice)
+      : null;
+  const amountCents = resolvedPrice
+    ? euroAmountToCents(resolvedPrice.amount)
+    : null;
+
+  return {
+    ...requirement,
+    unit: "piece",
+    kind: "ingredient",
+    brandConstraint: null,
+    requiredQuantity: safeQuantity,
+    purchaseQuantity: safeQuantity,
+    packageCapacity: 1,
+    usedIn: requirement.usedIn.map((use) => ({
+      ...use,
+      requiredQuantity: safeQuantity,
+    })),
+    product: {
+      productId: product.id,
+      sku: product.sku,
+      name: product.name,
+      brand: product.brand,
+      packageText: product.packageText,
+      imageUrl: product.imageUrl,
+      supermarket: product.supermarket,
+      sourceUrl: product.sourceUrl,
+    },
+    price:
+      resolvedPrice && amountCents !== null
+        ? {
+            amountCents,
+            isOffer: resolvedPrice.isOffer,
+            updatedAt: resolvedPrice.updatedAt,
+            freshness: resolvedPrice.freshness,
+          }
+        : null,
+    productMatchMissing: false,
+    packageCalculationMissing: false,
+  };
+}
+
 export function combinedProductPurchaseQuantity(
   requirements: WeekIngredientRequirement[],
 ): number {

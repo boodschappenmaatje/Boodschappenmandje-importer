@@ -1,7 +1,7 @@
 import type { PriceFreshness, UUID } from "@/types/catalog";
 import type { BudgetStatus } from "@/types/budget";
 
-export const WEEK_PREPARATION_SCHEMA_VERSION = 4 as const;
+export const WEEK_PREPARATION_SCHEMA_VERSION = 6 as const;
 
 export const MEAL_CATEGORIES = [
   "dutch",
@@ -49,6 +49,91 @@ export interface SelectedRecipeReference {
   id: UUID;
   sourceKey: string;
   name: string;
+}
+
+export type WeekProductSelectionSource =
+  | "automaticSuggestion"
+  | "manualSearch";
+
+export type WeekProductApplicationMode =
+  | "automaticPlanValidation"
+  | "explicitUserChoice";
+
+export type WeekBudgetMutation =
+  | {
+      kind: "replaceIngredient";
+      weekPreparationId: string;
+      dayIndex: number;
+      ingredientId: UUID;
+      productId: UUID;
+      quantity: number;
+    }
+  | {
+      kind: "addToMeal";
+      weekPreparationId: string;
+      dayIndex: number;
+      productId: UUID;
+      quantity: number;
+    }
+  | {
+      kind: "replaceRecipe";
+      weekPreparationId: string;
+      dayIndex: number;
+      recipeId: UUID;
+    };
+
+export type WeekBudgetDecision =
+  | { mode: "automaticPlanValidation" }
+  | { mode: "userConfirmedManualChoice" }
+  | {
+      mode: "userApprovedBudgetOverride";
+      approvedAt: string;
+      approvedMealPlanCostCents: number;
+      approvedTotalWeekCostCents: number;
+      approvedMealBudgetCents: number | null;
+      approvedWeekBudgetCents: number | null;
+      approvedMutation: WeekBudgetMutation;
+    };
+
+export interface WeekProductOverride {
+  ingredientId: UUID;
+  productId: UUID;
+  sku: string;
+  quantity: number | null;
+  selectionSource: WeekProductSelectionSource;
+  applicationMode: WeekProductApplicationMode;
+  budgetDecision: WeekBudgetDecision;
+  updatedAt: string;
+}
+
+export interface WeekIngredientOverride {
+  ingredientId: UUID;
+  substituteIngredientId: UUID;
+  substituteSourceKey: string;
+  quantityMultiplier: number;
+  updatedAt: string;
+}
+
+export interface WeekManualProductAddition {
+  id: string;
+  product: WeekProductReference;
+  price: WeekPriceSnapshot;
+  quantity: number;
+  selectionSource: WeekProductSelectionSource;
+  applicationMode: WeekProductApplicationMode;
+  budgetDecision: WeekBudgetDecision;
+  updatedAt: string;
+}
+
+export interface WeekMealCustomization {
+  dayIndex: number;
+  baseRecipe: SelectedRecipeReference;
+  replacementRecipe: SelectedRecipeReference | null;
+  recipeBudgetDecision: WeekBudgetDecision;
+  productOverrides: WeekProductOverride[];
+  ingredientOverrides: WeekIngredientOverride[];
+  manualProductAdditions: WeekManualProductAddition[];
+  updatedAt: string;
 }
 
 export interface PreparedDay {
@@ -149,6 +234,7 @@ export interface WeekPreparation {
   days: PreparedDay[];
   ingredients: WeekIngredientRequirement[];
   generation: WeekGenerationSummary | null;
+  customizations: WeekMealCustomization[];
   status: WeekPreparationStatus;
   listStrategy: "preserveAndComplete";
 }

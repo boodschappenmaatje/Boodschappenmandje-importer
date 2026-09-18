@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { CatalogFilterSheet, categoryLabel } from "./CatalogFilterSheet";
 import { CatalogProductCard } from "./CatalogProductCard";
+import { CatalogSearchField } from "./CatalogSearchField";
 import { catalogSearchInstruction, CATALOG_PAGE_SEARCH_DEBOUNCE_MS } from "./CatalogSearchView";
 import type { Product } from "@/types/catalog";
 
@@ -30,6 +31,25 @@ describe("PWA 8 cataloguscomponenten", () => {
     expect(CATALOG_PAGE_SEARCH_DEBOUNCE_MS).toBeLessThanOrEqual(400);
     expect(catalogSearchInstruction("c")).toContain("1 teken");
     expect(catalogSearchInstruction("cola")).toBeNull();
+  });
+
+  it("biedt één toegankelijk mobiel zoekveld voor catalogus en selectiecontext", () => {
+    const html = renderToStaticMarkup(
+      createElement(CatalogSearchField, {
+        value: "boomstam",
+        placeholder: "Zoek producten",
+        ariaLabel: "Zoek producten op naam, merk, verpakking of categorie",
+        onChange: () => undefined,
+        onClear: () => undefined,
+        className: "manual-catalog-search-field",
+      }),
+    );
+
+    expect(html).toContain('type="search"');
+    expect(html).toContain('enterKeyHint="search"');
+    expect(html).toContain("manual-catalog-search-field");
+    expect(html).toContain("boomstam");
+    expect(html).toContain("Wis zoekterm");
   });
 
   it("toont volledige productinformatie, ontbrekende prijs en lijststatus", () => {
