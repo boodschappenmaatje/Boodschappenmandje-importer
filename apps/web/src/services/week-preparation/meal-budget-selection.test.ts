@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeCatalog, RecipeRepository } from "@/services/week-preparation/recipe-repository";
+import {
+  createCachedCatalogRepository,
+  createCachedRecipeRepository,
+} from "@/services/week-preparation/planning-cache";
 import { generatePreparedWeek, refreshGeneratedWeek, revalidatePreparedWeek } from "@/services/week-preparation/week-generation";
 import {
   createWeekPreparation,
@@ -226,6 +230,48 @@ function selectedRecipeIds(result: Awaited<ReturnType<typeof generatePreparedWee
 }
 
 describe("budgetbewuste READY-receptselectie", () => {
+  it("hergebruikt recipe- en productdata wanneer alleen het maaltijd-budget opnieuw wordt geoptimaliseerd", async () => {
+    let recipeLoads = 0;
+    let searches = 0;
+    const countedRecipes: RecipeRepository = {
+      async loadCatalog() {
+        recipeLoads += 1;
+        return CATALOG;
+      },
+    };
+    const countedCatalog: CatalogRepository = {
+      ...catalogRepository,
+      async search(term) {
+        searches += 1;
+        return catalogRepository.search(term);
+      },
+    };
+    const cachedRecipes = createCachedRecipeRepository(countedRecipes);
+    const cachedCatalog = createCachedCatalogRepository(countedCatalog);
+
+    const first = await generatePreparedWeek(
+      prepared(300),
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+    );
+    const firstCounts = { recipeLoads, searches };
+    const second = await generatePreparedWeek(
+      prepared(700),
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+    );
+
+    expect(first.status).toBe("generated");
+    expect(second.status).toBe("generated");
+    expect(firstCounts.recipeLoads).toBe(1);
+    expect(firstCounts.searches).toBeGreaterThan(0);
+    expect({ recipeLoads, searches }).toEqual(firstCounts);
+  });
+
   it("kiest een andere READY kandidaat binnen dezelfde categorie wanneer de eerste te duur is", async () => {
     const result = await generatePreparedWeek(
       prepared(300),

@@ -9,6 +9,7 @@ import {
 } from "@/services/shopping-list/shopping-list";
 import {
   commitExplicitRecipeChoice,
+  commitExplicitRecipeAlternative,
   commitManualProductChoice,
   findProductAlternatives,
   findRecipeAlternatives,
@@ -277,6 +278,130 @@ describe("PWA 12 maaltijdcustomization", () => {
       .toBe("overMealBudget");
   });
 
+  it("past een vers getoond gerechtalternatief toe zonder de volledige validatiepipeline opnieuw te starten", async () => {
+    const original = { ...await preparedWeek(), mealBudgetCents: 764 };
+    let recipeLoads = 0;
+    let searches = 0;
+    let productRefreshes = 0;
+    const countingRecipes: RecipeRepository = {
+      async loadCatalog() {
+        recipeLoads += 1;
+        return catalog;
+      },
+    };
+    const countingCatalog: CatalogRepository = {
+      ...repositoryFor(),
+      async search(term) {
+        searches += 1;
+        return catalogRepository.search(term);
+      },
+      async getByIds(ids) {
+        productRefreshes += 1;
+        return catalogRepository.getByIds(ids);
+      },
+    };
+    const alternatives = await findRecipeAlternatives(
+      original,
+      0,
+      countingRecipes,
+      countingCatalog,
+      list,
+      NOW,
+    );
+    const selected = alternatives.find((item) => item.recipe.id === EXPENSIVE.id)!;
+    recipeLoads = 0;
+    searches = 0;
+    productRefreshes = 0;
+
+    const result = await commitExplicitRecipeAlternative(
+      original,
+      0,
+      selected,
+      true,
+      countingRecipes,
+      countingCatalog,
+      list,
+      new Date(NOW.getTime() + 1_000),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.preparation.days[0].recipeId).toBe(EXPENSIVE.id);
+    expect(result.preparation.status).toBe("generated");
+    expect(result.impact.mealBudgetOverageCents).toBe(34);
+    expect(result.preparation.generation).toMatchObject({
+      mealPlanKnownCostCents: 798,
+      mealBudgetStatus: "overMealBudget",
+    });
+    expect(result.preparation.customizations[0].recipeBudgetDecision).toMatchObject({
+      mode: "userApprovedBudgetOverride",
+      approvedMutation: { recipeId: EXPENSIVE.id, dayIndex: 0 },
+    });
+    expect({ recipeLoads, searches, productRefreshes }).toEqual({
+      recipeLoads: 0,
+      searches: 0,
+      productRefreshes: 0,
+    });
+  });
+
+  it("hervalidateert een verlopen gerecht-snapshot gericht en vraagt opnieuw bij gewijzigde prijsimpact", async () => {
+    const original = await preparedWeek();
+    const alternatives = await findRecipeAlternatives(
+      original,
+      0,
+      recipeRepository,
+      catalogRepository,
+      list,
+      NOW,
+    );
+    const selected = alternatives.find((item) => item.recipe.id === EXPENSIVE.id)!;
+    let recipeLoads = 0;
+    let searches = 0;
+    const changedProducts = products.map((item) =>
+      item.id === "product-expensive"
+        ? product(item.id, item.name, 899)
+        : item,
+    );
+    const changedCatalog = repositoryFor(() => changedProducts);
+    const countingRecipes: RecipeRepository = {
+      async loadCatalog() {
+        recipeLoads += 1;
+        return catalog;
+      },
+    };
+    const countingCatalog: CatalogRepository = {
+      ...changedCatalog,
+      async search(term) {
+        searches += 1;
+        return changedCatalog.search(term);
+      },
+    };
+
+    const result = await commitExplicitRecipeAlternative(
+      original,
+      0,
+      selected,
+      true,
+      countingRecipes,
+      countingCatalog,
+      list,
+      new Date(NOW.getTime() + 6 * 60 * 1000),
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      reason: "budget_impact_changed",
+      preview: {
+        alternative: {
+          recipe: { id: EXPENSIVE.id },
+          impact: { nextMealPlanCostCents: 998 },
+        },
+      },
+    });
+    expect(recipeLoads).toBe(1);
+    expect(searches).toBeGreaterThan(0);
+  });
+
   it("hervalidateert actuele prijzen bij bevestigen en weigert een stale alternatief", async () => {
     let liveProducts = products;
     const liveRepository = repositoryFor(() => liveProducts);
@@ -465,6 +590,59 @@ describe("PWA 12 maaltijdcustomization", () => {
       synchronized,
       validated.preparation.ingredients,
       validated.preparation.id,
+      NOW,
+    )).toEqual(synchronized);
+  });
+
+  it("synchroniseert een verse snapshotmutatie gericht met een reeds gekoppelde lijst", async () => {
+    const original = await preparedWeek();
+    const completedOriginal = completeShoppingListFromWeek(
+      createEmptyActiveShoppingList(NOW),
+      original.ingredients,
+      original.id,
+      NOW,
+    );
+    const baselineList = listWithoutCurrentWeekMealPlan(
+      completedOriginal,
+      original.id,
+      NOW,
+    );
+    const alternatives = await findRecipeAlternatives(
+      original,
+      0,
+      recipeRepository,
+      catalogRepository,
+      baselineList,
+      NOW,
+    );
+    const selected = alternatives.find((item) => item.recipe.id === MACARONI.id)!;
+    const committed = await commitExplicitRecipeAlternative(
+      original,
+      0,
+      selected,
+      false,
+      recipeRepository,
+      catalogRepository,
+      baselineList,
+      NOW,
+    );
+    expect(committed.ok).toBe(true);
+    if (!committed.ok) return;
+
+    const synchronized = completeShoppingListFromWeek(
+      completedOriginal,
+      committed.preparation.ingredients,
+      committed.preparation.id,
+      NOW,
+    );
+    expect(synchronized.items.some((item) => item.productId === "product-spaghetti"))
+      .toBe(false);
+    expect(synchronized.items.find((item) => item.productId === "product-macaroni"))
+      .toMatchObject({ usedIn: [MACARONI.name] });
+    expect(completeShoppingListFromWeek(
+      synchronized,
+      committed.preparation.ingredients,
+      committed.preparation.id,
       NOW,
     )).toEqual(synchronized);
   });

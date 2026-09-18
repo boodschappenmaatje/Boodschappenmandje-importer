@@ -273,8 +273,7 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
     try {
       const result = await week.applyExplicitRecipe(
         dayIndex,
-        pending.recipe.id,
-        pending.impact,
+        pending,
         pending.impact.requiresBudgetOverride,
       );
       if (result.applied) {

@@ -1,4 +1,5 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
+import { PRICE_STALE_AFTER_DAYS } from "@/services/catalog/price";
 import { removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { evaluateMealBudget, mealBudgetAllowsPlan } from "@/services/week-preparation/meal-budget";
@@ -23,9 +24,12 @@ import {
   rankedReadyRecipesForDay,
   suitableRecipes,
 } from "@/services/week-preparation/recipe-selection";
+import { PLANNING_CACHE_TTL_MS } from "@/services/week-preparation/planning-cache";
 import {
   calculateDishCostSummary,
+  recalculateMealBudgetSummary,
   rebuildPreparedWeekSelection,
+  revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
 import type { Product, Recipe } from "@/types/catalog";
 import type { ActiveShoppingList } from "@/types/shopping-list";
@@ -70,6 +74,8 @@ export interface RecipeAlternative {
   alreadyUsedInWeek: boolean;
   impact: ManualProductBudgetImpact;
   preparation: WeekPreparation;
+  basePreparationUpdatedAt: string;
+  validatedAt: string;
 }
 
 export interface ProductAlternative {
@@ -112,7 +118,10 @@ export type ExplicitRecipeCommitResult =
     }
   | {
       ok: false;
-      reason: CustomizationFailure | "budget_override_required";
+      reason:
+        | CustomizationFailure
+        | "budget_override_required"
+        | "budget_impact_changed";
       preview?: ExplicitRecipeChoicePreview;
     };
 
@@ -330,6 +339,8 @@ function buildAlternative(
     ),
     impact: budgetImpact(preparation, nextPreparation, list, now),
     preparation: nextPreparation,
+    basePreparationUpdatedAt: preparation.updatedAt,
+    validatedAt: now.toISOString(),
   };
 }
 
@@ -431,6 +442,152 @@ function recipeMutation(
   };
 }
 
+function recipeBudgetDecision(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  recipeId: string,
+  impact: ManualProductBudgetImpact,
+  now: Date,
+): WeekBudgetDecision {
+  return impact.requiresBudgetOverride
+    ? {
+        mode: "userApprovedBudgetOverride",
+        approvedAt: now.toISOString(),
+        approvedMealPlanCostCents: impact.nextMealPlanCostCents,
+        approvedTotalWeekCostCents: impact.nextTotalWeekCostCents,
+        approvedMealBudgetCents: impact.mealBudgetCents,
+        approvedWeekBudgetCents: impact.weekBudgetCents,
+        approvedMutation: recipeMutation(preparation, dayIndex, recipeId),
+      }
+    : { mode: "userConfirmedManualChoice" };
+}
+
+function withRecipeBudgetDecision(
+  preparation: WeekPreparation,
+  dayIndex: number,
+  decision: WeekBudgetDecision,
+): WeekPreparation {
+  return {
+    ...preparation,
+    customizations: preparation.customizations.map((customization) =>
+      customization.dayIndex === dayIndex
+        ? { ...customization, recipeBudgetDecision: decision }
+        : customization,
+    ),
+  };
+}
+
+function sameBudgetImpact(
+  expected: ManualProductBudgetImpact,
+  actual: ManualProductBudgetImpact,
+): boolean {
+  return (
+    expected.nextMealPlanCostCents === actual.nextMealPlanCostCents &&
+    expected.nextTotalWeekCostCents === actual.nextTotalWeekCostCents &&
+    expected.mealBudgetCents === actual.mealBudgetCents &&
+    expected.weekBudgetCents === actual.weekBudgetCents &&
+    expected.mealBudgetOverageCents === actual.mealBudgetOverageCents &&
+    expected.weekBudgetOverageCents === actual.weekBudgetOverageCents
+  );
+}
+
+function snapshotPriceIsFresh(
+  ingredient: WeekIngredientRequirement,
+  now: Date,
+): boolean {
+  if (ingredient.optional && !ingredient.product) return true;
+  if (
+    !ingredient.product ||
+    !ingredient.price ||
+    ingredient.price.freshness !== "fresh" ||
+    ingredient.purchaseQuantity === null ||
+    ingredient.packageCapacity === null
+  ) {
+    return false;
+  }
+  const updatedAt = ingredient.price.updatedAt
+    ? new Date(ingredient.price.updatedAt).getTime()
+    : Number.NaN;
+  return (
+    Number.isFinite(updatedAt) &&
+    updatedAt <= now.getTime() &&
+    now.getTime() - updatedAt <= PRICE_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000
+  );
+}
+
+function recipeSnapshotIsFresh(
+  alternative: RecipeAlternative,
+  now: Date,
+): boolean {
+  const validatedAt = new Date(alternative.validatedAt).getTime();
+  return (
+    Number.isFinite(validatedAt) &&
+    validatedAt <= now.getTime() &&
+    now.getTime() - validatedAt <= PLANNING_CACHE_TTL_MS &&
+    alternative.preparation.ingredients.every((ingredient) =>
+      snapshotPriceIsFresh(ingredient, now),
+    )
+  );
+}
+
+function hasIngredientLevelCustomizations(preparation: WeekPreparation): boolean {
+  return preparation.customizations.some(
+    (customization) =>
+      customization.productOverrides.length > 0 ||
+      customization.ingredientOverrides.length > 0 ||
+      customization.manualProductAdditions.length > 0,
+  );
+}
+
+function technicallyComplete(preparation: WeekPreparation): boolean {
+  return (
+    preparation.days.every(
+      (day) => day.freeChoice || (day.recipeId !== null && day.recipe !== null),
+    ) &&
+    preparation.ingredients.every(
+      (ingredient) =>
+        ingredient.optional ||
+        (!ingredient.productMatchMissing &&
+          !ingredient.packageCalculationMissing &&
+          ingredient.product !== null &&
+          ingredient.price !== null &&
+          ingredient.purchaseQuantity !== null),
+    )
+  );
+}
+
+function refreshedAlternative(
+  current: WeekPreparation,
+  dayIndex: number,
+  original: RecipeAlternative,
+  preparation: WeekPreparation,
+  list: ActiveShoppingList,
+  now: Date,
+): RecipeAlternative {
+  const impact = budgetImpact(current, preparation, list, now);
+  const currentDish = calculateDishCostSummary(
+    dayIndex,
+    current.ingredients,
+  );
+  const alternativeDish = calculateDishCostSummary(
+    dayIndex,
+    preparation.ingredients,
+  );
+  return {
+    ...original,
+    currentDishCostCents: currentDish.knownCostCents,
+    alternativeDishCostCents: alternativeDish.knownCostCents,
+    differenceCents: alternativeDish.knownCostCents - currentDish.knownCostCents,
+    nextMealPlanCostCents: impact.nextMealPlanCostCents,
+    mealBudgetCents: impact.mealBudgetCents,
+    withinMealBudget: impact.mealBudgetOverageCents === 0,
+    impact,
+    preparation,
+    basePreparationUpdatedAt: current.updatedAt,
+    validatedAt: now.toISOString(),
+  };
+}
+
 export async function commitExplicitRecipeChoice(
   preparation: WeekPreparation,
   dayIndex: number,
@@ -459,27 +616,155 @@ export async function commitExplicitRecipeChoice(
       preview: result.preview,
     };
   }
-  const decision: WeekBudgetDecision = alternative.impact.requiresBudgetOverride
-    ? {
-        mode: "userApprovedBudgetOverride",
-        approvedAt: now.toISOString(),
-        approvedMealPlanCostCents: alternative.impact.nextMealPlanCostCents,
-        approvedTotalWeekCostCents: alternative.impact.nextTotalWeekCostCents,
-        approvedMealBudgetCents: alternative.impact.mealBudgetCents,
-        approvedWeekBudgetCents: alternative.impact.weekBudgetCents,
-        approvedMutation: recipeMutation(preparation, dayIndex, recipeId),
-      }
-    : { mode: "userConfirmedManualChoice" };
-  const customizations = alternative.preparation.customizations.map(
-    (customization) => customization.dayIndex === dayIndex
-      ? { ...customization, recipeBudgetDecision: decision }
-      : customization,
+  const decision = recipeBudgetDecision(
+    preparation,
+    dayIndex,
+    recipeId,
+    alternative.impact,
+    now,
   );
   return {
     ok: true,
-    preparation: { ...alternative.preparation, customizations },
+    preparation: withRecipeBudgetDecision(
+      alternative.preparation,
+      dayIndex,
+      decision,
+    ),
     impact: alternative.impact,
   };
+}
+
+/**
+ * Commits the exact alternative the user inspected. A fresh snapshot already
+ * contains READY products, packages, prices and the aggregated week, so the
+ * normal confirmation path is local. Only a stale or structurally changed
+ * snapshot falls back to one selected-week revalidation.
+ */
+export async function commitExplicitRecipeAlternative(
+  current: WeekPreparation,
+  dayIndex: number,
+  alternative: RecipeAlternative,
+  approveBudgetOverride: boolean,
+  recipeRepository: RecipeRepository,
+  catalogRepository: CatalogRepository,
+  list: ActiveShoppingList = EMPTY_LIST,
+  now: Date = new Date(),
+): Promise<ExplicitRecipeCommitResult> {
+  const selectedDay = alternative.preparation.days.find(
+    (day) => day.dayIndex === dayIndex,
+  );
+  if (
+    alternative.preparation.id !== current.id ||
+    alternative.recipe.id !== selectedDay?.recipeId ||
+    selectedDay.freeChoice ||
+    selectedDay.category === "freeChoice"
+  ) {
+    return { ok: false, reason: "day_not_found" };
+  }
+  if (alternative.impact.requiresBudgetOverride && !approveBudgetOverride) {
+    return {
+      ok: false,
+      reason: "budget_override_required",
+      preview: { dayIndex, recipeId: alternative.recipe.id, alternative },
+    };
+  }
+
+  let validatedAlternative = alternative;
+  const canReuseSnapshot =
+    alternative.basePreparationUpdatedAt === current.updatedAt &&
+    recipeSnapshotIsFresh(alternative, now) &&
+    !hasIngredientLevelCustomizations(alternative.preparation);
+
+  if (!canReuseSnapshot) {
+    const tentativeDecision = recipeBudgetDecision(
+      current,
+      dayIndex,
+      alternative.recipe.id,
+      alternative.impact,
+      now,
+    );
+    const tentative = withRecipeBudgetDecision(
+      alternative.preparation,
+      dayIndex,
+      tentativeDecision,
+    );
+    const validation = await revalidatePreparedWeek(
+      tentative,
+      recipeRepository,
+      catalogRepository,
+      now,
+      list,
+    );
+    if (!technicallyComplete(validation.preparation)) {
+      return { ok: false, reason: "recipe_not_ready" };
+    }
+    validatedAlternative = refreshedAlternative(
+      current,
+      dayIndex,
+      alternative,
+      validation.preparation,
+      list,
+      now,
+    );
+    if (!sameBudgetImpact(alternative.impact, validatedAlternative.impact)) {
+      return {
+        ok: false,
+        reason: "budget_impact_changed",
+        preview: {
+          dayIndex,
+          recipeId: alternative.recipe.id,
+          alternative: validatedAlternative,
+        },
+      };
+    }
+  }
+
+  const impact = budgetImpact(
+    current,
+    validatedAlternative.preparation,
+    list,
+    now,
+  );
+  if (!sameBudgetImpact(alternative.impact, impact)) {
+    return {
+      ok: false,
+      reason: "budget_impact_changed",
+      preview: {
+        dayIndex,
+        recipeId: alternative.recipe.id,
+        alternative: { ...validatedAlternative, impact },
+      },
+    };
+  }
+  if (impact.requiresBudgetOverride && !approveBudgetOverride) {
+    return {
+      ok: false,
+      reason: "budget_override_required",
+      preview: {
+        dayIndex,
+        recipeId: alternative.recipe.id,
+        alternative: validatedAlternative,
+      },
+    };
+  }
+
+  const decision = recipeBudgetDecision(
+    current,
+    dayIndex,
+    alternative.recipe.id,
+    impact,
+    now,
+  );
+  const approved = withRecipeBudgetDecision(
+    validatedAlternative.preparation,
+    dayIndex,
+    decision,
+  );
+  const preparation = recalculateMealBudgetSummary(approved, list, now);
+  if (!technicallyComplete(preparation) || preparation.status !== "generated") {
+    return { ok: false, reason: "recipe_not_ready" };
+  }
+  return { ok: true, preparation, impact };
 }
 
 export async function replaceWeekRecipe(

@@ -28,12 +28,11 @@ import {
 } from "@/services/week-preparation/recipe-repository";
 import {
   commitManualProductChoice,
-  commitExplicitRecipeChoice,
+  commitExplicitRecipeAlternative,
   findProductAlternatives as loadProductAlternatives,
   findRecipeAlternatives as loadRecipeAlternatives,
   listWithoutCurrentWeekMealPlan,
   previewManualProductChoice,
-  previewExplicitRecipeChoice,
   replaceWeekProduct,
   replaceWeekRecipe,
   type ManualProductChoice,
@@ -44,6 +43,10 @@ import {
   type RecipeAlternative,
   type ExplicitRecipeChoicePreview,
 } from "@/services/week-preparation/meal-customization";
+import {
+  createCachedCatalogRepository,
+  createCachedRecipeRepository,
+} from "@/services/week-preparation/planning-cache";
 import type { Product } from "@/types/catalog";
 import {
   calculateWeekBudgetSummary,
@@ -99,8 +102,7 @@ interface WeekPreparationContextValue {
   replaceRecipe: (dayIndex: number, recipeId: string) => Promise<boolean>;
   applyExplicitRecipe: (
     dayIndex: number,
-    recipeId: string,
-    expectedImpact: ManualProductBudgetImpact,
+    alternative: RecipeAlternative,
     approveBudgetOverride: boolean,
   ) => Promise<ExplicitRecipeApplyResult>;
   findProductAlternatives: (
@@ -207,13 +209,39 @@ export function WeekPreparationProvider({
   const generationRunRef = useRef(0);
   const refreshedWeekRef = useRef<string | null>(null);
   const customizationRunRef = useRef(false);
+  const recipeRepositoryCacheRef = useRef<{
+    source: RecipeRepository | undefined;
+    repository: RecipeRepository | null;
+  }>({ source: undefined, repository: null });
+  const catalogRepositoryCacheRef = useRef<{
+    source: CatalogRepository | undefined;
+    repository: CatalogRepository | null;
+  }>({ source: undefined, repository: null });
 
   const recipeRepository = useCallback(
-    () => suppliedRecipeRepository ?? createRecipeRepository(),
+    () => {
+      const cached = recipeRepositoryCacheRef.current;
+      if (!cached.repository || cached.source !== suppliedRecipeRepository) {
+        cached.source = suppliedRecipeRepository;
+        cached.repository = createCachedRecipeRepository(
+          suppliedRecipeRepository ?? createRecipeRepository(),
+        );
+      }
+      return cached.repository;
+    },
     [suppliedRecipeRepository],
   );
   const catalogRepository = useCallback(
-    () => suppliedCatalogRepository ?? createCatalogRepository(),
+    () => {
+      const cached = catalogRepositoryCacheRef.current;
+      if (!cached.repository || cached.source !== suppliedCatalogRepository) {
+        cached.source = suppliedCatalogRepository;
+        cached.repository = createCachedCatalogRepository(
+          suppliedCatalogRepository ?? createCatalogRepository(),
+        );
+      }
+      return cached.repository;
+    },
     [suppliedCatalogRepository],
   );
 
@@ -748,7 +776,10 @@ export function WeekPreparationProvider({
           dayIndex,
           recipeRepository(),
           catalogRepository(),
-          currentList(),
+          listWithoutCurrentWeekMealPlan(
+            currentList(),
+            current.id,
+          ),
         );
       } catch {
         setActionMessage(
@@ -802,8 +833,7 @@ export function WeekPreparationProvider({
   const applyExplicitRecipe = useCallback(
     async (
       dayIndex: number,
-      recipeId: string,
-      expectedImpact: ManualProductBudgetImpact,
+      alternative: RecipeAlternative,
       approveBudgetOverride: boolean,
     ): Promise<ExplicitRecipeApplyResult> => {
       if (customizationRunRef.current) return { applied: false };
@@ -819,31 +849,10 @@ export function WeekPreparationProvider({
           current.id,
           validationNow,
         );
-        const livePreview = await previewExplicitRecipeChoice(
+        const committed = await commitExplicitRecipeAlternative(
           current,
           dayIndex,
-          recipeId,
-          recipeRepository(),
-          catalogRepository(),
-          validationList,
-          validationNow,
-        );
-        if (!livePreview.ok) {
-          setActionMessage(
-            "Dit gerecht is niet meer compleet beschikbaar. Er is niets gewijzigd.",
-          );
-          return { applied: false };
-        }
-        if (!sameBudgetImpact(expectedImpact, livePreview.preview.alternative.impact)) {
-          setActionMessage(
-            "De prijs of je budget is gewijzigd. Controleer de nieuwe bedragen en bevestig opnieuw.",
-          );
-          return { applied: false, revalidatedPreview: livePreview.preview };
-        }
-        const committed = await commitExplicitRecipeChoice(
-          current,
-          dayIndex,
-          recipeId,
+          alternative,
           approveBudgetOverride,
           recipeRepository(),
           catalogRepository(),
@@ -852,7 +861,9 @@ export function WeekPreparationProvider({
         );
         if (!committed.ok) {
           setActionMessage(
-            committed.reason === "budget_override_required"
+            committed.reason === "budget_impact_changed"
+              ? "De prijs of je budget is gewijzigd. Controleer de nieuwe bedragen en bevestig opnieuw."
+              : committed.reason === "budget_override_required"
               ? "Bevestig eerst bewust dat je deze budgetoverschrijding accepteert."
               : "Dit gerecht is niet meer compleet beschikbaar. Er is niets gewijzigd.",
           );
@@ -860,26 +871,13 @@ export function WeekPreparationProvider({
             ? { applied: false, revalidatedPreview: committed.preview }
             : { applied: false };
         }
-        const validation = await revalidatePreparedWeek(
-          committed.preparation,
-          recipeRepository(),
-          catalogRepository(),
-          validationNow,
-          validationList,
-        );
-        if (!validation.ready) {
-          setActionMessage(
-            "Het gerecht of de prijs is intussen gewijzigd. Controleer de bedragen opnieuw.",
-          );
-          return { applied: false };
-        }
-        return await syncValidatedCustomization(validation.preparation)
+        return await syncValidatedCustomization(committed.preparation)
           ? { applied: true }
           : { applied: false };
       } catch (error) {
         console.error("[week-preparation] explicit recipe replacement failed", {
           dayIndex,
-          recipeId,
+          recipeId: alternative.recipe.id,
           error,
         });
         setActionMessage(
