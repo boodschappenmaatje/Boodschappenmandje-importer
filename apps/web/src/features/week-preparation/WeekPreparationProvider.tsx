@@ -46,6 +46,7 @@ import {
 import {
   createCachedCatalogRepository,
   createCachedRecipeRepository,
+  createWeekPlanningSnapshotCache,
 } from "@/services/week-preparation/planning-cache";
 import type { Product } from "@/types/catalog";
 import {
@@ -207,6 +208,7 @@ export function WeekPreparationProvider({
   const storageRef = useRef<WeekPreparationStorage | null>(suppliedStorage ?? null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const generationRunRef = useRef(0);
+  const generationInFlightRef = useRef(false);
   const refreshedWeekRef = useRef<string | null>(null);
   const customizationRunRef = useRef(false);
   const recipeRepositoryCacheRef = useRef<{
@@ -217,6 +219,9 @@ export function WeekPreparationProvider({
     source: CatalogRepository | undefined;
     repository: CatalogRepository | null;
   }>({ source: undefined, repository: null });
+  const planningSnapshotCacheRef = useRef(
+    createWeekPlanningSnapshotCache(),
+  );
 
   const recipeRepository = useCallback(
     () => {
@@ -287,6 +292,8 @@ export function WeekPreparationProvider({
 
   const runGeneration = useCallback(
     async (base: WeekPreparation) => {
+      if (generationInFlightRef.current) return;
+      generationInFlightRef.current = true;
       const run = generationRunRef.current + 1;
       generationRunRef.current = run;
       setPendingBudgetReapproval(null);
@@ -299,6 +306,7 @@ export function WeekPreparationProvider({
           catalogRepository(),
           new Date(),
           shoppingList.list ?? undefined,
+          { cache: planningSnapshotCacheRef.current },
         );
         if (generationRunRef.current !== run) return;
         refreshedWeekRef.current = generated.id;
@@ -306,6 +314,8 @@ export function WeekPreparationProvider({
       } catch {
         if (generationRunRef.current !== run) return;
         replace(markWeekGenerationFailed(base));
+      } finally {
+        generationInFlightRef.current = false;
       }
     },
     [catalogRepository, recipeRepository, replace, shoppingList.list],
