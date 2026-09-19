@@ -264,6 +264,44 @@ describe("catalogus zoeken", () => {
 });
 
 describe("centrale server-side zoekengine", () => {
+  it("start product- en prijsreads voor exacte ids parallel", async () => {
+    type Result = { data: unknown[]; error: null };
+    const started: string[] = [];
+    const controls = new Map<string, (result: Result) => void>();
+    const client = {
+      from(table: string) {
+        let resolveResult!: (result: Result) => void;
+        const result = new Promise<Result>((resolve) => {
+          resolveResult = resolve;
+        });
+        controls.set(table, resolveResult);
+        const builder = {
+          select() { return builder; },
+          eq() { return builder; },
+          in() { return builder; },
+          order() { return builder; },
+          then(onFulfilled: (value: Result) => unknown, onRejected?: (reason: unknown) => unknown) {
+            started.push(table);
+            return result.then(onFulfilled, onRejected);
+          },
+        };
+        return builder;
+      },
+    } as unknown as SupabaseClient;
+    const repository = new SupabaseCatalogRepository(client);
+    const loading = repository.getByIds(["product-a"]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(started).toEqual(["products", "product_prices"]);
+    controls.get("products")?.({ data: [], error: null });
+    controls.get("product_prices")?.({ data: [], error: null });
+    await expect(loading).resolves.toEqual({
+      products: [],
+      priceStatus: "complete",
+    });
+  });
+
   it("stuurt zoeken, filters, sortering en paginering naar één RPC", async () => {
     let calledFunction = "";
     let calledParameters: Record<string, unknown> = {};

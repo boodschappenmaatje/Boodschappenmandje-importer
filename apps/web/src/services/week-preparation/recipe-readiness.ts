@@ -3,6 +3,7 @@ import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient
 import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
 import {
   applyProductToRequirement,
+  isReliableIngredientMatch,
   matchWeekIngredientsWithDiagnostics,
   type IngredientMatchFailureReason,
   type WeekIngredientMatchDiagnostics,
@@ -47,6 +48,7 @@ export interface IngredientReadinessResult {
   productId: string | null;
   sku: string | null;
   productName: string | null;
+  requirementKey: string | null;
   reason: RecipeReadinessReason | null;
   origin: RecipeReadinessIssueOrigin | null;
 }
@@ -65,6 +67,14 @@ export interface RecipeReadinessResult {
 export interface RecipeReadinessGateResult {
   recipes: RecipeReadinessResult[];
   matchedProductsByRequirement: ReadonlyMap<string, Product>;
+}
+
+export interface RecipeReadinessEvaluationOptions {
+  /**
+   * Current products loaded in one batch from persistent product matches.
+   * Reliable entries skip matcher searches; stale/invalid entries are ignored.
+   */
+  matchedProductsByRequirement?: ReadonlyMap<string, Product>;
 }
 
 function issueOrigin(
@@ -157,6 +167,7 @@ function invalidIngredientResult(
     productId: null,
     sku: null,
     productName: null,
+    requirementKey: null,
     reason,
     origin: issueOrigin(reason),
   };
@@ -203,6 +214,7 @@ function resultForRequirement(
     productId: product?.id ?? null,
     sku: product?.sku ?? null,
     productName: product?.name ?? null,
+    requirementKey: recipeRequirementKey(requirement),
     reason,
     origin: reason ? issueOrigin(reason, requirement, product) : null,
   };
@@ -303,6 +315,7 @@ export async function evaluateRecipeReadiness(
   numberOfPeople: number,
   catalog: RecipeCatalog,
   catalogRepository: CatalogRepository,
+  options: RecipeReadinessEvaluationOptions = {},
 ): Promise<RecipeReadinessGateResult> {
   const requirementsByRecipe = new Map<string, WeekIngredientRequirement[]>();
   const invalidByRecipe = new Map<string, IngredientReadinessResult[]>();
@@ -343,11 +356,39 @@ export async function evaluateRecipeReadiness(
     }
   });
 
-  const diagnostics = await matchWeekIngredientsWithDiagnostics(
-    [...representativeRequirements.values()],
+  const ingredientById = new Map(
+    catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+  );
+  const knownDiagnostics: WeekIngredientMatchDiagnostics[] = [];
+  const requirementsNeedingSearch: WeekIngredientRequirement[] = [];
+  for (const [key, requirement] of representativeRequirements) {
+    const product = options.matchedProductsByRequirement?.get(key) ?? null;
+    const ingredient = ingredientById.get(requirement.ingredientId);
+    if (
+      product &&
+      ingredient &&
+      isReliableIngredientMatch(
+        ingredient,
+        product,
+        requirement.brandConstraint,
+      )
+    ) {
+      knownDiagnostics.push({
+        requirement: applyProductToRequirement(requirement, product),
+        product,
+        candidates: [product],
+        failureReason: null,
+      });
+    } else {
+      requirementsNeedingSearch.push(requirement);
+    }
+  }
+  const searchedDiagnostics = await matchWeekIngredientsWithDiagnostics(
+    requirementsNeedingSearch,
     catalog.ingredients,
     catalogRepository,
   );
+  const diagnostics = [...knownDiagnostics, ...searchedDiagnostics];
   const diagnosticsByKey = new Map(
     diagnostics.map((item) => [recipeRequirementKey(item.requirement), item]),
   );

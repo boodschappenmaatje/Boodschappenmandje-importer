@@ -23,6 +23,33 @@ function roundedQuantity(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
+interface CatalogAggregationIndex {
+  ingredientById: Map<string, RecipeCatalog["ingredients"][number]>;
+  ingredientBySourceKey: Map<string, RecipeCatalog["ingredients"][number]>;
+  relationsByRecipe: Map<string, RecipeCatalog["relations"]>;
+}
+
+const aggregationIndexes = new WeakMap<RecipeCatalog, CatalogAggregationIndex>();
+
+function aggregationIndex(catalog: RecipeCatalog): CatalogAggregationIndex {
+  const cached = aggregationIndexes.get(catalog);
+  if (cached) return cached;
+  const created = {
+    ingredientById: new Map(
+      catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    ),
+    ingredientBySourceKey: new Map(
+      catalog.ingredients.map((ingredient) => [ingredient.sourceKey, ingredient]),
+    ),
+    relationsByRecipe: Map.groupBy(
+      catalog.relations,
+      (relation) => relation.recipeId,
+    ),
+  };
+  aggregationIndexes.set(catalog, created);
+  return created;
+}
+
 export function aggregateWeekIngredients(
   days: PreparedDay[],
   numberOfPeople: number,
@@ -30,13 +57,8 @@ export function aggregateWeekIngredients(
 ): WeekIngredientRequirement[] {
   if (!Number.isInteger(numberOfPeople) || numberOfPeople < 1) return [];
 
-  const ingredientById = new Map(
-    catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
-  );
-  const relationsByRecipe = Map.groupBy(
-    catalog.relations,
-    (relation) => relation.recipeId,
-  );
+  const { ingredientById, ingredientBySourceKey, relationsByRecipe } =
+    aggregationIndex(catalog);
   const aggregated = new Map<string, WeekIngredientRequirement>();
 
   function addRequirement(
@@ -110,8 +132,8 @@ export function aggregateWeekIngredients(
     if (!day.recipeId || !day.recipe) continue;
     const mealMix = mealMixProfileForRecipe(day.recipe.sourceKey);
     if (mealMix) {
-      const mixIngredient = catalog.ingredients.find(
-        (ingredient) => ingredient.sourceKey === mealMix.productIngredientSourceKey,
+      const mixIngredient = ingredientBySourceKey.get(
+        mealMix.productIngredientSourceKey,
       );
       if (mixIngredient) {
         addRequirement(
@@ -128,9 +150,7 @@ export function aggregateWeekIngredients(
       }
 
       for (const supplement of mealMix.supplements) {
-        const ingredient = catalog.ingredients.find(
-          (candidate) => candidate.sourceKey === supplement.sourceKey,
-        );
+        const ingredient = ingredientBySourceKey.get(supplement.sourceKey);
         if (!ingredient) continue;
         addRequirement(
           day,

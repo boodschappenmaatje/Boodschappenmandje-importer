@@ -6,6 +6,16 @@ import type {
   RecipeCatalog,
   RecipeRepository,
 } from "@/services/week-preparation/recipe-repository";
+import {
+  type RecipeReadinessGateResult,
+  type RecipeReadinessResult,
+} from "@/services/week-preparation/recipe-readiness";
+import {
+  resolveRecipeReadiness,
+  type PersistentRecipeReadinessRepository,
+} from "@/services/week-preparation/persistent-readiness-cache";
+import type { Product, Recipe } from "@/types/catalog";
+import type { WeekPreparation } from "@/types/week-preparation";
 
 export const PLANNING_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -14,9 +24,51 @@ interface CacheEntry<T> {
   value: Promise<T>;
 }
 
-interface PlanningCacheOptions {
+export interface PlanningCacheOptions {
   ttlMs?: number;
   now?: () => number;
+  persistentRepository?: PersistentRecipeReadinessRepository | null;
+}
+
+interface ReadinessBucket {
+  expiresAt: number;
+  recipes: Map<string, RecipeReadinessResult>;
+  matchedProductsByRequirement: Map<string, Product>;
+  pending: Promise<void> | null;
+}
+
+interface WeekSnapshotEntry {
+  expiresAt: number;
+  value: WeekPreparation;
+}
+
+export interface CachedRecipeReadiness {
+  gate: RecipeReadinessGateResult;
+  hitCount: number;
+  missCount: number;
+}
+
+export interface WeekPlanningSnapshotCache {
+  prepareCatalog(
+    sourceCatalog: RecipeCatalog,
+    prepare: () => RecipeCatalog,
+  ): RecipeCatalog;
+  evaluateReadiness(
+    sourceCatalog: RecipeCatalog,
+    recipes: Recipe[],
+    numberOfPeople: number,
+    preparedCatalog: RecipeCatalog,
+    catalogRepository: CatalogRepository,
+  ): Promise<CachedRecipeReadiness>;
+  getWeek(
+    sourceCatalog: RecipeCatalog,
+    key: string,
+  ): WeekPreparation | null;
+  setWeek(
+    sourceCatalog: RecipeCatalog,
+    key: string,
+    preparation: WeekPreparation,
+  ): void;
 }
 
 function cached<T>(
@@ -112,6 +164,152 @@ export function createCachedCatalogRepository(
         now,
         ttlMs,
       );
+    },
+  };
+}
+
+/**
+ * Keeps the expensive derived planning data next to the existing repository
+ * request cache. A catalog object is the snapshot identity: once the recipe
+ * repository refreshes, the WeakMap key changes and READY/week snapshots can
+ * no longer be reused accidentally.
+ */
+export function createWeekPlanningSnapshotCache(
+  options: PlanningCacheOptions = {},
+): WeekPlanningSnapshotCache {
+  const ttlMs = options.ttlMs ?? PLANNING_CACHE_TTL_MS;
+  const now = options.now ?? Date.now;
+  const persistentRepository = options.persistentRepository ?? null;
+  const preparedCatalogs = new WeakMap<RecipeCatalog, RecipeCatalog>();
+  const readinessByCatalog = new WeakMap<
+    RecipeCatalog,
+    Map<number, ReadinessBucket>
+  >();
+  const weeksByCatalog = new WeakMap<
+    RecipeCatalog,
+    Map<string, WeekSnapshotEntry>
+  >();
+
+  function readinessBucket(
+    sourceCatalog: RecipeCatalog,
+    numberOfPeople: number,
+  ): ReadinessBucket {
+    let byPeople = readinessByCatalog.get(sourceCatalog);
+    if (!byPeople) {
+      byPeople = new Map();
+      readinessByCatalog.set(sourceCatalog, byPeople);
+    }
+    const timestamp = now();
+    const existing = byPeople.get(numberOfPeople);
+    if (existing && existing.expiresAt > timestamp) return existing;
+    const created: ReadinessBucket = {
+      expiresAt: timestamp + ttlMs,
+      recipes: new Map(),
+      matchedProductsByRequirement: new Map(),
+      pending: null,
+    };
+    byPeople.set(numberOfPeople, created);
+    return created;
+  }
+
+  async function fillMissingReadiness(
+    bucket: ReadinessBucket,
+    recipes: Recipe[],
+    numberOfPeople: number,
+    preparedCatalog: RecipeCatalog,
+    catalogRepository: CatalogRepository,
+  ): Promise<{ persistentHits: number; fallbackCount: number }> {
+    if (bucket.pending) await bucket.pending;
+    const missing = recipes.filter((recipe) => !bucket.recipes.has(recipe.id));
+    if (missing.length === 0) return { persistentHits: 0, fallbackCount: 0 };
+
+    let persistentHits = 0;
+    let fallbackCount = missing.length;
+    bucket.pending = resolveRecipeReadiness(
+      missing,
+      numberOfPeople,
+      preparedCatalog,
+      catalogRepository,
+      persistentRepository,
+      new Date(now()),
+    ).then((resolution) => {
+      persistentHits = resolution.persistentHitCount;
+      fallbackCount = resolution.fallbackCount;
+      for (const result of resolution.gate.recipes) {
+        bucket.recipes.set(result.recipeId, result);
+      }
+      for (const [key, product] of resolution.gate.matchedProductsByRequirement) {
+        bucket.matchedProductsByRequirement.set(key, product);
+      }
+    });
+    try {
+      await bucket.pending;
+    } finally {
+      bucket.pending = null;
+    }
+    return { persistentHits, fallbackCount };
+  }
+
+  return {
+    prepareCatalog(sourceCatalog, prepare) {
+      const existing = preparedCatalogs.get(sourceCatalog);
+      if (existing) return existing;
+      const prepared = prepare();
+      preparedCatalogs.set(sourceCatalog, prepared);
+      return prepared;
+    },
+    async evaluateReadiness(
+      sourceCatalog,
+      recipes,
+      numberOfPeople,
+      preparedCatalog,
+      catalogRepository,
+    ) {
+      const bucket = readinessBucket(sourceCatalog, numberOfPeople);
+      const hitCount = recipes.filter((recipe) =>
+        bucket.recipes.has(recipe.id),
+      ).length;
+      const fill = await fillMissingReadiness(
+        bucket,
+        recipes,
+        numberOfPeople,
+        preparedCatalog,
+        catalogRepository,
+      );
+      return {
+        gate: {
+          recipes: recipes.flatMap((recipe) => {
+            const result = bucket.recipes.get(recipe.id);
+            return result ? [result] : [];
+          }),
+          matchedProductsByRequirement: new Map(
+            bucket.matchedProductsByRequirement,
+          ),
+        },
+        hitCount: hitCount + fill.persistentHits,
+        missCount: fill.fallbackCount,
+      };
+    },
+    getWeek(sourceCatalog, key) {
+      const byKey = weeksByCatalog.get(sourceCatalog);
+      const existing = byKey?.get(key);
+      if (!existing) return null;
+      if (existing.expiresAt <= now()) {
+        byKey?.delete(key);
+        return null;
+      }
+      return existing.value;
+    },
+    setWeek(sourceCatalog, key, preparation) {
+      let byKey = weeksByCatalog.get(sourceCatalog);
+      if (!byKey) {
+        byKey = new Map();
+        weeksByCatalog.set(sourceCatalog, byKey);
+      }
+      byKey.set(key, {
+        expiresAt: now() + ttlMs,
+        value: preparation,
+      });
     },
   };
 }

@@ -403,24 +403,6 @@ function valuesFromFacetRows(
 export class SupabaseCatalogRepository implements CatalogRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  private async pricesForProducts(
-    productRows: unknown[],
-    productIds: string[],
-    signal?: AbortSignal,
-  ): Promise<CatalogProductsResult> {
-    let priceQuery = this.client
-      .from("product_prices")
-      .select(PRICE_FIELDS)
-      .in("product_id", productIds);
-
-    if (signal) priceQuery = priceQuery.abortSignal(signal);
-    const { data: priceRows, error: priceError } = await priceQuery;
-    if (priceError || !Array.isArray(priceRows)) {
-      return mapCatalogRows(productRows, [], "unavailable");
-    }
-    return mapCatalogRows(productRows, priceRows);
-  }
-
   async query(request: CatalogQueryRequest = {}): Promise<CatalogQueryPageResult> {
     const normalized = normalizeCatalogQueryRequest(request);
     const {
@@ -594,9 +576,20 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       .in("id", uniqueIds)
       .order("name", { ascending: true })
       .order("id", { ascending: true });
+    let priceQuery = this.client
+      .from("product_prices")
+      .select(PRICE_FIELDS)
+      .in("product_id", uniqueIds);
 
-    if (signal) productQuery = productQuery.abortSignal(signal);
-    const { data: productRows, error: productError } = await productQuery;
+    if (signal) {
+      productQuery = productQuery.abortSignal(signal);
+      priceQuery = priceQuery.abortSignal(signal);
+    }
+    const [productResult, priceResult] = await Promise.all([
+      productQuery,
+      priceQuery,
+    ]);
+    const { data: productRows, error: productError } = productResult;
     if (productError) throw new CatalogReadError("products-unavailable");
     if (!Array.isArray(productRows)) throw new CatalogReadError("invalid-response");
     if (productRows.length === 0) return { products: [], priceStatus: "complete" };
@@ -609,7 +602,11 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       )
       .filter((id): id is string => typeof id === "string" && id.length > 0);
     if (returnedIds.length === 0) throw new CatalogReadError("invalid-response");
-    return this.pricesForProducts(productRows, returnedIds, signal);
+    const { data: priceRows, error: priceError } = priceResult;
+    if (priceError || !Array.isArray(priceRows)) {
+      return mapCatalogRows(productRows, [], "unavailable");
+    }
+    return mapCatalogRows(productRows, priceRows);
   }
 
   async search(
