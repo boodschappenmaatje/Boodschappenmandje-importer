@@ -25,7 +25,8 @@ type MatchStatus = "valid" | "invalid";
 
 export interface PersistentProductMatchRow {
   match_key: string;
-  ingredient_id: string;
+  ingredient_id: string | null;
+  ingredient_source_key: string;
   requirement_unit: string;
   requirement_kind: string;
   brand_constraint: string;
@@ -377,6 +378,7 @@ const READINESS_SELECT = [
 const MATCH_SELECT = [
   "match_key",
   "ingredient_id",
+  "ingredient_source_key",
   "requirement_unit",
   "requirement_kind",
   "brand_constraint",

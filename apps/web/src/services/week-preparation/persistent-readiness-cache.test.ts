@@ -136,6 +136,7 @@ function matchRow(ingredientId: string, matchedProduct: Product | null): Persist
   return {
     match_key: `${ingredientId}:piece:ingredient:generic`,
     ingredient_id: ingredientId,
+    ingredient_source_key: "ingredient",
     requirement_unit: "piece",
     requirement_kind: "ingredient",
     brand_constraint: "",

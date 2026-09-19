@@ -96,6 +96,13 @@ function bestIngredientResult(
   return current;
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function persistedIngredientId(ingredientId: string): string | null {
+  return UUID_PATTERN.test(ingredientId) ? ingredientId : null;
+}
+
 function rowsForGate(
   gate: RecipeReadinessGateResult,
   numberOfPeople: number,
@@ -121,7 +128,8 @@ function rowsForGate(
     const product = gate.matchedProductsByRequirement.get(key) ?? null;
     return [{
       match_key: key,
-      ingredient_id: descriptor.ingredientId,
+      ingredient_id: persistedIngredientId(descriptor.ingredientId),
+      ingredient_source_key: ingredient.sourceKey,
       requirement_unit: descriptor.unit,
       requirement_kind: descriptor.kind,
       brand_constraint: descriptor.brandConstraint,
@@ -312,7 +320,8 @@ export async function repairIngredientProductMatch(
 
   const write = await client.from("ingredient_product_matches").upsert({
     match_key: input.matchKey,
-    ingredient_id: descriptor.ingredientId,
+    ingredient_id: persistedIngredientId(descriptor.ingredientId),
+    ingredient_source_key: ingredient.sourceKey,
     requirement_unit: descriptor.unit,
     requirement_kind: descriptor.kind,
     brand_constraint: descriptor.brandConstraint,

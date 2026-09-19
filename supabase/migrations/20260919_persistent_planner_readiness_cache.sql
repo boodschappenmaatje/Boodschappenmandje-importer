@@ -4,7 +4,8 @@ begin;
 -- catalogusbrondata en mogen altijd opnieuw worden opgebouwd.
 create table if not exists public.ingredient_product_matches (
   match_key text primary key,
-  ingredient_id uuid not null references public.ingredients(id) on delete cascade,
+  ingredient_id uuid references public.ingredients(id) on delete cascade,
+  ingredient_source_key text not null,
   requirement_unit text not null,
   requirement_kind text not null,
   brand_constraint text not null default '',
@@ -22,6 +23,8 @@ create table if not exists public.ingredient_product_matches (
   updated_at timestamptz not null default now(),
   constraint ingredient_product_matches_key_not_blank
     check (length(btrim(match_key)) > 0),
+  constraint ingredient_product_matches_source_key_not_blank
+    check (length(btrim(ingredient_source_key)) > 0),
   constraint ingredient_product_matches_unit_check
     check (requirement_unit in ('g', 'kg', 'ml', 'l', 'piece', 'loaf')),
   constraint ingredient_product_matches_kind_check
@@ -40,6 +43,9 @@ create table if not exists public.ingredient_product_matches (
 
 create index if not exists ingredient_product_matches_ingredient_idx
   on public.ingredient_product_matches (ingredient_id);
+
+create index if not exists ingredient_product_matches_source_key_idx
+  on public.ingredient_product_matches (ingredient_source_key);
 
 create index if not exists ingredient_product_matches_product_idx
   on public.ingredient_product_matches (product_id)

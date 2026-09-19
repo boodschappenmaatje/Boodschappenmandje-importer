@@ -35,6 +35,11 @@ describe("structureel planner-cachecontract", () => {
     expect(migration).toContain("grant select, insert, update, delete on public.ingredient_product_matches to service_role");
     expect(migration).toContain("grant select, insert, update, delete on public.recipe_readiness_cache to service_role");
     expect(migration).toContain("grant execute on function public.invalidate_recipe_readiness_for_match_key(text, text)");
+    expect(migration).toContain("ingredient_id uuid references public.ingredients(id) on delete cascade");
+    expect(migration).toContain("ingredient_source_key text not null");
+    expect(migration).not.toContain("ingredient_id uuid not null references public.ingredients");
+    expect(serverService).toContain("ingredient_id: persistedIngredientId(descriptor.ingredientId)");
+    expect(serverService).toContain("ingredient_source_key: ingredient.sourceKey");
   });
 
   it("invalideert wijzigingen gericht via match-key, recept, ingrediënt, product en prijs", () => {
