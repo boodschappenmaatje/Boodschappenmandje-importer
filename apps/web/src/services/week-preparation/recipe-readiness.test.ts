@@ -474,6 +474,61 @@ describe("Recipe Readiness Gate", () => {
 });
 
 describe("generieke matching en verpakkingseenheden", () => {
+  it("accepteert veilige samenstelling en korte meervoudsuitgang in productnamen", () => {
+    const fishSchnitzel: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-fish-schnitzel",
+      sourceKey: "fishSchnitzel",
+      name: "visschnitzel",
+      normalizedName: "visschnitzel",
+      category: "Vis",
+      aliases: ["visschnitzel"],
+    };
+    const nachos: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-nachos",
+      sourceKey: "nachos",
+      name: "tortillachips",
+      normalizedName: "tortillachips",
+      category: "Snacks",
+      aliases: ["tortillachips"],
+    };
+
+    expect(isReliableIngredientMatch(fishSchnitzel, product({
+      id: "product-visschnitzels",
+      sku: "871000019",
+      name: "Iglo Fish & Fun visschnitzels familieverpakking",
+      category: "Vis",
+      productType: "Visschnitzel",
+    }))).toBe(true);
+    expect(isReliableIngredientMatch(nachos, product({
+      id: "product-tortilla-chips",
+      sku: "871000020",
+      name: "Santa Maria Tortilla chips salted",
+      category: "Snacks/Chips",
+      productType: "Tortilla chips",
+    }))).toBe(true);
+  });
+
+  it("verruimt korte termen niet tot toevallige deelwoorden", () => {
+    const cola: RecipeIngredientDefinition = {
+      ...BEEF,
+      id: "ingredient-cola",
+      sourceKey: "cola",
+      name: "cola",
+      normalizedName: "cola",
+      category: "Drinken",
+      aliases: ["cola"],
+    };
+    expect(isReliableIngredientMatch(cola, product({
+      id: "product-chocolate",
+      sku: "871000021",
+      name: "Pure chocolade",
+      category: "Chocolade",
+      productType: "Chocolade",
+    }))).toBe(false);
+  });
+
   it.each([
     ["gehakt", "Vlees"],
     ["kip", "Vlees"],

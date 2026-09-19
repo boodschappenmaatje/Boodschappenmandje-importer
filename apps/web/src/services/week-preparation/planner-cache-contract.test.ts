@@ -6,7 +6,10 @@ import {
   isPlannerCacheAdminRequest,
   isSameOriginPlannerRequest,
 } from "@/server/planner-cache-auth";
-import { parsePlannerCacheRefreshInput } from "@/server/planner-cache-service";
+import {
+  matchDescriptor,
+  parsePlannerCacheRefreshInput,
+} from "@/server/planner-cache-service";
 
 const projectRoot = resolve(process.cwd(), "../..");
 const migration = readFileSync(
@@ -75,6 +78,26 @@ describe("structureel planner-cachecontract", () => {
     })).toEqual({ recipeIds: ["a", "b"], numberOfPeople: 4 });
     expect(parsePlannerCacheRefreshInput({ recipeIds: ["a"], numberOfPeople: 13 })).toBeNull();
     expect(parsePlannerCacheRefreshInput({ recipeIds: [], numberOfPeople: 4 })).toBeNull();
+  });
+
+  it("bewaart afgeleide meal-mix-ingrediënten met dubbelepunten in hun match-key", () => {
+    expect(matchDescriptor(
+      "meal-mix-ingredient:volleKwark:g:ingredient:generic",
+    )).toEqual({
+      ingredientId: "meal-mix-ingredient:volleKwark",
+      unit: "g",
+      kind: "ingredient",
+      brandConstraint: "",
+    });
+    expect(matchDescriptor(
+      "meal-mix-ingredient:bosui:piece:ingredient:generic",
+    )).toEqual({
+      ingredientId: "meal-mix-ingredient:bosui",
+      unit: "piece",
+      kind: "ingredient",
+      brandConstraint: "",
+    });
+    expect(matchDescriptor("ongeldig:key")).toBeNull();
   });
 
   it("scheidt publieke same-origin refresh van admin-only backfill en repair", () => {

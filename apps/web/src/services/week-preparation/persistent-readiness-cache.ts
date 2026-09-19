@@ -405,26 +405,32 @@ export class SupabasePersistentRecipeReadinessRepository
   ): Promise<PersistentReadinessLoadResult> {
     const readiness: PersistentRecipeReadinessRow[] = [];
     const matches: PersistentProductMatchRow[] = [];
-    for (let offset = 0; offset < recipeIds.length; offset += 100) {
-      const ids = recipeIds.slice(offset, offset + 100);
-      if (ids.length === 0) continue;
-      const result = await this.client
+    const readinessBatches = Array.from(
+      { length: Math.ceil(recipeIds.length / 100) },
+      (_, index) => recipeIds.slice(index * 100, (index + 1) * 100),
+    );
+    const matchBatches = Array.from(
+      { length: Math.ceil(matchKeys.length / 100) },
+      (_, index) => matchKeys.slice(index * 100, (index + 1) * 100),
+    );
+    const [readinessResults, matchResults] = await Promise.all([
+      Promise.all(readinessBatches.map((ids) => this.client
         .from("recipe_readiness_cache")
         .select(READINESS_SELECT)
         .eq("people_count", numberOfPeople)
-        .in("recipe_id", ids);
+        .in("recipe_id", ids))),
+      Promise.all(matchBatches.map((keys) => this.client
+        .from("ingredient_product_matches")
+        .select(MATCH_SELECT)
+        .in("match_key", keys))),
+    ]);
+    for (const result of readinessResults) {
       if (result.error || !Array.isArray(result.data)) {
         return { available: false, readiness: [], matches: [] };
       }
       readiness.push(...(result.data as unknown as PersistentRecipeReadinessRow[]));
     }
-    for (let offset = 0; offset < matchKeys.length; offset += 100) {
-      const keys = matchKeys.slice(offset, offset + 100);
-      if (keys.length === 0) continue;
-      const result = await this.client
-        .from("ingredient_product_matches")
-        .select(MATCH_SELECT)
-        .in("match_key", keys);
+    for (const result of matchResults) {
       if (result.error || !Array.isArray(result.data)) {
         return { available: false, readiness: [], matches: [] };
       }

@@ -146,7 +146,19 @@ function reliableTermMatch(
   const terms = [...new Set([ingredient.name, ...ingredient.aliases].map(normalize))]
     .filter(Boolean);
   const name = normalize(product.name);
-  return terms.some((term) => containsTerm(name, term));
+  const nameTokens = name.split(" ").filter(Boolean);
+  return terms.some((term) => {
+    if (containsTerm(name, term)) return true;
+    if (term.length < 6) return false;
+
+    const compactTerm = term.replace(/\s+/g, "");
+    const compactName = nameTokens.join("");
+    if (compactTerm.length >= 6 && compactName.includes(compactTerm)) return true;
+
+    return !term.includes(" ") && nameTokens.some(
+      (token) => token.startsWith(term) && token.length - term.length <= 2,
+    );
+  });
 }
 
 const MEAL_MIX_STOP_WORDS = new Set([

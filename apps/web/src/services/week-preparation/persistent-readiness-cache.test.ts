@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import {
   PLANNER_MATCHER_VERSION,
   PLANNER_READINESS_EVALUATOR_VERSION,
+  SupabasePersistentRecipeReadinessRepository,
   resolveRecipeReadiness,
   type PersistentProductMatchRow,
   type PersistentRecipeReadinessRepository,
@@ -216,6 +218,47 @@ function persistent(
 }
 
 describe("persistente Recipe Readiness fast path", () => {
+  it("start readiness- en matchbatches onafhankelijk en parallel", async () => {
+    type Result = { data: unknown[]; error: null };
+    const pending: Array<{
+      table: string;
+      resolve: (result: Result) => void;
+    }> = [];
+    const client = {
+      from(table: string) {
+        const builder = {
+          select() { return builder; },
+          eq() { return builder; },
+          in() {
+            return new Promise<Result>((resolve) => {
+              pending.push({ table, resolve });
+            });
+          },
+        };
+        return builder;
+      },
+    } as unknown as SupabaseClient;
+    const cache = new SupabasePersistentRecipeReadinessRepository(client);
+    const loading = cache.load(
+      ["recipe-a"],
+      4,
+      Array.from({ length: 101 }, (_, index) => `match-${index}`),
+    );
+
+    await Promise.resolve();
+    expect(pending.map(({ table }) => table)).toEqual([
+      "recipe_readiness_cache",
+      "ingredient_product_matches",
+      "ingredient_product_matches",
+    ]);
+    for (const request of pending) request.resolve({ data: [], error: null });
+    await expect(loading).resolves.toEqual({
+      available: true,
+      readiness: [],
+      matches: [],
+    });
+  });
+
   it("gebruikt een geldige centrale READY-snapshot zonder evaluate/search en hydrateert producten in één batch", async () => {
     const source = catalog(["pasta"]);
     const matched = product("pasta");

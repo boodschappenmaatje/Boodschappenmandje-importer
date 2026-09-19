@@ -63,21 +63,24 @@ export function parsePlannerCacheRefreshInput(
   return { recipeIds, numberOfPeople };
 }
 
-function matchDescriptor(requirementKey: string): {
+export function matchDescriptor(requirementKey: string): {
   ingredientId: string;
   unit: string;
   kind: string;
   brandConstraint: string;
 } | null {
-  const [ingredientId, unit, kind, ...brandParts] = requirementKey.split(":");
+  const parts = requirementKey.split(":");
+  const brand = parts.pop() ?? "";
+  const kind = parts.pop() ?? "";
+  const unit = parts.pop() ?? "";
+  const ingredientId = parts.join(":");
   if (
     !ingredientId ||
-    !["g", "kg", "ml", "l", "piece", "loaf"].includes(unit ?? "") ||
-    !["ingredient", "mealMix"].includes(kind ?? "")
+    !["g", "kg", "ml", "l", "piece", "loaf"].includes(unit) ||
+    !["ingredient", "mealMix"].includes(kind)
   ) {
     return null;
   }
-  const brand = brandParts.join(":");
   return {
     ingredientId,
     unit,
