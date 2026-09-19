@@ -165,7 +165,7 @@ function persistedIngredientId(ingredientId: string): string | null {
   return UUID_PATTERN.test(ingredientId) ? ingredientId : null;
 }
 
-function rowsForGate(
+export function rowsForGate(
   gate: RecipeReadinessGateResult,
   numberOfPeople: number,
   now: Date,
@@ -232,7 +232,7 @@ function rowsForGate(
   return { matchRows, readinessRows };
 }
 
-async function loadCatalog(client: SupabaseClient): Promise<RecipeCatalog> {
+export async function loadCatalog(client: SupabaseClient): Promise<RecipeCatalog> {
   const loaded = await new SupabaseRecipeRepository(client).loadCatalog();
   return {
     ...loaded,

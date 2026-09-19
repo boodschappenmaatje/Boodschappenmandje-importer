@@ -76,6 +76,8 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+      PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
       HEADLESS: "1"
 
     steps:

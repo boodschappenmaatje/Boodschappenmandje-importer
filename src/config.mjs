@@ -200,6 +200,8 @@ export function loadConfig(env = process.env) {
       && env.PREFER_NEW_PRODUCTS !== "false",
     supabaseURL: env.SUPABASE_URL?.trim(),
     supabaseSecret: env.SUPABASE_SECRET_KEY?.trim(),
+    plannerCacheBaseURL: env.PLANNER_CACHE_BASE_URL?.trim(),
+    plannerCacheAdminToken: env.PLANNER_CACHE_ADMIN_TOKEN?.trim(),
   };
 
   if (!dryRun) {

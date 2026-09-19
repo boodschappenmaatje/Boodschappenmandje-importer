@@ -1,5 +1,7 @@
 import { setDefaultResultOrder } from "node:dns";
+import { randomUUID } from "node:crypto";
 import { UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
+import { notifyPlannerOfNewProducts, plannerMaintenanceSettings } from "./planner-cache-maintenance.mjs";
 
 const REQUEST_TIMEOUT_MS = 25_000;
 const MAX_ATTEMPTS = 3;
@@ -844,6 +846,12 @@ function pricePayload(productID, product) {
 }
 
 export async function upsertProducts(config, products) {
+  // Explicit configuration keeps the existing importer unchanged until activation.
+  // Validate it before any writes; the API token never reaches Supabase/browser code.
+  const maintenance = config.updateMode === "prices" || config.updateMode === "classify"
+    ? null : plannerMaintenanceSettings(config);
+  const newProductIds = [];
+  let maintenanceResult;
   const imported = [];
   const errors = [];
   const seenSKUs = new Set();
@@ -853,53 +861,79 @@ export async function upsertProducts(config, products) {
     return true;
   });
 
-  for (const product of uniqueProducts) {
-    if (!(Number.isFinite(product?.price) && product.price > 0)) {
-      errors.push({ sku: product?.sku ?? "-", message: "Ongeldige prijs; bestaande Supabase-prijs blijft ongewijzigd." });
-      continue;
-    }
-    try {
-      const rows = await postJSON(
-        config.supabaseURL,
-        "products",
-        config.supabaseSecret,
-        [productPayload(product, config.productTypeSupported !== false)],
-        "resolution=merge-duplicates,return=representation",
-        { on_conflict: "supermarket,sku", select: "id,sku,name" },
-      );
-      const stored = rows[0];
-      if (!stored?.id || stored.sku !== product.sku) {
-        throw new Error(`Supabase gaf geen veilig gekoppeld product_id terug voor SKU ${product.sku}.`);
+  try {
+    for (const product of uniqueProducts) {
+      if (!(Number.isFinite(product?.price) && product.price > 0)) {
+        errors.push({ sku: product?.sku ?? "-", message: "Ongeldige prijs; bestaande Supabase-prijs blijft ongewijzigd." });
+        continue;
       }
+      try {
+        const insertionId = maintenance ? randomUUID() : null;
+        const inserted = maintenance ? await postJSON(
+          config.supabaseURL,
+          "products",
+          config.supabaseSecret,
+          [{ ...productPayload(product, config.productTypeSupported !== false), id: insertionId }],
+          "resolution=ignore-duplicates,return=representation",
+          { on_conflict: "supermarket,sku", select: "id,sku,name" },
+        ) : [];
+        // DO NOTHING + returned UUID proves a real insert, including a lost-response
+        // retry. A concurrent/existing product retains its own ID and is never new.
+        const rows = inserted.length > 0 ? inserted : await postJSON(
+          config.supabaseURL,
+          "products",
+          config.supabaseSecret,
+          [productPayload(product, config.productTypeSupported !== false)],
+          "resolution=merge-duplicates,return=representation",
+          { on_conflict: "supermarket,sku", select: "id,sku,name" },
+        );
+        const stored = rows[0];
+        if (!stored?.id || stored.sku !== product.sku) {
+          throw new Error(`Supabase gaf geen veilig gekoppeld product_id terug voor SKU ${product.sku}.`);
+        }
 
-      const priceRows = await postJSON(
-        config.supabaseURL,
-        "product_prices",
-        config.supabaseSecret,
-        [pricePayload(stored.id, product)],
-        "resolution=merge-duplicates,return=representation",
-        { on_conflict: "product_id", select: "product_id,price,is_offer,updated_at" },
-      );
-      const storedPrice = priceRows[0];
-      if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
-        throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
+        const priceRows = await postJSON(
+          config.supabaseURL,
+          "product_prices",
+          config.supabaseSecret,
+          [pricePayload(stored.id, product)],
+          "resolution=merge-duplicates,return=representation",
+          { on_conflict: "product_id", select: "product_id,price,is_offer,updated_at" },
+        );
+        const storedPrice = priceRows[0];
+        if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
+          throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
+        }
+        imported.push({ sku: product.sku, name: product.name, price: product.price });
+        if (maintenance && stored.id === insertionId) newProductIds.push(stored.id);
+      } catch (error) {
+        const structural = error instanceof SupabaseRequestError
+          && (error.kind === "network" || error.kind === "dns" || error.kind === "tls"
+            || error.kind === "timeout" || error.kind === "connection-reset"
+            || error.kind === "connection-refused" || error.kind === "response"
+            || error.status === 401 || error.status === 403 || error.status === 404
+            || error.status === 408 || error.status === 425 || error.status === 429
+            || (error.status ?? 0) >= 500);
+        if (structural) throw error;
+        errors.push({ sku: product.sku, message: error instanceof Error ? error.message : "onbekende fout" });
       }
-      imported.push({ sku: product.sku, name: product.name, price: product.price });
-    } catch (error) {
-      const structural = error instanceof SupabaseRequestError
-        && (error.kind === "network" || error.kind === "dns" || error.kind === "tls"
-          || error.kind === "timeout" || error.kind === "connection-reset"
-          || error.kind === "connection-refused" || error.kind === "response"
-          || error.status === 401 || error.status === 403 || error.status === 404
-          || error.status === 408 || error.status === 425 || error.status === 429
-          || (error.status ?? 0) >= 500);
-      if (structural) throw error;
-      errors.push({ sku: product.sku, message: error instanceof Error ? error.message : "onbekende fout" });
+    }
+  } finally {
+    // A later structural import failure must not lose notifications for earlier
+    // successfully confirmed product/price pairs in this batch.
+    if (maintenance && newProductIds.length > 0) {
+      const result = maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
+      if (result.pendingProductIds.length > 0) {
+        // Successful catalog writes remain successful. Preserve exact replay scope,
+        // never include response bodies, URLs, tokens or a global refresh instruction.
+        console.warn(`Planner-cacheonderhoud nog niet bevestigd; gerichte herhaling nodig voor product-ID's: ${result.pendingProductIds.join(",")}`);
+      }
     }
   }
-
   if (imported.length === 0 && uniqueProducts.length > 0) {
     throw new Error(`Geen enkel product kon naar Supabase worden geschreven. Eerste fout: ${errors[0]?.message ?? "onbekend"}`);
   }
+  if (maintenanceResult) return { imported, errors,
+    duplicateSKUsSkipped: products.length - uniqueProducts.length, plannerMaintenance: maintenanceResult };
   return { imported, errors, duplicateSKUsSkipped: products.length - uniqueProducts.length };
 }
