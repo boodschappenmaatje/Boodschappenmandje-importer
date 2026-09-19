@@ -5,8 +5,14 @@ import type { RecipeCatalog, RecipeRepository } from "@/services/week-preparatio
 import {
   createCachedCatalogRepository,
   createCachedRecipeRepository,
+  createWeekPlanningSnapshotCache,
 } from "@/services/week-preparation/planning-cache";
-import { generatePreparedWeek, refreshGeneratedWeek, revalidatePreparedWeek } from "@/services/week-preparation/week-generation";
+import {
+  generatePreparedWeek,
+  refreshGeneratedWeek,
+  revalidatePreparedWeek,
+  type WeekGenerationMetrics,
+} from "@/services/week-preparation/week-generation";
 import {
   createWeekPreparation,
   prepareWeek,
@@ -230,6 +236,268 @@ function selectedRecipeIds(result: Awaited<ReturnType<typeof generatePreparedWee
 }
 
 describe("budgetbewuste READY-receptselectie", () => {
+  it("maakt dezelfde zevendaagse week bij een volledige cache-hit zonder nieuwe pipeline of requests", async () => {
+    let recipeLoads = 0;
+    let searches = 0;
+    const countedRecipes: RecipeRepository = {
+      async loadCatalog() {
+        recipeLoads += 1;
+        return CATALOG;
+      },
+    };
+    const countedCatalog: CatalogRepository = {
+      ...catalogRepository,
+      async search(term) {
+        searches += 1;
+        return catalogRepository.search(term);
+      },
+    };
+    const cachedRecipes = createCachedRecipeRepository(countedRecipes);
+    const cachedCatalog = createCachedCatalogRepository(countedCatalog);
+    const snapshots = createWeekPlanningSnapshotCache();
+    const traces: WeekGenerationMetrics[] = [];
+    const input = preparedDays(
+      5_400,
+      Array.from({ length: 7 }, () => "pasta" as const),
+    );
+
+    const first = await generatePreparedWeek(
+      input,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots, onMetrics: (metrics) => traces.push(metrics) },
+    );
+    const requestCounts = { recipeLoads, searches };
+    const second = await generatePreparedWeek(
+      input,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots, onMetrics: (metrics) => traces.push(metrics) },
+    );
+
+    expect(first.status).toBe("generated");
+    expect(second).toEqual(first);
+    expect({ recipeLoads, searches }).toEqual(requestCounts);
+    expect(traces[0]).toMatchObject({
+      resultCacheHit: false,
+      readinessCacheHits: 0,
+      readinessCacheMisses: 3,
+    });
+    expect(traces[1]).toMatchObject({
+      resultCacheHit: true,
+      readinessCacheHits: 0,
+      readinessCacheMisses: 0,
+      readinessMs: 0,
+      selectionMs: 0,
+    });
+  });
+
+  it("meet een volledige cache-hit zonder onbetrouwbare harde tijdslimiet", async () => {
+    const definitions = Array.from({ length: 28 }, (_, index) => ({
+      id: `pasta-performance-${index}`,
+      name: `Pasta performance ${index}`,
+      price: 1 + (index % 5) * 0.25,
+    }));
+    const repositories = fixture(definitions);
+    let searches = 0;
+    const countedCatalog: CatalogRepository = {
+      ...repositories.catalogRepository,
+      async search(term) {
+        searches += 1;
+        return repositories.catalogRepository.search(term);
+      },
+    };
+    const cachedRecipes = createCachedRecipeRepository(repositories.recipeRepository);
+    const cachedCatalog = createCachedCatalogRepository(countedCatalog);
+    const input = preparedDays(
+      10_000,
+      Array.from({ length: 7 }, () => "pasta" as const),
+    );
+    const baselineTraces: WeekGenerationMetrics[] = [];
+
+    await generatePreparedWeek(
+      input,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+    );
+    const warmedRequests = searches;
+    await generatePreparedWeek(
+      input,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { onMetrics: (metrics) => baselineTraces.push(metrics) },
+    );
+    const snapshots = createWeekPlanningSnapshotCache();
+    const cachedTraces: WeekGenerationMetrics[] = [];
+    await generatePreparedWeek(
+      input,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots },
+    );
+    await generatePreparedWeek(
+      input,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots, onMetrics: (metrics) => cachedTraces.push(metrics) },
+    );
+
+    expect(searches).toBe(warmedRequests);
+    expect(baselineTraces[0]).toMatchObject({
+      resultCacheHit: false,
+      readinessCacheHits: 0,
+      readinessCacheMisses: 28,
+    });
+    expect(cachedTraces[0]).toMatchObject({
+      resultCacheHit: true,
+      readinessMs: 0,
+      selectionMs: 0,
+    });
+  });
+
+  it("hergebruikt READY, matches, verpakking en prijzen wanneer alleen het maaltijd-budget verandert", async () => {
+    let searches = 0;
+    const countedCatalog: CatalogRepository = {
+      ...catalogRepository,
+      async search(term) {
+        searches += 1;
+        return catalogRepository.search(term);
+      },
+    };
+    const cachedRecipes = createCachedRecipeRepository(recipeRepository);
+    const cachedCatalog = createCachedCatalogRepository(countedCatalog);
+    const snapshots = createWeekPlanningSnapshotCache();
+    const traces: WeekGenerationMetrics[] = [];
+
+    await generatePreparedWeek(
+      preparedDays(5_000, Array.from({ length: 7 }, () => "pasta" as const)),
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots },
+    );
+    const searchCount = searches;
+    const changed = await generatePreparedWeek(
+      preparedDays(5_400, Array.from({ length: 7 }, () => "pasta" as const)),
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots, onMetrics: (metrics) => traces.push(metrics) },
+    );
+
+    expect(changed.status).toBe("generated");
+    expect(searches).toBe(searchCount);
+    expect(traces[0]).toMatchObject({
+      resultCacheHit: false,
+      readinessCacheHits: 3,
+      readinessCacheMisses: 0,
+    });
+  });
+
+  it("valideert bij één nieuwe dagcategorie alleen de nog niet gecachete recepten", async () => {
+    const repositories = fixture([
+      { id: "pasta-one", name: "Pasta voordelig", price: 2 },
+      { id: "pasta-two", name: "Macaroni simpel", price: 2.5 },
+      { id: "quick-only", name: "Omelet snel", price: 1.5 },
+    ]);
+    let searches = 0;
+    const countedCatalog: CatalogRepository = {
+      ...repositories.catalogRepository,
+      async search(term) {
+        searches += 1;
+        return repositories.catalogRepository.search(term);
+      },
+    };
+    const cachedRecipes = createCachedRecipeRepository(repositories.recipeRepository);
+    const cachedCatalog = createCachedCatalogRepository(countedCatalog);
+    const snapshots = createWeekPlanningSnapshotCache();
+    const traces: WeekGenerationMetrics[] = [];
+
+    await generatePreparedWeek(
+      preparedDays(5_000, ["pasta"]),
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots },
+    );
+    const before = searches;
+    const changed = await generatePreparedWeek(
+      preparedDays(5_000, ["pasta", "quick"]),
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots, onMetrics: (metrics) => traces.push(metrics) },
+    );
+
+    expect(changed.status).toBe("generated");
+    expect(traces[0]).toMatchObject({
+      resultCacheHit: false,
+      readinessCacheHits: 2,
+      readinessCacheMisses: 1,
+    });
+    expect(searches).toBe(before + 1);
+  });
+
+  it("herberekent quantities bij een personenwijziging zonder productmatches opnieuw op te halen", async () => {
+    let searches = 0;
+    const countedCatalog: CatalogRepository = {
+      ...catalogRepository,
+      async search(term) {
+        searches += 1;
+        return catalogRepository.search(term);
+      },
+    };
+    const cachedRecipes = createCachedRecipeRepository(recipeRepository);
+    const cachedCatalog = createCachedCatalogRepository(countedCatalog);
+    const snapshots = createWeekPlanningSnapshotCache();
+    const traces: WeekGenerationMetrics[] = [];
+    const fourPeople = preparedDays(5_400, ["pasta"]);
+
+    const first = await generatePreparedWeek(
+      fourPeople,
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots },
+    );
+    const before = searches;
+    const changed = await generatePreparedWeek(
+      { ...fourPeople, numberOfPeople: 5 },
+      cachedRecipes,
+      cachedCatalog,
+      NOW,
+      emptyList(),
+      { cache: snapshots, onMetrics: (metrics) => traces.push(metrics) },
+    );
+
+    expect(changed.ingredients[0]?.requiredQuantity).not.toBe(
+      first.ingredients[0]?.requiredQuantity,
+    );
+    expect(searches).toBe(before);
+    expect(traces[0]).toMatchObject({
+      resultCacheHit: false,
+      readinessCacheHits: 0,
+      readinessCacheMisses: 3,
+    });
+  });
+
   it("hergebruikt recipe- en productdata wanneer alleen het maaltijd-budget opnieuw wordt geoptimaliseerd", async () => {
     let recipeLoads = 0;
     let searches = 0;

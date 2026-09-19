@@ -72,6 +72,14 @@ describe("PWA 12 compacte iPhone-customization", () => {
     expect(controls).toContain('"Bevestig vervanging"');
   });
 
+  it("houdt ook volledige weekgeneratie single-flight en providerbreed gecachet", () => {
+    expect(provider).toContain("createWeekPlanningSnapshotCache()");
+    expect(provider).toContain("if (generationInFlightRef.current) return");
+    expect(provider).toContain("generationInFlightRef.current = true");
+    expect(provider).toContain("generationInFlightRef.current = false");
+    expect(provider).toContain("cache: planningSnapshotCacheRef.current");
+  });
+
   it("houdt de selectie vast tot succes en toont een fout in plaats van stil te stoppen", () => {
     expect(controls).toContain("if (result.applied)");
     expect(controls).toContain("setOpen(false); setPending(null); setAlternatives([])");
