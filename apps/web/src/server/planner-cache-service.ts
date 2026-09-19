@@ -35,6 +35,65 @@ export interface PlannerCacheRefreshResult {
   fallbackCount: number;
 }
 
+export const PLANNER_MAINTENANCE_PEOPLE_COUNTS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+] as const;
+
+export interface PlannerReadinessStateRow {
+  recipe_id: string;
+  people_count: number;
+  evaluator_version: number;
+  refresh_status: string;
+  invalidated_at: string | null;
+  expires_at: string;
+}
+
+export interface PlannerReadinessMaintenanceTarget {
+  numberOfPeople: number;
+  recipeIds: string[];
+}
+
+export interface PlannerCacheMaintenanceResult extends PlannerCacheRefreshResult {
+  maintainedPeopleCounts: number[];
+  skippedCurrentReadiness: number;
+}
+
+function currentReadinessState(
+  row: PlannerReadinessStateRow,
+  now: Date,
+): boolean {
+  const expiresAt = Date.parse(row.expires_at);
+  return (
+    row.evaluator_version === PLANNER_READINESS_EVALUATOR_VERSION &&
+    row.refresh_status === "current" &&
+    row.invalidated_at === null &&
+    Number.isFinite(expiresAt) &&
+    expiresAt > now.getTime()
+  );
+}
+
+export function planPlannerReadinessMaintenance(
+  recipeIds: string[],
+  rows: PlannerReadinessStateRow[],
+  peopleCounts: readonly number[],
+  now: Date = new Date(),
+): PlannerReadinessMaintenanceTarget[] {
+  const uniqueRecipeIds = [...new Set(recipeIds)];
+  const currentKeys = new Set(
+    rows
+      .filter((row) => currentReadinessState(row, now))
+      .map((row) => `${row.recipe_id}:${row.people_count}`),
+  );
+  return [...new Set(peopleCounts)].flatMap((numberOfPeople) => {
+    const missingOrStale = uniqueRecipeIds.filter(
+      (recipeId) => !currentKeys.has(`${recipeId}:${numberOfPeople}`),
+    );
+    return missingOrStale.length > 0
+      ? [{ numberOfPeople, recipeIds: missingOrStale }]
+      : [];
+  });
+}
+
 function uniqueBoundedIds(values: unknown, maximum: number): string[] {
   if (!Array.isArray(values)) return [];
   return [...new Set(
@@ -239,6 +298,87 @@ export async function refreshPlannerReadiness(
   return refreshWithCatalog(client, catalog, recipes, input.numberOfPeople, now);
 }
 
+const READINESS_STATE_SELECT = [
+  "recipe_id",
+  "people_count",
+  "evaluator_version",
+  "refresh_status",
+  "invalidated_at",
+  "expires_at",
+].join(",");
+
+async function loadReadinessState(
+  client: SupabaseClient,
+  recipeIds: string[],
+  peopleCounts: readonly number[],
+): Promise<PlannerReadinessStateRow[]> {
+  if (recipeIds.length === 0 || peopleCounts.length === 0) return [];
+  const result = await client
+    .from("recipe_readiness_cache")
+    .select(READINESS_STATE_SELECT)
+    .in("recipe_id", recipeIds)
+    .in("people_count", [...peopleCounts]);
+  if (result.error || !Array.isArray(result.data)) {
+    throw new Error("planner-readiness-state-read-failed");
+  }
+  return result.data as unknown as PlannerReadinessStateRow[];
+}
+
+/**
+ * Lazy, targeted maintenance for normal planner traffic. The browser already
+ * reports only recipes that missed the persistent fast path. Rebuild those
+ * recipes for 1–10 people without touching current rows for other recipes.
+ */
+export async function maintainPlannerReadiness(
+  client: SupabaseClient,
+  input: PlannerCacheRefreshInput,
+  now: Date = new Date(),
+): Promise<PlannerCacheMaintenanceResult> {
+  const catalog = await loadCatalog(client);
+  const requested = new Set(input.recipeIds);
+  const recipes = catalog.recipes.filter((recipe) => requested.has(recipe.id));
+  const recipeIds = recipes.map((recipe) => recipe.id);
+  const peopleCounts = input.numberOfPeople >= 1 && input.numberOfPeople <= 10
+    ? [
+        input.numberOfPeople,
+        ...PLANNER_MAINTENANCE_PEOPLE_COUNTS.filter(
+          (count) => count !== input.numberOfPeople,
+        ),
+      ]
+    : [input.numberOfPeople];
+  const existing = await loadReadinessState(client, recipeIds, peopleCounts);
+  const targets = planPlannerReadinessMaintenance(
+    recipeIds,
+    existing,
+    peopleCounts,
+    now,
+  );
+  let refreshed = 0;
+  let persistentHits = 0;
+  let fallbackCount = 0;
+  for (const target of targets) {
+    const targetIds = new Set(target.recipeIds);
+    const result = await refreshWithCatalog(
+      client,
+      catalog,
+      recipes.filter((recipe) => targetIds.has(recipe.id)),
+      target.numberOfPeople,
+      now,
+    );
+    refreshed += result.refreshed;
+    persistentHits += result.persistentHits;
+    fallbackCount += result.fallbackCount;
+  }
+  return {
+    requested: recipes.length,
+    refreshed,
+    persistentHits,
+    fallbackCount,
+    maintainedPeopleCounts: targets.map((target) => target.numberOfPeople),
+    skippedCurrentReadiness: recipeIds.length * peopleCounts.length - refreshed,
+  };
+}
+
 export interface PlannerBackfillInput {
   afterSourceKey?: string | null;
   batchSize?: number;
@@ -270,13 +410,32 @@ export async function backfillPlannerReadinessBatch(
     !input.afterSourceKey || recipe.sourceKey > input.afterSourceKey,
   );
   const batch = candidates.slice(0, batchSize);
-  const refreshed = await refreshWithCatalog(
+  const existing = await loadReadinessState(
     client,
-    catalog,
-    batch,
-    input.numberOfPeople,
+    batch.map((recipe) => recipe.id),
+    [input.numberOfPeople],
+  );
+  const targets = planPlannerReadinessMaintenance(
+    batch.map((recipe) => recipe.id),
+    existing,
+    [input.numberOfPeople],
     now,
   );
+  const targetIds = new Set(targets[0]?.recipeIds ?? []);
+  const refreshed = targetIds.size > 0
+    ? await refreshWithCatalog(
+        client,
+        catalog,
+        batch.filter((recipe) => targetIds.has(recipe.id)),
+        input.numberOfPeople,
+        now,
+      )
+    : {
+        requested: 0,
+        refreshed: 0,
+        persistentHits: 0,
+        fallbackCount: 0,
+      };
   const nextCursor = batch.at(-1)?.sourceKey ?? null;
   return {
     ...refreshed,

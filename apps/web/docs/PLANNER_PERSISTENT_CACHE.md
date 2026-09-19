@@ -9,6 +9,8 @@ Deze PWA 12-performancefix voegt uitsluitend afgeleide, opnieuw opbouwbare data 
 - recept-, ingrediënt-, product- en prijswijzigingen markeren alleen afhankelijke rijen als `pending`;
 - de planner gebruikt geldige rijen zonder een volledige readiness-evaluatie of productzoekactie;
 - ontbrekende of stale rijen vallen alleen voor de betrokken recepten terug;
+- de gerichte fallback vult voor een nieuw of gewijzigd recept automatisch alleen
+  ontbrekende/stale readiness voor 1–10 personen aan; andere recepten blijven ongemoeid;
 - Data Health gebruikt dezelfde resolver en dezelfde READY-definitie.
 
 ## Veilige uitrol
@@ -33,6 +35,9 @@ npm run cache:backfill
 Herhaal dit later voor de gewenste aantallen personen 1–12. Start deze opdracht niet tegen
 Production voordat de migratie apart is goedgekeurd. Een onderbroken run kan met de laatst geprinte
 cursor worden hervat.
+
+De backfill slaat reeds actuele readiness over. Productmatches blijven gedeeld: dezelfde match_key
+wordt niet per personenaantal gekopieerd.
 
 ## Match Repair
 

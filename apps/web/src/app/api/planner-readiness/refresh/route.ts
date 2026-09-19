@@ -1,8 +1,8 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isSameOriginPlannerRequest } from "@/server/planner-cache-auth";
 import {
+  maintainPlannerReadiness,
   parsePlannerCacheRefreshInput,
-  refreshPlannerReadiness,
 } from "@/server/planner-cache-service";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "invalid-request" }, { status: 400 });
   }
   try {
-    const result = await refreshPlannerReadiness(client, input);
+    const result = await maintainPlannerReadiness(client, input);
     return Response.json(result);
   } catch {
     return Response.json({ error: "refresh-failed" }, { status: 503 });
