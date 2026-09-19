@@ -1,0 +1,367 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository";
+import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
+import {
+  isReliableIngredientMatch,
+} from "@/services/week-preparation/product-matching";
+import {
+  PLANNER_MATCHER_VERSION,
+  PLANNER_READINESS_EVALUATOR_VERSION,
+  PLANNER_READINESS_TTL_MS,
+  SupabasePersistentRecipeReadinessRepository,
+  requirementKeysForRecipes,
+  resolveRecipeReadiness,
+} from "@/services/week-preparation/persistent-readiness-cache";
+import type {
+  IngredientReadinessResult,
+  RecipeReadinessGateResult,
+} from "@/services/week-preparation/recipe-readiness";
+import {
+  SupabaseRecipeRepository,
+  type RecipeCatalog,
+} from "@/services/week-preparation/recipe-repository";
+import type { Product, Recipe } from "@/types/catalog";
+
+export interface PlannerCacheRefreshInput {
+  recipeIds: string[];
+  numberOfPeople: number;
+}
+
+export interface PlannerCacheRefreshResult {
+  requested: number;
+  refreshed: number;
+  persistentHits: number;
+  fallbackCount: number;
+}
+
+function uniqueBoundedIds(values: unknown, maximum: number): string[] {
+  if (!Array.isArray(values)) return [];
+  return [...new Set(
+    values
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )].slice(0, maximum);
+}
+
+export function parsePlannerCacheRefreshInput(
+  value: unknown,
+): PlannerCacheRefreshInput | null {
+  if (typeof value !== "object" || value === null) return null;
+  const input = value as { recipeIds?: unknown; numberOfPeople?: unknown };
+  const recipeIds = uniqueBoundedIds(input.recipeIds, 100);
+  const numberOfPeople = Number(input.numberOfPeople);
+  if (
+    recipeIds.length === 0 ||
+    !Number.isInteger(numberOfPeople) ||
+    numberOfPeople < 1 ||
+    numberOfPeople > 12
+  ) {
+    return null;
+  }
+  return { recipeIds, numberOfPeople };
+}
+
+function matchDescriptor(requirementKey: string): {
+  ingredientId: string;
+  unit: string;
+  kind: string;
+  brandConstraint: string;
+} | null {
+  const [ingredientId, unit, kind, ...brandParts] = requirementKey.split(":");
+  if (
+    !ingredientId ||
+    !["g", "kg", "ml", "l", "piece", "loaf"].includes(unit ?? "") ||
+    !["ingredient", "mealMix"].includes(kind ?? "")
+  ) {
+    return null;
+  }
+  const brand = brandParts.join(":");
+  return {
+    ingredientId,
+    unit,
+    kind,
+    brandConstraint: brand === "generic" ? "" : brand,
+  };
+}
+
+function bestIngredientResult(
+  current: IngredientReadinessResult | undefined,
+  next: IngredientReadinessResult,
+): IngredientReadinessResult {
+  if (!current) return next;
+  if (!current.productId && next.productId) return next;
+  if (!current.ready && next.ready) return next;
+  return current;
+}
+
+function rowsForGate(
+  gate: RecipeReadinessGateResult,
+  numberOfPeople: number,
+  now: Date,
+) {
+  const ingredientsByKey = new Map<string, IngredientReadinessResult>();
+  for (const recipe of gate.recipes) {
+    for (const ingredient of recipe.ingredients) {
+      if (!ingredient.requirementKey) continue;
+      ingredientsByKey.set(
+        ingredient.requirementKey,
+        bestIngredientResult(
+          ingredientsByKey.get(ingredient.requirementKey),
+          ingredient,
+        ),
+      );
+    }
+  }
+
+  const matchRows = [...ingredientsByKey].flatMap(([key, ingredient]) => {
+    const descriptor = matchDescriptor(key);
+    if (!descriptor) return [];
+    const product = gate.matchedProductsByRequirement.get(key) ?? null;
+    return [{
+      match_key: key,
+      ingredient_id: descriptor.ingredientId,
+      requirement_unit: descriptor.unit,
+      requirement_kind: descriptor.kind,
+      brand_constraint: descriptor.brandConstraint,
+      product_id: product?.id ?? null,
+      match_status: product ? "valid" : "invalid",
+      failure_reason: product ? null : ingredient.reason ?? "matcher_failed",
+      matcher_version: PLANNER_MATCHER_VERSION,
+      refresh_status: "current",
+      invalidated_at: null,
+      invalidation_reason: null,
+      product_updated_at: product?.updatedAt ?? null,
+      price_updated_at: product?.currentPrice?.updatedAt ?? null,
+      matched_at: now.toISOString(),
+      checked_at: now.toISOString(),
+    }];
+  });
+  const expiresAt = new Date(now.getTime() + PLANNER_READINESS_TTL_MS).toISOString();
+  const readinessRows = gate.recipes.map((recipe) => ({
+    recipe_id: recipe.recipeId,
+    people_count: numberOfPeople,
+    readiness_status: recipe.ready ? "READY" : "NOT_READY",
+    required_ingredient_count: recipe.requiredIngredientCount,
+    ready_required_ingredient_count: recipe.readyRequiredIngredientCount,
+    problem_count: recipe.problemCount,
+    readiness_payload: recipe,
+    dependency_match_keys: [...new Set(
+      recipe.ingredients.flatMap((ingredient) =>
+        ingredient.requirementKey ? [ingredient.requirementKey] : [],
+      ),
+    )],
+    evaluator_version: PLANNER_READINESS_EVALUATOR_VERSION,
+    refresh_status: "current",
+    invalidated_at: null,
+    invalidation_reason: null,
+    evaluated_at: now.toISOString(),
+    expires_at: expiresAt,
+  }));
+  return { matchRows, readinessRows };
+}
+
+async function loadCatalog(client: SupabaseClient): Promise<RecipeCatalog> {
+  const loaded = await new SupabaseRecipeRepository(client).loadCatalog();
+  return {
+    ...loaded,
+    ingredients: enrichIngredientsForMealMixes(loaded.ingredients),
+  };
+}
+
+async function persistGate(
+  client: SupabaseClient,
+  gate: RecipeReadinessGateResult,
+  numberOfPeople: number,
+  now: Date,
+): Promise<void> {
+  const { matchRows, readinessRows } = rowsForGate(gate, numberOfPeople, now);
+  if (matchRows.length > 0) {
+    const matchResult = await client
+      .from("ingredient_product_matches")
+      .upsert(matchRows, { onConflict: "match_key" });
+    if (matchResult.error) throw new Error("planner-match-cache-write-failed");
+  }
+  if (readinessRows.length > 0) {
+    const readinessResult = await client
+      .from("recipe_readiness_cache")
+      .upsert(readinessRows, { onConflict: "recipe_id,people_count" });
+    if (readinessResult.error) throw new Error("planner-readiness-cache-write-failed");
+  }
+}
+
+async function refreshWithCatalog(
+  client: SupabaseClient,
+  catalog: RecipeCatalog,
+  recipes: Recipe[],
+  numberOfPeople: number,
+  now: Date,
+): Promise<PlannerCacheRefreshResult> {
+  const catalogRepository = new SupabaseCatalogRepository(client);
+  const persistentRepository = new SupabasePersistentRecipeReadinessRepository(client);
+  const resolution = await resolveRecipeReadiness(
+    recipes,
+    numberOfPeople,
+    catalog,
+    catalogRepository,
+    persistentRepository,
+    now,
+  );
+  await persistGate(client, resolution.gate, numberOfPeople, now);
+  return {
+    requested: recipes.length,
+    refreshed: resolution.gate.recipes.length,
+    persistentHits: resolution.persistentHitCount,
+    fallbackCount: resolution.fallbackCount,
+  };
+}
+
+export async function refreshPlannerReadiness(
+  client: SupabaseClient,
+  input: PlannerCacheRefreshInput,
+  now: Date = new Date(),
+): Promise<PlannerCacheRefreshResult> {
+  const catalog = await loadCatalog(client);
+  const requested = new Set(input.recipeIds);
+  const recipes = catalog.recipes.filter((recipe) => requested.has(recipe.id));
+  return refreshWithCatalog(client, catalog, recipes, input.numberOfPeople, now);
+}
+
+export interface PlannerBackfillInput {
+  afterSourceKey?: string | null;
+  batchSize?: number;
+  numberOfPeople: number;
+}
+
+export interface PlannerBackfillResult extends PlannerCacheRefreshResult {
+  nextCursor: string | null;
+  complete: boolean;
+}
+
+export async function backfillPlannerReadinessBatch(
+  client: SupabaseClient,
+  input: PlannerBackfillInput,
+  now: Date = new Date(),
+): Promise<PlannerBackfillResult> {
+  if (!Number.isInteger(input.numberOfPeople) || input.numberOfPeople < 1 || input.numberOfPeople > 12) {
+    throw new Error("invalid-people-count");
+  }
+  const requestedBatchSize = Number.isFinite(input.batchSize)
+    ? Math.trunc(input.batchSize ?? 10)
+    : 10;
+  const batchSize = Math.max(1, Math.min(20, requestedBatchSize));
+  const catalog = await loadCatalog(client);
+  const ordered = catalog.recipes.toSorted((left, right) =>
+    left.sourceKey.localeCompare(right.sourceKey),
+  );
+  const candidates = ordered.filter((recipe) =>
+    !input.afterSourceKey || recipe.sourceKey > input.afterSourceKey,
+  );
+  const batch = candidates.slice(0, batchSize);
+  const refreshed = await refreshWithCatalog(
+    client,
+    catalog,
+    batch,
+    input.numberOfPeople,
+    now,
+  );
+  const nextCursor = batch.at(-1)?.sourceKey ?? null;
+  return {
+    ...refreshed,
+    nextCursor,
+    complete: batch.length === 0 || candidates.length <= batch.length,
+  };
+}
+
+export interface MatchRepairInput {
+  matchKey: string;
+  productId: string;
+}
+
+export interface MatchRepairResult {
+  affectedRecipeCount: number;
+  refreshedReadinessCount: number;
+}
+
+export async function repairIngredientProductMatch(
+  client: SupabaseClient,
+  input: MatchRepairInput,
+  now: Date = new Date(),
+): Promise<MatchRepairResult> {
+  const descriptor = matchDescriptor(input.matchKey);
+  if (!descriptor || !input.productId.trim()) throw new Error("invalid-match-repair");
+  const catalog = await loadCatalog(client);
+  const ingredient = catalog.ingredients.find((item) => item.id === descriptor.ingredientId);
+  if (!ingredient) throw new Error("ingredient-not-found");
+  const catalogRepository = new SupabaseCatalogRepository(client);
+  const productResult = await catalogRepository.getByIds([input.productId]);
+  const product: Product | undefined = productResult.products[0];
+  if (
+    !product ||
+    !isReliableIngredientMatch(
+      ingredient,
+      product,
+      descriptor.brandConstraint === "Knorr" || descriptor.brandConstraint === "Honig"
+        ? descriptor.brandConstraint
+        : null,
+    )
+  ) {
+    throw new Error("unreliable-match-repair");
+  }
+
+  const write = await client.from("ingredient_product_matches").upsert({
+    match_key: input.matchKey,
+    ingredient_id: descriptor.ingredientId,
+    requirement_unit: descriptor.unit,
+    requirement_kind: descriptor.kind,
+    brand_constraint: descriptor.brandConstraint,
+    product_id: product.id,
+    match_status: "valid",
+    failure_reason: null,
+    matcher_version: PLANNER_MATCHER_VERSION,
+    refresh_status: "current",
+    invalidated_at: null,
+    invalidation_reason: null,
+    product_updated_at: product.updatedAt,
+    price_updated_at: product.currentPrice?.updatedAt ?? null,
+    matched_at: now.toISOString(),
+    checked_at: now.toISOString(),
+  }, { onConflict: "match_key" });
+  if (write.error) throw new Error("planner-match-repair-write-failed");
+
+  const keysByRecipe = requirementKeysForRecipes(catalog.recipes, 1, catalog);
+  const affectedRecipes = catalog.recipes.filter((recipe) =>
+    keysByRecipe.get(recipe.id)?.includes(input.matchKey),
+  );
+  if (affectedRecipes.length === 0) {
+    return { affectedRecipeCount: 0, refreshedReadinessCount: 0 };
+  }
+  const existing = await client
+    .from("recipe_readiness_cache")
+    .select("recipe_id,people_count")
+    .in("recipe_id", affectedRecipes.map((recipe) => recipe.id));
+  if (existing.error || !Array.isArray(existing.data)) {
+    throw new Error("planner-readiness-scope-read-failed");
+  }
+  const peopleCounts = [...new Set(
+    existing.data.flatMap((row) =>
+      typeof row.people_count === "number" ? [row.people_count] : [],
+    ),
+  )];
+  let refreshedReadinessCount = 0;
+  for (const numberOfPeople of peopleCounts) {
+    const result = await refreshWithCatalog(
+      client,
+      catalog,
+      affectedRecipes,
+      numberOfPeople,
+      now,
+    );
+    refreshedReadinessCount += result.refreshed;
+  }
+  return {
+    affectedRecipeCount: affectedRecipes.length,
+    refreshedReadinessCount,
+  };
+}

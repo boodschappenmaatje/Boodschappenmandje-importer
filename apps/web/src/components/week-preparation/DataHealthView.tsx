@@ -14,11 +14,14 @@ import {
   type RecipeImageStatus,
 } from "@/services/week-preparation/recipe-images";
 import {
-  evaluateRecipeReadiness,
   type RecipeReadinessGateResult,
   type RecipeReadinessIssueOrigin,
   type RecipeReadinessReason,
 } from "@/services/week-preparation/recipe-readiness";
+import {
+  createPersistentRecipeReadinessRepository,
+  resolveRecipeReadiness,
+} from "@/services/week-preparation/persistent-readiness-cache";
 import { createRecipeRepository } from "@/services/week-preparation/recipe-repository";
 import { recipeCategories } from "@/services/week-preparation/recipe-selection";
 import { MEAL_CATEGORY_LABELS } from "@/services/week-preparation/week-preparation";
@@ -83,11 +86,13 @@ async function loadDataHealth(numberOfPeople: number): Promise<DataHealthResult>
     ...loaded,
     ingredients: enrichIngredientsForMealMixes(loaded.ingredients),
   };
-  const gate = await evaluateRecipeReadiness(
+  const catalogRepository = createCatalogRepository();
+  const resolution = await resolveRecipeReadiness(
     catalog.recipes,
     numberOfPeople,
     catalog,
-    createCatalogRepository(),
+    catalogRepository,
+    createPersistentRecipeReadinessRepository(),
   );
   const imageHealth = evaluateRecipeImageHealth(
     catalog.recipes.map((recipe) =>
@@ -99,7 +104,7 @@ async function loadDataHealth(numberOfPeople: number): Promise<DataHealthResult>
     ),
   );
   return {
-    gate,
+    gate: resolution.gate,
     imageHealth,
     recipes: catalog.recipes,
     checkedAt: new Date().toISOString(),

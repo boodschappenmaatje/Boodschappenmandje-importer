@@ -12,9 +12,13 @@ import {
 } from "@/services/week-preparation/product-matching";
 import {
   applyReadinessProducts,
-  evaluateRecipeReadiness,
   readyRecipeIds,
+  type RecipeReadinessGateResult,
 } from "@/services/week-preparation/recipe-readiness";
+import {
+  createPersistentRecipeReadinessRepository,
+  resolveRecipeReadiness,
+} from "@/services/week-preparation/persistent-readiness-cache";
 import type {
   RecipeCatalog,
   RecipeIngredientDefinition,
@@ -243,7 +247,7 @@ async function loadedRecipeContext(
   day: PreparedDay;
   catalog: RecipeCatalog;
   rankedRecipes: Recipe[];
-  readiness: Awaited<ReturnType<typeof evaluateRecipeReadiness>>;
+  readiness: RecipeReadinessGateResult;
 } | null> {
   const day = preparation.days.find((item) => item.dayIndex === dayIndex);
   if (
@@ -274,12 +278,13 @@ async function loadedRecipeContext(
   for (const recipe of [...candidates, ...catalog.recipes.filter((item) => selectedIds.has(item.id))]) {
     evaluatedRecipes.set(recipe.id, recipe);
   }
-  const readiness = await evaluateRecipeReadiness(
+  const readiness = (await resolveRecipeReadiness(
     [...evaluatedRecipes.values()],
     preparation.numberOfPeople,
     catalog,
     catalogRepository,
-  );
+    createPersistentRecipeReadinessRepository(),
+  )).gate;
   const rankedRecipes = rankedReadyRecipesForDay(
     day,
     candidates,
@@ -295,7 +300,7 @@ function buildAlternative(
   day: PreparedDay,
   recipe: Recipe,
   catalog: RecipeCatalog,
-  readiness: Awaited<ReturnType<typeof evaluateRecipeReadiness>>,
+  readiness: RecipeReadinessGateResult,
   list: ActiveShoppingList,
   now: Date,
 ): RecipeAlternative {
