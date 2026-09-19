@@ -23,6 +23,7 @@ jobs:
         env:
           PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
           PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
@@ -67,7 +68,7 @@ jobs:
               fail('unexpected-workflow-context');
             }
             const keys = ['PLANNER_CACHE_BASE_URL', 'PLANNER_CACHE_ADMIN_TOKEN',
-              'SUPABASE_URL', 'SUPABASE_SECRET_KEY'];
+              'SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'VERCEL_AUTOMATION_BYPASS_SECRET'];
             let missing = false;
             for (const key of keys) {
               const configured = Boolean(process.env[key]?.trim());
@@ -102,7 +103,8 @@ jobs:
             preview.pathname = '/api/internal/planner-readiness/new-products';
             const auth = await request(preview, {
               method: 'POST',
-              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json',
+                'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET.trim() },
               body: '{"productIds":[]}',
             }, 'preview-auth');
             const result = await json(auth);

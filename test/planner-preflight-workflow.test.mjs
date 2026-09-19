@@ -46,7 +46,7 @@ test("preflight is manual, explicit, branch scoped, permissionless and has no ch
   assert.equal((job.match(/^      - name:/gm) ?? []).length, 1);
   assert.doesNotMatch(job, /uses:|npm |npx |import:daily|src\/importer|workflow_run/);
   assert.equal(script, scriptFrom(standalone));
-  for (const key of ["PLANNER_CACHE_ADMIN_TOKEN", "SUPABASE_URL", "SUPABASE_SECRET_KEY"]) {
+  for (const key of ["PLANNER_CACHE_ADMIN_TOKEN", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "VERCEL_AUTOMATION_BYPASS_SECRET"]) {
     assert.ok(job.includes(`${key}: \${{ secrets.${key} }}`));
   }
   assert.ok(job.includes("PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}"));
@@ -58,6 +58,7 @@ const base = {
   GITHUB_REF: "refs/heads/fix/planner-new-product-maintenance",
   PLANNER_CACHE_BASE_URL: "https://boodschappenmaatje-pwa-git-fix-planne-a4a7f3-dennisverkaik-4661.vercel.app",
   PLANNER_CACHE_ADMIN_TOKEN: "fixture-token-not-a-real-secret",
+  VERCEL_AUTOMATION_BYPASS_SECRET: "fixture-bypass-not-a-real-secret",
   SUPABASE_URL: "https://pjcqxufvbkkjehituzxz.supabase.co",
   SUPABASE_SECRET_KEY: "sb_secret_fixture_not_real",
 };
@@ -76,6 +77,8 @@ async function run(options = {}) {
       assert.equal(request.method, "POST");
       assert.equal(request.body, '{"productIds":[]}');
       assert.equal(request.headers.authorization, `Bearer ${env.PLANNER_CACHE_ADMIN_TOKEN}`);
+      assert.equal(request.headers['x-vercel-protection-bypass'], env.VERCEL_AUTOMATION_BYPASS_SECRET);
+      assert.ok(!String(url).includes(env.VERCEL_AUTOMATION_BYPASS_SECRET));
       if (options.networkError) throw new Error(env.PLANNER_CACHE_ADMIN_TOKEN);
       return options.auth ?? response(400, { error: "invalid-request" });
     }
@@ -84,12 +87,13 @@ async function run(options = {}) {
     assert.equal(request.method, "GET");
     assert.equal(request.body, undefined);
     assert.equal(request.headers.apikey, env.SUPABASE_SECRET_KEY);
+    assert.equal(request.headers['x-vercel-protection-bypass'], undefined);
     return options.read ?? response(200, [{ id: "fixture-recipe-id" }]);
   };
   const context = vm.createContext({ process, fetch, Buffer, URL, AbortSignal,
     console: { log: (value) => logs.push(value), error: (value) => logs.push(value) } });
   await new vm.Script(`(async () => {${script}})()`).runInContext(context);
-  for (const key of ["PLANNER_CACHE_ADMIN_TOKEN", "SUPABASE_SECRET_KEY"]) {
+  for (const key of ["PLANNER_CACHE_ADMIN_TOKEN", "SUPABASE_SECRET_KEY", "VERCEL_AUTOMATION_BYPASS_SECRET"]) {
     if (env[key]) assert.ok(!logs.join("\n").includes(env[key]), "must not log secrets");
   }
   return { code: process.exitCode ?? 0, calls, logs };
@@ -101,7 +105,7 @@ test("happy preflight performs exactly one empty-list POST then one GET", async 
   assert.equal(result.calls.length, 2);
 });
 
-for (const key of ["PLANNER_CACHE_BASE_URL", "PLANNER_CACHE_ADMIN_TOKEN", "SUPABASE_URL", "SUPABASE_SECRET_KEY"]) {
+for (const key of ["PLANNER_CACHE_BASE_URL", "PLANNER_CACHE_ADMIN_TOKEN", "SUPABASE_URL", "SUPABASE_SECRET_KEY", "VERCEL_AUTOMATION_BYPASS_SECRET"]) {
   test(`missing ${key} stops before network access`, async () => {
     const result = await run({ env: { [key]: "" } });
     assert.equal(result.code, 1); assert.equal(result.calls.length, 0);
