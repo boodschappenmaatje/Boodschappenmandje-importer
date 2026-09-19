@@ -9,7 +9,7 @@ create table if not exists public.ingredient_product_matches (
   requirement_unit text not null,
   requirement_kind text not null,
   brand_constraint text not null default '',
-  product_id uuid references public.products(id) on delete set null,
+  product_id uuid references public.products(id) on delete cascade,
   match_status text not null,
   failure_reason text,
   matcher_version integer not null,
