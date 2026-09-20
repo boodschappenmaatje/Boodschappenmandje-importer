@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { loadConfig } from "../src/config.mjs";
 import { notifyPlannerOfNewProducts, plannerMaintenanceSettings } from "../src/planner-cache-maintenance.mjs";
@@ -15,6 +16,83 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), { status
 const acknowledgement = (ids) => json({ productCount: ids.length, changedMatchKeys: [],
   affectedRecipeIds: [], refreshedReadinessCount: 0 });
 const bypassConfig = { ...config, plannerCacheAutomationBypassSecret: "fixture-bypass-not-a-real-secret" };
+
+for (const [filename, jobName, mode] of [
+  ["import-hoogvliet-poc.yml", "import", "catalog"],
+  ["retry-daily-catalog-import.yml", "retry-if-due", "growth"],
+]) {
+  test(`${filename}: job environment reaches real maintenance requests with both auth headers on every batch/retry`, async (t) => {
+    const workflow = readFileSync(new URL(`../.github/workflows/${filename}`, import.meta.url), "utf8")
+      .replace(/\r\n/g, "\n");
+    const job = workflow.split(`\n  ${jobName}:\n`)[1]?.split(/\n  [\w-]+:\n/)[0];
+    const environment = job?.match(/^    env:\n([\s\S]*?)(?=^    steps:)/m)?.[1];
+    assert.ok(environment, "read the actual importer job environment, not the preflight step");
+    const fixtures = {
+      SUPABASE_URL: config.supabaseURL,
+      SUPABASE_SECRET_KEY: config.supabaseSecret,
+      PLANNER_CACHE_BASE_URL: config.plannerCacheBaseURL,
+      PLANNER_CACHE_ADMIN_TOKEN: config.plannerCacheAdminToken,
+      VERCEL_AUTOMATION_BYPASS_SECRET: bypassConfig.plannerCacheAutomationBypassSecret,
+    };
+    const env = { UPDATE_MODE: mode };
+    for (const [key, value] of Object.entries(fixtures)) {
+      const source = key === "PLANNER_CACHE_BASE_URL" ? "vars" : "secrets";
+      assert.ok(environment.includes(`${key}: \${{ ${source}.${key} }}`), `${key} must be mapped in ${jobName}`);
+      env[key] = `  ${value}  `;
+    }
+    const loaded = loadConfig(env);
+    const requests = [], output = [], priced = new Set();
+    for (const method of ["log", "info", "warn", "error", "debug"]) {
+      t.mock.method(console, method, (...args) => output.push(args));
+    }
+    // All HTTP is intercepted: exercise the normal storage -> maintenance path
+    // with fixture products only, without running an importer or writing a database.
+    t.mock.method(globalThis, "fetch", async (url, options) => {
+      const body = JSON.parse(options.body);
+      const snapshot = { url: String(url), method: options.method, headers: { ...options.headers },
+        redirect: options.redirect, body, priceConfirmed: body.productIds?.every((id) => priced.has(id)) };
+      requests.push(snapshot);
+      if (url.origin === config.plannerCacheBaseURL) {
+        const attempts = requests.filter((request) => request.body.productIds).length;
+        if (attempts === 1) return json({ error: fixtures.VERCEL_AUTOMATION_BYPASS_SECRET }, 503);
+        if (attempts === 2) throw new Error(`${fixtures.PLANNER_CACHE_ADMIN_TOKEN} ${fixtures.VERCEL_AUTOMATION_BYPASS_SECRET}`);
+        return acknowledgement(body.productIds);
+      }
+      if (url.pathname.endsWith("/product_prices")) priced.add(body[0].product_id);
+      return json(body);
+    });
+    const products = Array.from({ length: 41 }, (_, i) => product(String(730331000 + i)));
+    const result = await upsertProducts(loaded, [...products, products[0]]);
+    const maintenance = requests.filter((request) => request.body.productIds);
+    assert.deepEqual(maintenance.map((request) => request.body.productIds.length), [20, 20, 20, 20, 1]);
+    assert.deepEqual(maintenance[0].body, maintenance[1].body);
+    assert.deepEqual(maintenance[1].body, maintenance[2].body);
+    for (const request of maintenance) {
+      assert.equal(request.url, `${config.plannerCacheBaseURL}/api/internal/planner-readiness/new-products`);
+      assert.equal(request.method, "POST");
+      assert.equal(request.redirect, "manual");
+      assert.equal(request.priceConfirmed, true);
+      assert.deepEqual(request.headers, {
+        authorization: `Bearer ${config.plannerCacheAdminToken}`,
+        "content-type": "application/json",
+        "x-vercel-protection-bypass": bypassConfig.plannerCacheAutomationBypassSecret,
+      });
+    }
+    const storage = requests.filter((request) => !request.body.productIds);
+    assert.equal(storage.length, 82);
+    for (const request of storage) {
+      assert.equal(new URL(request.url).origin, config.supabaseURL);
+      assert.equal(Object.hasOwn(request.headers, "x-vercel-protection-bypass"), false);
+    }
+    assert.equal(new Set(maintenance.slice(2).flatMap((request) => request.body.productIds)).size, 41);
+    assert.equal(result.imported.length, 41);
+    assert.equal(result.duplicateSKUsSkipped, 1);
+    assert.deepEqual(result.plannerMaintenance, { notifiedProducts: 41, pendingProductIds: [] });
+    for (const secret of [config.supabaseSecret, config.plannerCacheAdminToken, bypassConfig.plannerCacheAutomationBypassSecret]) {
+      assert.equal(JSON.stringify({ output, result }).includes(secret), false);
+    }
+  });
+}
 
 test("optional server config reaches only the configured planner origin with both independent auth layers", async () => {
   const loaded = loadConfig({ DRY_RUN: "1", PLANNER_CACHE_BASE_URL: config.plannerCacheBaseURL,

@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-const workflow = readFileSync(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8");
-const standalone = readFileSync(new URL("../.github/workflows/planner-cache-preflight.yml", import.meta.url), "utf8");
+const workflow = readFileSync(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const standalone = readFileSync(new URL("../.github/workflows/planner-cache-preflight.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const job = workflow.match(/^  preflight:\n[\s\S]*?(?=^  import:)/m)?.[0];
 const input = "      preflight_only:\n" +
   "        description: Alleen planner-auth en Supabase read-only controleren; geen import\n" +
