@@ -8,7 +8,7 @@ const output = new URL("../apps/web/test-results/pwa13/", import.meta.url);
 await mkdir(output, { recursive: true });
 const timestamp = new Date().toISOString();
 const fixtures = {
-  recipes: [{ id: "recipe-pasta", source_key: "spaghetti", name: "Zelfgemaakte spaghetti", normalized_name: "spaghetti", symbol: "fork.knife", preparation_minutes: 20, vegetarian: true, contains_pork: false, kid_friendly: true, healthy: false, budget_tier: "economical" }],
+  recipes: [{ id: "recipe-pasta", source_key: "spaghetti-bolognese", name: "Zelfgemaakte spaghetti", normalized_name: "spaghetti", symbol: "fork.knife", preparation_minutes: 20, vegetarian: true, contains_pork: false, kid_friendly: true, healthy: false, budget_tier: "economical" }],
   ingredients: [{ id: "ingredient-pasta", source_key: "spaghetti", name: "spaghetti", normalized_name: "spaghetti", default_unit: "g", category: "Pasta, rijst & granen" }],
   ingredient_aliases: [{ ingredient_id: "ingredient-pasta", alias: "pasta", normalized_alias: "pasta" }],
   recipe_ingredients: [{ id: "relation-pasta", recipe_id: "recipe-pasta", ingredient_id: "ingredient-pasta", amount_per_person: 100, unit: "g", position: 0 }],
@@ -65,6 +65,12 @@ try {
     assert.equal(await day.getByRole("group", { name: "Ingrediënt", exact: true }).count(), 1);
     await day.getByRole("button", { name: "Controleer producten en prijs" }).click();
     await day.getByRole("button", { name: "Gerecht opslaan voor deze dag" }).waitFor().catch(async (error) => { console.error(await day.innerText(), errors, requests); throw error; });
+    const budget = day.locator(".dish-budget-summary").last();
+    const budgetBox = await budget.boundingBox();
+    assert.ok(budgetBox && budgetBox.y >= 0 && budgetBox.y < 700, "budget directly visible after choice");
+    await budget.getByRole("button", { name: "Bekijk ingrediënten" }).click();
+    assert.match(await budget.locator(".recipe-ingredients").innerText(), /600 g nodig/);
+    assert.match(await budget.locator(".recipe-ingredients").innerText(), /500 g/);
     assert.match(await day.innerText(), /2 verpakking/);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: new URL(`custom-${width}.png`, output).pathname.replace(/^\/(\w:)/, "$1"), fullPage: true });
@@ -79,13 +85,33 @@ try {
     await page.screenshot({ path: new URL(`search-${width}.png`, output).pathname.replace(/^\/(\w:)/, "$1"), fullPage: true });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await day.getByRole("button", { name: "Gebruik dit gerecht", exact: true }).first().click();
+    await day.locator(".dish-budget-summary").last().getByRole("button", { name: "Bekijk ingrediënten" }).click();
+    const chosenCards = await day.locator(".dish-budget-summary .recipe-ingredients").innerText();
     await day.getByRole("button", { name: "Gerecht opslaan voor deze dag" }).click();
     await page.getByText("Zelfgemaakte spaghetti", { exact: true }).first().waitFor();
+    await page.reload();
+    await page.getByText("Zelfgemaakte spaghetti", { exact: true }).first().waitFor();
+    await page.locator(".recipe-detail > summary").first().click();
+    const activeCards = await page.locator(".recipe-detail .recipe-ingredients").first().innerText();
+    for (const text of ["600 g nodig", "500 g", "2 verpakkingen"]) { assert.ok(chosenCards.includes(text)); assert.ok(activeCards.includes(text)); }
+    const imageState = await page.locator(".recipe-detail .recipe-summary-image").first().getAttribute("data-image-source");
+    await page.goto(baseUrl);
+    const homeImage = page.locator(".meal-day-card").filter({ hasText: "Zelfgemaakte spaghetti" }).locator(".meal-day-image");
+    await homeImage.waitFor();
+    assert.equal(await homeImage.getAttribute("data-image-source"), imageState);
+    assert.equal(await homeImage.getAttribute("data-has-image"), "true");
+    await page.reload();
+    await homeImage.waitFor();
+    assert.equal(await homeImage.getAttribute("data-image-source"), imageState);
+    await page.screenshot({ path: new URL(`home-${width}.png`, output).pathname.replace(/^\/(\w:)/, "$1"), fullPage: true });
+    await homeImage.locator("img").dispatchEvent("error");
+    assert.equal(await homeImage.getAttribute("data-has-image"), "false");
+    assert.equal(await homeImage.locator("svg").count(), 1);
     await page.goto(`${baseUrl}/lijst`);
     await page.getByText("Spaghetti", { exact: true }).first().waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ width, editor: "pass", search: "pass", persistence: "pass", replacement: "pass", shoppingList: "pass", overflow: false, pageErrors: errors }));
+    console.log(JSON.stringify({ width, editor: "pass", search: "pass", persistence: "pass", homeImage: "pass", brokenImageFallback: "pass", budgetAtTop: "pass", sharedIngredientCards: "pass", replacement: "pass", shoppingList: "pass", overflow: false, pageErrors: errors }));
     await context.close();
   }
 } finally { await browser.close(); }

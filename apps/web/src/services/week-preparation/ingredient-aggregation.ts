@@ -130,7 +130,7 @@ export function aggregateWeekIngredients(
 
   for (const day of days) {
     if (!day.recipeId || !day.recipe) continue;
-    const mealMix = mealMixProfileForRecipe(day.recipe.sourceKey);
+    const mealMix = mealMixProfileForRecipe(day.recipe.sourceKey, catalog.mealMixProfiles);
     if (mealMix) {
       const mixIngredient = ingredientBySourceKey.get(
         mealMix.productIngredientSourceKey,

@@ -26,12 +26,13 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
   if (!day || !preparation.numberOfPeople) return null;
   const custom = "customDish" in choice ? choice.customDish : undefined;
   if (custom && !validCustomDish(custom)) return null;
+  const catalog = custom ? null : await recipes.loadCatalog();
   const recipe = custom
     ? { id: `custom-dish:${preparation.id}:${dayIndex}`, sourceKey: "custom-dish", name: custom.name.trim() }
-    : (await recipes.loadCatalog()).recipes.find((item) => item.id === (choice as { recipeId: string }).recipeId);
+    : catalog?.recipes.find((item) => item.id === (choice as { recipeId: string }).recipeId);
   if (!recipe) return null;
   // A brand name alone is never proof of a validated meal-mix recipe.
-  if (!custom && /\b(knorr|honig)\b/i.test(`${recipe.name} ${recipe.sourceKey}`) && !mealMixProfileForRecipe(recipe.sourceKey)) return null;
+  if (!custom && /\b(knorr|honig)\b/i.test(`${recipe.name} ${recipe.sourceKey}`) && !mealMixProfileForRecipe(recipe.sourceKey, catalog?.mealMixProfiles)) return null;
   const reference = { id: recipe.id, sourceKey: recipe.sourceKey, name: recipe.name };
   const next: WeekPreparation = {
     ...preparation,
@@ -68,14 +69,17 @@ export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: n
   const candidates = catalog.recipes.filter((recipe) => recipeMatchesQuery(recipe, query)).slice(0, 20);
   const results: FreeChoiceResult[] = [];
   for (const recipe of candidates) {
-    results.push({ recipe, brand: mealMixProfileForRecipe(recipe.sourceKey)?.brand ?? null,
+    results.push({ recipe, brand: mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles)?.brand ?? null,
       alternative: await previewFreeChoice(preparation, dayIndex, { recipeId: recipe.id }, recipes, products, list) });
   }
   for (const brand of ["Honig", "Knorr"]) {
     const recipe = { id: `unavailable-${brand}-spaghetti`, sourceKey: `unavailable-${brand.toLowerCase()}-spaghetti`, name: `${brand} Spaghetti Bolognese` };
-    if (recipeMatchesQuery(recipe, query) && !results.some((item) => normalize(item.recipe.name) === normalize(recipe.name))) {
+    if (recipeMatchesQuery(recipe, query) && !results.some((item) => item.brand === brand && /spaghetti/i.test(item.recipe.name))) {
       results.push({ recipe, brand, alternative: null });
     }
+  }
+  for (const recipe of catalog.unavailableMealMixes ?? []) {
+    if (recipeMatchesQuery(recipe, query) && !results.some(item => item.recipe.name === recipe.name)) results.push({ recipe, brand: recipe.brand, alternative: null });
   }
   return results.sort((a, b) => Number(!a.alternative) - Number(!b.alternative));
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
+import { DishBudgetSummary } from "@/components/week-preparation/DishBudgetSummary";
 import { DishImage } from "@/components/ui/DishImage";
 import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import { formatCents, euroAmountToCents } from "@/services/budget/budget-engine";
@@ -73,6 +74,10 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
   const [dish, setDish] = useState<CustomDish>(initialDish ?? { name: "", servings: week.preparation?.numberOfPeople ?? 4, ingredients: [] });
   const [preview, setPreview] = useState<RecipeAlternative | null>(null);
   const revision = useRef(0);
+  const confirmation = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (preview) { confirmation.current?.focus({ preventScroll: true }); confirmation.current?.scrollIntoView({ block: "start" }); }
+  }, [preview]);
   const { searchDishes } = week;
   useEffect(() => {
     if (mode !== "search" || query.trim().length < 2) return;
@@ -111,10 +116,19 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
       <button type="button" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setPreview(null); setMessage(""); }}>{initialDish ? "Eigen gerecht bewerken" : "Maak zelf een gerecht"}</button>
     </div>
     {mode ? <button type="button" className="text-action" onClick={() => { revision.current++; setMode(null); setPreview(null); setBusy(false); }}>Sluiten</button> : null}
+    {preview ? <div className="customization-confirm" ref={confirmation} tabIndex={-1}>
+      <strong>{preview.recipe.name} · ± {formatCents(preview.alternativeDishCostCents)}</strong>
+      <DishBudgetSummary preparation={preview.preparation} dayIndex={dayIndex} expandable />
+      <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>
+      <p>Totaal deze week: {formatCents(preview.impact.nextTotalWeekCostCents)}</p>
+      {preview.impact.weekBudgetRemainingCents !== null ? <p>Resterend weekbudget: {formatCents(preview.impact.weekBudgetRemainingCents)}</p> : null}
+      {preview.impact.requiresBudgetOverride ? <p>Je overschrijdt het maaltijdbudget met {formatCents(preview.impact.mealBudgetOverageCents)} en het weekbudget met {formatCents(preview.impact.weekBudgetOverageCents)}.</p> : null}
+      <button type="button" className="primary-action compact-action" disabled={week.customizationBusy || busy} onClick={apply}>{week.customizationBusy ? "Opslaan…" : preview.impact.requiresBudgetOverride ? "Toch gebruiken en opslaan" : "Gerecht opslaan voor deze dag"}</button>
+    </div> : null}
     {mode === "search" ? <>
       <label>Zoek gerecht of maaltijdmix<input type="search" value={query} placeholder="Bijvoorbeeld Honig spaghetti" onChange={(event) => { setQuery(event.target.value); setResults([]); setPreview(null); setBusy(false); }} /></label>
       <ul className="free-choice-results">{results.map((result) => <li key={result.recipe.id}>
-        <DishImage asset={recipeImageFor({ recipeSourceKey: result.recipe.sourceKey, recipeName: result.recipe.name, categories: [], ingredients: [] })} className="recipe-summary-image" sizes="58px" title={result.recipe.name} />
+        <DishImage asset={recipeImageFor({ recipeSourceKey: result.recipe.sourceKey, recipeName: result.recipe.name, categories: [], ingredients: result.alternative?.preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)).map((item) => ({ sourceKey: item.sourceKey, name: item.name, optional: item.optional })) ?? [] })} className="recipe-summary-image" sizes="58px" title={result.recipe.name} />
         <div><strong>{result.recipe.name}</strong>{result.brand ? <p>{result.brand}</p> : null}<p>{week.preparation?.numberOfPeople} personen · schaalbaar</p>
           <p>{result.alternative ? `± ${formatCents(result.alternative.alternativeDishCostCents)}` : "Deze variant is nog niet compleet beschikbaar"}</p>
           <button type="button" disabled={!result.alternative || busy || week.customizationBusy} onClick={() => setPreview(result.alternative)}>Gebruik dit gerecht</button>
@@ -129,14 +143,5 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
       <button type="button" disabled={busy || week.customizationBusy || !dish.name.trim() || !dish.ingredients.length} onClick={checkDish}>Controleer producten en prijs</button>
     </> : null}
     {message ? <p role="status">{message}</p> : null}
-    {preview ? <div className="customization-confirm" role="status">
-      <strong>{preview.recipe.name} · ± {formatCents(preview.alternativeDishCostCents)}</strong>
-      <ul>{preview.preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)).map((item) => <li key={item.ingredientId}>{item.name}: {item.product?.name} · {item.purchaseQuantity} verpakking(en)</li>)}</ul>
-      <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>
-      <p>Totaal deze week: {formatCents(preview.impact.nextTotalWeekCostCents)}</p>
-      {preview.impact.weekBudgetRemainingCents !== null ? <p>Resterend weekbudget: {formatCents(preview.impact.weekBudgetRemainingCents)}</p> : null}
-      {preview.impact.requiresBudgetOverride ? <p>Je overschrijdt het maaltijdbudget met {formatCents(preview.impact.mealBudgetOverageCents)} en het weekbudget met {formatCents(preview.impact.weekBudgetOverageCents)}.</p> : null}
-      <button type="button" className="primary-action compact-action" disabled={week.customizationBusy || busy} onClick={apply}>{week.customizationBusy ? "Opslaan…" : preview.impact.requiresBudgetOverride ? "Toch gebruiken en opslaan" : "Gerecht opslaan voor deze dag"}</button>
-    </div> : null}
   </section>;
 }

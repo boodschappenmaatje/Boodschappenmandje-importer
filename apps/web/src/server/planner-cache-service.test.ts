@@ -15,7 +15,7 @@ function currentRow(
   return {
     recipe_id: recipeId,
     people_count: peopleCount,
-    evaluator_version: 1,
+    evaluator_version: 2,
     refresh_status: "current",
     invalidated_at: null,
     expires_at: "2026-09-20T12:00:00.000Z",

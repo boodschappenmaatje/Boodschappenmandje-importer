@@ -5,10 +5,11 @@ import {
   applyProductToRequirement,
   isReliableIngredientMatch,
   matchWeekIngredientsWithDiagnostics,
+  selectIngredientProduct,
   type IngredientMatchFailureReason,
   type WeekIngredientMatchDiagnostics,
 } from "@/services/week-preparation/product-matching";
-import type { RecipeCatalog } from "@/services/week-preparation/recipe-repository";
+import type { RecipeCatalog, RecipeIngredientDefinition } from "@/services/week-preparation/recipe-repository";
 import type { Product, Recipe } from "@/types/catalog";
 import type {
   PreparedDay,
@@ -67,9 +68,11 @@ export interface RecipeReadinessResult {
 export interface RecipeReadinessGateResult {
   recipes: RecipeReadinessResult[];
   matchedProductsByRequirement: ReadonlyMap<string, Product>;
+  candidatesByRequirement?: ReadonlyMap<string, { ingredient: RecipeIngredientDefinition; products: Product[] }>;
 }
 
 export interface RecipeReadinessEvaluationOptions {
+  candidatesByRequirement?: RecipeReadinessGateResult["candidatesByRequirement"];
   /**
    * Current products loaded in one batch from persistent product matches.
    * Reliable entries skip matcher searches; stale/invalid entries are ignored.
@@ -228,7 +231,7 @@ function expectedIngredientProblems(
   const ingredientById = new Map(
     catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
   );
-  const mealMix = mealMixProfileForRecipe(recipe.sourceKey);
+  const mealMix = mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles);
   if (mealMix) {
     const expected = [
       mealMix.productIngredientSourceKey,
@@ -376,7 +379,7 @@ export async function evaluateRecipeReadiness(
       knownDiagnostics.push({
         requirement: applyProductToRequirement(requirement, product),
         product,
-        candidates: [product],
+        candidates: options.candidatesByRequirement?.get(key)?.products ?? [product],
         failureReason: null,
       });
     } else {
@@ -393,8 +396,11 @@ export async function evaluateRecipeReadiness(
     diagnostics.map((item) => [recipeRequirementKey(item.requirement), item]),
   );
   const matchedProductsByRequirement = new Map<string, Product>();
+  const candidatesByRequirement = new Map<string, { ingredient: RecipeIngredientDefinition; products: Product[] }>();
   for (const [key, diagnostic] of diagnosticsByKey) {
     if (diagnostic.product) matchedProductsByRequirement.set(key, diagnostic.product);
+    const ingredient = ingredientById.get(diagnostic.requirement.ingredientId);
+    if (ingredient) candidatesByRequirement.set(key, { ingredient, products: diagnostic.candidates.filter(product => isReliableIngredientMatch(ingredient, product, diagnostic.requirement.brandConstraint)) });
   }
 
   const results = recipes.map((recipe) => {
@@ -405,8 +411,9 @@ export async function evaluateRecipeReadiness(
         if (!diagnostic) {
           return invalidIngredientResult(requirement, "ingredient_invalid");
         }
-        const applied = applyProductToRequirement(requirement, diagnostic.product);
-        return resultForRequirement(applied, { ...diagnostic, requirement: applied });
+        const product = productForRequirement(requirement, { matchedProductsByRequirement, candidatesByRequirement });
+        const applied = applyProductToRequirement(requirement, product);
+        return resultForRequirement(applied, { ...diagnostic, product, requirement: applied });
       }),
     ];
     const required = ingredientResults.filter((item) => item.required);
@@ -425,17 +432,36 @@ export async function evaluateRecipeReadiness(
     } satisfies RecipeReadinessResult;
   });
 
-  return { recipes: results, matchedProductsByRequirement };
+  return { recipes: results, matchedProductsByRequirement, candidatesByRequirement };
+}
+
+const quantitySelections = new WeakMap<object, Map<string, Product | null>>();
+
+function productForRequirement(
+  requirement: WeekIngredientRequirement,
+  gate: Pick<RecipeReadinessGateResult, "matchedProductsByRequirement" | "candidatesByRequirement">,
+) {
+  const key = recipeRequirementKey(requirement);
+  const candidates = gate.candidatesByRequirement?.get(key);
+  if (!candidates) return gate.matchedProductsByRequirement.get(key) ?? null;
+  let selected = quantitySelections.get(candidates);
+  if (!selected) { selected = new Map(); quantitySelections.set(candidates, selected); }
+  const quantityKey = `${key}:${requirement.requiredQuantity}`;
+  if (selected.has(quantityKey)) return selected.get(quantityKey) ?? null;
+  const product = selectIngredientProduct(candidates.ingredient, candidates.products, requirement.brandConstraint,
+    requirement.kind === "mealMix" ? null : requirement.unit, requirement.requiredQuantity)
+  selected.set(quantityKey, product);
+  return product;
 }
 
 export function applyReadinessProducts(
   requirements: WeekIngredientRequirement[],
-  gate: Pick<RecipeReadinessGateResult, "matchedProductsByRequirement">,
+  gate: Pick<RecipeReadinessGateResult, "matchedProductsByRequirement" | "candidatesByRequirement">,
 ): WeekIngredientRequirement[] {
   return requirements.map((requirement) =>
     applyProductToRequirement(
       requirement,
-      gate.matchedProductsByRequirement.get(recipeRequirementKey(requirement)) ?? null,
+      productForRequirement(requirement, gate),
     ),
   );
 }

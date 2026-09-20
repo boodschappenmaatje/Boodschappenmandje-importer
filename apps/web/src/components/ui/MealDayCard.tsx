@@ -28,11 +28,11 @@ export function MealDayCard({
   active?: boolean;
 }) {
   const image = recipeImageFor(
-    recipeSourceKey && category !== "freeChoice"
+    recipeSourceKey
       ? {
           recipeSourceKey,
           recipeName: title,
-          categories: [category],
+          categories: category === "freeChoice" ? [] : [category],
           ingredients,
         }
       : null,

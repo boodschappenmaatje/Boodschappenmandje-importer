@@ -13,6 +13,7 @@ export interface MealMixSupplement {
 }
 
 export interface MealMixProfile {
+  productId?: string;
   recipeSourceKey: string;
   dishName: string;
   brand: MealMixBrand;
@@ -226,8 +227,8 @@ const profileByIngredient = new Map(
   MEAL_MIX_PROFILES.map((profile) => [profile.productIngredientSourceKey, profile]),
 );
 
-export function mealMixProfileForRecipe(sourceKey: string): MealMixProfile | null {
-  return profileByRecipe.get(sourceKey) ?? null;
+export function mealMixProfileForRecipe(sourceKey: string, profiles?: readonly MealMixProfile[]): MealMixProfile | null {
+  return profiles?.find((profile) => profile.recipeSourceKey === sourceKey) ?? profileByRecipe.get(sourceKey) ?? null;
 }
 
 export function mealMixProfileForIngredient(sourceKey: string): MealMixProfile | null {
@@ -246,15 +247,23 @@ export function inferMealMixBrand(
 
 export function enrichIngredientsForMealMixes(
   ingredients: RecipeIngredientDefinition[],
+  profiles: readonly MealMixProfile[] = MEAL_MIX_PROFILES,
 ): RecipeIngredientDefinition[] {
   const bySourceKey = new Map(ingredients.map((ingredient) => [ingredient.sourceKey, ingredient]));
 
-  for (const profile of MEAL_MIX_PROFILES) {
+  for (const profile of [...MEAL_MIX_PROFILES, ...profiles]) {
     const mealMix = bySourceKey.get(profile.productIngredientSourceKey);
     if (mealMix) {
       bySourceKey.set(profile.productIngredientSourceKey, {
         ...mealMix,
+        productId: profile.productId,
         aliases: [...new Set([...mealMix.aliases, profile.productName, ...profile.productAliases])],
+      });
+    } else if (profile.productId) {
+      bySourceKey.set(profile.productIngredientSourceKey, {
+        id: `meal-mix-ingredient:${profile.productIngredientSourceKey}`, sourceKey: profile.productIngredientSourceKey,
+        name: profile.productName, normalizedName: profile.productName.toLowerCase(), defaultUnit: "piece",
+        category: "Maaltijdcomponenten", aliases: profile.productAliases, productId: profile.productId,
       });
     }
     for (const item of profile.supplements) {

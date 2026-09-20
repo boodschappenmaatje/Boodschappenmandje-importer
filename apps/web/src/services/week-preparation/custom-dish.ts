@@ -41,7 +41,7 @@ export async function matchCustomDishes(preparation: WeekPreparation, catalog: R
       const requiredQuantity = quantity * (row.unit === "kg" || row.unit === "l" ? 1000 : 1);
       const product = row.productId
         ? (await repository.getByIds([row.productId])).products.find((item) => item.id === row.productId && item.isAvailable !== false && item.supermarket === "Hoogvliet") ?? null
-        : (await searchIngredientProduct(repository, definition, null, unit)).product;
+        : (await searchIngredientProduct(repository, definition, null, unit, requiredQuantity)).product;
       result.push(applyProductToRequirement({
         ingredientId: id, sourceKey: definition.sourceKey, name: row.name, unit, optional: false,
         servingsBase: 1, kind: "ingredient", brandConstraint: null, requiredQuantity,

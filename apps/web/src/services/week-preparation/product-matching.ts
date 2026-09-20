@@ -189,6 +189,33 @@ function reliableBrandedMealMixMatch(
   });
 }
 
+function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinition, product: Product): boolean {
+  const required = normalize(ingredient.name);
+  const name = normalize(product.name);
+  // Discovery aliases must not erase explicit recipe properties.
+  if (/drogisterij|lichaamsverzorging|haarverzorging|schoonmaak|huishoudelijk|dierenvoeding/.test(normalize(product.category))) return false;
+  if (/\b(?:bad|douche|massage|shampoo|zeep|bodylotion)\b/.test(name)) return false;
+  if (ingredient.category === "Groente" && /puree|passata|sap|saus|poeder|kruiden|soep/.test(name) &&
+    !/puree|passata|sap|saus|poeder|kruiden|soep/.test(required)) return false;
+  if (["Vlees", "Vis", "Groente", "Pasta, rijst & granen"].includes(ingredient.category) &&
+    /kruidenmix|maaltijdmix|basis voor/.test(name) && !/kruidenmix|maaltijdmix|basis voor/.test(required)) return false;
+  if (["Vlees", "Vis", "Groente", "Zuivel & eieren", "Pasta, rijst & granen"].includes(ingredient.category) &&
+    /maaltijden|maaltijdsalades|kant en klaar/.test(normalize(product.category)) && !/maaltijd|salade/.test(required)) return false;
+  if (["Vlees", "Vis", "Groente", "Zuivel & eieren", "Pasta, rijst & granen"].includes(ingredient.category) &&
+    /\b(?:maaltijd|maaltijdpakket|maaltijdmix|pizza|lasagne|lasagnette|roerbak sensatie|salade|soep)\b/.test(name) &&
+    !/\b(?:maaltijd|pizza|lasagne|lasagnette|salade|soep)\b/.test(required)) return false;
+  if (["Vlees", "Vis"].includes(ingredient.category) && /\b(?:pasta|rijst|noedels|wraps|saus|ragout)\b/.test(name)) return false;
+  for (const qualifier of ["volle", "halfvolle", "magere", "mager", "volkoren", "glutenvrij", "lactosevrij", "ongezouten"]) {
+    if (containsTerm(required, qualifier) && !containsTerm(name, qualifier)) return false;
+  }
+  if (/rundergehakt/.test(required) && !/rundergehakt|rundvleesgehakt/.test(name.replaceAll(" ", ""))) return false;
+  if (/kipfilet/.test(required) && !/gerookt|gebraden|gemarineerd|gegaard|gepaneerd/.test(required) &&
+    /gerookt|gebraden|gemarineerd|gegaard|gepaneerd|vleeswaren|broodbeleg|salade|schnitzel/.test(normalize(`${product.name} ${product.category}`))) return false;
+  if (/geraspte.*kaas/.test(required) && !/gerasp|kaasrasp/.test(name)) return false;
+  if (/30\+/.test(ingredient.name) && !/30\+/.test(product.name)) return false;
+  return true;
+}
+
 export function isReliableIngredientMatch(
   ingredient: RecipeIngredientDefinition,
   product: Product,
@@ -197,6 +224,7 @@ export function isReliableIngredientMatch(
   const productBrand = normalize(product.brand);
   const productName = normalize(product.name);
   const requiredBrand = normalize(brandConstraint);
+  if (requiredBrand && /wereldgerecht/.test(normalize(ingredient.name)) && !/wereldgerecht/.test(productName)) return false;
   const brandMatches =
     !requiredBrand ||
     productBrand === requiredBrand ||
@@ -207,9 +235,11 @@ export function isReliableIngredientMatch(
   return (
     product.supermarket === "Hoogvliet" &&
     Boolean(product.id && product.sku) &&
+    (!ingredient.productId || ingredient.productId === product.id) &&
     product.isAvailable !== false &&
     brandMatches &&
     termMatches &&
+    requiredIngredientPropertiesMatch(ingredient, product) &&
     !categoryConflicts(ingredient, product)
   );
 }
@@ -292,6 +322,12 @@ export function productPackageCapacity(
   product: Product,
   unit: WeekIngredientUnit,
 ): number | null {
+  // A catalog's "1 stuk" can describe one net, while its name declares the
+  // contents (e.g. "Rode uien net 3 stuks"). Count the edible units in that net.
+  if (unit === "piece") {
+    const namedCount = capacityFromText(product.name, unit);
+    if (namedCount !== null && /\b(?:net|zak|pak|verpakking|doos)\b/i.test(product.name)) return namedCount;
+  }
   const massUnit = unit === "g" || unit === "kg";
   const volumeUnit = unit === "ml" || unit === "l";
   const textCapacity = capacityFromText(
@@ -341,6 +377,7 @@ export function selectIngredientProduct(
   products: Product[],
   brandConstraint: MealMixBrand | null = inferMealMixBrand(ingredient),
   requiredUnit: WeekIngredientUnit | null = null,
+  requiredQuantity = 1,
 ): Product | null {
   const reliable = products.filter((product) =>
     isReliableIngredientMatch(ingredient, product, brandConstraint),
@@ -351,10 +388,18 @@ export function selectIngredientProduct(
       )
     : [];
   const candidates = compatiblePackages.length > 0 ? compatiblePackages : reliable;
+  const totalCost = (product: Product): number => {
+    const capacity = requiredUnit ? productPackageCapacity(product, requiredUnit) : 1;
+    const price = product.currentPrice?.productId === product.id ? resolveCurrentPrice(product.currentPrice) : null;
+    if (!capacity || !price || price.freshness !== "fresh") return Infinity;
+    const cents = euroAmountToCents(price.amount);
+    return cents === null ? Infinity : Math.ceil(requiredQuantity / capacity) * cents;
+  };
   return (
     candidates
       .toSorted(
         (left, right) =>
+          totalCost(left) - totalCost(right) ||
           matchScore(ingredient, right) - matchScore(ingredient, left) ||
           left.name.localeCompare(right.name, "nl-NL") ||
           left.id.localeCompare(right.id),
@@ -547,34 +592,31 @@ function ingredientMatchFailure(
   return "matcher_failed";
 }
 
+function ingredientCandidates(repository: CatalogRepository, term: string) {
+  return repository.searchCandidates?.(term) ?? repository.search(term, { limit: 12 });
+}
+
 export async function searchIngredientProduct(
   repository: CatalogRepository,
   ingredient: RecipeIngredientDefinition,
   brandConstraint: MealMixBrand | null,
   requiredUnit: WeekIngredientUnit | null = null,
+  requiredQuantity = 1,
 ): Promise<IngredientMatchDiagnostics> {
   const terms = [...new Set([ingredient.name, ...ingredient.aliases])]
     .map((term) => term.trim())
-    .filter((term) => term.length >= 2)
-    .slice(0, 4);
+    .filter((term) => term.length >= 2);
   const found = new Map<string, Product>();
 
+  if (ingredient.productId) {
+    const exact = (await repository.getByIds([ingredient.productId])).products;
+    const product = selectIngredientProduct(ingredient, exact, brandConstraint, requiredUnit, requiredQuantity);
+    return { product, candidates: exact, failureReason: product ? null : "no_catalog_product" };
+  }
+
   for (const term of terms) {
-    const result = await repository.search(term, { limit: 12 });
+    const result = await ingredientCandidates(repository, term);
     for (const product of result.products) found.set(product.id, product);
-    const match = selectIngredientProduct(
-      ingredient,
-      [...found.values()],
-      brandConstraint,
-      requiredUnit,
-    );
-    if (match) {
-      return {
-        product: match,
-        candidates: [...found.values()],
-        failureReason: null,
-      };
-    }
   }
 
   const candidates = [...found.values()];
@@ -583,6 +625,7 @@ export async function searchIngredientProduct(
     candidates,
     brandConstraint,
     requiredUnit,
+    requiredQuantity,
   );
   return {
     product,
@@ -629,6 +672,7 @@ export async function matchWeekIngredientsWithDiagnostics(
         ingredient,
         requirement.brandConstraint ?? inferMealMixBrand(ingredient),
         requirement.kind === "mealMix" ? null : requirement.unit,
+        requirement.requiredQuantity,
       );
       result[index] = {
         ...diagnostic,

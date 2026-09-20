@@ -196,6 +196,7 @@ export function rowsForGate(
       requirement_kind: descriptor.kind,
       brand_constraint: descriptor.brandConstraint,
       product_id: product?.id ?? null,
+      candidate_product_ids: gate.candidatesByRequirement?.get(key)?.products.map((candidate) => candidate.id) ?? (product ? [product.id] : []),
       match_status: product ? "valid" : "invalid",
       failure_reason: product ? null : ingredient.reason ?? "matcher_failed",
       matcher_version: PLANNER_MATCHER_VERSION,

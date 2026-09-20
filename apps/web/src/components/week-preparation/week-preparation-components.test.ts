@@ -388,7 +388,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Hoogvliet rundergehakt");
     expect(html).toContain("Hoogvliet · 500 g");
     expect(html).toContain("2 verpakkingen · € 8,98");
-    expect(html).toContain("Geschatte kosten gerecht: € 8,98");
+    expect(html).toContain("Totaal gerecht: € 8,98");
     expect(html).toContain("Vervang gerecht");
     expect(html).toContain("recipe-detail-hero");
     expect(html).toContain("pasta-spaghetti-bolognese.webp");

@@ -38,7 +38,7 @@ function missing(ingredient = FALAFEL): PersistentProductMatchRow {
   return { match_key: `${ingredient.id}:g:ingredient:generic`, ingredient_id: null,
     ingredient_source_key: ingredient.sourceKey, requirement_unit: "g", requirement_kind: "ingredient",
     brand_constraint: "", product_id: null, match_status: "invalid", failure_reason: "no_catalog_product",
-    matcher_version: 1, refresh_status: "current", invalidated_at: null,
+    matcher_version: 2, refresh_status: "current", invalidated_at: null,
     product_updated_at: null, price_updated_at: null, checked_at: BEFORE };
 }
 type Row = Record<string, unknown>;
@@ -92,7 +92,7 @@ beforeEach(() => {
   vi.mocked(loadCatalog).mockResolvedValue(CATALOG);
   vi.spyOn(SupabaseCatalogRepository.prototype, "getByIds").mockImplementation(async (ids) =>
     ({ products: products.filter((p) => ids.includes(p.id)), priceStatus: "complete" }));
-  search = vi.spyOn(SupabaseCatalogRepository.prototype, "search").mockImplementation(async (term) =>
+  search = vi.spyOn(SupabaseCatalogRepository.prototype, "searchCandidates").mockImplementation(async (term) =>
     ({ products: products.filter((p) => p.name.toLowerCase().includes(term)), priceStatus: "complete" }));
 });
 

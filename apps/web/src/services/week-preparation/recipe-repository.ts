@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { enrichIngredientsForMealMixes, type MealMixProfile } from "@/services/week-preparation/meal-mix-profiles";
 import type {
   Ingredient,
   Recipe,
@@ -10,9 +11,12 @@ import type {
 
 export interface RecipeIngredientDefinition extends Ingredient {
   aliases: string[];
+  productId?: string;
 }
 
 export interface RecipeCatalog {
+  mealMixProfiles?: MealMixProfile[];
+  unavailableMealMixes?: { id: string; sourceKey: string; name: string; brand: string }[];
   recipes: Recipe[];
   ingredients: RecipeIngredientDefinition[];
   relations: RecipeIngredient[];
@@ -242,15 +246,32 @@ export class SupabaseRecipeRepository implements RecipeRepository {
       throw new RecipeReadError("invalid-response");
     }
 
+    // Additive rollout: an older database may not expose the new table yet.
+    const profilesResult = await this.client.from("meal_mix_profiles")
+      .select("profile,status,recipe_id,product_id,brand,products(name,sku)");
+    if (profilesResult.error && !["42P01", "PGRST205"].includes(profilesResult.error.code)) throw new RecipeReadError("recipes-unavailable");
+    const mealMixProfiles = (profilesResult.data ?? []).flatMap((row) => {
+      const profile = row.profile as MealMixProfile | null;
+      return row.status === "verified" && profile?.verificationStatus === "verified" && profile.productId &&
+        Number.isInteger(profile.servingsPerPackage) && profile.servingsPerPackage > 0 &&
+        Array.isArray(profile.supplements) ? [profile] : [];
+    });
+    const blocked = (profilesResult.data ?? []).filter(row => row.status !== "verified");
+    const blockedRecipeIds = new Set(blocked.map(row => row.recipe_id));
     return {
-      recipes,
-      ingredients: ingredients.map((ingredient) => ({
+      mealMixProfiles,
+      unavailableMealMixes: blocked.flatMap(row => {
+        const product = row.products as unknown as { name: string; sku: string } | null;
+        return product ? [{ id: `unavailable-${row.product_id}`, sourceKey: `catalog-mix-${product.sku}`, name: product.name, brand: row.brand }] : [];
+      }),
+      recipes: recipes.filter(recipe => !blockedRecipeIds.has(recipe.id)),
+      ingredients: enrichIngredientsForMealMixes(ingredients.map((ingredient) => ({
         ...ingredient,
         aliases: [...new Set([
           ingredient.name,
           ...(aliasesByIngredient.get(ingredient.id) ?? []),
         ])],
-      })),
+      })), mealMixProfiles),
       relations,
     };
   }

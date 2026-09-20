@@ -380,6 +380,8 @@ export class CatalogReadError extends Error {
 }
 
 export interface CatalogRepository {
+  /** Full candidate set for quantity-aware planning; the UI search stays compact. */
+  searchCandidates?(term: string): Promise<CatalogProductsResult>;
   getPage(request?: CatalogPageRequest): Promise<CatalogPageResult>;
   getByIds(productIds: string[], signal?: AbortSignal): Promise<CatalogProductsResult>;
   query(request?: CatalogQueryRequest): Promise<CatalogQueryPageResult>;
@@ -402,6 +404,18 @@ function valuesFromFacetRows(
 
 export class SupabaseCatalogRepository implements CatalogRepository {
   constructor(private readonly client: SupabaseClient) {}
+
+  async searchCandidates(term: string): Promise<CatalogProductsResult> {
+    const products = new Map<string, Product>();
+    let priceStatus: CatalogProductsResult["priceStatus"] = "complete";
+    for (let page = 1; ; page++) {
+      const result = await this.query({ term, page, pageSize: MAX_CATALOG_PAGE_SIZE, sort: "relevance" });
+      for (const product of result.products) products.set(product.id, product);
+      if (result.priceStatus !== "complete") priceStatus = result.priceStatus;
+      if (!result.hasMore) break;
+    }
+    return { products: [...products.values()], priceStatus };
+  }
 
   async query(request: CatalogQueryRequest = {}): Promise<CatalogQueryPageResult> {
     const normalized = normalizeCatalogQueryRequest(request);
