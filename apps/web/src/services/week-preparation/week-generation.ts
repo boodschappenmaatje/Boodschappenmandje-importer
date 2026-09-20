@@ -1,6 +1,7 @@
 import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
+import { matchCustomDishes } from "@/services/week-preparation/custom-dish";
 import {
   applyManualProductToRequirement,
   applyProductToRequirement,
@@ -1225,6 +1226,17 @@ export async function generatePreparedWeek(
     return preparation;
   }
 
+  const explicitDays = preparation.days.filter((day) => day.category === "freeChoice" && day.recipe);
+  if (explicitDays.length) {
+    const automatic = await generatePreparedWeek({
+      ...preparation,
+      days: preparation.days.map((day) => explicitDays.includes(day) ? { ...day, freeChoice: true, recipeId: null, recipe: null, customDish: undefined } : day),
+    }, recipeRepository, catalogRepository, now, list, options);
+    return (await revalidatePreparedWeek({ ...automatic,
+      days: automatic.days.map((day) => explicitDays.find((chosen) => chosen.dayIndex === day.dayIndex) ?? day),
+      customizations: preparation.customizations,
+    }, recipeRepository, catalogRepository, now, list)).preparation;
+  }
   const catalogStartedAt = monotonicNow();
   const loadedCatalog = await recipeRepository.loadCatalog();
   const catalog = options.cache?.prepareCatalog(loadedCatalog, () => ({
@@ -1367,7 +1379,7 @@ export async function revalidatePreparedWeek(
   const hasDayGap = preparation.days.some(
     (day) =>
       !day.freeChoice &&
-      (!day.recipeId || !readyIds.has(day.recipeId)),
+      (!day.recipeId || (!day.customDish && !readyIds.has(day.recipeId))),
   );
   const requirements = aggregateWeekIngredients(
     preparation.days,
@@ -1376,7 +1388,7 @@ export async function revalidatePreparedWeek(
   );
   const ingredients = await applyStoredCustomizations(
     preparation,
-    applyReadinessProducts(requirements, readiness),
+    [...applyReadinessProducts(requirements, readiness), ...await matchCustomDishes(preparation, catalog, catalogRepository)],
     catalog,
     catalogRepository,
   );

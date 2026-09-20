@@ -14,6 +14,7 @@ import {
   type WeekMealCustomization,
 } from "@/types/week-preparation";
 import { mealMixProfileForIngredient } from "@/services/week-preparation/meal-mix-profiles";
+import { validCustomDish } from "@/services/week-preparation/custom-dish";
 
 const ACTIVE_PREPARATION_KEY = "active";
 
@@ -216,7 +217,8 @@ function isPreparedDay(value: unknown): value is PreparedDay {
     Number(value.dayIndex) < 0 ||
     Number(value.dayIndex) > 6 ||
     !isCategory(value.category) ||
-    typeof value.freeChoice !== "boolean"
+    typeof value.freeChoice !== "boolean" ||
+    (value.customDish !== undefined && !validCustomDish(value.customDish))
   ) {
     return false;
   }

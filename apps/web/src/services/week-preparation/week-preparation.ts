@@ -304,6 +304,7 @@ export function changePreparedDayCategory(
       ? {
           ...day,
           category,
+          customDish: undefined,
           freeChoice: category === "freeChoice",
           recipeId: null,
           recipe: null,
@@ -317,6 +318,7 @@ export function changePreparedDayCategory(
   return withUpdatedAt(preparation, now, {
     days,
     categoryDistribution,
+    customizations: preparation.customizations.filter((item) => item.dayIndex !== dayIndex),
     ingredients: [],
     generation: null,
     status: "readyForGeneration",

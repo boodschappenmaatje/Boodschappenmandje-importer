@@ -137,12 +137,27 @@ export interface WeekMealCustomization {
 }
 
 export interface PreparedDay {
+  customDish?: CustomDish;
   dayIndex: number;
   category: MealCategory;
   freeChoice: boolean;
   recipeId: UUID | null;
   recipe: SelectedRecipeReference | null;
   status: "categoryAssigned" | "recipeSelected" | "freeChoice";
+}
+
+export interface CustomDishIngredient {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: WeekIngredientUnit;
+  productId: string | null;
+}
+
+export interface CustomDish {
+  name: string;
+  servings: number;
+  ingredients: CustomDishIngredient[];
 }
 
 export type WeekIngredientUnit = "g" | "kg" | "ml" | "l" | "piece" | "loaf";

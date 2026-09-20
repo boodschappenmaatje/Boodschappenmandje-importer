@@ -4136,3 +4136,24 @@ body {
   .budget-screen { max-width: 560px; margin-inline: auto; }
   .app-header { max-width: 560px; }
 }
+/* PWA 13: inline editors stay in the page's safe-area and keyboard flow. */
+.free-choice-control { display: grid; gap: 12px; min-width: 0; padding: 12px 0; }
+.free-choice-control label { display: grid; gap: 6px; min-width: 0; }
+.free-choice-control input, .free-choice-control select { width: 100%; min-width: 0; box-sizing: border-box; font-size: 16px; min-height: 44px; border: 1px solid #d8ded6; border-radius: 10px; padding: 10px; background: white; color: #253628; }
+.free-choice-control button { min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+.free-choice-routes { display: grid; gap: 8px; }
+.free-choice-results, .custom-product-options { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.free-choice-results > li { display: flex; gap: 10px; min-width: 0; padding: 12px; border: 1px solid #d8ded6; border-radius: 12px; }
+.free-choice-results > li > div { min-width: 0; overflow-wrap: anywhere; }
+.free-choice-results .recipe-summary-image { flex: 0 0 58px; }
+.custom-ingredient-editor { margin: 0; min-width: 0; padding: 12px; border: 1px solid #d8ded6; border-radius: 12px; display: grid; gap: 10px; }
+.custom-ingredient-editor p { overflow-wrap: anywhere; }
+.custom-ingredient-amount { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.free-choice-control .customization-confirm { min-width: 0; overflow-wrap: anywhere; }
+
+.prepared-days .free-choice-control label { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: stretch; padding: 0; border: 0; background: transparent; font-weight: 600; }
+.prepared-days .free-choice-control input, .prepared-days .free-choice-control select { width: 100%; max-width: none; min-width: 0; font-weight: 400; }
+.prepared-days .free-choice-control button { border: 1px solid #c9e3f8; border-radius: 10px; padding: 10px 12px; background: #edf7ff; color: #075c9c; font: inherit; font-weight: 700; cursor: pointer; }
+.prepared-days .free-choice-control button:disabled { opacity: .55; cursor: default; }
+.prepared-days .free-choice-control .primary-action { background: #087fdf; color: white; border-color: #087fdf; }
+.prepared-days .free-choice-control .text-action { background: transparent; border-color: transparent; }

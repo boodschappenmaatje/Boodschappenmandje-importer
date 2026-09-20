@@ -12,6 +12,10 @@ import {
 } from "react";
 
 import { useBudget } from "@/features/budget/BudgetProvider";
+import { previewFreeChoice, searchFreeChoice, type FreeChoiceResult } from "@/services/week-preparation/free-choice";
+import { customIngredientDefinition } from "@/services/week-preparation/custom-dish";
+import { searchIngredientProduct } from "@/services/week-preparation/product-matching";
+import type { CustomDish, WeekIngredientUnit } from "@/types/week-preparation";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { calculateBudget } from "@/services/budget/budget-engine";
 import {
@@ -80,6 +84,9 @@ import type {
 type WeekPreparationProviderStatus = "loading" | "ready" | "error";
 
 interface WeekPreparationContextValue {
+  searchDishes: (dayIndex: number, query: string) => Promise<FreeChoiceResult[]>;
+  previewCustomDish: (dayIndex: number, dish: CustomDish) => Promise<RecipeAlternative | null>;
+  matchCustomIngredient: (name: string, unit: WeekIngredientUnit, productId?: string | null) => Promise<Product | null>;
   status: WeekPreparationProviderStatus;
   preparation: WeekPreparation | null;
   persistenceWarning: string | null;
@@ -724,17 +731,6 @@ export function WeekPreparationProvider({
     shoppingList,
   ]);
 
-  const changeDayCategory = useCallback(
-    (dayIndex: number, category: MealCategory) => {
-      const current = preparationRef.current;
-      if (!current) return;
-      const changed = changePreparedDayCategory(current, dayIndex, category);
-      if (changed === current) return;
-      void runGeneration(changed);
-    },
-    [runGeneration],
-  );
-
   const currentList = useCallback(
     () => shoppingList.list ?? undefined,
     [shoppingList.list],
@@ -753,7 +749,7 @@ export function WeekPreparationProvider({
       try {
         // Synchroniseer eerst de lijst. Bij een opslagfout blijft de zichtbare
         // week daardoor volledig ongewijzigd in plaats van half aangepast.
-        if (alreadyCompleted) {
+        if (alreadyCompleted || next.days.some((day) => day.category === "freeChoice" && day.recipe)) {
           await shoppingList.completeFromWeek(next.ingredients, next.id);
         }
         setPendingBudgetReapproval(null);
@@ -777,6 +773,40 @@ export function WeekPreparationProvider({
     },
     [replace, shoppingList],
   );
+
+  const changeDayCategory = useCallback(
+    (dayIndex: number, category: MealCategory) => {
+      const current = preparationRef.current;
+      if (!current || customizationRunRef.current || generationInFlightRef.current) return;
+      const changed = changePreparedDayCategory(current, dayIndex, category);
+      if (changed === current) return;
+      customizationRunRef.current = true;
+      setCustomizationBusy(true);
+      const selectChangedDay = async () => {
+        if (category === "freeChoice") return changed;
+        const selected = await generatePreparedWeek({ ...changed, days: changed.days.filter((day) => day.dayIndex === dayIndex), customizations: [] }, recipeRepository(), catalogRepository());
+        return { ...changed, days: changed.days.map((day) => day.dayIndex === dayIndex ? selected.days[0] : day) };
+      };
+      void selectChangedDay().then((next) => revalidatePreparedWeek(next, recipeRepository(), catalogRepository(), new Date(), listWithoutCurrentWeekMealPlan(currentList(), current.id)))
+        .then((result) => syncValidatedCustomization(result.preparation))
+        .catch(() => setActionMessage("Wijzigen lukt nu niet. Je huidige week is behouden."))
+        .finally(() => { customizationRunRef.current = false; setCustomizationBusy(false); });
+    }, [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
+  );
+
+  const searchDishes = useCallback(async (dayIndex: number, query: string) => {
+    const current = preparationRef.current;
+    return current ? searchFreeChoice(current, dayIndex, query, recipeRepository(), catalogRepository(), currentList()) : [];
+  }, [catalogRepository, currentList, recipeRepository]);
+  const previewCustomDish = useCallback(async (dayIndex: number, customDish: CustomDish) => {
+    const current = preparationRef.current;
+    return current ? previewFreeChoice(current, dayIndex, { customDish }, recipeRepository(), catalogRepository(), currentList()) : null;
+  }, [catalogRepository, currentList, recipeRepository]);
+  const matchCustomIngredient = useCallback(async (name: string, unit: WeekIngredientUnit, productId?: string | null) => {
+    if (productId) return (await catalogRepository().getByIds([productId])).products.find((product) => product.id === productId) ?? null;
+    const catalog = await recipeRepository().loadCatalog();
+    return (await searchIngredientProduct(catalogRepository(), customIngredientDefinition(name, "custom-preview", catalog), null, unit)).product;
+  }, [catalogRepository, recipeRepository]);
 
   const findRecipeAlternatives = useCallback(
     async (dayIndex: number): Promise<RecipeAlternative[]> => {
@@ -883,6 +913,10 @@ export function WeekPreparationProvider({
           return committed.preview
             ? { applied: false, revalidatedPreview: committed.preview }
             : { applied: false };
+        }
+        if (preparationRef.current !== current) {
+          setActionMessage("Je week is ondertussen gewijzigd. Controleer je gerecht opnieuw voordat je opslaat.");
+          return { applied: false };
         }
         return await syncValidatedCustomization(committed.preparation)
           ? { applied: true }
@@ -1104,6 +1138,9 @@ export function WeekPreparationProvider({
 
   const value = useMemo<WeekPreparationContextValue>(
     () => ({
+      searchDishes,
+      previewCustomDish,
+      matchCustomIngredient,
       status,
       preparation,
       persistenceWarning,
@@ -1135,6 +1172,9 @@ export function WeekPreparationProvider({
     }),
     [
       actionMessage,
+      searchDishes,
+      previewCustomDish,
+      matchCustomIngredient,
       adjustCategory,
       changeDayCategory,
       customizationBusy,

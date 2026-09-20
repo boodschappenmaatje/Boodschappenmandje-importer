@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Icon } from "@/components/Icon";
 import { DishImage } from "@/components/ui/DishImage";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
+import { FreeChoiceControl } from "@/components/week-preparation/FreeChoiceControl";
 import {
   MealReplacementControl,
   ProductAlternativeControl,
@@ -391,11 +392,11 @@ export function WeekPreparationView() {
                   );
                   const dishTitle = mealMix?.dishName ?? day.recipe?.name ?? "Gerecht";
                   const dishImage = recipeImageFor(
-                    day.recipe && day.category !== "freeChoice"
+                    day.recipe && !day.customDish
                       ? {
                           recipeSourceKey: day.recipe.sourceKey,
                           recipeName: dishTitle,
-                          categories: [day.category],
+                          categories: day.category === "freeChoice" ? [] : [day.category],
                           ingredients: dayIngredients.map((ingredient) => ({
                             sourceKey: ingredient.sourceKey,
                             name: ingredient.name,
@@ -435,7 +436,7 @@ export function WeekPreparationView() {
                         </select>
                       </label>
                       {day.freeChoice ? (
-                        <p className="free-choice-copy">Vrije keuze — kies later zelf een gerecht</p>
+                        <FreeChoiceControl dayIndex={day.dayIndex} />
                       ) : day.recipe ? (
                         <div className="recipe-day-entry">
                           {dishNeedsReview ? (
@@ -482,7 +483,7 @@ export function WeekPreparationView() {
                                 ? `Geschatte kosten gerecht: ${formatCents(dishCost.knownCostCents)}`
                                 : `${formatCents(dishCost.knownCostCents)} bekend · nog ${dishCost.missingProductCount} ${dishCost.missingProductCount === 1 ? "product" : "producten"} niet compleet`}
                             </p>
-                            {!dishNeedsReview ? (
+                            {day.category === "freeChoice" ? <FreeChoiceControl key={day.recipeId} dayIndex={day.dayIndex} initialDish={day.customDish} /> : !dishNeedsReview ? (
                               <MealReplacementControl
                                 dayIndex={day.dayIndex}
                                 currentRecipeName={dishTitle}
