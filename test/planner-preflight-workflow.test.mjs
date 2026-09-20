@@ -11,7 +11,7 @@ const input = "      preflight_only:\n" +
   "        description: Alleen planner-auth en Supabase read-only controleren; geen import\n" +
   "        type: boolean\n        default: false\n";
 const guard = "    # Fail closed for both typed boolean and raw workflow_dispatch input.\n" +
-  "    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' }}\n";
+  "    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}\n";
 const scriptFrom = (text) => text.match(/node --input-type=module <<'NODE'\n([\s\S]*?)^          NODE/m)?.[1]
   .replace(/^          /gm, "");
 const script = scriptFrom(job ?? "");
@@ -21,7 +21,11 @@ test("normal importer is byte-identical apart from the optional bypass environme
   assert.ok(workflow.includes(input));
   assert.ok(workflow.includes(guard));
   const bypassEnv = "      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}\n";
-  const withoutPreflight = workflow.replace(input, "").replace(job, "").replace(guard, "");
+  const e2eInputs = workflow.match(/^      falafel_e2e_only:\n[\s\S]*?(?=^      preflight_only:)/m)?.[0];
+  const e2eJob = workflow.match(/\n  falafel-e2e:\n[\s\S]*$/)?.[0];
+  assert.ok(e2eInputs && e2eJob);
+  const withoutPreflight = workflow.replace(e2eInputs, "").replace(e2eJob, "")
+    .replace(input, "").replace(job, "").replace(guard, "");
   assert.equal(withoutPreflight.split(bypassEnv).length - 1, 1);
   assert.match(withoutPreflight, /^  import:\n[\s\S]*?    env:\n[\s\S]*?      VERCEL_AUTOMATION_BYPASS_SECRET: \$\{\{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/m);
   const original = withoutPreflight.replace(bypassEnv, "");
@@ -32,9 +36,12 @@ test("normal importer is byte-identical apart from the optional bypass environme
 
 test("job-level guard excludes the entire importer for typed or raw true", () => {
   const expression = workflow.match(/^  import:\n[^\n]*\n    if: \$\{\{ (.*) \}\}/m)?.[1];
-  assert.equal(expression, "inputs.preflight_only != true && github.event.inputs.preflight_only != 'true'");
+  assert.equal(`    if: \${{ ${expression} }}\n`, guard.split("\n").slice(1).join("\n"));
   // These are the boolean/raw-string representations supplied by workflow_dispatch.
-  const allow = (typed, raw) => typed !== true && raw !== "true";
+  const allow = (typed, raw) => vm.runInNewContext(expression, {
+    inputs: { preflight_only: typed, falafel_e2e_only: false, e2e_test_sku: "" },
+    github: { event: { inputs: { preflight_only: raw, falafel_e2e_only: "false", e2e_test_sku: "" } } },
+  });
   for (const [typed, raw] of [[true, "true"], [true, undefined], [undefined, "true"], [false, "true"]]) {
     assert.equal(allow(typed, raw), false);
   }

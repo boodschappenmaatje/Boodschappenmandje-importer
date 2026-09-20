@@ -3,6 +3,15 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
+      falafel_e2e_only:
+        description: Alleen de expliciet goedgekeurde falafel-E2E; normale importer overslaan
+        type: boolean
+        default: false
+      e2e_test_sku:
+        description: Verplicht voor falafel-E2E; uitsluitend 730331000
+        type: string
+        required: false
+        default: ""
       preflight_only:
         description: Alleen planner-auth en Supabase read-only controleren; geen import
         type: boolean
@@ -75,7 +84,7 @@ concurrency:
 jobs:
   preflight:
     permissions: {}
-    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
+    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -196,7 +205,7 @@ jobs:
 
   import:
     # Fail closed for both typed boolean and raw workflow_dispatch input.
-    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' }}
+    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -402,3 +411,40 @@ jobs:
       - name: Geplande catalogusrun direct controleren
         if: env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'growth' && env.IMPORT_TRIGGER == 'schedule'
         run: npm run monitor:catalog
+
+  falafel-e2e:
+    # Manual PR #23 only. Shares the existing importer concurrency lock above.
+    if: github.event_name == 'workflow_dispatch' && (inputs.falafel_e2e_only == true || inputs.e2e_test_sku != '') && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FALAFEL_E2E_ONLY: ${{ inputs.falafel_e2e_only }}
+      E2E_TEST_SKU: ${{ inputs.e2e_test_sku }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+    steps:
+      - name: Checkout exact dispatch commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Validate explicit single-SKU authorization before dependencies or secrets
+        run: node scripts/falafel-e2e.mjs --validate-input
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Chromium installeren
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run only the bounded falafel E2E
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/falafel-e2e.mjs
