@@ -62,11 +62,13 @@ geen evaluatie of herschrijven van alle recepten.
 Importer runtime:
 
 - `PLANNER_CACHE_BASE_URL`: HTTPS-origin van de goedgekeurde appomgeving;
-- `PLANNER_CACHE_ADMIN_TOKEN`: dezelfde server-side admin-token als op die appomgeving.
+- `PLANNER_CACHE_ADMIN_TOKEN`: dezelfde server-side admin-token als op die appomgeving;
+- `VERCEL_AUTOMATION_BYPASS_SECRET`: optioneel voor een beschermde Vercel-omgeving,
+  als `x-vercel-protection-bypass` naast de admin-token op elke batch en retry.
 
-Beide leeg: bestaande import blijft ongewijzigd, onderhoud niet actief.
-Slechts één ingesteld/ongeldige URL: configuratiefout vóór writes.
-De normale import- en retryworkflows geven alleen deze twee waarden door; hun cron,
+Base-URL en admin-token beide leeg: bestaande import blijft ongewijzigd, onderhoud niet actief.
+Slechts één van die twee ingesteld/ongeldige URL: configuratiefout vóór writes.
+De normale import- en retryworkflows geven alle drie deze waarden door; hun cron,
 daily-joblogica, concurrency, fail-fast, checkpointing en monitoring zijn ongewijzigd.
 Geen echte variable/secretwaarde wordt door deze codecommit geconfigureerd.
 
@@ -79,5 +81,14 @@ de importer volgt nooit redirects en schakelt geen beveiliging uit.
 
 Testfixtures gebruiken de echte centrale matcher, readinessresolver en evaluator,
 met een in-memory database-adapter die gerichte invalidatie simuleert.
-Dit is code-/regressiebewijs, geen claim van een uitgevoerde Production-import.
-Voor de echte falafel-E2E-test moet afzonderlijk toestemming volgen.
+Daarnaast is de afzonderlijk goedgekeurde, begrensde falafel-E2E geslaagd op
+commit `a6c82108917f740cc4d2f8e6b38823edf2d2c28a`, Actions-run
+[35531726483](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/35531726483).
+SKU `730331000` is eenmaal toegevoegd met verpakking 200 gram en live prijs EUR 1,48:
+een nieuwe productrow, een prijsrow, een bijgewerkte falafelmatch en tien bestaande
+readinessrecords. De maintenance-call naar Preview gaf HTTP 200 met uitsluitend
+het nieuwe product-ID. De audit over twaalf tabellen vond nul onverwachte wijzigingen.
+De brede importer/discovery bleef overgeslagen; dit was geen Production-deployment.
+De geisoleerde preflight was al geslaagd in run `35528642713` op `ce53b06`.
+Zie `FALAFEL-E2E.md` in de repositoryroot voor begrenzing en auditbeperkingen.
+Deze resultaten vereisen geen nieuwe import of E2E-herhaling bij de finale review.
