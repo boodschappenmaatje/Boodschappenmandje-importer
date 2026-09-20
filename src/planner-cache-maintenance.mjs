@@ -10,7 +10,7 @@ export function plannerMaintenanceSettings(config) {
   if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
     !["", "/"].includes(url.pathname)) throw new Error("Planner-cache base-URL moet een HTTPS-origin zijn.");
   url.pathname = PATH;
-  return { url, token };
+  return { url, token, automationBypassSecret: config.plannerCacheAutomationBypassSecret?.trim() };
 }
 
 /** Only after product AND price confirmation; never rolls back a successful import. */
@@ -25,7 +25,12 @@ export async function notifyPlannerOfNewProducts(settings, productIds, fetcher =
       try {
         const response = await fetcher(settings.url, {
           method: "POST",
-          headers: { authorization: `Bearer ${settings.token}`, "content-type": "application/json" },
+          headers: {
+            authorization: `Bearer ${settings.token}`,
+            "content-type": "application/json",
+            ...(settings.automationBypassSecret
+              ? { "x-vercel-protection-bypass": settings.automationBypassSecret } : {}),
+          },
           body: JSON.stringify({ productIds: batch }),
           redirect: "manual",
           signal: AbortSignal.timeout(65_000),

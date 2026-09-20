@@ -202,6 +202,7 @@ export function loadConfig(env = process.env) {
     supabaseSecret: env.SUPABASE_SECRET_KEY?.trim(),
     plannerCacheBaseURL: env.PLANNER_CACHE_BASE_URL?.trim(),
     plannerCacheAdminToken: env.PLANNER_CACHE_ADMIN_TOKEN?.trim(),
+    plannerCacheAutomationBypassSecret: env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim(),
   };
 
   if (!dryRun) {

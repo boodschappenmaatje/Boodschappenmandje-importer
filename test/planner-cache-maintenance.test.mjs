@@ -14,6 +14,66 @@ const product = (sku = "730331000") => ({ supermarket: "Hoogvliet", sku,
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
 const acknowledgement = (ids) => json({ productCount: ids.length, changedMatchKeys: [],
   affectedRecipeIds: [], refreshedReadinessCount: 0 });
+const bypassConfig = { ...config, plannerCacheAutomationBypassSecret: "fixture-bypass-not-a-real-secret" };
+
+test("optional server config reaches only the configured planner origin with both independent auth layers", async () => {
+  const loaded = loadConfig({ DRY_RUN: "1", PLANNER_CACHE_BASE_URL: config.plannerCacheBaseURL,
+    PLANNER_CACHE_ADMIN_TOKEN: config.plannerCacheAdminToken,
+    VERCEL_AUTOMATION_BYPASS_SECRET: `  ${bypassConfig.plannerCacheAutomationBypassSecret}  ` });
+  assert.equal(loaded.plannerCacheAutomationBypassSecret, bypassConfig.plannerCacheAutomationBypassSecret);
+  const result = await notifyPlannerOfNewProducts(plannerMaintenanceSettings(loaded), ["fixture-id"], async (url, options) => {
+    assert.equal(String(url), `${config.plannerCacheBaseURL}/api/internal/planner-readiness/new-products`);
+    assert.equal(url.search, "");
+    assert.deepEqual(options.headers, {
+      authorization: `Bearer ${config.plannerCacheAdminToken}`,
+      "content-type": "application/json",
+      "x-vercel-protection-bypass": bypassConfig.plannerCacheAutomationBypassSecret,
+    });
+    assert.equal(options.redirect, "manual");
+    return acknowledgement(["fixture-id"]);
+  });
+  assert.equal(result.notifiedProducts, 1);
+});
+
+test("missing or blank bypass sends no bypass header and preserves existing app auth", async () => {
+  for (const value of [undefined, "", "   "]) {
+    const settings = plannerMaintenanceSettings({ ...config, plannerCacheAutomationBypassSecret: value });
+    await notifyPlannerOfNewProducts(settings, ["fixture-id"], async (_url, options) => {
+      assert.deepEqual(options.headers, {
+        authorization: `Bearer ${config.plannerCacheAdminToken}`, "content-type": "application/json",
+      });
+      return acknowledgement(["fixture-id"]);
+    });
+  }
+  assert.equal(plannerMaintenanceSettings({ plannerCacheAutomationBypassSecret: "fixture-only" }), null);
+});
+
+test("bypass never reaches Supabase; product and price requests are identical with or without bypass", async (t) => {
+  const runs = [];
+  for (const settings of [config, bypassConfig]) {
+    const writes = [];
+    const mock = t.mock.method(globalThis, "fetch", async (url, options) => {
+      if (url.origin === config.plannerCacheBaseURL) {
+        assert.equal(options.headers["x-vercel-protection-bypass"], settings.plannerCacheAutomationBypassSecret);
+        return acknowledgement(JSON.parse(options.body).productIds);
+      }
+      assert.equal(url.origin, config.supabaseURL);
+      assert.equal(Object.hasOwn(options.headers, "x-vercel-protection-bypass"), false);
+      const payload = JSON.parse(options.body);
+      // The normal importer intentionally generates a fresh insertion UUID.
+      const normalized = payload.map(({ id, product_id, ...row }) => row);
+      writes.push({ url: String(url), method: options.method, headers: options.headers, body: normalized });
+      return json(payload);
+    });
+    const result = await upsertProducts(settings, [product()]);
+    assert.equal(result.imported.length, 1);
+    assert.equal(result.plannerMaintenance.notifiedProducts, 1);
+    mock.mock.restore();
+    runs.push(writes);
+  }
+  assert.equal(runs[0].length, 2);
+  assert.deepEqual(runs[0], runs[1]);
+});
 
 test("maintenance configuration is explicit, HTTPS-only and loaded server-side", () => {
   assert.equal(plannerMaintenanceSettings({}), null);
@@ -91,16 +151,18 @@ test("failed price confirmation cannot trigger planner maintenance", async (t) =
 
 test("maintenance outage preserves successful imports and exposes only exact retry IDs, never secrets", async (t) => {
   const warnings = [];
+  const output = [];
   let notifyCalls = 0;
   t.mock.method(console, "warn", (message) => warnings.push(message));
+  for (const method of ["log", "info", "error", "debug"]) t.mock.method(console, method, (...args) => output.push(args));
   t.mock.method(globalThis, "fetch", async (url, options) => {
     if (url.pathname.endsWith("new-products")) {
       notifyCalls += 1;
-      throw new Error(config.plannerCacheAdminToken);
+      throw new Error(`${config.plannerCacheAdminToken} ${bypassConfig.plannerCacheAutomationBypassSecret}`);
     }
     return json(JSON.parse(options.body));
   });
-  const result = await upsertProducts(config, [product()]);
+  const result = await upsertProducts(bypassConfig, [product()]);
   assert.equal(result.imported.length, 1);
   assert.equal(result.errors.length, 0);
   assert.equal(result.plannerMaintenance.pendingProductIds.length, 1);
@@ -108,6 +170,9 @@ test("maintenance outage preserves successful imports and exposes only exact ret
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].includes(config.plannerCacheAdminToken), false);
   assert.equal(warnings[0].includes(config.supabaseSecret), false);
+  for (const secret of [config.plannerCacheAdminToken, config.supabaseSecret, bypassConfig.plannerCacheAutomationBypassSecret]) {
+    assert.equal(JSON.stringify({ warnings, output, result }).includes(secret), false);
+  }
 });
 
 test("a later structural write failure still notifies earlier confirmed products", async (t) => {
@@ -143,12 +208,14 @@ test("notification batches are bounded, deduplicated and retry-idempotent", asyn
 });
 
 test("authorization errors and redirects are not retried or followed", async () => {
-  for (const status of [401, 403, 302]) {
+  for (const status of [401, 403, 301, 302, 303, 307, 308]) {
     let calls = 0;
-    const result = await notifyPlannerOfNewProducts(plannerMaintenanceSettings(config), ["one"], async (_url, options) => {
+    const result = await notifyPlannerOfNewProducts(plannerMaintenanceSettings(bypassConfig), ["one"], async (url, options) => {
       calls += 1;
+      assert.equal(url.origin, config.plannerCacheBaseURL);
+      assert.equal(options.headers["x-vercel-protection-bypass"], bypassConfig.plannerCacheAutomationBypassSecret);
       assert.equal(options.redirect, "manual");
-      return json({}, status);
+      return new Response("", { status, headers: { location: "https://other.example/collect" } });
     });
     assert.equal(calls, 1);
     assert.deepEqual(result.pendingProductIds, ["one"]);
