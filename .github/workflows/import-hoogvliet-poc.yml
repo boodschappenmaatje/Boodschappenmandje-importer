@@ -3,6 +3,19 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
+      falafel_e2e_only:
+        description: Alleen de expliciet goedgekeurde falafel-E2E; normale importer overslaan
+        type: boolean
+        default: false
+      e2e_test_sku:
+        description: Verplicht voor falafel-E2E; uitsluitend 730331000
+        type: string
+        required: false
+        default: ""
+      preflight_only:
+        description: Alleen planner-auth en Supabase read-only controleren; geen import
+        type: boolean
+        default: false
       update_mode:
         description: Soort update
         required: true
@@ -69,13 +82,139 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  preflight:
+    permissions: {}
+    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify configuration, Preview auth, and read-only Supabase access
+        shell: bash
+        env:
+          PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          // Only the PR #23 branch alias published by the Vercel GitHub bot.
+          // Reject production, arbitrary hosts, URL credentials and redirects.
+          const previewOrigin = 'https://boodschappenmaatje-pwa-git-fix-planne-a4a7f3-dennisverkaik-4661.vercel.app';
+          const projectRef = 'pjcqxufvbkkjehituzxz'; // BoodschappenMaatje
+          const supabaseOrigin = `https://${projectRef}.supabase.co`;
+          const safeFailures = new Set();
+          function fail(code) {
+            safeFailures.add(code);
+            throw new Error(code);
+          }
+          function assertOrigin(value, expected, label) {
+            let url;
+            try { url = new URL(value); } catch { fail(`${label}-invalid-origin`); }
+            if (url.origin !== expected || url.username || url.password ||
+                url.pathname !== '/' || url.search || url.hash) {
+              fail(`${label}-unexpected-origin`);
+            }
+            return url;
+          }
+          async function request(url, options, label) {
+            try {
+              return await fetch(url, {
+                ...options,
+                redirect: 'manual',
+                signal: AbortSignal.timeout(20_000),
+              });
+            } catch { fail(`${label}-network-error`); }
+          }
+          async function json(response) {
+            if (!response.headers.get('content-type')?.includes('application/json')) return null;
+            try { return await response.json(); } catch { return null; }
+          }
+          try {
+            if (process.env.GITHUB_EVENT_NAME !== 'workflow_dispatch' ||
+                process.env.GITHUB_REPOSITORY !== 'boodschappenmaatje/Boodschappenmandje-importer' ||
+                process.env.GITHUB_REF !== 'refs/heads/fix/planner-new-product-maintenance') {
+              fail('unexpected-workflow-context');
+            }
+            const keys = ['PLANNER_CACHE_BASE_URL', 'PLANNER_CACHE_ADMIN_TOKEN',
+              'SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'VERCEL_AUTOMATION_BYPASS_SECRET'];
+            let missing = false;
+            for (const key of keys) {
+              const configured = Boolean(process.env[key]?.trim());
+              console.log(`${key}: ${configured ? 'configured' : 'missing'}`);
+              missing ||= !configured;
+            }
+            if (missing) fail('configuration-missing');
+
+            const preview = assertOrigin(process.env.PLANNER_CACHE_BASE_URL.trim(), previewOrigin, 'preview');
+            const supabase = assertOrigin(process.env.SUPABASE_URL.trim(), supabaseOrigin, 'supabase');
+            const token = process.env.PLANNER_CACHE_ADMIN_TOKEN.trim();
+            const secret = process.env.SUPABASE_SECRET_KEY.trim();
+            if (/\s/.test(token)) fail('admin-token-invalid-format');
+            const headers = { apikey: secret, accept: 'application/json' };
+            // Support the existing legacy service_role key and modern server keys.
+            // Never accept an anon/publishable key as evidence of server access.
+            if (!/^sb_secret_[A-Za-z0-9_-]+$/.test(secret)) {
+              let payload;
+              try {
+                const parts = secret.split('.');
+                if (parts.length !== 3) fail('supabase-server-key-invalid');
+                payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+              } catch { fail('supabase-server-key-invalid'); }
+              if (payload?.role !== 'service_role' || payload?.ref !== projectRef) {
+                fail('supabase-server-key-project-or-role-mismatch');
+              }
+              headers.authorization = `Bearer ${secret}`;
+            }
+            console.log('Preview origin: expected PR #23 branch alias');
+            console.log('Supabase origin: expected BoodschappenMaatje project');
+
+            preview.pathname = '/api/internal/planner-readiness/new-products';
+            const auth = await request(preview, {
+              method: 'POST',
+              headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json',
+                'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET.trim() },
+              body: '{"productIds":[]}',
+            }, 'preview-auth');
+            const result = await json(auth);
+            // Do not print arbitrary response bodies, headers, errors or URLs.
+            const errorCode = result?.error === 'invalid-request' ? 'invalid-request'
+              : result?.error === 'unauthorized' ? 'unauthorized' : 'unexpected-response';
+            console.log(`Preview auth HTTP: ${auth.status}; code: ${errorCode}`);
+            if (auth.status !== 400 || errorCode !== 'invalid-request') fail('preview-auth-failed');
+            console.log('Preview auth: passed; empty productIds rejected before database access');
+
+            // One bounded SELECT only; no RPC, SQL, mutations or maintenance calls.
+            supabase.pathname = '/rest/v1/recipes';
+            supabase.search = '?select=id&limit=1';
+            const read = await request(supabase, { method: 'GET', headers }, 'supabase-read');
+            console.log(`Supabase read-only HTTP: ${read.status}`);
+            if (read.status !== 200) fail('supabase-read-failed');
+            const rows = await json(read);
+            if (!Array.isArray(rows) || rows.length !== 1 ||
+                typeof rows[0]?.id !== 'string' || !rows[0].id) fail('supabase-read-unexpected-response');
+            console.log('Supabase read-only check: passed');
+            console.log('Preflight passed. Importer writes: 0. Database writes by this workflow: 0.');
+          } catch (error) {
+            const code = safeFailures.has(error?.message) ? error.message : 'unexpected-preflight-failure';
+            console.error(`Preflight failed: ${code}`);
+            process.exitCode = 1;
+          }
+          NODE
+
   import:
+    # Fail closed for both typed boolean and raw workflow_dispatch input.
+    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+      PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       HEADLESS: "1"
 
     steps:
@@ -272,3 +411,40 @@ jobs:
       - name: Geplande catalogusrun direct controleren
         if: env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'growth' && env.IMPORT_TRIGGER == 'schedule'
         run: npm run monitor:catalog
+
+  falafel-e2e:
+    # Manual PR #23 only. Shares the existing importer concurrency lock above.
+    if: github.event_name == 'workflow_dispatch' && (inputs.falafel_e2e_only == true || inputs.e2e_test_sku != '') && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FALAFEL_E2E_ONLY: ${{ inputs.falafel_e2e_only }}
+      E2E_TEST_SKU: ${{ inputs.e2e_test_sku }}
+      PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+    steps:
+      - name: Checkout exact dispatch commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Validate explicit single-SKU authorization before dependencies or secrets
+        run: node scripts/falafel-e2e.mjs --validate-input
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Chromium installeren
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run only the bounded falafel E2E
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/falafel-e2e.mjs
