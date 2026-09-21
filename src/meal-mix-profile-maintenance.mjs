@@ -4,7 +4,7 @@ import { restURL, requestHeaders } from "./supabase.mjs";
 import { parseMealMixSource } from "../apps/web/src/server/meal-mix-source.ts";
 import { MEAL_MIX_PROFILES } from "../apps/web/src/services/week-preparation/meal-mix-profiles.ts";
 
-export const MEAL_MIX_PARSER_VERSION = 2;
+export const MEAL_MIX_PARSER_VERSION = 3;
 
 export async function readMealMixSource(page, product) {
   const url = new URL(product.source_url);
@@ -44,10 +44,10 @@ export function mealMixApi(config, fetcher = fetch) {
 /** Queue processing is bounded and idempotent, with compare-and-set writes. */
 export async function maintainMealMixProfiles({ api, readSource, refreshRecipes, limit = 20 }) {
   const queued = await api("meal_mix_profiles", { select: "*",
-    or: `(status.eq.pending,parser_version.lt.${MEAL_MIX_PARSER_VERSION},and(status.eq.verified,cache_status.eq.pending))`, order: "updated_at.asc", limit: String(Math.min(100, Math.max(1, limit))) });
+    or: `(status.eq.pending,and(status.eq.needs_review,parser_version.lt.${MEAL_MIX_PARSER_VERSION}),and(status.eq.verified,cache_status.eq.pending))`, order: "updated_at.asc", limit: String(Math.min(100, Math.max(1, limit))) });
   const results = [];
   for (const queue of queued) {
-    if (queue.status === "verified" && queue.parser_version === MEAL_MIX_PARSER_VERSION && queue.cache_status === "pending") {
+    if (queue.status === "verified" && queue.cache_status === "pending") {
       await refreshRecipes([queue.recipe_id]);
       await api("meal_mix_profiles", { product_id: `eq.${queue.product_id}`, updated_at: `eq.${queue.updated_at}` }, { method: "PATCH", body: { cache_status: "current" } });
       results.push({ productId: queue.product_id, status: "cache_refreshed" });
@@ -90,15 +90,43 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
   return results;
 }
 
+/** Profile currency is not readiness currency: prices/dependencies and the
+ * readiness TTL can change without altering the package source. Reuse verified
+ * profiles and refresh only affected recipes through the existing service. */
+export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 20, now = new Date() }) {
+  const profiles = await api("meal_mix_profiles", {
+    select: "product_id,recipe_id,updated_at", status: "eq.verified", order: "updated_at.asc", limit: "100",
+  });
+  if (!profiles.length) return [];
+  const ids = profiles.map((row) => row.recipe_id).filter(Boolean);
+  if (!ids.length) return [];
+  const rows = await api("recipe_readiness_cache", {
+    select: "recipe_id,people_count,refresh_status,invalidated_at,expires_at",
+    recipe_id: `in.(${ids.join(",")})`, people_count: "gte.1", and: "(people_count.lte.10)", limit: "1000",
+  });
+  const refreshed = [];
+  for (const profile of profiles) {
+    if (!profile.recipe_id) continue;
+    const current = new Set(rows.filter((row) => row.recipe_id === profile.recipe_id &&
+      row.refresh_status === "current" && row.invalidated_at === null &&
+      Date.parse(row.expires_at) > now.getTime()).map((row) => row.people_count));
+    if (Array.from({ length: 10 }, (_, index) => index + 1).every((people) => current.has(people))) continue;
+    await refreshRecipes([profile.recipe_id]);
+    await api("meal_mix_profiles", { product_id: `eq.${profile.product_id}`, updated_at: `eq.${profile.updated_at}` },
+      { method: "PATCH", body: { cache_status: "current" } });
+    refreshed.push(profile.recipe_id);
+    if (refreshed.length >= Math.min(100, Math.max(1, limit))) break;
+  }
+  return refreshed;
+}
+
 async function main() {
   const api = mealMixApi({ supabaseURL: process.env.SUPABASE_URL, supabaseSecretKey: process.env.SUPABASE_SECRET_KEY });
   const base = new URL(process.env.PLANNER_CACHE_BASE_URL);
   if (base.protocol !== "https:" || base.username || base.password) throw Error("invalid-planner-origin");
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
   try {
-    const results = await maintainMealMixProfiles({ api, limit: process.argv.includes("--backfill") ? 100 : 20,
-      readSource: async (product) => { const page = await browser.newPage(); try { return await readMealMixSource(page, product); } finally { await page.close(); } },
-      refreshRecipes: async (recipeIds) => {
+    const refreshRecipes = async (recipeIds) => {
         const response = await fetch(new URL("/api/internal/planner-readiness/mix-refresh", base), {
           method: "POST", redirect: "manual", signal: AbortSignal.timeout(120000),
           headers: { "content-type": "application/json", authorization: `Bearer ${process.env.PLANNER_CACHE_ADMIN_TOKEN}`,
@@ -106,9 +134,13 @@ async function main() {
           body: JSON.stringify({ recipeIds }),
         });
         if (!response.ok) throw Error("meal-mix-cache-refresh-failed");
-      },
+      };
+    const limit = process.argv.includes("--backfill") ? 100 : 20;
+    const results = await maintainMealMixProfiles({ api, limit, refreshRecipes,
+      readSource: async (product) => { const page = await browser.newPage(); try { return await readMealMixSource(page, product); } finally { await page.close(); } },
     });
-    console.log(JSON.stringify(results, null, 2));
+    const refreshedRecipeIds = await refreshStaleMealMixCaches({ api, refreshRecipes, limit });
+    console.log(JSON.stringify({ profiles: results, refreshedRecipeIds }, null, 2));
   } finally { await browser.close(); }
 }
 

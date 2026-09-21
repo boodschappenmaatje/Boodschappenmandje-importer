@@ -7,6 +7,9 @@ import { calculateDishCostSummary, revalidatePreparedWeek } from "@/services/wee
 import type { Recipe } from "@/types/catalog";
 import type { ActiveShoppingList } from "@/types/shopping-list";
 import type { CustomDish, WeekPreparation } from "@/types/week-preparation";
+import { createCachedCatalogRepository, createWeekPlanningSnapshotCache, type WeekPlanningSnapshotCache } from "./planning-cache";
+import { createPersistentRecipeReadinessRepository } from "./persistent-readiness-cache";
+import { enrichIngredientsForMealMixes } from "./meal-mix-profiles";
 
 export interface FreeChoiceResult {
   recipe: Pick<Recipe, "id" | "sourceKey" | "name">;
@@ -21,7 +24,7 @@ export function recipeMatchesQuery(recipe: Pick<Recipe, "name" | "sourceKey">, q
   return normalize(query).trim().split(/\s+/).every((word) => text.includes(word));
 }
 
-export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: number, choice: { recipeId: string } | { customDish: CustomDish }, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, now = new Date()): Promise<RecipeAlternative | null> {
+export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: number, choice: { recipeId: string } | { customDish: CustomDish }, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, now = new Date(), planningCache?: WeekPlanningSnapshotCache): Promise<RecipeAlternative | null> {
   const day = preparation.days.find((item) => item.dayIndex === dayIndex);
   if (!day || !preparation.numberOfPeople) return null;
   const custom = "customDish" in choice ? choice.customDish : undefined;
@@ -49,7 +52,7 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
     }],
   };
   const baseline = listWithoutCurrentWeekMealPlan(list, preparation.id, now);
-  const validated = (await revalidatePreparedWeek(next, recipes, products, now, baseline)).preparation;
+  const validated = (await revalidatePreparedWeek(next, recipes, products, now, baseline, planningCache)).preparation;
   const dish = calculateDishCostSummary(dayIndex, validated.ingredients);
   if (!dish.complete || !validated.ingredients.some((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)) ||
     validated.ingredients.some((item) => item.usedIn.some((use) => use.dayIndex === dayIndex) && !item.optional && item.price?.freshness !== "fresh")) return null;
@@ -63,14 +66,27 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
   };
 }
 
-export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: number, query: string, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList): Promise<FreeChoiceResult[]> {
+export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: number, query: string, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, planningCache = createWeekPlanningSnapshotCache({ persistentRepository: createPersistentRecipeReadinessRepository() })): Promise<FreeChoiceResult[]> {
   if (query.trim().length < 2) return [];
   const catalog = await recipes.loadCatalog();
   const candidates = catalog.recipes.filter((recipe) => recipeMatchesQuery(recipe, query)).slice(0, 20);
+  // One snapshot and one batched persistent lookup, including selected dishes
+  // needed by the unchanged whole-week budget and package calculations.
+  const snapshotRecipes: RecipeRepository = { loadCatalog: async () => catalog };
+  const snapshotProducts = createCachedCatalogRepository(products);
+  const preparedCatalog = planningCache.prepareCatalog(catalog, () => ({
+    ...catalog, ingredients: enrichIngredientsForMealMixes(catalog.ingredients, catalog.mealMixProfiles),
+  }));
+  const selectedIds = new Set(preparation.days.map((day) => day.recipeId));
+  const targetIds = new Set(candidates.map((recipe) => recipe.id));
+  const readiness = preparation.numberOfPeople ? await planningCache.evaluateReadiness(catalog,
+    catalog.recipes.filter((recipe) => selectedIds.has(recipe.id) || targetIds.has(recipe.id)),
+    preparation.numberOfPeople, preparedCatalog, snapshotProducts) : null;
+  const readyIds = new Set(readiness?.gate.recipes.filter((recipe) => recipe.ready).map((recipe) => recipe.recipeId));
   const results: FreeChoiceResult[] = [];
   for (const recipe of candidates) {
     results.push({ recipe, brand: mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles)?.brand ?? null,
-      alternative: await previewFreeChoice(preparation, dayIndex, { recipeId: recipe.id }, recipes, products, list) });
+      alternative: readyIds.has(recipe.id) ? await previewFreeChoice(preparation, dayIndex, { recipeId: recipe.id }, snapshotRecipes, snapshotProducts, list, new Date(), planningCache) : null });
   }
   for (const brand of ["Honig", "Knorr"]) {
     const recipe = { id: `unavailable-${brand}-spaghetti`, sourceKey: `unavailable-${brand.toLowerCase()}-spaghetti`, name: `${brand} Spaghetti Bolognese` };

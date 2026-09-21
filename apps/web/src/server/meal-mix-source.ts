@@ -96,7 +96,10 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
     if (rawUnit === "ml") unit = "ml";
     if (rawUnit === "l") { unit = "ml"; quantity *= 1000; }
     if (rawUnit && /^el|eetlepel/.test(rawUnit)) { unit = "ml"; quantity *= 15; }
-    let name = match[3].replace(/\b(?:middelgrote|grote|kleine)\s+/gi, "").replace(/\s*\(1\/2 pak\)/i, "").trim();
+    let name = match[3].replace(/\b(?:middelgrote|grote|kleine)\s+/gi, "").replace(/\s*\(1\/2 pak\)/i, "")
+      // A declared storage form is part of the ingredient identity, not missing
+      // package contents. Preserve it; do not silently substitute fresh spinach.
+      .replace(/\(diepvries\)/gi, "diepvries").trim();
     // Manufacturer explicitly permits either option; select the first, without inventing a substitute.
     name = name.split(/\s+of\s+/i)[0];
     if (/\b(?:blikje?|pak|zak|bosje)\b|[()]/i.test(name)) return fail(`supplement_content_missing:${normalize(original)}`);

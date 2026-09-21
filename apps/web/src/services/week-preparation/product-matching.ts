@@ -193,6 +193,7 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
   const required = normalize(ingredient.name);
   const name = normalize(product.name);
   // Discovery aliases must not erase explicit recipe properties.
+  if (/\bdiepvries\b/.test(required) && !/\bdiepvries\b/.test(normalize(`${product.name} ${product.category}`))) return false;
   if (/drogisterij|lichaamsverzorging|haarverzorging|schoonmaak|huishoudelijk|dierenvoeding/.test(normalize(product.category))) return false;
   if (/\b(?:bad|douche|massage|shampoo|zeep|bodylotion)\b/.test(name)) return false;
   if (ingredient.category === "Groente" && /puree|passata|sap|saus|poeder|kruiden|soep/.test(name) &&

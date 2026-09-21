@@ -796,7 +796,7 @@ export function WeekPreparationProvider({
 
   const searchDishes = useCallback(async (dayIndex: number, query: string) => {
     const current = preparationRef.current;
-    return current ? searchFreeChoice(current, dayIndex, query, recipeRepository(), catalogRepository(), currentList()) : [];
+    return current ? searchFreeChoice(current, dayIndex, query, recipeRepository(), catalogRepository(), currentList(), planningSnapshotCacheRef.current) : [];
   }, [catalogRepository, currentList, recipeRepository]);
   const previewCustomDish = useCallback(async (dayIndex: number, customDish: CustomDish) => {
     const current = preparationRef.current;

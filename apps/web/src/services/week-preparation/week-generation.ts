@@ -1353,22 +1353,26 @@ export async function revalidatePreparedWeek(
   catalogRepository: CatalogRepository,
   now: Date = new Date(),
   list: ActiveShoppingList = EMPTY_LIST,
+  planningCache?: WeekPlanningSnapshotCache,
 ): Promise<PreparedWeekReadinessResult> {
   if (preparation.numberOfPeople === null) {
     return { ready: false, preparation };
   }
   const loadedCatalog = await recipeRepository.loadCatalog();
-  const catalog: RecipeCatalog = {
+  const prepareCatalog = (): RecipeCatalog => ({
     ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
-  };
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients, loadedCatalog.mealMixProfiles),
+  });
+  const catalog = planningCache?.prepareCatalog(loadedCatalog, prepareCatalog) ?? prepareCatalog();
   const selectedIds = new Set(
     preparation.days
       .map((day) => day.recipeId)
       .filter((id): id is string => Boolean(id)),
   );
   const selectedRecipes = catalog.recipes.filter((recipe) => selectedIds.has(recipe.id));
-  const readiness = (await resolveRecipeReadiness(
+  const readiness = planningCache ? (await planningCache.evaluateReadiness(
+    loadedCatalog, selectedRecipes, preparation.numberOfPeople, catalog, catalogRepository,
+  )).gate : (await resolveRecipeReadiness(
     selectedRecipes,
     preparation.numberOfPeople,
     catalog,

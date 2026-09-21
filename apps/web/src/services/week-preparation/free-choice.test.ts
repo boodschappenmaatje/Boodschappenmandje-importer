@@ -10,6 +10,10 @@ import type { RecipeCatalog, RecipeRepository } from "./recipe-repository";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { Product, Recipe } from "@/types/catalog";
 import type { CustomDish, WeekPreparation } from "@/types/week-preparation";
+import { evaluateRecipeReadiness } from "./recipe-readiness";
+import { rowsForGate } from "@/server/planner-cache-service";
+import { createWeekPlanningSnapshotCache } from "./planning-cache";
+import type { PersistentProductMatchRow, PersistentRecipeReadinessRow } from "./persistent-readiness-cache";
 
 const now = new Date();
 const pasta: Recipe = { id: "pasta", sourceKey: "spaghetti", name: "Zelfgemaakte spaghetti", normalizedName: "spaghetti", symbol: "fork.knife", preparationMinutes: 20, vegetarian: true, containsPork: false, kidFriendly: true, healthy: false, budgetTier: "economical" };
@@ -33,6 +37,51 @@ function week(): WeekPreparation {
 const dish: CustomDish = { name: "Mijn pasta", servings: 6, ingredients: [{ id: "row1", name: "pasta", quantity: 600, unit: "g", productId: null }] };
 
 describe("PWA 13 vrije keuze", () => {
+  it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])("hergebruikt persistente readiness voor %i personen zonder live search", async (people) => {
+    const saved = rowsForGate(await evaluateRecipeReadiness([pasta], people, catalog, products), people, now);
+    let loads = 0;
+    let productReads = 0;
+    const cache = createWeekPlanningSnapshotCache({ persistentRepository: { load: async (ids, requestedPeople) => {
+      loads++;
+      expect(ids).toEqual([pasta.id]);
+      expect(requestedPeople).toBe(people);
+      return { available: true, matches: saved.matchRows as PersistentProductMatchRow[], readiness: saved.readinessRows as PersistentRecipeReadinessRow[] };
+    } } });
+    const noSearch = { ...products, search: async () => { throw new Error("unexpected live matching"); },
+      getByIds: async (ids: string[]) => { productReads++; return products.getByIds(ids); } };
+    const current = { ...week(), numberOfPeople: people };
+    for (let run = 0; run < 2; run++) {
+      const found = await searchFreeChoice(current, 0, "spaghetti", recipes, noSearch, undefined, cache);
+      expect(found[0].alternative?.preparation.ingredients[0].requiredQuantity).toBe(people * 100);
+      expect(found[0].alternative?.preparation.ingredients[0].purchaseQuantity).toBe(Math.ceil(people / 5));
+      expect(found[0].alternative?.alternativeDishCostCents).toBe(200 * Math.ceil(people / 5));
+    }
+    expect(loads).toBe(1);
+    expect(productReads).toBe(1);
+  });
+
+  it("valt gericht terug bij verlopen cache en maakt ontbrekende producten niet READY", async () => {
+    const saved = rowsForGate(await evaluateRecipeReadiness([pasta], 6, catalog, products), 6, new Date(0));
+    const cache = createWeekPlanningSnapshotCache({ persistentRepository: { load: async () => ({
+      available: true, matches: [], readiness: saved.readinessRows as PersistentRecipeReadinessRow[],
+    }) } });
+    const unavailable = { ...products, search: async () => ({ products: [], priceStatus: "complete" as const }) };
+    const found = await searchFreeChoice(week(), 0, "spaghetti", recipes, unavailable, undefined, cache);
+    expect(found.every((item) => !item.alternative)).toBe(true);
+  });
+  it("laadt de catalogus en gedeelde ingrediëntzoekopdrachten eenmaal per zoekactie", async () => {
+    const variants = [1, 2, 3].map((n) => ({ ...pasta, id: `pasta-${n}` }));
+    const many = { ...catalog, recipes: variants, relations: variants.map((r) => ({ ...catalog.relations[0], id: r.id, recipeId: r.id })) };
+    let catalogReads = 0;
+    let searches = 0;
+    const countedRecipes = { loadCatalog: async () => { catalogReads++; return many; } };
+    const countedProducts = { ...products, search: async (term: string) => { searches++; return products.search(term); } };
+    const found = await searchFreeChoice(week(), 0, "spaghetti", countedRecipes, countedProducts);
+    expect(found.filter((item) => item.alternative)).toHaveLength(3);
+    console.log(JSON.stringify({ freeChoiceCandidates: 3, catalogReads, searches }));
+    expect(catalogReads).toBe(1);
+    expect(searches).toBeLessThanOrEqual(2);
+  });
   it("zoekt op alle woorden en houdt merken gescheiden", () => {
     expect(recipeMatchesQuery(pasta, "spaghetti")).toBe(true);
     expect(recipeMatchesQuery({ sourceKey: "honig-macaroni", name: "Honig macaroni" }, "Honig spaghetti")).toBe(true);

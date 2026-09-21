@@ -172,20 +172,25 @@ export class SupabaseRecipeRepository implements RecipeRepository {
       .select("id,recipe_id,ingredient_id,amount_per_person,unit,position")
       .order("recipe_id", { ascending: true })
       .order("position", { ascending: true });
+    // Independent of the canonical reads: do not add a second network wave.
+    let profilesQuery = this.client.from("meal_mix_profiles")
+      .select("profile,status,recipe_id,product_id,brand,products(name,sku)");
 
     if (signal) {
       recipesQuery = recipesQuery.abortSignal(signal);
       ingredientsQuery = ingredientsQuery.abortSignal(signal);
       aliasesQuery = aliasesQuery.abortSignal(signal);
       relationsQuery = relationsQuery.abortSignal(signal);
+      profilesQuery = profilesQuery.abortSignal(signal);
     }
 
-    const [recipesResult, ingredientsResult, aliasesResult, relationsResult] =
+    const [recipesResult, ingredientsResult, aliasesResult, relationsResult, profilesResult] =
       await Promise.all([
         recipesQuery,
         ingredientsQuery,
         aliasesQuery,
         relationsQuery,
+        profilesQuery,
       ]);
 
     if (
@@ -247,8 +252,6 @@ export class SupabaseRecipeRepository implements RecipeRepository {
     }
 
     // Additive rollout: an older database may not expose the new table yet.
-    const profilesResult = await this.client.from("meal_mix_profiles")
-      .select("profile,status,recipe_id,product_id,brand,products(name,sku)");
     if (profilesResult.error && !["42P01", "PGRST205"].includes(profilesResult.error.code)) throw new RecipeReadError("recipes-unavailable");
     const mealMixProfiles = (profilesResult.data ?? []).flatMap((row) => {
       const profile = row.profile as MealMixProfile | null;

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseMealMixSource, matchingExistingMixProfile } from "../apps/web/src/server/meal-mix-source.ts";
-import { maintainMealMixProfiles, MEAL_MIX_PARSER_VERSION } from "../src/meal-mix-profile-maintenance.mjs";
+import { maintainMealMixProfiles, refreshStaleMealMixCaches, MEAL_MIX_PARSER_VERSION } from "../src/meal-mix-profile-maintenance.mjs";
 
 const product = { id: "product", sku: "123456789", name: "Honig Basis voor testpasta", brand: "Honig",
   package_text: "41 gram", source_url: "https://www.hoogvliet.com/product/honig-testpasta", category: "Maaltijdmixen" };
@@ -31,6 +31,14 @@ test("fails closed for missing pack contents, missing units and conflicting serv
   assert.equal(parseMealMixSource(source("voor 4 porties. Zelf toevoegen: Nasi groentepakket (450 g) 125 taugé 3 bosuiVoorbereiding:")).status, "needs_review");
   assert.equal(parseMealMixSource(source("voor 4 porties. voor 3 personen. Zelf toevoegen\n300 g pasta\nAlgemene bereidingswijze")).reason, "servings_conflict");
   assert.equal(parseMealMixSource({ ...source("voor 4 porties"), title: "Ander product" }).reason, "source_identity_mismatch");
+});
+
+test("preserves explicitly declared frozen form without inventing package contents", () => {
+  const parsed = parseMealMixSource(source("voor 4 porties. Zelf toevoegen\n200 g spinazie (diepvries)\nAlgemene bereidingswijze\n20 min"));
+  assert.equal(parsed.status, "verified");
+  assert.deepEqual(parsed.profile.supplements.map(({ name, quantity, unit }) => ({ name, quantity, unit })),
+    [{ name: "spinazie diepvries", quantity: 200, unit: "g" }]);
+  assert.equal(parseMealMixSource(source("voor 4 porties. Zelf toevoegen\n1 blikje spinazie (diepvries)\nAlgemene bereidingswijze")).status, "needs_review");
 });
 
 test("a completed profile with an interrupted cache refresh resumes without fetching or creating duplicates", async () => {
@@ -86,4 +94,40 @@ test("a concurrent catalog change prevents publication of stale source data", as
   }, readSource: async () => source("voor 4 personen. Zelf toevoegen\n300 g pasta\nAlgemene bereidingswijze\n20 min"), refreshRecipes: async () => { refreshed = true; } });
   assert.equal(result[0].status, "changed_during_fetch");
   assert.equal(refreshed, false);
+});
+
+test("price invalidation and expiry refresh only affected verified profiles without source/product writes", async () => {
+  const now = new Date("2026-09-21T10:00:00Z");
+  const profiles = ["untouched", "pending", "expired", "missing"].map((id) => ({ product_id: id, recipe_id: id, updated_at: "snapshot" }));
+  const rows = profiles.flatMap(({ recipe_id }) => Array.from({ length: 10 }, (_, n) => ({
+    recipe_id, people_count: n + 1, refresh_status: recipe_id === "pending" && n === 3 ? "pending" : "current",
+    invalidated_at: recipe_id === "pending" && n === 3 ? now.toISOString() : null,
+    expires_at: recipe_id === "expired" ? "2026-09-20T10:00:00Z" : "2026-09-22T10:00:00Z",
+  }))).filter((row) => row.recipe_id !== "missing" || row.people_count !== 10);
+  const writes = [];
+  const refreshed = [];
+  const api = async (table, query, options) => {
+    if (options) {
+      assert.equal(table, "meal_mix_profiles");
+      assert.equal(query.updated_at, "eq.snapshot");
+      writes.push(query.product_id);
+      return [{}];
+    }
+    if (table === "meal_mix_profiles") { assert.equal(query.status, "eq.verified"); return profiles; }
+    assert.equal(table, "recipe_readiness_cache");
+    return rows;
+  };
+  const refreshRecipes = async ([id]) => {
+    refreshed.push(id);
+    for (let people = 1; people <= 10; people++) {
+      let row = rows.find((r) => r.recipe_id === id && r.people_count === people);
+      if (!row) { row = { recipe_id: id, people_count: people }; rows.push(row); }
+      Object.assign(row, { refresh_status: "current", invalidated_at: null, expires_at: "2026-09-22T10:00:00Z" });
+    }
+  };
+  assert.deepEqual(await refreshStaleMealMixCaches({ api, refreshRecipes, now, limit: 2 }), ["pending", "expired"]);
+  assert.deepEqual(await refreshStaleMealMixCaches({ api, refreshRecipes, now }), ["missing"]);
+  assert.deepEqual(await refreshStaleMealMixCaches({ api, refreshRecipes, now }), []);
+  assert.deepEqual(refreshed, ["pending", "expired", "missing"]);
+  assert.equal(writes.length, 3);
 });

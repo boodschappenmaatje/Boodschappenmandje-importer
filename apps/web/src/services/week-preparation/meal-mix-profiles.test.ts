@@ -23,6 +23,14 @@ import type { WeekIngredientRequirement } from "@/types/week-preparation";
 
 const NOW = "2026-09-15T12:00:00.000Z";
 
+it("behoudt een expliciete diepvries-eis ook bij een generieke zoekalias", () => {
+  const ingredient = { id: "frozen-spinach", sourceKey: "frozen-spinach", name: "spinazie diepvries",
+    normalizedName: "spinazie diepvries", defaultUnit: "g", category: "Groente", aliases: ["spinazie"] };
+  const fresh = product({ id: "fresh", sku: "fresh", name: "Spinazie", category: "Groente/Bladgroente", productType: "Groente" });
+  expect(isReliableIngredientMatch(ingredient, fresh)).toBe(false);
+  expect(isReliableIngredientMatch(ingredient, { ...fresh, id: "frozen", sku: "frozen", category: "Diepvries/Groente" })).toBe(true);
+});
+
 function product(input: Partial<Product> & Pick<Product, "id" | "sku" | "name">): Product {
   return {
     supermarket: "Hoogvliet",
