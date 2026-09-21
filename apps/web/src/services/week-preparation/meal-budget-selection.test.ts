@@ -296,6 +296,8 @@ describe("budgetbewuste READY-receptselectie", () => {
     });
   });
 
+  // Four full fixture generations measure cache reuse, not a wall-clock SLA.
+  // Allow slower CI/dev hosts to reach the assertions without changing them.
   it("meet een volledige cache-hit zonder onbetrouwbare harde tijdslimiet", async () => {
     const definitions = Array.from({ length: 28 }, (_, index) => ({
       id: `pasta-performance-${index}`,
@@ -365,7 +367,7 @@ describe("budgetbewuste READY-receptselectie", () => {
       readinessMs: 0,
       selectionMs: 0,
     });
-  });
+  }, 30_000);
 
   it("hergebruikt READY, matches, verpakking en prijzen wanneer alleen het maaltijd-budget verandert", async () => {
     let searches = 0;
