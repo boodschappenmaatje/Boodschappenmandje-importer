@@ -237,7 +237,7 @@ export async function loadCatalog(client: SupabaseClient): Promise<RecipeCatalog
   const loaded = await new SupabaseRecipeRepository(client).loadCatalog();
   return {
     ...loaded,
-    ingredients: enrichIngredientsForMealMixes(loaded.ingredients),
+    ingredients: enrichIngredientsForMealMixes(loaded.ingredients, loaded.mealMixProfiles),
   };
 }
 

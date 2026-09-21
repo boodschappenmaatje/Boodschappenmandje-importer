@@ -267,11 +267,18 @@ export function enrichIngredientsForMealMixes(
       });
     }
     for (const item of profile.supplements) {
+      // Hoogvliet labels these fresh vegetable mixes "Italiaanse roerbak".
+      // Keep the package ingredient unchanged; the regular matcher still checks
+      // product category, preparation form, price and purchasable quantity.
+      const aliases = [...new Set([...item.aliases,
+        ...(item.category === "Groente" && /^italiaans[e]? (?:groentepakket|groentemix|roerbakmix|roerbakgroenten|wokgroenten)$/i.test(item.name.trim())
+          ? ["Italiaanse roerbak"] : []),
+      ])];
       const existing = bySourceKey.get(item.sourceKey);
       if (existing) {
         bySourceKey.set(item.sourceKey, {
           ...existing,
-          aliases: [...new Set([...existing.aliases, ...item.aliases])],
+          aliases: [...new Set([...existing.aliases, ...aliases])],
         });
       } else {
         bySourceKey.set(item.sourceKey, {
@@ -281,7 +288,7 @@ export function enrichIngredientsForMealMixes(
           normalizedName: item.name.toLocaleLowerCase("nl-NL"),
           defaultUnit: item.unit,
           category: item.category,
-          aliases: item.aliases,
+          aliases,
         });
       }
     }

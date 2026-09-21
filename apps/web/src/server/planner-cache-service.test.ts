@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { SupabaseRecipeRepository } from "@/services/week-preparation/recipe-repository";
+import { MEAL_MIX_PROFILES, enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 
 import {
   PLANNER_MAINTENANCE_PEOPLE_COUNTS,
+  loadCatalog,
   planPlannerReadinessMaintenance,
   type PlannerReadinessStateRow,
 } from "@/server/planner-cache-service";
@@ -23,6 +27,17 @@ function currentRow(
 }
 
 describe("planner-cache automatisch onderhoud", () => {
+  it("behoudt de exacte geverifieerde catalogusvariant bij serveronderhoud", async () => {
+    const profile = { ...MEAL_MIX_PROFILES[0], productId: "exact-catalog-product", servingsPerPackage: 3 };
+    const ingredients = enrichIngredientsForMealMixes([], [profile]);
+    const read = vi.spyOn(SupabaseRecipeRepository.prototype, "loadCatalog").mockResolvedValue({
+      recipes: [], relations: [], ingredients, mealMixProfiles: [profile],
+    });
+    try {
+      const loaded = await loadCatalog({} as SupabaseClient);
+      expect(loaded.ingredients.find(item => item.sourceKey === profile.productIngredientSourceKey)?.productId).toBe(profile.productId);
+    } finally { read.mockRestore(); }
+  });
   it("bouwt voor één nieuw recept alleen dat recept voor 1–10 op", () => {
     const existing = PLANNER_MAINTENANCE_PEOPLE_COUNTS.map((people) =>
       currentRow("existing", people),

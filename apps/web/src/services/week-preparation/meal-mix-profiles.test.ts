@@ -23,6 +23,20 @@ import type { WeekIngredientRequirement } from "@/types/week-preparation";
 
 const NOW = "2026-09-15T12:00:00.000Z";
 
+it.each(["Italiaanse groentemix", "Italiaans groentepakket", "Italiaanse roerbakmix", "Italiaanse wokgroenten"])("herkent de catalogusnaam Italiaanse roerbak voor %s zonder andere gerechten toe te laten", (name) => {
+  const base = MEAL_MIX_PROFILES[0];
+  const profile = { ...base, supplements: [{ sourceKey: "italian-vegetables", name, aliases: [name], category: "Groente", quantity: 400, unit: "g" as const }] };
+  const ingredient = enrichIngredientsForMealMixes([], [profile]).find(item => item.sourceKey === "italian-vegetables")!;
+  const vegetables = product({ id: "italian", sku: "italian", name: "Italiaanse roerbak", category: "Aardappelen, groente, fruit/Groente/Groentemixen", productType: "Aardappelen", packageText: "400 gram" });
+  expect(isReliableIngredientMatch(ingredient, vegetables)).toBe(true);
+  for (const wrong of [
+    { name: "Oosterse roerbak" },
+    { name: "Italiaanse roerbak saus", category: "Sauzen" },
+    { name: "Italiaanse roerbak maaltijd", category: "Maaltijden" },
+  ]) expect(isReliableIngredientMatch(ingredient, { ...vegetables, ...wrong })).toBe(false);
+  expect(profile.supplements[0].aliases).toEqual([name]);
+});
+
 it("behoudt een expliciete diepvries-eis ook bij een generieke zoekalias", () => {
   const ingredient = { id: "frozen-spinach", sourceKey: "frozen-spinach", name: "spinazie diepvries",
     normalizedName: "spinazie diepvries", defaultUnit: "g", category: "Groente", aliases: ["spinazie"] };
