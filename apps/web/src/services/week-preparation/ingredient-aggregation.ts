@@ -157,7 +157,7 @@ export function aggregateWeekIngredients(
           ingredient.id,
           ingredient.sourceKey,
           supplement.name,
-          (supplement.quantity * numberOfPeople) / mealMix.servingsPerPackage,
+          (supplement.quantity * numberOfPeople) / (mealMix.supplementServings ?? mealMix.servingsPerPackage),
           supplement.unit,
           "ingredient",
           null,

@@ -89,9 +89,16 @@ function categoryConflicts(
   const categorySegments = product.category?.split("/") ?? [];
   const categorySpecificSegments =
     categorySegments.length > 1 ? categorySegments.slice(1) : categorySegments;
-  const contextWithoutProductType = normalize(
+  let contextWithoutProductType = normalize(
     [product.name, categorySegments.at(-1)].filter(Boolean).join(" "),
   );
+  // For meal-mix frozen spinach, "fijn/grof gehakt" describes chopping,
+  // not minced meat. Keep every other category and preparation-form check.
+  if (ingredient.sourceKey.startsWith("mix-supplement-") &&
+      normalize(ingredient.name) === "spinazie diepvries" &&
+      /diepvries/i.test(product.category ?? "") && /spinazie/i.test(product.name)) {
+    contextWithoutProductType = contextWithoutProductType.replace(/\b(?:fijn|grof) gehakt\b/g, "");
+  }
   const productSpecificClassification = normalize(
     [
       product.name,
@@ -193,6 +200,14 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
   const required = normalize(ingredient.name);
   const name = normalize(product.name);
   // Discovery aliases must not erase explicit recipe properties.
+  if (ingredient.sourceKey.startsWith("mix-supplement-")) {
+    const context = normalize(`${product.name} ${product.category}`);
+    if (/baby|peuter|dreumes|bonbebe|\bmaanden\b/.test(context)) return false;
+    if (required === "appel" && /moes|compote|conserven|gedroogd|sap/.test(context)) return false;
+    // Fresh vegetables used in these package recipes are not cooked preserves.
+    if (/^(kastanjechampignons|champignons|wortel|wortels)$/.test(required) &&
+        /conserven|potgroente|blikgroente/.test(context)) return false;
+  }
   if (/\bdiepvries\b/.test(required) && !/\bdiepvries\b/.test(normalize(`${product.name} ${product.category}`))) return false;
   if (/drogisterij|lichaamsverzorging|haarverzorging|schoonmaak|huishoudelijk|dierenvoeding/.test(normalize(product.category))) return false;
   if (/\b(?:bad|douche|massage|shampoo|zeep|bodylotion)\b/.test(name)) return false;

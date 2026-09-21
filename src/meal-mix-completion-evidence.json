@@ -1,0 +1,144 @@
+[
+  {
+    "sku": "730051000",
+    "servings": 4,
+    "preparationMinutes": 25,
+    "url": "https://www.plus.nl/product/knorr-maaltijdmix-kebab-stazak-30-g-417907",
+    "evidence": "30 g; 3–4 personen; bereidingstijd 25 minuten. Zelf toevoegen: rode ui, komkommer, ijsbergsla, kipfilet 400 g, pita 400 g, olie 1 el.",
+    "items": [
+      [
+        1,
+        "piece",
+        "rode ui",
+        "Groente"
+      ],
+      [
+        1,
+        "piece",
+        "komkommer",
+        "Groente"
+      ],
+      [
+        1,
+        "piece",
+        "ijsbergsla",
+        "Groente"
+      ],
+      [
+        400,
+        "g",
+        "kipfilet",
+        "Vlees"
+      ],
+      [
+        400,
+        "g",
+        "pitabroodjes",
+        "Brood"
+      ],
+      [
+        15,
+        "ml",
+        "olie",
+        "Sauzen & smaakmakers"
+      ]
+    ],
+    "preparationFingerprint": "d24700178fe11f1a5c167bd9fd7cf66df6d2aeb419f43b163a9700e2706608d2",
+    "productId": "29da05dd-8ee6-4aeb-a87b-1b7756af7c3b",
+    "productName": "Knorr Maaltijdmix kebab",
+    "packageText": "30 gram"
+  },
+  {
+    "sku": "704893000",
+    "servings": 3,
+    "preparationMinutes": 40,
+    "url": "https://www.jumbo.com/producten/knorr-wereldgerechten-maaltijdpakket-italiaanse-risotto-257-g-513922DS",
+    "evidence": "Exacte 257 g verpakking: 2–3 personen; 225 g kipfilet, 2 uien, 250 g champignons, courgette, prei, olie 2 el. Bereiding: 10 minuten marineren, 3 minuten groenten, 17 minuten koken.",
+    "items": [
+      [
+        225,
+        "g",
+        "kipfilet",
+        "Vlees"
+      ],
+      [
+        2,
+        "piece",
+        "uien",
+        "Groente"
+      ],
+      [
+        250,
+        "g",
+        "champignons",
+        "Groente"
+      ],
+      [
+        1,
+        "piece",
+        "courgette",
+        "Groente"
+      ],
+      [
+        1,
+        "piece",
+        "prei",
+        "Groente"
+      ],
+      [
+        30,
+        "ml",
+        "olie",
+        "Sauzen & smaakmakers"
+      ]
+    ],
+    "preparationFingerprint": "bbd94d4e32affee41e066a5973acfe142b34b4f8d86bc613f775f71ce603668f",
+    "productId": "6e1f5818-c230-44d2-9d56-d3daa5fa7317",
+    "productName": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+    "packageText": "257 gram"
+  },
+  {
+    "sku": "665854000",
+    "servings": 8,
+    "supplementServings": 4,
+    "preparationMinutes": 10,
+    "url": "https://www.ah.nl/producten/product/wi122943/honig-mix-voor-boerenomelet",
+    "evidence": "38 g; 2 zakjes × 4 porties = 8 porties per doos. Boodschappenlijst geldt voor 1 zakje: 6 eieren, 1 ui, 125 g (kastanje)champignons, 4 sneetjes volkorenbrood, 2 el olijfolie. Geen gewicht voor brood verzonnen.",
+    "items": [
+      [
+        6,
+        "piece",
+        "eieren",
+        "Zuivel & eieren"
+      ],
+      [
+        1,
+        "piece",
+        "ui",
+        "Groente"
+      ],
+      [
+        125,
+        "g",
+        "kastanjechampignons",
+        "Groente"
+      ],
+      [
+        4,
+        "piece",
+        "sneetjes volkoren brood",
+        "Brood"
+      ],
+      [
+        30,
+        "ml",
+        "olijfolie",
+        "Sauzen & smaakmakers"
+      ]
+    ],
+    "preparationFingerprint": "d24dedc1b1865fb5c4e110b4523afb834a544b72ed02e2fee8f2a568cc854677",
+    "productId": "672987fb-3486-4a58-8db4-bbe1cc781518",
+    "productName": "Honig Mix voor boerenomelet",
+    "packageText": "38 gram"
+  }
+]

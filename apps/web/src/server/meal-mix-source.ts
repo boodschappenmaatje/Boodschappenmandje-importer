@@ -23,6 +23,8 @@ export interface MealMixCorroboration {
   sourceUrl: string;
   evidence: string;
   servings?: number;
+  supplementServings?: number;
+  preparationMinutes?: number;
   replacements?: [string, string][];
   supplementList?: string;
   waterOnly?: boolean;
@@ -86,7 +88,7 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
       if (!text.includes(from)) return fail("corroboration_text_changed");
       text = text.replace(from, to);
     }
-    if (corroboration.supplementList) text += `\nZelf toevoegen\n${corroboration.supplementList}\nAlgemene bereidingswijze\n`;
+    if (corroboration.supplementList) text = `Zelf toevoegen\n${corroboration.supplementList}\nAlgemene bereidingswijze\n${text}`;
   }
   const brand = /^honig\b/i.test(source.product.name) ? "Honig" : "Knorr";
   const servingMatches = [...text.matchAll(/(?:voor|geschikt voor)\s+(?:(\d+)\s*(?:tot|à|a|[-–])\s*)?(\d+)\s*(?:personen|porties)\b/gi)];
@@ -144,7 +146,7 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
     if (/\b(?:blikje?|pak|zak|bosje)\b|[()]/i.test(name)) return fail(`supplement_content_missing:${normalize(original)}`);
     if (/\d+\s+(?:g|gram|ml|kg|bosui)\b/i.test(name)) return fail(`supplement_ambiguous:${normalize(original)}`);
     if (!quantity || !name) return fail("supplement_invalid");
-    if (unit === "piece" && !/^(?:rode |gele |groene )?(?:ui(?:en)?|bosui|lente[- ]ui|paprika['’]?s?|courgette|prei|broccoli|komkommer|tomaten?|eieren|ijsbergsla|lasagnebladen|appel|rookworst)$/i.test(name)) return fail(`supplement_unit_missing:${normalize(original)}`);
+    if (unit === "piece" && !/^(?:rode |gele |groene )?(?:ui(?:en)?|bosui|lente[- ]ui|paprika['’]?s?|courgette|prei|broccoli|komkommer|tomaten?|eieren|ijsbergsla|lasagnebladen|appel|citroen|rookworst|sneetjes volkoren brood)$/i.test(name)) return fail(`supplement_unit_missing:${normalize(original)}`);
     const normalized = normalize(name);
     const aliases = [name];
     if (/\bui\b/.test(normalized)) aliases.push(name.replace(/ui\b/i, "uien"));
@@ -167,6 +169,8 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
     productIngredientSourceKey: `catalog-mix-product-${source.product.sku}`,
     productId: source.product.id, productName: source.product.name, productAliases: [source.product.name],
     servingsPerPackage: servings[0], supplements, sourceUrl: source.sourceUrl, verificationStatus: "verified",
+    ...(corroboration?.supplementServings ? { supplementServings: corroboration.supplementServings } : {}),
+    ...(corroboration?.preparationMinutes ? { preparationMinutes: corroboration.preparationMinutes } : {}),
     ...(corroboration?.waterOnly ? { waterOnly: true } : {}),
   } };
 }

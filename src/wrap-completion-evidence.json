@@ -1,0 +1,55 @@
+{
+  "sku": "070523000",
+  "servings": 4,
+  "preparationMinutes": 25,
+  "url": "https://www.ah.nl/producten/product/wi584828/honig-familie-maaltijdpakket-oosterse-wraps",
+  "evidence": "357 g, 4 porties. AH en PLUS geven dezelfde volledige lijst voor dit maaltijdpakket; de onvolledige Hoogvliet-tekst wordt aangevuld. 300 g kip, 450 g nasi/bami groenten, paprika 1, komkommer 0.5, citroen 1, Griekse yoghurt 250 g, olijfolie 2 el. Water niet inkopen. AH noemt 25 minuten inclusief oven; 20 minuten staat onder gebruik.",
+  "items": [
+    [
+      300,
+      "g",
+      "kipfilet",
+      "Vlees"
+    ],
+    [
+      450,
+      "g",
+      "nasi/bami groenten",
+      "Groente"
+    ],
+    [
+      1,
+      "piece",
+      "rode paprika",
+      "Groente"
+    ],
+    [
+      0.5,
+      "piece",
+      "komkommer",
+      "Groente"
+    ],
+    [
+      1,
+      "piece",
+      "citroen",
+      "Fruit"
+    ],
+    [
+      250,
+      "g",
+      "Griekse yoghurt",
+      "Zuivel & eieren"
+    ],
+    [
+      30,
+      "ml",
+      "olijfolie",
+      "Sauzen & smaakmakers"
+    ]
+  ],
+  "preparationFingerprint": "76828e95867a5d89af075c8dc7e36849818ecc1ea90ae8fb7ce533175426a1ed",
+  "productId": "9c5828c0-62a0-4197-9c91-d89ee85ea927",
+  "productName": "Honig Familiegerecht Oosterse wraps",
+  "packageText": "357 gram"
+}

@@ -1,11 +1,32 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { mealMixCorroborationFor } from "../src/meal-mix-reviewed-evidence.mjs";
 import { parseMealMixSource, matchingExistingMixProfile, mealMixPreparationFingerprint } from "../apps/web/src/server/meal-mix-source.ts";
 import { maintainMealMixProfiles, refreshStaleMealMixCaches, MEAL_MIX_PARSER_VERSION } from "../src/meal-mix-profile-maintenance.mjs";
 
 const product = { id: "product", sku: "123456789", name: "Honig Basis voor testpasta", brand: "Honig",
   package_text: "41 gram", source_url: "https://www.hoogvliet.com/product/honig-testpasta", category: "Maaltijdmixen" };
 const source = (text) => ({ product, title: product.name, text, sourceUrl: product.source_url, fetchedAt: "2026-09-20T12:00:00Z" });
+
+test("the four completed profiles use exact SKU/pack/source evidence, including the two-sachet omelette", () => {
+  const sources = JSON.parse(readFileSync(new URL('./fixtures/meal-mix-completion-sources.json', import.meta.url)));
+  sources.push(JSON.parse(readFileSync(new URL('./fixtures/wrap-completion-source.json', import.meta.url))));
+  for (const snapshot of sources) {
+    const evidence = mealMixCorroborationFor(snapshot.product);
+    const parsed = parseMealMixSource(snapshot, [], evidence);
+    assert.equal(parsed.status, 'verified', snapshot.product.name);
+    assert.ok(parsed.profile.supplements.length >= 5);
+    assert.equal(mealMixCorroborationFor({...snapshot.product, package_text:'999 gram'}), undefined);
+    assert.equal(parseMealMixSource({...snapshot,text:snapshot.text.replace('Bereidingswijze:','Bereidingswijze: gewijzigde receptuur')},[],evidence).status,'needs_review');
+    if(snapshot.product.sku==='665854000') {
+      assert.equal(parsed.profile.servingsPerPackage,8);
+      assert.equal(parsed.profile.supplementServings,4);
+      assert.equal(parsed.profile.supplements.find(i=>i.name==='eieren').quantity,6);
+    }
+    if(snapshot.product.sku==='070523000') assert.equal(parsed.profile.supplements.find(i=>i.name==='kipfilet').quantity,300);
+  }
+});
 
 test("supplement aliases retain the exact vegetable and classify ham without misclassifying mushrooms", () => {
   const result = parseMealMixSource(source("Voor 4 personen. Zelf toevoegen\n125 g achterham\n250 g champignons\n250 g cherrytomaten\n200 g doperwten\nAlgemene bereidingswijze\n20 min"));

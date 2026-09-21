@@ -1,0 +1,2789 @@
+[
+  {
+    "brand": "Honig",
+    "dishName": "Honig Bakplaat mix boontjes & gehaktballetjes",
+    "productId": "4a6d640b-699c-487d-8550-363f845cb12f",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-bakplaat-mix-boontjes-gehaktballetjes",
+    "productName": "Honig Bakplaat mix boontjes & gehaktballetjes",
+    "supplements": [
+      {
+        "name": "voorgekookte mini krieltjes",
+        "unit": "g",
+        "aliases": [
+          "voorgekookte mini krieltjes"
+        ],
+        "category": "Aardappel & zetmeel",
+        "quantity": 600,
+        "sourceKey": "mix-supplement-voorgekookte-mini-krieltjes"
+      },
+      {
+        "name": "sperziebonen",
+        "unit": "g",
+        "aliases": [
+          "sperziebonen"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-sperziebonen"
+      },
+      {
+        "name": "cherrytomaatjes",
+        "unit": "g",
+        "aliases": [
+          "cherrytomaatjes",
+          "cherrytomaten",
+          "cherry tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-cherrytomaatjes"
+      },
+      {
+        "name": "rode uien",
+        "unit": "piece",
+        "aliases": [
+          "rode uien"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-rode-uien"
+      },
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Bakplaat mix boontjes & gehaktballetjes"
+    ],
+    "recipeSourceKey": "catalog-mix-731727000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-731727000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Bakplaat mix broccoli & rundervink",
+    "productId": "0b8a31f4-00f4-4172-a362-d60878c0e52c",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-bakplaat-mix-broccoli-rundervink",
+    "productName": "Honig Bakplaat mix broccoli & rundervink",
+    "supplements": [
+      {
+        "name": "voorgekookte krieltjes",
+        "unit": "g",
+        "aliases": [
+          "voorgekookte krieltjes"
+        ],
+        "category": "Aardappel & zetmeel",
+        "quantity": 600,
+        "sourceKey": "mix-supplement-voorgekookte-krieltjes"
+      },
+      {
+        "name": "broccoli",
+        "unit": "g",
+        "aliases": [
+          "broccoli"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-broccoli"
+      },
+      {
+        "name": "rode paprika's",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika's",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-rode-paprika-s"
+      },
+      {
+        "name": "tomaten",
+        "unit": "piece",
+        "aliases": [
+          "tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-tomaten"
+      },
+      {
+        "name": "rode ui",
+        "unit": "piece",
+        "aliases": [
+          "rode ui",
+          "rode uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-ui"
+      },
+      {
+        "name": "rundervinken",
+        "unit": "g",
+        "aliases": [
+          "rundervinken"
+        ],
+        "category": "Vlees",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-rundervinken"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Bakplaat mix broccoli & rundervink"
+    ],
+    "recipeSourceKey": "catalog-mix-731728000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-731728000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Bakplaat mix courgette & kip",
+    "productId": "59c003eb-9d19-477c-82f2-8624355b316b",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-bakplaat-mix-courgette-kip",
+    "productName": "Honig Bakplaat mix courgette & kip",
+    "supplements": [
+      {
+        "name": "voorgekookte aardappelpartjes",
+        "unit": "g",
+        "aliases": [
+          "voorgekookte aardappelpartjes"
+        ],
+        "category": "Aardappel & zetmeel",
+        "quantity": 500,
+        "sourceKey": "mix-supplement-voorgekookte-aardappelpartjes"
+      },
+      {
+        "name": "courgette",
+        "unit": "piece",
+        "aliases": [
+          "courgette"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-courgette"
+      },
+      {
+        "name": "wortels",
+        "unit": "g",
+        "aliases": [
+          "wortels"
+        ],
+        "category": "Groente",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-wortels"
+      },
+      {
+        "name": "tomaten",
+        "unit": "piece",
+        "aliases": [
+          "tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-tomaten"
+      },
+      {
+        "name": "rode ui",
+        "unit": "piece",
+        "aliases": [
+          "rode ui",
+          "rode uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-ui"
+      },
+      {
+        "name": "kipdijfilet",
+        "unit": "g",
+        "aliases": [
+          "kipdijfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 350,
+        "sourceKey": "mix-supplement-kipdijfilet"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Bakplaat mix courgette & kip"
+    ],
+    "recipeSourceKey": "catalog-mix-731729000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-731729000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor bami speciaal",
+    "productId": "310700d2-7524-4199-bf64-ec0a9087682b",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-bami-speciaal1",
+    "productName": "Honig Basis voor bami speciaal",
+    "supplements": [
+      {
+        "name": "Mie Nestjes",
+        "unit": "g",
+        "aliases": [
+          "Mie Nestjes"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-mie-nestjes"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "nasi/bami groenten",
+        "unit": "g",
+        "aliases": [
+          "nasi/bami groenten",
+          "nasi bami groente",
+          "nasi bami groenten",
+          "bamigroenten"
+        ],
+        "category": "Groente",
+        "quantity": 450,
+        "sourceKey": "mix-supplement-nasi-bami-groenten"
+      },
+      {
+        "name": "paprika",
+        "unit": "piece",
+        "aliases": [
+          "paprika",
+          "paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-paprika"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor bami speciaal"
+    ],
+    "recipeSourceKey": "catalog-mix-718160000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-718160000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor chili con carne",
+    "productId": "4bedda2b-5771-4175-8c76-6e8ebe5d78e4",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-chili-con-carne",
+    "productName": "Honig Basis voor chili con carne",
+    "supplements": [
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "rode paprika",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-paprika"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "tomaten",
+        "unit": "piece",
+        "aliases": [
+          "tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 4,
+        "sourceKey": "mix-supplement-tomaten"
+      },
+      {
+        "name": "Hollandse bruine bonen",
+        "unit": "g",
+        "aliases": [
+          "Hollandse bruine bonen"
+        ],
+        "category": "Groente",
+        "quantity": 680,
+        "sourceKey": "mix-supplement-hollandse-bruine-bonen"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor chili con carne"
+    ],
+    "recipeSourceKey": "catalog-mix-718350000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-718350000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor hachee",
+    "productId": "f5d962bc-2ac8-40b0-93ff-6f7735e99be9",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-hachee",
+    "productName": "Honig Basis voor hachee",
+    "supplements": [
+      {
+        "name": "hacheevlees",
+        "unit": "g",
+        "aliases": [
+          "hacheevlees"
+        ],
+        "category": "Vlees",
+        "quantity": 500,
+        "sourceKey": "mix-supplement-hacheevlees"
+      },
+      {
+        "name": "uien",
+        "unit": "piece",
+        "aliases": [
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 4,
+        "sourceKey": "mix-supplement-uien"
+      },
+      {
+        "name": "wortel",
+        "unit": "g",
+        "aliases": [
+          "wortel"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-wortel"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 45,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor hachee"
+    ],
+    "recipeSourceKey": "catalog-mix-181595000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-181595000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor italiaanse kruidensaus",
+    "productId": "78e62bfa-e210-48ae-b839-01dc5769efaf",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-italiaanse-kruidensaus1",
+    "productName": "Honig Basis voor italiaanse kruidensaus",
+    "supplements": [
+      {
+        "name": "Spaghetti Original",
+        "unit": "g",
+        "aliases": [
+          "Spaghetti Original"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-spaghetti-original"
+      },
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "Provençaalse wokgroenten",
+        "unit": "g",
+        "aliases": [
+          "Provençaalse wokgroenten"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-provencaalse-wokgroenten"
+      },
+      {
+        "name": "cherrytomaatjes",
+        "unit": "g",
+        "aliases": [
+          "cherrytomaatjes",
+          "cherrytomaten",
+          "cherry tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-cherrytomaatjes"
+      },
+      {
+        "name": "rode paprika",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-paprika"
+      },
+      {
+        "name": "verse basilicum",
+        "unit": "ml",
+        "aliases": [
+          "verse basilicum"
+        ],
+        "category": "Groente",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-verse-basilicum"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor italiaanse kruidensaus"
+    ],
+    "recipeSourceKey": "catalog-mix-718363000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-718363000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor lasagnesaus",
+    "productId": "473b743f-e3ed-417d-9414-a74c9f779d96",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-lasagnesaus",
+    "productName": "Honig Basis voor lasagnesaus",
+    "supplements": [
+      {
+        "name": "lasagnebladen",
+        "unit": "g",
+        "aliases": [
+          "lasagnebladen"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-lasagnebladen"
+      },
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "Italiaanse roerbakmix",
+        "unit": "g",
+        "aliases": [
+          "Italiaanse roerbakmix",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-italiaanse-roerbakmix"
+      },
+      {
+        "name": "cherrytomaatjes",
+        "unit": "g",
+        "aliases": [
+          "cherrytomaatjes",
+          "cherrytomaten",
+          "cherry tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-cherrytomaatjes"
+      },
+      {
+        "name": "halfvolle melk",
+        "unit": "ml",
+        "aliases": [
+          "halfvolle melk"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 500,
+        "sourceKey": "mix-supplement-halfvolle-melk"
+      },
+      {
+        "name": "geraspte kaas",
+        "unit": "g",
+        "aliases": [
+          "geraspte kaas",
+          "geraspte kaas"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 50,
+        "sourceKey": "mix-supplement-geraspte-kaas"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor lasagnesaus"
+    ],
+    "recipeSourceKey": "catalog-mix-070520000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-070520000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor macaroni en spaghetti",
+    "productId": "58e1cebd-d9d3-43be-956a-8dfce8debf48",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-macaroni-en-spaghetti",
+    "productName": "Honig Basis voor macaroni en spaghetti",
+    "supplements": [
+      {
+        "name": "Macaroni",
+        "unit": "g",
+        "aliases": [
+          "Macaroni"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-macaroni"
+      },
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "Italiaanse wokgroenten",
+        "unit": "g",
+        "aliases": [
+          "Italiaanse wokgroenten",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 600,
+        "sourceKey": "mix-supplement-italiaanse-wokgroenten"
+      },
+      {
+        "name": "cherrytomaatjes",
+        "unit": "g",
+        "aliases": [
+          "cherrytomaatjes",
+          "cherrytomaten",
+          "cherry tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-cherrytomaatjes"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor macaroni en spaghetti"
+    ],
+    "recipeSourceKey": "honig-macaroni",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-070519000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor macaronisaus stroganoff",
+    "productId": "fff35ad4-4f78-49d8-86fc-12b6a3e55692",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-macaronisaus-stroganoff",
+    "productName": "Honig Basis voor macaronisaus stroganoff",
+    "supplements": [
+      {
+        "name": "Macaroni",
+        "unit": "g",
+        "aliases": [
+          "Macaroni"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-macaroni"
+      },
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "Provençaalse wokgroenten",
+        "unit": "g",
+        "aliases": [
+          "Provençaalse wokgroenten"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-provencaalse-wokgroenten"
+      },
+      {
+        "name": "kastanjechampignons",
+        "unit": "g",
+        "aliases": [
+          "kastanjechampignons",
+          "kastanje champignons"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-kastanjechampignons"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor macaronisaus stroganoff"
+    ],
+    "recipeSourceKey": "catalog-mix-182737000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-182737000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor nasi speciaal",
+    "productId": "b22425e8-f438-44ca-9ed4-0cffe9018c18",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-nasi-speciaal",
+    "productName": "Honig Basis voor nasi speciaal",
+    "supplements": [
+      {
+        "name": "rijst",
+        "unit": "g",
+        "aliases": [
+          "rijst"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rijst"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "nasi/bami groenten",
+        "unit": "g",
+        "aliases": [
+          "nasi/bami groenten",
+          "nasi bami groente",
+          "nasi bami groenten",
+          "bamigroenten"
+        ],
+        "category": "Groente",
+        "quantity": 450,
+        "sourceKey": "mix-supplement-nasi-bami-groenten"
+      },
+      {
+        "name": "rode paprika",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-paprika"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor nasi speciaal"
+    ],
+    "recipeSourceKey": "honig-nasi-speciaal",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-070517000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor roerbakmie",
+    "productId": "48f15669-47ed-40fb-924f-77f03552cfa3",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-roerbakmie",
+    "productName": "Honig Basis voor roerbakmie",
+    "supplements": [
+      {
+        "name": "Roerbakmie",
+        "unit": "g",
+        "aliases": [
+          "Roerbakmie"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-roerbakmie"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "Oosterse wokgroenten",
+        "unit": "g",
+        "aliases": [
+          "Oosterse wokgroenten"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-oosterse-wokgroenten"
+      },
+      {
+        "name": "kastanjechampignons",
+        "unit": "g",
+        "aliases": [
+          "kastanjechampignons",
+          "kastanje champignons"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-kastanjechampignons"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor roerbakmie"
+    ],
+    "recipeSourceKey": "catalog-mix-132802000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-132802000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor spaghettisaus bolognese",
+    "productId": "a54afe1f-3def-40f9-b1cc-9b96126873d7",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-spaghettisaus-bolognese",
+    "productName": "Honig Basis voor spaghettisaus bolognese",
+    "supplements": [
+      {
+        "name": "spaghetti",
+        "unit": "g",
+        "aliases": [
+          "spaghetti"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-spaghetti"
+      },
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "Italiaanse roerbakmix",
+        "unit": "g",
+        "aliases": [
+          "Italiaanse roerbakmix",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-italiaanse-roerbakmix"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "gezeefde tomaten",
+        "unit": "g",
+        "aliases": [
+          "gezeefde tomaten"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 260,
+        "sourceKey": "mix-supplement-gezeefde-tomaten"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor spaghettisaus bolognese"
+    ],
+    "recipeSourceKey": "catalog-mix-181722000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-181722000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Basis voor tagliatelle roomsaus",
+    "productId": "b949f3eb-ae70-4c91-8808-b2f3960ecf71",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-basis-voor-tagliatelle-roomsaus",
+    "productName": "Honig Basis voor tagliatelle roomsaus",
+    "supplements": [
+      {
+        "name": "Pasta",
+        "unit": "g",
+        "aliases": [
+          "Pasta"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-pasta"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "kastanjechampignons",
+        "unit": "g",
+        "aliases": [
+          "kastanjechampignons",
+          "kastanje champignons"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-kastanjechampignons"
+      },
+      {
+        "name": "spinazie diepvries",
+        "unit": "g",
+        "aliases": [
+          "spinazie diepvries"
+        ],
+        "category": "Groente",
+        "quantity": 200,
+        "sourceKey": "mix-supplement-spinazie-diepvries"
+      },
+      {
+        "name": "halfvolle melk",
+        "unit": "ml",
+        "aliases": [
+          "halfvolle melk"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-halfvolle-melk"
+      },
+      {
+        "name": "achterham",
+        "unit": "g",
+        "aliases": [
+          "achterham"
+        ],
+        "category": "Vlees",
+        "quantity": 100,
+        "sourceKey": "mix-supplement-achterham"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Basis voor tagliatelle roomsaus"
+    ],
+    "recipeSourceKey": "catalog-mix-186457000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-186457000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Maaltijdsoep erwten",
+    "productId": "0c92ffc4-94cf-4f84-8afd-9479c83a2c87",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-maaltijdsoep-erwten",
+    "productName": "Honig Maaltijdsoep erwten",
+    "supplements": [
+      {
+        "name": "rookworst",
+        "unit": "piece",
+        "aliases": [
+          "rookworst"
+        ],
+        "category": "Vlees",
+        "quantity": 0.5,
+        "sourceKey": "mix-supplement-rookworst"
+      },
+      {
+        "name": "aardappel",
+        "unit": "g",
+        "aliases": [
+          "aardappel"
+        ],
+        "category": "Aardappel & zetmeel",
+        "quantity": 50,
+        "sourceKey": "mix-supplement-aardappel"
+      },
+      {
+        "name": "erwtensoepgroenten",
+        "unit": "g",
+        "aliases": [
+          "erwtensoepgroenten"
+        ],
+        "category": "Groente",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-erwtensoepgroenten"
+      }
+    ],
+    "productAliases": [
+      "Honig Maaltijdsoep erwten"
+    ],
+    "recipeSourceKey": "catalog-mix-083039000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-083039000"
+  },
+  {
+    "brand": "Honig",
+    "dishName": "Honig Mix voor kapucijners",
+    "productId": "2201dbcd-a481-41d1-858f-62a3bcbd21fb",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-mix-voor-kapucijners",
+    "productName": "Honig Mix voor kapucijners",
+    "supplements": [
+      {
+        "name": "rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "rundergehakt"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rundergehakt"
+      },
+      {
+        "name": "uien",
+        "unit": "piece",
+        "aliases": [
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-uien"
+      },
+      {
+        "name": "rode paprika's",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika's",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-rode-paprika-s"
+      },
+      {
+        "name": "kapucijners",
+        "unit": "g",
+        "aliases": [
+          "kapucijners"
+        ],
+        "category": "Groente",
+        "quantity": 710,
+        "sourceKey": "mix-supplement-kapucijners"
+      },
+      {
+        "name": "olijfolie",
+        "unit": "ml",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olijfolie"
+      }
+    ],
+    "productAliases": [
+      "Honig Mix voor kapucijners"
+    ],
+    "recipeSourceKey": "catalog-mix-714983000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-714983000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Air fryer mix voor krokante kip knoflook",
+    "productId": "462b9ab0-d588-4b9f-8312-84c54344cedf",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-air-fryer-mix-voor-krokante-kip-knoflook",
+    "productName": "Knorr Air fryer mix voor krokante kip knoflook",
+    "supplements": [
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 45,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Air fryer mix voor krokante kip knoflook"
+    ],
+    "recipeSourceKey": "catalog-mix-733174000",
+    "servingsPerPackage": 3,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-733174000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Maaltijdmix kip madras",
+    "productId": "d4a991fa-b9c0-4e64-bc85-235d4655d019",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-kip-madras",
+    "productName": "Knorr Maaltijdmix kip madras",
+    "supplements": [
+      {
+        "name": "sperziebonen",
+        "unit": "g",
+        "aliases": [
+          "sperziebonen"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-sperziebonen"
+      },
+      {
+        "name": "lente-ui",
+        "unit": "piece",
+        "aliases": [
+          "lente-ui",
+          "lente-uien",
+          "bosuien",
+          "lente ui",
+          "lente-uien",
+          "bosuitjes"
+        ],
+        "category": "Groente",
+        "quantity": 3,
+        "sourceKey": "mix-supplement-lente-ui"
+      },
+      {
+        "name": "tomaten",
+        "unit": "piece",
+        "aliases": [
+          "tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-tomaten"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "appel",
+        "unit": "piece",
+        "aliases": [
+          "appel"
+        ],
+        "category": "Fruit",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-appel"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "crème fraiche light",
+        "unit": "g",
+        "aliases": [
+          "crème fraiche light"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-creme-fraiche-light"
+      },
+      {
+        "name": "rijst",
+        "unit": "g",
+        "aliases": [
+          "rijst"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rijst"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Maaltijdmix kip madras"
+    ],
+    "recipeSourceKey": "catalog-mix-730044000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-730044000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Maaltijdmix lasagne bolognese",
+    "productId": "838614b3-55a2-4436-83d5-a9b49291434c",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-lasagne-bolognese",
+    "productName": "Knorr Maaltijdmix lasagne bolognese",
+    "supplements": [
+      {
+        "name": "Italiaans groentepakket",
+        "unit": "g",
+        "aliases": [
+          "Italiaans groentepakket",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-italiaans-groentepakket"
+      },
+      {
+        "name": "mager rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "mager rundergehakt",
+          "rundergehakt mager"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-mager-rundergehakt"
+      },
+      {
+        "name": "lasagnebladen",
+        "unit": "piece",
+        "aliases": [
+          "lasagnebladen"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 12,
+        "sourceKey": "mix-supplement-lasagnebladen"
+      },
+      {
+        "name": "geraspte 30+ kaas",
+        "unit": "g",
+        "aliases": [
+          "geraspte 30+ kaas",
+          "geraspte kaas"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 100,
+        "sourceKey": "mix-supplement-geraspte-30-kaas"
+      },
+      {
+        "name": "magere melk",
+        "unit": "ml",
+        "aliases": [
+          "magere melk"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-magere-melk"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Maaltijdmix lasagne bolognese"
+    ],
+    "recipeSourceKey": "catalog-mix-730054000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-730054000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Maaltijdmix mac & cheese",
+    "productId": "ce8a0ddc-e4e7-4e32-99e0-70989323966a",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-mac-cheese",
+    "productName": "Knorr Maaltijdmix mac & cheese",
+    "supplements": [
+      {
+        "name": "broccoli",
+        "unit": "piece",
+        "aliases": [
+          "broccoli"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-broccoli"
+      },
+      {
+        "name": "kookroom",
+        "unit": "ml",
+        "aliases": [
+          "kookroom"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 200,
+        "sourceKey": "mix-supplement-kookroom"
+      },
+      {
+        "name": "geraspte kaas",
+        "unit": "g",
+        "aliases": [
+          "geraspte kaas",
+          "geraspte kaas"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 75,
+        "sourceKey": "mix-supplement-geraspte-kaas"
+      },
+      {
+        "name": "macaroni",
+        "unit": "g",
+        "aliases": [
+          "macaroni"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-macaroni"
+      }
+    ],
+    "productAliases": [
+      "Knorr Maaltijdmix mac & cheese"
+    ],
+    "recipeSourceKey": "catalog-mix-730049000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-730049000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Maaltijdmix teriyaki",
+    "productId": "0c1b9ec7-8138-414f-a51c-0ff3f62e840e",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-teriyaki",
+    "productName": "Knorr Maaltijdmix teriyaki",
+    "supplements": [
+      {
+        "name": "Chinese wokgroente",
+        "unit": "g",
+        "aliases": [
+          "Chinese wokgroente"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-chinese-wokgroente"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "woknoedels",
+        "unit": "g",
+        "aliases": [
+          "woknoedels"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-woknoedels"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Maaltijdmix teriyaki"
+    ],
+    "recipeSourceKey": "catalog-mix-730047000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-730047000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Maaltijdmix tikka masala",
+    "productId": "8c656d64-0eb9-4290-abbe-1e4c5e939ca2",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-tikka-masala",
+    "productName": "Knorr Maaltijdmix tikka masala",
+    "supplements": [
+      {
+        "name": "gele paprika",
+        "unit": "piece",
+        "aliases": [
+          "gele paprika",
+          "gele paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-gele-paprika"
+      },
+      {
+        "name": "rode paprika",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-paprika"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "tomatenblokjes",
+        "unit": "g",
+        "aliases": [
+          "tomatenblokjes"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-tomatenblokjes"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "magere yoghurt",
+        "unit": "g",
+        "aliases": [
+          "magere yoghurt"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 260,
+        "sourceKey": "mix-supplement-magere-yoghurt"
+      },
+      {
+        "name": "rijst",
+        "unit": "g",
+        "aliases": [
+          "rijst"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-rijst"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Maaltijdmix tikka masala"
+    ],
+    "recipeSourceKey": "catalog-mix-730052000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-730052000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Mix macaroni carbonara",
+    "productId": "dd6bf1fc-7a61-48a8-9b50-04470ef02563",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-mix-macaroni-carbonara1",
+    "productName": "Knorr Mix macaroni carbonara",
+    "supplements": [
+      {
+        "name": "champignons",
+        "unit": "g",
+        "aliases": [
+          "champignons"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-champignons"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "hamblokjes",
+        "unit": "g",
+        "aliases": [
+          "hamblokjes"
+        ],
+        "category": "Vlees",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-hamblokjes"
+      },
+      {
+        "name": "magere melk",
+        "unit": "ml",
+        "aliases": [
+          "magere melk"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 500,
+        "sourceKey": "mix-supplement-magere-melk"
+      },
+      {
+        "name": "macaroni",
+        "unit": "g",
+        "aliases": [
+          "macaroni"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-macaroni"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Mix macaroni carbonara"
+    ],
+    "recipeSourceKey": "catalog-mix-709641000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-709641000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Mix spaghetti bolognese",
+    "productId": "a3ecc219-53df-461a-bd79-f3e46213447e",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-mix-spaghetti-bolognese1",
+    "productName": "Knorr Mix spaghetti bolognese",
+    "supplements": [
+      {
+        "name": "italiaans groentepakket",
+        "unit": "g",
+        "aliases": [
+          "italiaans groentepakket",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 600,
+        "sourceKey": "mix-supplement-italiaans-groentepakket"
+      },
+      {
+        "name": "mager rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "mager rundergehakt",
+          "rundergehakt mager"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-mager-rundergehakt"
+      },
+      {
+        "name": "spaghetti",
+        "unit": "g",
+        "aliases": [
+          "spaghetti"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-spaghetti"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Mix spaghetti bolognese"
+    ],
+    "recipeSourceKey": "catalog-mix-709635000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-709635000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Mix voor bami",
+    "productId": "778c7bc9-8a32-44ce-bf60-b139c9eb242c",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-mix-voor-bami1",
+    "productName": "Knorr Mix voor bami",
+    "supplements": [
+      {
+        "name": "Bami groentepakket",
+        "unit": "g",
+        "aliases": [
+          "Bami groentepakket",
+          "nasi bami groente",
+          "nasi bami groenten",
+          "bamigroenten"
+        ],
+        "category": "Groente",
+        "quantity": 450,
+        "sourceKey": "mix-supplement-bami-groentepakket"
+      },
+      {
+        "name": "taugé",
+        "unit": "g",
+        "aliases": [
+          "taugé"
+        ],
+        "category": "Groente",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-tauge"
+      },
+      {
+        "name": "bosui",
+        "unit": "piece",
+        "aliases": [
+          "bosui",
+          "bosuien",
+          "bosui",
+          "bosuien",
+          "lente ui",
+          "lente-uien",
+          "bosuitjes"
+        ],
+        "category": "Groente",
+        "quantity": 3,
+        "sourceKey": "mix-supplement-bosui"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "mie",
+        "unit": "g",
+        "aliases": [
+          "mie"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-mie"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Mix voor bami"
+    ],
+    "recipeSourceKey": "catalog-mix-709604000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-709604000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Mix voor macaroni",
+    "productId": "a12e9b23-e0e7-4510-b625-aa3075db94ef",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-mix-voor-macaroni1",
+    "productName": "Knorr Mix voor macaroni",
+    "supplements": [
+      {
+        "name": "Italiaans groentepakket",
+        "unit": "g",
+        "aliases": [
+          "Italiaans groentepakket",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 600,
+        "sourceKey": "mix-supplement-italiaans-groentepakket"
+      },
+      {
+        "name": "mager rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "mager rundergehakt",
+          "rundergehakt mager"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-mager-rundergehakt"
+      },
+      {
+        "name": "macaroni",
+        "unit": "g",
+        "aliases": [
+          "macaroni"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-macaroni"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Mix voor macaroni"
+    ],
+    "recipeSourceKey": "catalog-mix-709601000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-709601000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Mix voor nasi",
+    "productId": "be39dc3d-f29e-4392-82ed-ff91c23e66f3",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-mix-voor-nasi2",
+    "productName": "Knorr Mix voor nasi",
+    "supplements": [
+      {
+        "name": "Nasi groentepakket",
+        "unit": "g",
+        "aliases": [
+          "Nasi groentepakket"
+        ],
+        "category": "Groente",
+        "quantity": 450,
+        "sourceKey": "mix-supplement-nasi-groentepakket"
+      },
+      {
+        "name": "taugé",
+        "unit": "g",
+        "aliases": [
+          "taugé"
+        ],
+        "category": "Groente",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-tauge"
+      },
+      {
+        "name": "bosui",
+        "unit": "piece",
+        "aliases": [
+          "bosui",
+          "bosuien",
+          "bosui",
+          "bosuien",
+          "lente ui",
+          "lente-uien",
+          "bosuitjes"
+        ],
+        "category": "Groente",
+        "quantity": 3,
+        "sourceKey": "mix-supplement-bosui"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "rijst",
+        "unit": "g",
+        "aliases": [
+          "rijst"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-rijst"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Mix voor nasi"
+    ],
+    "recipeSourceKey": "catalog-mix-709603000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-709603000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Mix voor tagliatelle",
+    "productId": "8ded40e6-2578-41bd-95ba-1f40a5affd9c",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-mix-voor-tagliatelle1",
+    "productName": "Knorr Mix voor tagliatelle",
+    "supplements": [
+      {
+        "name": "broccoli",
+        "unit": "piece",
+        "aliases": [
+          "broccoli"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-broccoli"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "cherrytomaten",
+        "unit": "g",
+        "aliases": [
+          "cherrytomaten",
+          "cherrytomaten",
+          "cherry tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-cherrytomaten"
+      },
+      {
+        "name": "doperwten",
+        "unit": "g",
+        "aliases": [
+          "doperwten",
+          "doperwtjes"
+        ],
+        "category": "Groente",
+        "quantity": 75,
+        "sourceKey": "mix-supplement-doperwten"
+      },
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "tagliatelle",
+        "unit": "g",
+        "aliases": [
+          "tagliatelle"
+        ],
+        "category": "Pasta, rijst & granen",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-tagliatelle"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Mix voor tagliatelle"
+    ],
+    "recipeSourceKey": "catalog-mix-709741000",
+    "servingsPerPackage": 4,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-709741000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Risotto bospaddenstoelen",
+    "productId": "e472e4a6-7a9a-4508-a80e-3275e563670a",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-risotto-bospaddenstoelen",
+    "waterOnly": true,
+    "productName": "Knorr Risotto bospaddenstoelen",
+    "supplements": [],
+    "productAliases": [
+      "Knorr Risotto bospaddenstoelen"
+    ],
+    "recipeSourceKey": "catalog-mix-729332000",
+    "servingsPerPackage": 2,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-729332000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Risotto truffel",
+    "productId": "f3bfbba9-aa25-4fcb-860d-d52219d7e46b",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-risotto-truffel",
+    "waterOnly": true,
+    "productName": "Knorr Risotto truffel",
+    "supplements": [],
+    "productAliases": [
+      "Knorr Risotto truffel"
+    ],
+    "recipeSourceKey": "catalog-mix-729333000",
+    "servingsPerPackage": 2,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-729333000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Spaghetteria carbonara",
+    "productId": "ab6ec8d8-c92d-40b3-909d-6ecaa582ff72",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-spaghetteria-carbonara",
+    "waterOnly": true,
+    "productName": "Knorr Spaghetteria carbonara",
+    "supplements": [],
+    "productAliases": [
+      "Knorr Spaghetteria carbonara"
+    ],
+    "recipeSourceKey": "catalog-mix-703080000",
+    "servingsPerPackage": 2,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-703080000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Spaghetteria pesto",
+    "productId": "024c26d6-fc44-4db8-b04f-2558e7412f9c",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-spaghetteria-pesto",
+    "waterOnly": true,
+    "productName": "Knorr Spaghetteria pesto",
+    "supplements": [],
+    "productAliases": [
+      "Knorr Spaghetteria pesto"
+    ],
+    "recipeSourceKey": "catalog-mix-703081000",
+    "servingsPerPackage": 2,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-703081000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Spaghetteria pomodoro mozzarella",
+    "productId": "0769ebf1-e3ba-46b7-8f65-ccadd4fc2616",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-spaghetteria-pomodoro-mozzarella",
+    "waterOnly": true,
+    "productName": "Knorr Spaghetteria pomodoro mozzarella",
+    "supplements": [],
+    "productAliases": [
+      "Knorr Spaghetteria pomodoro mozzarella"
+    ],
+    "recipeSourceKey": "catalog-mix-732786000",
+    "servingsPerPackage": 2,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-732786000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Wereldgerecht maaltijdpakket italiaanse lasagnette napoletan",
+    "productId": "720690dd-a798-4791-a237-b534faa857a2",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-wereldgerecht-maaltijdpakket-italiaanse-lasagnette-napoletan",
+    "productName": "Knorr Wereldgerecht maaltijdpakket italiaanse lasagnette napoletan",
+    "supplements": [
+      {
+        "name": "mager rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "mager rundergehakt",
+          "rundergehakt mager"
+        ],
+        "category": "Vlees",
+        "quantity": 225,
+        "sourceKey": "mix-supplement-mager-rundergehakt"
+      },
+      {
+        "name": "Italiaanse groentemix",
+        "unit": "g",
+        "aliases": [
+          "Italiaanse groentemix",
+          "Italiaanse groentemix",
+          "Italiaanse roerbakgroenten",
+          "Italiaanse wokgroenten",
+          "Italiaanse groente"
+        ],
+        "category": "Groente",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-italiaanse-groentemix"
+      },
+      {
+        "name": "komkommer",
+        "unit": "piece",
+        "aliases": [
+          "komkommer"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-komkommer"
+      },
+      {
+        "name": "melk",
+        "unit": "ml",
+        "aliases": [
+          "melk"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 400,
+        "sourceKey": "mix-supplement-melk"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Wereldgerecht maaltijdpakket italiaanse lasagnette napoletan"
+    ],
+    "recipeSourceKey": "catalog-mix-704890000",
+    "servingsPerPackage": 3,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-704890000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Wereldgerechten maaltijdpakket mexicaanse burrito's",
+    "productId": "f40ee94b-3269-4e7f-ae37-30d09908fa55",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakket-mexicaanse-burrito-s",
+    "productName": "Knorr Wereldgerechten maaltijdpakket mexicaanse burrito's",
+    "supplements": [
+      {
+        "name": "kipfilet",
+        "unit": "g",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 225,
+        "sourceKey": "mix-supplement-kipfilet"
+      },
+      {
+        "name": "champignons",
+        "unit": "g",
+        "aliases": [
+          "champignons"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "sourceKey": "mix-supplement-champignons"
+      },
+      {
+        "name": "rode paprika",
+        "unit": "piece",
+        "aliases": [
+          "rode paprika",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-rode-paprika"
+      },
+      {
+        "name": "gele paprika",
+        "unit": "piece",
+        "aliases": [
+          "gele paprika",
+          "gele paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-gele-paprika"
+      },
+      {
+        "name": "ui",
+        "unit": "piece",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-ui"
+      },
+      {
+        "name": "volle kwark",
+        "unit": "g",
+        "aliases": [
+          "volle kwark"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 125,
+        "sourceKey": "mix-supplement-volle-kwark"
+      },
+      {
+        "name": "geraspte 30+ kaas",
+        "unit": "g",
+        "aliases": [
+          "geraspte 30+ kaas",
+          "geraspte kaas"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 50,
+        "sourceKey": "mix-supplement-geraspte-30-kaas"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Wereldgerechten maaltijdpakket mexicaanse burrito's"
+    ],
+    "recipeSourceKey": "knorr-burritos",
+    "servingsPerPackage": 3,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-704883000"
+  },
+  {
+    "brand": "Knorr",
+    "dishName": "Knorr Wereldgerechten Mexicaanse taco`s",
+    "productId": "f3797b43-ea06-4303-82f8-36902805e6e2",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-wereldgerechten-mexicaanse-taco-s",
+    "productName": "Knorr Wereldgerechten Mexicaanse taco`s",
+    "supplements": [
+      {
+        "name": "mager rundergehakt",
+        "unit": "g",
+        "aliases": [
+          "mager rundergehakt",
+          "rundergehakt mager"
+        ],
+        "category": "Vlees",
+        "quantity": 225,
+        "sourceKey": "mix-supplement-mager-rundergehakt"
+      },
+      {
+        "name": "maïs blik",
+        "unit": "g",
+        "aliases": [
+          "maïs blik"
+        ],
+        "category": "Groente",
+        "quantity": 150,
+        "sourceKey": "mix-supplement-mais-blik"
+      },
+      {
+        "name": "ijsbergsla",
+        "unit": "g",
+        "aliases": [
+          "ijsbergsla"
+        ],
+        "category": "Groente",
+        "quantity": 100,
+        "sourceKey": "mix-supplement-ijsbergsla"
+      },
+      {
+        "name": "tomaten",
+        "unit": "piece",
+        "aliases": [
+          "tomaten"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "sourceKey": "mix-supplement-tomaten"
+      },
+      {
+        "name": "courgette",
+        "unit": "piece",
+        "aliases": [
+          "courgette"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "sourceKey": "mix-supplement-courgette"
+      },
+      {
+        "name": "olie",
+        "unit": "ml",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "sourceKey": "mix-supplement-olie"
+      }
+    ],
+    "productAliases": [
+      "Knorr Wereldgerechten Mexicaanse taco`s"
+    ],
+    "recipeSourceKey": "catalog-mix-704882000",
+    "servingsPerPackage": 3,
+    "verificationStatus": "verified",
+    "productIngredientSourceKey": "catalog-mix-product-704882000"
+  },
+  {
+    "recipeSourceKey": "catalog-mix-665854000",
+    "dishName": "Honig Mix voor boerenomelet",
+    "brand": "Honig",
+    "productIngredientSourceKey": "catalog-mix-product-665854000",
+    "productId": "672987fb-3486-4a58-8db4-bbe1cc781518",
+    "productName": "Honig Mix voor boerenomelet",
+    "productAliases": [
+      "Honig Mix voor boerenomelet"
+    ],
+    "servingsPerPackage": 8,
+    "supplements": [
+      {
+        "sourceKey": "mix-supplement-eieren",
+        "name": "eieren",
+        "aliases": [
+          "eieren"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 6,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-ui",
+        "name": "ui",
+        "aliases": [
+          "ui",
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-kastanjechampignons",
+        "name": "kastanjechampignons",
+        "aliases": [
+          "kastanjechampignons",
+          "kastanje champignons"
+        ],
+        "category": "Groente",
+        "quantity": 125,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-sneetjes-volkoren-brood",
+        "name": "sneetjes volkoren brood",
+        "aliases": [
+          "sneetjes volkoren brood"
+        ],
+        "category": "Brood",
+        "quantity": 4,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-olijfolie",
+        "name": "olijfolie",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "unit": "ml"
+      }
+    ],
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-mix-voor-boerenomelet",
+    "verificationStatus": "verified",
+    "supplementServings": 4,
+    "preparationMinutes": 10
+  },
+  {
+    "recipeSourceKey": "catalog-mix-704893000",
+    "dishName": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+    "brand": "Knorr",
+    "productIngredientSourceKey": "catalog-mix-product-704893000",
+    "productId": "6e1f5818-c230-44d2-9d56-d3daa5fa7317",
+    "productName": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+    "productAliases": [
+      "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto"
+    ],
+    "servingsPerPackage": 3,
+    "supplements": [
+      {
+        "sourceKey": "mix-supplement-kipfilet",
+        "name": "kipfilet",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 225,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-uien",
+        "name": "uien",
+        "aliases": [
+          "uien"
+        ],
+        "category": "Groente",
+        "quantity": 2,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-champignons",
+        "name": "champignons",
+        "aliases": [
+          "champignons"
+        ],
+        "category": "Groente",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-courgette",
+        "name": "courgette",
+        "aliases": [
+          "courgette"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-prei",
+        "name": "prei",
+        "aliases": [
+          "prei"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-olie",
+        "name": "olie",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "unit": "ml"
+      }
+    ],
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakketten-italiaanse-risotto",
+    "verificationStatus": "verified",
+    "preparationMinutes": 40
+  },
+  {
+    "recipeSourceKey": "catalog-mix-730051000",
+    "dishName": "Knorr Maaltijdmix kebab",
+    "brand": "Knorr",
+    "productIngredientSourceKey": "catalog-mix-product-730051000",
+    "productId": "29da05dd-8ee6-4aeb-a87b-1b7756af7c3b",
+    "productName": "Knorr Maaltijdmix kebab",
+    "productAliases": [
+      "Knorr Maaltijdmix kebab"
+    ],
+    "servingsPerPackage": 4,
+    "supplements": [
+      {
+        "sourceKey": "mix-supplement-rode-ui",
+        "name": "rode ui",
+        "aliases": [
+          "rode ui",
+          "rode uien"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-komkommer",
+        "name": "komkommer",
+        "aliases": [
+          "komkommer"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-ijsbergsla",
+        "name": "ijsbergsla",
+        "aliases": [
+          "ijsbergsla"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-kipfilet",
+        "name": "kipfilet",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 400,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-pitabroodjes",
+        "name": "pitabroodjes",
+        "aliases": [
+          "pitabroodjes"
+        ],
+        "category": "Brood",
+        "quantity": 400,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-olie",
+        "name": "olie",
+        "aliases": [
+          "olie",
+          "zonnebloemolie",
+          "arachideolie",
+          "rijstolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 15,
+        "unit": "ml"
+      }
+    ],
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-kebab",
+    "verificationStatus": "verified",
+    "preparationMinutes": 25
+  },
+  {
+    "recipeSourceKey": "catalog-mix-070523000",
+    "dishName": "Honig Familiegerecht Oosterse wraps",
+    "brand": "Honig",
+    "productIngredientSourceKey": "catalog-mix-product-070523000",
+    "productId": "9c5828c0-62a0-4197-9c91-d89ee85ea927",
+    "productName": "Honig Familiegerecht Oosterse wraps",
+    "productAliases": [
+      "Honig Familiegerecht Oosterse wraps"
+    ],
+    "servingsPerPackage": 4,
+    "supplements": [
+      {
+        "sourceKey": "mix-supplement-kipfilet",
+        "name": "kipfilet",
+        "aliases": [
+          "kipfilet"
+        ],
+        "category": "Vlees",
+        "quantity": 300,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-nasi-bami-groenten",
+        "name": "nasi/bami groenten",
+        "aliases": [
+          "nasi/bami groenten",
+          "nasi bami groente",
+          "nasi bami groenten",
+          "bamigroenten"
+        ],
+        "category": "Groente",
+        "quantity": 450,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-rode-paprika",
+        "name": "rode paprika",
+        "aliases": [
+          "rode paprika",
+          "rode paprika"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-komkommer",
+        "name": "komkommer",
+        "aliases": [
+          "komkommer"
+        ],
+        "category": "Groente",
+        "quantity": 0.5,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-citroen",
+        "name": "citroen",
+        "aliases": [
+          "citroen"
+        ],
+        "category": "Groente",
+        "quantity": 1,
+        "unit": "piece"
+      },
+      {
+        "sourceKey": "mix-supplement-griekse-yoghurt",
+        "name": "Griekse yoghurt",
+        "aliases": [
+          "Griekse yoghurt"
+        ],
+        "category": "Zuivel & eieren",
+        "quantity": 250,
+        "unit": "g"
+      },
+      {
+        "sourceKey": "mix-supplement-olijfolie",
+        "name": "olijfolie",
+        "aliases": [
+          "olijfolie"
+        ],
+        "category": "Sauzen & smaakmakers",
+        "quantity": 30,
+        "unit": "ml"
+      }
+    ],
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-familiegerecht-oosterse-wraps",
+    "verificationStatus": "verified",
+    "preparationMinutes": 25
+  }
+]

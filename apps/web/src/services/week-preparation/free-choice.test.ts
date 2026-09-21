@@ -37,6 +37,13 @@ function week(): WeekPreparation {
 const dish: CustomDish = { name: "Mijn pasta", servings: 6, ingredients: [{ id: "row1", name: "pasta", quantity: 600, unit: "g", productId: null }] };
 
 describe("PWA 13 vrije keuze", () => {
+  it('shows the complete branded inventory even when Knorr has more than twenty variants', async () => {
+    const variants=Array.from({length:22},(_,i)=>({...pasta,id:`mix-${i}`,sourceKey:`catalog-mix-test-${i}`,name:`Knorr maaltijdmix ${i}`}));
+    const repository={loadCatalog:async()=>({...catalog,recipes:variants,relations:[]})};
+    const cache=createWeekPlanningSnapshotCache({persistentRepository:{load:async()=>({available:false,readiness:[],matches:[]})}});
+    const found=await searchFreeChoice(week(),0,'Knorr',repository,products,undefined,cache);
+    expect(found.map(r=>r.recipe.id)).toEqual(variants.map(r=>r.id));
+  });
   it("batches candidate readiness and reuses it across searches", async () => {
     const load = vi.fn(async () => ({ available: false, readiness: [], matches: [] }));
     const search = vi.fn(products.search);

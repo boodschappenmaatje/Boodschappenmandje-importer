@@ -3,9 +3,9 @@ import { pathToFileURL } from "node:url";
 import { restURL, requestHeaders } from "./supabase.mjs";
 import { parseMealMixSource } from "../apps/web/src/server/meal-mix-source.ts";
 import { MEAL_MIX_PROFILES } from "../apps/web/src/services/week-preparation/meal-mix-profiles.ts";
-import corroborations from "./meal-mix-corroboration.json" with { type: "json" };
+import { mealMixCorroborationFor } from "./meal-mix-reviewed-evidence.mjs";
 
-export const MEAL_MIX_PARSER_VERSION = 4;
+export const MEAL_MIX_PARSER_VERSION = 5;
 
 export async function readMealMixSource(page, product) {
   const url = new URL(product.source_url);
@@ -22,6 +22,7 @@ export function profileRecipeRow(profile, source) {
   // When the source provides no duration, do not publish an invented time.
   const durations = [...source.text.matchAll(/\b(\d+)(?:\s*(?:à|tot|[-–])\s*(\d+))?\s*min(?:uten)?\b/gi)]
     .map((match) => Number(match[2] ?? match[1])).filter((value) => value > 0 && value <= 360);
+  if (profile.preparationMinutes) durations.push(profile.preparationMinutes);
   if (!durations.length) return null;
   return { source_key: profile.recipeSourceKey, name: profile.dishName,
     normalized_name: profile.dishName.toLocaleLowerCase("nl-NL"), symbol: "fork.knife",
@@ -62,7 +63,7 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
     let source;
     try {
       source = await readSource(product);
-      result = parseMealMixSource(source, MEAL_MIX_PROFILES, corroborations[product.sku]);
+      result = parseMealMixSource(source, MEAL_MIX_PROFILES, mealMixCorroborationFor(product));
     } catch { result = { status: "needs_review", reason: "source_unavailable", fingerprint: null }; }
     let recipeId = queue.recipe_id;
     if (result.status === "verified") {

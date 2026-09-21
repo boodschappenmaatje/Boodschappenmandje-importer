@@ -100,7 +100,7 @@ describe("Recipe Image Quality Gate", () => {
     const scan = evaluateRecipeImageHealth(allContexts);
 
     expect(recipeData.recipes).toHaveLength(100);
-    expect(SPECIFIC_RECIPE_IMAGE_COUNT).toBe(100);
+    expect(SPECIFIC_RECIPE_IMAGE_COUNT).toBe(137);
     expect(scan.summary.total).toBe(100);
     expect(scan.summary).toEqual({
       total: 100,
@@ -145,7 +145,7 @@ describe("Recipe Image Quality Gate", () => {
   });
 
   it("koppelt alle 14 gegen de gate gevalideerde AI-replacements aan de stabiele recipe-id", () => {
-    expect(AI_GENERATED_RECIPE_IMAGE_COUNT).toBe(14);
+    expect(AI_GENERATED_RECIPE_IMAGE_COUNT).toBe(54);
 
     for (const recipeId of AI_GENERATED_RECIPE_IMAGE_IDS) {
       const context = contextForRecipe(recipeId);

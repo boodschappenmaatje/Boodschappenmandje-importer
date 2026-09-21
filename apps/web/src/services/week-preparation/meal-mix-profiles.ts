@@ -21,6 +21,9 @@ export interface MealMixProfile {
   productName: string;
   productAliases: string[];
   servingsPerPackage: number;
+  /** People covered by the printed shopping list (one sachet may be part of a multipack). */
+  supplementServings?: number;
+  preparationMinutes?: number;
   supplements: MealMixSupplement[];
   sourceUrl: string;
   verificationStatus: "verified";
@@ -271,7 +274,7 @@ export function enrichIngredientsForMealMixes(
       // Hoogvliet labels these fresh vegetable mixes "Italiaanse roerbak".
       // Keep the package ingredient unchanged; the regular matcher still checks
       // product category, preparation form, price and purchasable quantity.
-      const aliases = [...new Set([...item.aliases,
+      const aliases = [...new Set([...item.aliases, ...mealMixSupplementAliases(item.name),
         ...(item.category === "Groente" && /^italiaans[e]? (?:groentepakket|groentemix|roerbakmix|roerbakgroenten|wokgroenten)$/i.test(item.name.trim())
           ? ["Italiaanse roerbak"] : []),
       ])];
@@ -296,4 +299,34 @@ export function enrichIngredientsForMealMixes(
   }
 
   return [...bySourceKey.values()];
+}
+
+/** Catalog spelling equivalents, limited to the branded package supplements. */
+export function mealMixSupplementAliases(name: string): string[] {
+  const key = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const aliases: Record<string, string[]> = {
+    "voorgekookte mini krieltjes": ["minikrieltjes"],
+    "voorgekookte krieltjes": ["krieltjes", "minikrieltjes"],
+    "voorgekookte aardappelpartjes": ["aardappelpart met schil"],
+    "spaghetti original": ["spaghetti"],
+    "pasta": ["macaroni", "penne", "fusilli"],
+    "appel": ["Elstar", "Jonagold", "Granny Smith", "Pink Lady"],
+    "mie nestjes": ["eiermie"],
+    "mie": ["eiermie"],
+    "chinese wokgroente": ["Chinese wok"],
+    "oosterse wokgroenten": ["Oosterse wok"],
+    "hollandse bruine bonen": ["bruine bonen"],
+    "gezeefde tomaten": ["tomato gezeefd"],
+    "mais blik": ["maiskorrels", "crispy mais"],
+    "wortels": ["worteltjes", "winterpeen"],
+    "wortel": ["worteltjes", "winterpeen"],
+    "spinazie diepvries": ["spinazie fijn gehakt", "spinazie grof gehakt"],
+    "kastanjechampignons": ["champignons"],
+    "hamblokjes": ["achterham"],
+    "creme fraiche light": ["demi creme fraiche"],
+    "nasi/bami groenten": ["Chinese wok"],
+    "nasi groentepakket": ["Chinese wok"],
+    "bami groentepakket": ["Chinese wok"],
+  };
+  return aliases[key] ?? [];
 }

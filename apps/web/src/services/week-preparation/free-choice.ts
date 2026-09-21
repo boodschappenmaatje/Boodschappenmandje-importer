@@ -69,7 +69,9 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
 export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: number, query: string, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, planningCache = createWeekPlanningSnapshotCache({ persistentRepository: createPersistentRecipeReadinessRepository() })): Promise<FreeChoiceResult[]> {
   if (query.trim().length < 2) return [];
   const catalog = await recipes.loadCatalog();
-  const candidates = catalog.recipes.filter((recipe) => recipeMatchesQuery(recipe, query)).slice(0, 20);
+  const matching = catalog.recipes.filter((recipe) => recipeMatchesQuery(recipe, query));
+  // A brand search must include the complete supported mix inventory (Knorr >20).
+  const candidates = /^(honig|knorr)$/i.test(query.trim()) ? matching : matching.slice(0, 20);
   // One snapshot and one batched persistent lookup, including selected dishes
   // needed by the unchanged whole-week budget and package calculations.
   const snapshotRecipes: RecipeRepository = { loadCatalog: async () => catalog };

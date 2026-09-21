@@ -1,0 +1,24 @@
+{
+  "product": {
+    "id": "9c5828c0-62a0-4197-9c91-d89ee85ea927",
+    "supermarket": "Hoogvliet",
+    "sku": "070523000",
+    "name": "Honig Familiegerecht Oosterse wraps",
+    "brand": "Honig",
+    "category": "Internationale keuken, pasta, rijst/Oosterse keuken/Maaltijdpakketten",
+    "package_text": "357 gram",
+    "weight_grams": 357,
+    "image_url": "https://cdn.hoogvliet.com/Images/Product/XL/070523000.jpg",
+    "source_url": "https://www.hoogvliet.com/product/honig-familiegerecht-oosterse-wraps",
+    "is_available": true,
+    "created_at": "2026-09-07T18:29:17.717285+00:00",
+    "updated_at": "2026-09-09T02:26:06.010902+00:00",
+    "product_type": "Pasta",
+    "last_seen_at": null,
+    "missing_checks": 0
+  },
+  "title": "Honig Familiegerecht Oosterse wraps",
+  "text": "Gebruiksaanwijzing Bereidingswijze: Op omgevingstemperatuur - Algemene bereidingswijze\n1 Verwarm de oven op 200°C. Verhit de olie in een pan en bak hierin de kipblokjes goudbruin gaar. Voeg de groenten en de in stukjes gesneden paprika toe en bak deze nog even mee.\n2 Voeg 100ml water en de Oosterse kruidenmix toe en verhit het geheel terwijl je het omschept nog ca. 1 minuut. Vul de Wraps met het kipmengsel en rol ze op. Leg de gevulde Wraps in een ingevette ovenschaal.\n3 Plaats de Wraps 5-10 minuten in de oven. Tip: verwarmen in de oven is niet nodig als je de wraps voor het vullen al even apart verwarmt.\n4 Serveer de wraps naar smaak samen met de Spicemix (Zoele Chili-Dipsaus). Let op: deze is redelijk pittig. Aan tafel!!\nNetto-inhoud: 357.00 GR",
+  "sourceUrl": "https://www.hoogvliet.com/product/honig-familiegerecht-oosterse-wraps",
+  "capture": "Preparation text read from product DOM; whitespace normalized."
+}
