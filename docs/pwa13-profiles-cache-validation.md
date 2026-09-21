@@ -6,7 +6,7 @@ Datum: 21 september 2026. Branch: codex/pwa-13-vrije-keuze; Draft PR #25.
 
 19 Honig- en 22 Knorr-producten onderzocht. Vooraf 15 verified/current; nu 36 verified (Honig 16, Knorr 20), vijf needs_review. Geen brede productimport, productwrites of prijswrites. De bestaande idempotente maintenanceflow vereist 21 nieuwe afgeleide recipes; ingredients en recipe_ingredients zijn niet gewijzigd.
 
-36 profielen × 10 personenvarianten = 360 maaltijdmixcachevarianten. Ook de bestaande gewone gerechten zijn bijgewerkt: totaal 133 × 10 = 1.330 readinessrecords, met 230 gedeelde productmatches. Current betekent een actuele beoordeling, niet automatisch selecteerbaar. Bij vier personen zijn 68 gerechten READY, waaronder vijftien branded mixen.
+36 profielen × 10 personenvarianten = 360 maaltijdmixcachevarianten. Ook de bestaande gewone gerechten zijn bijgewerkt: totaal 133 × 10 = 1.330 readinessrecords, met 230 gedeelde productmatches. Current betekent een actuele beoordeling, niet automatisch selecteerbaar. Bij vier personen zijn 68 gerechten READY, waaronder vijftien branded mixen met complete productdekking. De afzonderlijke prijscontrole laat tien daadwerkelijk selecteerbare mixen zien; vijf van de vijftien hebben nog een verouderde prijs. Van de overige 21 verified profielen hebben achttien een ontbrekend catalogusproduct; drie stranden op matching/verpakkingen.
 
 ## De 26 eerder onvolledige profielen
 
@@ -49,36 +49,36 @@ De vijf open punten: kipkerrie noemt een klein blikje ananas zonder inhoud; Oost
 |---|---|---|
 | Knorr Spaghetteria pesto | ja |  |
 | Knorr Spaghetteria pomodoro mozzarella | ja |  |
-| Honig Bakplaat mix broccoli & rundervink | nee | tomaten: package_unknown; voorgekookte krieltjes: no_catalog_product |
-| Knorr Maaltijdmix teriyaki | nee | Chinese wokgroente: no_catalog_product |
-| Honig Maaltijdsoep erwten | nee | erwtensoepgroenten: no_catalog_product; rookworst: package_unknown |
+| Honig Bakplaat mix broccoli & rundervink | nee | tomaten: package_unknown; voorgekookte krieltjes: no_catalog_product; Honig Bakplaat mix broccoli & rundervink: stale prijs (2026-09-10T04:53:25.949+00:00); tomaten: stale prijs (2026-09-08T08:48:28.666+00:00) |
+| Knorr Maaltijdmix teriyaki | nee | Chinese wokgroente: no_catalog_product; Knorr Maaltijdmix teriyaki: stale prijs (2026-09-07T18:29:26.345+00:00) |
+| Honig Maaltijdsoep erwten | nee | erwtensoepgroenten: no_catalog_product; rookworst: package_unknown; rookworst: stale prijs (2026-09-12T02:25:59.247+00:00) |
 | Honig Mix voor kapucijners | ja |  |
-| Honig Basis voor bami speciaal | nee | Mie Nestjes: no_catalog_product; nasi/bami groenten: no_catalog_product |
+| Honig Basis voor bami speciaal | nee | Mie Nestjes: no_catalog_product; nasi/bami groenten: no_catalog_product; Honig Basis voor bami speciaal: stale prijs (2026-09-12T02:28:16.192+00:00) |
 | Knorr Air fryer mix voor krokante kip knoflook | ja |  |
-| Honig Basis voor lasagnesaus | ja |  |
-| Honig Basis voor roerbakmie | nee | kastanjechampignons: no_catalog_product; Oosterse wokgroenten: no_catalog_product |
-| Honig Bakplaat mix boontjes & gehaktballetjes | nee | voorgekookte mini krieltjes: no_catalog_product |
-| Honig Basis voor chili con carne | nee | Hollandse bruine bonen: no_catalog_product; tomaten: package_unknown |
-| Honig Basis voor macaroni en spaghetti | ja |  |
-| Honig Bakplaat mix courgette & kip | nee | tomaten: package_unknown; voorgekookte aardappelpartjes: no_catalog_product; wortels: category_mismatch |
+| Honig Basis voor lasagnesaus | nee | cherrytomaatjes: stale prijs (2026-09-08T08:48:28.666+00:00); Honig Basis voor lasagnesaus: stale prijs (2026-09-12T02:25:38.012+00:00) |
+| Honig Basis voor roerbakmie | nee | kastanjechampignons: no_catalog_product; Oosterse wokgroenten: no_catalog_product; Roerbakmie: stale prijs (2026-09-12T02:25:00.864+00:00) |
+| Honig Bakplaat mix boontjes & gehaktballetjes | nee | voorgekookte mini krieltjes: no_catalog_product; cherrytomaatjes: stale prijs (2026-09-08T08:48:28.666+00:00) |
+| Honig Basis voor chili con carne | nee | Hollandse bruine bonen: no_catalog_product; tomaten: package_unknown; tomaten: stale prijs (2026-09-08T08:48:28.666+00:00) |
+| Honig Basis voor macaroni en spaghetti | nee | cherrytomaatjes: stale prijs (2026-09-08T08:48:28.666+00:00) |
+| Honig Bakplaat mix courgette & kip | nee | tomaten: package_unknown; voorgekookte aardappelpartjes: no_catalog_product; wortels: category_mismatch; tomaten: stale prijs (2026-09-08T08:48:28.666+00:00) |
 | Knorr Wereldgerecht maaltijdpakket italiaanse lasagnette napoletan | ja |  |
 | Knorr Mix voor bami | nee | Bami groentepakket: no_catalog_product; bosui: category_mismatch; mie: low_confidence_match |
-| Honig Basis voor italiaanse kruidensaus | nee | Provençaalse wokgroenten: no_catalog_product; Spaghetti Original: no_catalog_product; verse basilicum: low_confidence_match |
-| Knorr Maaltijdmix lasagne bolognese | nee | lasagnebladen: package_unknown |
-| Knorr Maaltijdmix tikka masala | nee | magere yoghurt: package_unknown |
-| Knorr Mix voor tagliatelle | ja |  |
+| Honig Basis voor italiaanse kruidensaus | nee | Provençaalse wokgroenten: no_catalog_product; Spaghetti Original: no_catalog_product; verse basilicum: low_confidence_match; cherrytomaatjes: stale prijs (2026-09-08T08:48:28.666+00:00) |
+| Knorr Maaltijdmix lasagne bolognese | nee | lasagnebladen: package_unknown; Knorr Maaltijdmix lasagne bolognese: stale prijs (2026-09-07T18:29:21.249+00:00) |
+| Knorr Maaltijdmix tikka masala | nee | magere yoghurt: package_unknown; Knorr Maaltijdmix tikka masala: stale prijs (2026-09-07T18:29:22.853+00:00) |
+| Knorr Mix voor tagliatelle | nee | cherrytomaten: stale prijs (2026-09-08T08:48:28.666+00:00) |
 | Knorr Mix voor macaroni | ja |  |
 | Knorr Mix spaghetti bolognese | ja |  |
 | Honig Basis voor spaghettisaus bolognese | nee | gezeefde tomaten: no_catalog_product |
-| Knorr Spaghetteria carbonara | ja |  |
-| Honig Basis voor nasi speciaal | nee | nasi/bami groenten: no_catalog_product |
+| Knorr Spaghetteria carbonara | nee | Knorr Spaghetteria carbonara: stale prijs (2026-09-10T04:52:56.032+00:00) |
+| Honig Basis voor nasi speciaal | nee | nasi/bami groenten: no_catalog_product; Honig Basis voor nasi speciaal: stale prijs (2026-09-10T04:53:16.757+00:00) |
 | Honig Basis voor tagliatelle roomsaus | nee | kastanjechampignons: no_catalog_product; spinazie diepvries: low_confidence_match |
 | Knorr Mix voor nasi | nee | bosui: category_mismatch; Nasi groentepakket: no_catalog_product |
 | Knorr Maaltijdmix mac & cheese | ja |  |
-| Knorr Maaltijdmix kip madras | nee | crème fraiche light: no_catalog_product; lente-ui: category_mismatch; tomaten: package_unknown |
-| Knorr Mix macaroni carbonara | nee | hamblokjes: matcher_failed |
-| Knorr Risotto bospaddenstoelen | ja |  |
-| Knorr Wereldgerechten Mexicaanse taco`s | nee | maïs blik: no_catalog_product; tomaten: package_unknown |
+| Knorr Maaltijdmix kip madras | nee | crème fraiche light: no_catalog_product; lente-ui: category_mismatch; tomaten: package_unknown; tomaten: stale prijs (2026-09-08T08:48:28.666+00:00) |
+| Knorr Mix macaroni carbonara | nee | hamblokjes: matcher_failed; Knorr Mix macaroni carbonara: stale prijs (2026-09-12T02:27:56.964+00:00) |
+| Knorr Risotto bospaddenstoelen | nee | Knorr Risotto bospaddenstoelen: stale prijs (2026-09-07T18:28:41.937+00:00) |
+| Knorr Wereldgerechten Mexicaanse taco`s | nee | maïs blik: no_catalog_product; tomaten: package_unknown; tomaten: stale prijs (2026-09-08T08:48:28.666+00:00) |
 | Knorr Risotto truffel | ja |  |
 | Knorr Wereldgerechten maaltijdpakket mexicaanse burrito's | ja |  |
 | Honig Basis voor hachee | nee | hacheevlees: no_catalog_product |
@@ -110,13 +110,13 @@ Let op: GitHub schedule draait alleen vanuit de default branch. Deze wijziging b
 
 ## Verificatie
 
-425 webtests, 188 importertests, TypeScript en production build geslaagd. Alle 1.330 varianten zijn teruggelezen met 133 cachehits per personenaantal en nul fallback; geen dubbele cachekeys. Zie de PR voor de definitieve mobiele browser- en Preview-status. De oorspronkelijke fysieke iPhone-plannerfout is niet reproduceerbaar bewezen; deze wijziging claimt daarom geen aangetoonde serveroorzaak voor die eerdere melding.
+425 webtests, 188 importertests, lint, TypeScript en production build geslaagd. Alle 1.330 varianten zijn teruggelezen met 133 cachehits per personenaantal en nul fallback; geen dubbele cachekeys. Mobiele controle van de lokale productiebuild op 375/390/430: weekgeneratie, zoeken, productkaart, opslaan en herladen geslaagd; geen horizontale overflow of browserfouten. 4p/7d/€100/€70 met zes categorieën en een Vrije-keuzedag resulteert na selectie van Knorr Spaghetteria pesto in zeven gerechten en €52,13 aan maaltijden/lijst. Pesto: twee verpakkingen voor vier personen, €5,12. De Vercel Preview vraagt login, waardoor de gedeployde browserflow nog niet is afgetekend. De oorspronkelijke fysieke iPhone-plannerfout is niet reproduceerbaar bewezen; deze wijziging claimt daarom geen aangetoonde serveroorzaak voor die eerdere melding.
 
 ## iPhone-hertest
 
 1. Open de nieuwe Preview en gebruik vier personen, zeven dagen, €100 weekbudget en €70 maaltijdlimiet.
 2. Genereer een week met een categoriecombinatie; controleer het weekmenu en budget bovenaan.
 3. Kies Vrije keuze voor een dag. Zoek spaghetti, Honig, Knorr lasagne en burrito's.
-4. Kies een complete mix zoals Knorr Burrito's of Knorr Mix voor tagliatelle. Controleer ingrediënten, merk en verpakkingen.
+4. Kies een complete mix zoals Knorr Burrito's of Knorr Spaghetteria pesto. Controleer ingrediënten, merk en verpakkingen.
 5. Controleer dat een onvolledige mix niet als volledig beschikbaar kan worden gekozen.
 6. Voeg toe aan de lijst, heropen de app en controleer week/lijst/budgetpersistentie.
