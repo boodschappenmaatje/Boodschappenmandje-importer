@@ -24,6 +24,7 @@ export interface MealMixProfile {
   supplements: MealMixSupplement[];
   sourceUrl: string;
   verificationStatus: "verified";
+  waterOnly?: boolean;
 }
 
 function supplement(

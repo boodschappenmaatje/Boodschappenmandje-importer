@@ -17,7 +17,7 @@ export interface FreeChoiceResult {
   alternative: RecipeAlternative | null;
 }
 
-const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/['’`]/g, "");
 export function recipeMatchesQuery(recipe: Pick<Recipe, "name" | "sourceKey">, query: string): boolean {
   const profile = mealMixProfileForRecipe(recipe.sourceKey);
   const text = normalize([recipe.name, recipe.sourceKey, profile?.brand, profile?.dishName, profile?.productName, ...(profile?.productAliases ?? [])].join(" "));
@@ -87,12 +87,6 @@ export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: n
   for (const recipe of candidates) {
     results.push({ recipe, brand: mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles)?.brand ?? null,
       alternative: readyIds.has(recipe.id) ? await previewFreeChoice(preparation, dayIndex, { recipeId: recipe.id }, snapshotRecipes, snapshotProducts, list, new Date(), planningCache) : null });
-  }
-  for (const brand of ["Honig", "Knorr"]) {
-    const recipe = { id: `unavailable-${brand}-spaghetti`, sourceKey: `unavailable-${brand.toLowerCase()}-spaghetti`, name: `${brand} Spaghetti Bolognese` };
-    if (recipeMatchesQuery(recipe, query) && !results.some((item) => item.brand === brand && /spaghetti/i.test(item.recipe.name))) {
-      results.push({ recipe, brand, alternative: null });
-    }
   }
   for (const recipe of catalog.unavailableMealMixes ?? []) {
     if (recipeMatchesQuery(recipe, query) && !results.some(item => item.recipe.name === recipe.name)) results.push({ recipe, brand: recipe.brand, alternative: null });

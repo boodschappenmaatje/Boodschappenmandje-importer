@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { previewFreeChoice, recipeMatchesQuery, searchFreeChoice } from "./free-choice";
 import { matchCustomDishes, validCustomDish } from "./custom-dish";
 import { commitExplicitRecipeAlternative } from "./meal-customization";
@@ -37,6 +37,23 @@ function week(): WeekPreparation {
 const dish: CustomDish = { name: "Mijn pasta", servings: 6, ingredients: [{ id: "row1", name: "pasta", quantity: 600, unit: "g", productId: null }] };
 
 describe("PWA 13 vrije keuze", () => {
+  it("batches candidate readiness and reuses it across searches", async () => {
+    const load = vi.fn(async () => ({ available: false, readiness: [], matches: [] }));
+    const search = vi.fn(products.search);
+    const cache = createWeekPlanningSnapshotCache({ persistentRepository: { load } });
+    const twoRecipes = { ...catalog, recipes: [pasta, { ...pasta, id: "pasta-2" }],
+      relations: [...catalog.relations, { ...catalog.relations[0], id: "rel-2", recipeId: "pasta-2" }] };
+    const repository = { loadCatalog: async () => twoRecipes };
+    const first = await searchFreeChoice(week(), 0, "spaghetti", repository, { ...products, search }, undefined, cache);
+    expect(first.filter(result => result.alternative)).toHaveLength(2);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load.mock.calls[0]).toBeDefined();
+    const calls = search.mock.calls.length;
+    await searchFreeChoice(week(), 0, "spaghetti", repository, { ...products, search }, undefined, cache);
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(search).toHaveBeenCalledTimes(calls);
+  });
+
   it.each([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])("hergebruikt persistente readiness voor %i personen zonder live search", async (people) => {
     const saved = rowsForGate(await evaluateRecipeReadiness([pasta], people, catalog, products), people, now);
     let loads = 0;
@@ -170,7 +187,8 @@ describe("PWA 13 vrije keuze", () => {
     }
   });
   it("onvolledige branded spaghetti heeft geen verzonnen recept of bedrag", async () => {
-    const results = await searchFreeChoice(week(), 0, "Honig spaghetti", recipes, products);
+    const unavailable = { id: "unavailable-mix", sourceKey: "unavailable-mix", name: "Honig spaghetti", brand: "Honig" };
+    const results = await searchFreeChoice(week(), 0, "Honig spaghetti", { loadCatalog: async () => ({ ...catalog, unavailableMealMixes: [unavailable] }) }, products);
     expect(results).toHaveLength(1);
     expect(results[0].brand).toBe("Honig");
     expect(results[0].alternative).toBeNull();

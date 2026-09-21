@@ -3,8 +3,9 @@ import { pathToFileURL } from "node:url";
 import { restURL, requestHeaders } from "./supabase.mjs";
 import { parseMealMixSource } from "../apps/web/src/server/meal-mix-source.ts";
 import { MEAL_MIX_PROFILES } from "../apps/web/src/services/week-preparation/meal-mix-profiles.ts";
+import corroborations from "./meal-mix-corroboration.json" with { type: "json" };
 
-export const MEAL_MIX_PARSER_VERSION = 3;
+export const MEAL_MIX_PARSER_VERSION = 4;
 
 export async function readMealMixSource(page, product) {
   const url = new URL(product.source_url);
@@ -25,8 +26,9 @@ export function profileRecipeRow(profile, source) {
   return { source_key: profile.recipeSourceKey, name: profile.dishName,
     normalized_name: profile.dishName.toLocaleLowerCase("nl-NL"), symbol: "fork.knife",
     preparation_minutes: Math.max(...durations),
-    vegetarian: !profile.supplements.some((item) => ["Vlees", "Vis"].includes(item.category)),
-    contains_pork: profile.supplements.some((item) => /varken|spek|ham|rookworst/i.test(item.name)),
+    // The packaged mix itself can contain meat/fish even without supplements.
+    vegetarian: !profile.supplements.some((item) => ["Vlees", "Vis"].includes(item.category)) && !/\b(varken|spek|kip|rund|garnalen|vis|ansjovis)/i.test(source.text),
+    contains_pork: profile.supplements.some((item) => /varken|spek|ham|rookworst/i.test(item.name)) || /\b(varkensvlees|buikspek|spekvet)\b/i.test(source.text),
     kid_friendly: false, healthy: false, budget_tier: "standard" };
 }
 
@@ -42,14 +44,15 @@ export function mealMixApi(config, fetcher = fetch) {
 }
 
 /** Queue processing is bounded and idempotent, with compare-and-set writes. */
-export async function maintainMealMixProfiles({ api, readSource, refreshRecipes, limit = 20 }) {
+export async function maintainMealMixProfiles({ api, readSource, refreshRecipes, limit = 100, now = new Date() }) {
+  const renewBefore = new Date(now.getTime() - 20 * 60 * 60 * 1000).toISOString();
   const queued = await api("meal_mix_profiles", { select: "*",
-    or: `(status.eq.pending,and(status.eq.needs_review,parser_version.lt.${MEAL_MIX_PARSER_VERSION}),and(status.eq.verified,cache_status.eq.pending))`, order: "updated_at.asc", limit: String(Math.min(100, Math.max(1, limit))) });
+    or: `(status.eq.pending,and(status.eq.needs_review,parser_version.lt.${MEAL_MIX_PARSER_VERSION}),and(status.eq.verified,cache_status.eq.pending),and(status.eq.verified,updated_at.lt.${renewBefore}))`, order: "updated_at.asc", limit: String(Math.min(100, Math.max(1, limit))) });
   const results = [];
   for (const queue of queued) {
-    if (queue.status === "verified" && queue.cache_status === "pending") {
+    if (queue.status === "verified") {
       await refreshRecipes([queue.recipe_id]);
-      await api("meal_mix_profiles", { product_id: `eq.${queue.product_id}`, updated_at: `eq.${queue.updated_at}` }, { method: "PATCH", body: { cache_status: "current" } });
+      await api("meal_mix_profiles", { product_id: `eq.${queue.product_id}`, updated_at: `eq.${queue.updated_at}` }, { method: "PATCH", body: { cache_status: "current", updated_at: now.toISOString() } });
       results.push({ productId: queue.product_id, status: "cache_refreshed" });
       continue;
     }
@@ -59,7 +62,7 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
     let source;
     try {
       source = await readSource(product);
-      result = parseMealMixSource(source, MEAL_MIX_PROFILES);
+      result = parseMealMixSource(source, MEAL_MIX_PROFILES, corroborations[product.sku]);
     } catch { result = { status: "needs_review", reason: "source_unavailable", fingerprint: null }; }
     let recipeId = queue.recipe_id;
     if (result.status === "verified") {
@@ -77,7 +80,7 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
     const patch = { status: result.status, cache_status: "pending", reason: verified ? null : result.reason,
       recipe_id: recipeId, profile: verified ? result.profile : null,
       source_url: product.source_url, source_fingerprint: result.fingerprint,
-      source_evidence: verified ? result.evidence : null, source_product_updated_at: product.updated_at,
+      source_evidence: result.evidence ?? null, source_product_updated_at: product.updated_at,
       parser_version: MEAL_MIX_PARSER_VERSION, checked_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     const saved = await api("meal_mix_profiles", { product_id: `eq.${product.id}`, updated_at: `eq.${queue.updated_at}` }, { method: "PATCH", body: patch });
     if (!saved.length) { results.push({ productId: product.id, status: "changed_during_fetch" }); continue; }
@@ -93,7 +96,7 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
 /** Profile currency is not readiness currency: prices/dependencies and the
  * readiness TTL can change without altering the package source. Reuse verified
  * profiles and refresh only affected recipes through the existing service. */
-export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 20, now = new Date() }) {
+export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 100, now = new Date() }) {
   const profiles = await api("meal_mix_profiles", {
     select: "product_id,recipe_id,updated_at", status: "eq.verified", order: "updated_at.asc", limit: "100",
   });
@@ -135,7 +138,7 @@ async function main() {
         });
         if (!response.ok) throw Error("meal-mix-cache-refresh-failed");
       };
-    const limit = process.argv.includes("--backfill") ? 100 : 20;
+    const limit = 100;
     const results = await maintainMealMixProfiles({ api, limit, refreshRecipes,
       readSource: async (product) => { const page = await browser.newPage(); try { return await readMealMixSource(page, product); } finally { await page.close(); } },
     });

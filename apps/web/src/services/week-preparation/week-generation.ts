@@ -1241,10 +1241,10 @@ export async function generatePreparedWeek(
   const loadedCatalog = await recipeRepository.loadCatalog();
   const catalog = options.cache?.prepareCatalog(loadedCatalog, () => ({
     ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients, loadedCatalog.mealMixProfiles),
   })) ?? {
     ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients, loadedCatalog.mealMixProfiles),
   };
   const catalogMs = monotonicNow() - catalogStartedAt;
   const cacheLookupStartedAt = monotonicNow();
@@ -1378,6 +1378,7 @@ export async function revalidatePreparedWeek(
     catalog,
     catalogRepository,
     createPersistentRecipeReadinessRepository(),
+    now,
   )).gate;
   const readyIds = readyRecipeIds(readiness);
   const hasDayGap = preparation.days.some(

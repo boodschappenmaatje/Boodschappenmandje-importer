@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository";
+import type { CatalogRepository } from "@/services/catalog/catalog-repository";
+import { createCachedCatalogRepository } from "@/services/week-preparation/planning-cache";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import {
   isReliableIngredientMatch,
@@ -268,8 +270,8 @@ async function refreshWithCatalog(
   recipes: Recipe[],
   numberOfPeople: number,
   now: Date,
+  catalogRepository: CatalogRepository = new SupabaseCatalogRepository(client),
 ): Promise<PlannerCacheRefreshResult> {
-  const catalogRepository = new SupabaseCatalogRepository(client);
   const persistentRepository = new SupabasePersistentRecipeReadinessRepository(client);
   const resolution = await resolveRecipeReadiness(
     recipes,
@@ -357,6 +359,7 @@ export async function maintainPlannerReadiness(
   let refreshed = 0;
   let persistentHits = 0;
   let fallbackCount = 0;
+  const catalogRepository = createCachedCatalogRepository(new SupabaseCatalogRepository(client));
   for (const target of targets) {
     const targetIds = new Set(target.recipeIds);
     const result = await refreshWithCatalog(
@@ -365,6 +368,7 @@ export async function maintainPlannerReadiness(
       recipes.filter((recipe) => targetIds.has(recipe.id)),
       target.numberOfPeople,
       now,
+      catalogRepository,
     );
     refreshed += result.refreshed;
     persistentHits += result.persistentHits;

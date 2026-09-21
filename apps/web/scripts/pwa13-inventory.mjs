@@ -1,0 +1,14 @@
+import { loadEnvFile } from 'node:process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { createClient } from '@supabase/supabase-js';
+loadEnvFile('.env.local');
+const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, {auth:{persistSession:false}});
+const {data,error}=await db.from('meal_mix_profiles').select('*,products(id,sku,name,brand,package_text,source_url,category,updated_at)').order('product_id');
+if(error) throw error;
+mkdirSync('test-results/pwa13-cache',{recursive:true});
+const label=process.argv[2]??'before';
+writeFileSync(`test-results/pwa13-cache/inventory-${label}.json`,JSON.stringify(data,null,2));
+const lines=['| Merk | Product | SKU / product-id | Status / cache | Reden | Bron / bewijs / fingerprint | Profiel |','| --- | --- | --- | --- | --- | --- | --- |'];
+for(const r of data.sort((a,b)=>a.products.name.localeCompare(b.products.name)))lines.push(`| ${r.products.brand} | ${r.products.name} | ${r.products.sku} / ${r.product_id} | ${r.status} / ${r.cache_status} | ${r.reason??'—'} | ${r.source_url?'ja':'nee'} / ${r.source_evidence?'ja':'nee'} / ${r.source_fingerprint?'ja':'nee'} | ${r.profile?'ja':'nee'} |`);
+writeFileSync(`../../docs/pwa13-profile-inventory-${label}.md`,lines.join('\n')+'\n');
+console.log(JSON.stringify({total:data.length,verified:data.filter(r=>r.status==='verified').length,review:data.filter(r=>r.status==='needs_review').length}));

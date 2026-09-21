@@ -1,11 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseMealMixSource, matchingExistingMixProfile } from "../apps/web/src/server/meal-mix-source.ts";
+import { parseMealMixSource, matchingExistingMixProfile, mealMixPreparationFingerprint } from "../apps/web/src/server/meal-mix-source.ts";
 import { maintainMealMixProfiles, refreshStaleMealMixCaches, MEAL_MIX_PARSER_VERSION } from "../src/meal-mix-profile-maintenance.mjs";
 
 const product = { id: "product", sku: "123456789", name: "Honig Basis voor testpasta", brand: "Honig",
   package_text: "41 gram", source_url: "https://www.hoogvliet.com/product/honig-testpasta", category: "Maaltijdmixen" };
 const source = (text) => ({ product, title: product.name, text, sourceUrl: product.source_url, fetchedAt: "2026-09-20T12:00:00Z" });
+
+test("supplement aliases retain the exact vegetable and classify ham without misclassifying mushrooms", () => {
+  const result = parseMealMixSource(source("Voor 4 personen. Zelf toevoegen\n125 g achterham\n250 g champignons\n250 g cherrytomaten\n200 g doperwten\nAlgemene bereidingswijze\n20 min"));
+  assert.equal(result.status, "verified");
+  assert.deepEqual(result.profile.supplements.map(item => item.category), ["Vlees", "Groente", "Groente", "Groente"]);
+  assert.ok(result.profile.supplements[2].aliases.includes("cherry tomaten"));
+  assert.ok(result.profile.supplements[3].aliases.includes("doperwtjes"));
+});
+
+test("reviewed serving evidence cannot be reused after pack or preparation changes", () => {
+  const original=source("Gebruiksaanwijzing Zelf toevoegen\n300 g pasta\nAlgemene bereidingswijze\n20 min");
+  const evidence={preparationFingerprint:mealMixPreparationFingerprint(original),servings:4,sourceUrl:"https://www.ah.nl/producten/product/exact",evidence:"Aantal porties: 4"};
+  assert.equal(parseMealMixSource(original,[],evidence).status,"verified");
+  assert.equal(parseMealMixSource({...original,product:{...product,package_text:"82 gram"}},[],evidence).reason,"corroboration_source_changed");
+  assert.equal(parseMealMixSource({...original,text:original.text.replace("300 g","200 g")},[],evidence).reason,"corroboration_source_changed");
+});
+
+test("water-only meals need explicit exact-source evidence, never an empty inferred list", () => {
+  const original=source("Voor 2 personen. Gebruiksaanwijzing Kook de zak met 500 ml water. 12 min");
+  assert.equal(parseMealMixSource(original).status,"needs_review");
+  const evidence={preparationFingerprint:mealMixPreparationFingerprint(original),sourceUrl:product.source_url,evidence:"Alleen water",supplementList:"500 ml water",waterOnly:true};
+  const parsed=parseMealMixSource(original,[],evidence);
+  assert.equal(parsed.status,"verified");
+  assert.deepEqual(parsed.profile.supplements,[]);
+  assert.equal(parsed.profile.waterOnly,true);
+});
+
+test("separates trailing oil and cooking labels and retains declared quantities", () => {
+  const parsed=parseMealMixSource(source("Aantal porties: 4. Zelf toevoegen: 250 g rijst OlieVoorbereiding: Verhit 2 el olie. 20 min"));
+  assert.equal(parsed.status,"verified");
+  assert.deepEqual(parsed.profile.supplements.map(r=>[r.name,r.quantity,r.unit]),[["rijst",250,"g"],["olie",30,"ml"]]);
+  const canned=parseMealMixSource(source("Voor 4 personen. Zelf toevoegen\n2 blik tomatenblokjes (à 400 g)\nAlgemene bereidingswijze"));
+  assert.equal(canned.profile.supplements[0].quantity,800);
+});
+
+test("daily cache renewal reuses verified source profiles even when cache_status was current", async () => {
+  let fetches=0; const refreshed=[];
+  const results=await maintainMealMixProfiles({ api:async(table,query,options)=>options?[]:[{product_id:"p",recipe_id:"r",status:"verified",cache_status:"current",parser_version:MEAL_MIX_PARSER_VERSION,updated_at:"2026-09-20T00:00:00Z"}],readSource:async()=>{fetches++;},refreshRecipes:async ids=>refreshed.push(ids),now:new Date("2026-09-21T06:45:00Z") });
+  assert.equal(fetches,0);assert.deepEqual(refreshed,[["r"]]);assert.equal(results[0].status,"cache_refreshed");
+});
 
 test("a one-piece ingredient does not terminate the explicit shopping list", () => {
   const result = parseMealMixSource(source("Deze verpakking is geschikt voor 4 porties.\nZelf toevoegen\n300 g pasta\n1 grote ui\n2 rode paprika's\n500 ml water\nAlgemene bereidingswijze\n1 Kook de pasta. 20 min"));
