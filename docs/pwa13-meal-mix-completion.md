@@ -87,7 +87,7 @@ Gezocht in bestaande producten, productnamen, aliassen en categorieën: hacheevl
 
 Retailer- en verpakkingsonderzoek leverde geen betrouwbare exacte inhoud voor het ‘klein blikje ananas’ bij Honig kipkerrie op; een 227 g-blikje uit een los internetrecept is daarom niet aangenomen. Voor tomaten, brood en lasagnebladen is geen standaardgewicht per stuk/snee/blad verzonnen. Voor yoghurt is ml niet stilzwijgend gelijkgesteld aan gram.
 
-De tabel noemt per gerecht één voldoende blokkerende reden. Aanvullende diagnostiek: erwtensoep vraagt ook een betrouwbare halve-rookworstverpakking; Italiaanse kruidensaus heeft ook een basilicum-volumeprobleem; kip madras vraagt ook een betrouwbare stukverpakking van appel en tomaat. De volledige bestaande readiness-validator behoudt alle problemen.
+De tabel noemt per gerecht één voldoende blokkerende reden. Aanvullende diagnostiek: erwtensoep vraagt ook een betrouwbare halve-rookworstverpakking; Italiaanse kruidensaus heeft ook een basilicum-volumeprobleem; kip madras mist ook een betrouwbare stukverpakking van tomaten. Appel is opgelost met Granny Smith-appels op schaal met bekende stukaantallen. De volledige bestaande readiness-validator behoudt alle problemen.
 
 ## Beelden
 
@@ -99,13 +99,15 @@ Mapping gebruikt stabiele recipe source keys en profiel/product-ID's, niet allee
 
 400 persistente readinessvarianten (40 profielen × personen 1–10), met de bestaande evaluator en exact dezelfde berekening als de app. Unieke sleutels `recipe_id, people_count`; productmatches blijven uniek op `match_key`. De schrijfvoorbereiding gebruikt conditionele upserts zodat identieke gegevens geen tweede record of onnodige update opleveren.
 
+Finale Supabase-teruglezing op 21 september 2026 om 18:33 UTC: Honig 18/18 profielen current, Knorr 22/22 current; alle 400 varianten current, niet geïnvalideerd en niet verlopen. Voor elk persoonsaantal zijn 10 Honig- en 15 Knorr-varianten READY. Nul dubbele readiness- of matchsleutels. Een herhaalde match-upsert en readiness-upserts voor personen 1, 6 en 10 veranderden nul records; een databaseassertie controleerde iedere herhaling afzonderlijk.
+
 Parser 5 bewaart de bestaande maintenanceflow. Nieuwe/gewijzigde ondersteunde producten gaan nog steeds via broncontrole naar verified, productmatching, readiness en caches 1–10. Onderbroken cachevernieuwing kan opnieuw worden uitgevoerd zonder dubbele recepten. De bestaande dagelijkse workflow wordt pas vanuit de default branch gepland; PR #25 blijft Draft.
 
 ## Verificatie
 
 - 80 gerichte webtests: merkbehoud, verpakkingen, schaalregels 1–10, volledige merkzoeklijst, foutieve productmatches, beeldmapping/persistentie en cache-idempotentie.
 - 15 maintenance-regressies: exact bronbewijs, bronwijzigingen, servings, herstel na onderbreking en bestaande maintenanceflow.
-- TypeScript-controle en lokale Next-build geslaagd; finale checks en Preview-status staan in PR #25.
+- Gerichte lint, TypeScript-controle en definitieve lokale Next-build geslaagd; Preview-status staat in PR #25.
 - Live Supabase-audit van de volledige set via de daadwerkelijke selectie- en readinessservices; opgeslagen week heen-en-terug door de bestaande serializer gecontroleerd.
 - Browser: Honig bolognese en Knorr burrito geselecteerd, ingrediënten/verpakkingen geopend, opgeslagen en Home herladen. Beide juiste gerechtbeelden zijn geladen en behouden. Burrito voor vier personen gebruikt twee 3-persoonsmixverpakkingen en 300 g kipfilet.
 - Geen fysieke iPhone-test geclaimd.
