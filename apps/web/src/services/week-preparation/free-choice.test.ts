@@ -14,6 +14,8 @@ import { evaluateRecipeReadiness } from "./recipe-readiness";
 import { rowsForGate } from "@/server/planner-cache-service";
 import { createWeekPlanningSnapshotCache } from "./planning-cache";
 import type { PersistentProductMatchRow, PersistentRecipeReadinessRow } from "./persistent-readiness-cache";
+import reviewedProfiles from "../../../../../test/fixtures/meal-mix-reviewed-profiles.json";
+import type { MealMixProfile } from "./meal-mix-profiles";
 
 const now = new Date();
 const pasta: Recipe = { id: "pasta", sourceKey: "spaghetti", name: "Zelfgemaakte spaghetti", normalizedName: "spaghetti", symbol: "fork.knife", preparationMinutes: 20, vegetarian: true, containsPork: false, kidFriendly: true, healthy: false, budgetTier: "economical" };
@@ -37,6 +39,28 @@ function week(): WeekPreparation {
 const dish: CustomDish = { name: "Mijn pasta", servings: 6, ingredients: [{ id: "row1", name: "pasta", quantity: 600, unit: "g", productId: null }] };
 
 describe("PWA 13 vrije keuze", () => {
+  it.each(["Knorr mix", "mix"])("keeps every matching catalog mix beyond twenty results for %s", async (query) => {
+    const profiles = reviewedProfiles as MealMixProfile[];
+    const variants = profiles.map(profile => ({ ...pasta, id: profile.productId!, sourceKey: profile.recipeSourceKey, name: profile.dishName }))
+      .sort((a, b) => a.sourceKey.localeCompare(b.sourceKey));
+    const repository = { loadCatalog: async () => ({ ...catalog, recipes: variants, relations: [], mealMixProfiles: profiles }) };
+    const cache = createWeekPlanningSnapshotCache({ persistentRepository: { load: async () => ({ available: false, readiness: [], matches: [] }) } });
+    const found = await searchFreeChoice(week(), 0, query, repository, products, undefined, cache);
+    const expected = variants.filter(recipe => recipeMatchesQuery(recipe, query));
+    expect(expected.length).toBeGreaterThan(20);
+    expect(found.map(item => item.recipe.id)).toEqual(expected.map(recipe => recipe.id));
+    expect(new Set(found.map(item => item.recipe.id)).size).toBe(found.length);
+    expect(found.every(item => (query === "mix" || item.brand === "Knorr") && item.alternative === null)).toBe(true);
+  });
+
+  it("retains the twenty-result bound for ordinary recipes", async () => {
+    const variants = Array.from({ length: 25 }, (_, index) => ({ ...pasta, id: `pasta-${index}` }));
+    const repository = { loadCatalog: async () => ({ ...catalog, recipes: variants, relations: [] }) };
+    const cache = createWeekPlanningSnapshotCache({ persistentRepository: { load: async () => ({ available: false, readiness: [], matches: [] }) } });
+    const found = await searchFreeChoice(week(), 0, "spaghetti", repository, products, undefined, cache);
+    expect(found.map(item => item.recipe.id)).toEqual(variants.slice(0, 20).map(recipe => recipe.id));
+  });
+
   it('shows the complete branded inventory even when Knorr has more than twenty variants', async () => {
     const variants=Array.from({length:22},(_,i)=>({...pasta,id:`mix-${i}`,sourceKey:`catalog-mix-test-${i}`,name:`Knorr maaltijdmix ${i}`}));
     const repository={loadCatalog:async()=>({...catalog,recipes:variants,relations:[]})};

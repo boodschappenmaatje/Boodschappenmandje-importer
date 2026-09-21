@@ -70,8 +70,10 @@ export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: n
   if (query.trim().length < 2) return [];
   const catalog = await recipes.loadCatalog();
   const matching = catalog.recipes.filter((recipe) => recipeMatchesQuery(recipe, query));
-  // A brand search must include the complete supported mix inventory (Knorr >20).
-  const candidates = /^(honig|knorr)$/i.test(query.trim()) ? matching : matching.slice(0, 20);
+  // Combined queries (e.g. "Knorr mix") must retain the complete matching mix
+  // inventory too. Keep the existing bound for ordinary recipe results.
+  const candidates = /^(honig|knorr)$/i.test(query.trim()) ? matching : matching.filter((recipe, index) =>
+    index < 20 || mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles) !== null);
   // One snapshot and one batched persistent lookup, including selected dishes
   // needed by the unchanged whole-week budget and package calculations.
   const snapshotRecipes: RecipeRepository = { loadCatalog: async () => catalog };
