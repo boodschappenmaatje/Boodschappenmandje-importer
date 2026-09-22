@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { CatalogFilterOptions, CatalogQuery, CatalogSort } from "@/types/catalog";
 
@@ -59,15 +59,29 @@ function CatalogFilterPanel({
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState(query);
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    panel.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    return () => previous?.focus();
+  }, []);
 
   return (
     <section
+      ref={panel}
       className="catalog-filter-sheet"
       role="dialog"
       aria-modal="true"
       aria-labelledby="catalog-filter-title"
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
+        if (event.key === "Tab") {
+          const controls = Array.from(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]), select, input, [tabindex="0"]') ?? []);
+          const first = controls[0];
+          const last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+        }
       }}
     >
       <div className="catalog-filter-panel">

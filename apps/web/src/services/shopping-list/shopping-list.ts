@@ -85,6 +85,7 @@ function rebuildContributedItem(
   return {
     ...item,
     quantity,
+    ...(quantity > item.quantity ? { checked: false } : {}),
     quantityContributions: contributions,
     sources: sourcesForContributions(item.sources, contributions),
     usedIn: mealPlanUsedIn(contributions.mealPlans),
@@ -175,9 +176,11 @@ export function addCatalogProduct(
       ...existing,
       name: product.name,
       brand: product.brand,
+      category: product.category,
       packageText: product.packageText,
       imageUrl: product.imageUrl,
       quantity: existing.quantity + 1,
+      checked: false,
       quantityContributions: {
         ...existing.quantityContributions,
         persistentQuantity:
@@ -195,6 +198,7 @@ export function addCatalogProduct(
     sku: product.sku,
     name: product.name,
     brand: product.brand,
+    category: product.category,
     packageText: product.packageText,
     imageUrl: product.imageUrl,
     quantity: 1,
@@ -295,6 +299,7 @@ export function completeShoppingListFromWeek(
         sku: existing.sku ?? product.sku,
         name: product.name,
         brand: product.brand,
+        category: product.category ?? existing.category,
         packageText: product.packageText,
         imageUrl: product.imageUrl,
         price: price ?? existing.price,
@@ -333,6 +338,7 @@ export function completeShoppingListFromWeek(
     items.push({
       productId: product.productId,
       sku: product.sku,
+      category: product.category,
       name: product.name,
       brand: product.brand,
       packageText: product.packageText,
@@ -537,6 +543,7 @@ export function refreshShoppingListFromCatalog(
       sku: item.sku ?? product.sku,
       name: product.name,
       brand: product.brand,
+      category: product.category,
       packageText: product.packageText,
       imageUrl: product.imageUrl,
       price: refreshedPrice ?? item.price,
@@ -571,4 +578,22 @@ export function calculateShoppingListTotal(
     missingPriceItemCount,
     isPartial: pricedItemCount > 0 && missingPriceItemCount > 0,
   };
+}
+
+/** Checking an item never changes its price, quantity, or meal-plan ownership. */
+export function toggleShoppingListItem(list: ActiveShoppingList, productId: string, now: Date | string = new Date()): ActiveShoppingList {
+  if (!list.items.some((item) => item.productId === productId)) return list;
+  const timestamp = nowIso(now);
+  return { ...list, updatedAt: timestamp, items: list.items.map((item) => item.productId === productId ? { ...item, checked: !item.checked, updatedAt: timestamp } : item) };
+}
+
+export type ShoppingListFilter = "all" | "remaining" | "checked";
+export function groupShoppingListItems(items: ShoppingListItem[], filter: ShoppingListFilter): [string, ShoppingListItem[]][] {
+  const groups = new Map<string, ShoppingListItem[]>();
+  for (const item of items) {
+    if (filter === "remaining" && item.checked || filter === "checked" && !item.checked) continue;
+    const category = item.category?.split("/")[0]?.trim() || "Overige boodschappen";
+    groups.set(category, [...(groups.get(category) ?? []), item]);
+  }
+  return [...groups.entries()];
 }

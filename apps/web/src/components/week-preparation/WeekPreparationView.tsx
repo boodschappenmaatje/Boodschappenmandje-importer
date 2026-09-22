@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState } from "react";
 
 import { DishImage } from "@/components/ui/DishImage";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
@@ -62,6 +62,9 @@ export function WeekPreparationView() {
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
+  const [step, setStep] = useState<number | null>(null);
+  const flowTop = useRef<HTMLDivElement>(null);
+  function goToStep(next: number) { setStep(next); requestAnimationFrame(() => { flowTop.current?.focus({ preventScroll: true }); flowTop.current?.scrollIntoView({ block: "start", behavior: "smooth" }); }); }
   const [budgetDraft, setBudgetDraft] = useState<string | null>(null);
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [mealBudgetDraft, setMealBudgetDraft] = useState<string | null>(null);
@@ -106,6 +109,7 @@ export function WeekPreparationView() {
   }
 
   const preparation = week.preparation;
+  const currentStep = step ?? (preparation.status === "draft" ? 0 : 3);
   const progress = distributionProgress(
     preparation.categoryDistribution,
     preparation.numberOfDays,
@@ -170,36 +174,17 @@ export function WeekPreparationView() {
   const completionActionBlocked =
     listCompletionBlocked || week.pendingBudgetReapproval !== null;
 
-  function saveBudget(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const cents = parseDutchEuroInput(displayedBudget);
-    if (cents === null) {
-      setBudgetError("Vul een geldig bedrag in, bijvoorbeeld 100 of 75,50.");
-      return;
+  function nextStep() {
+    if (currentStep === 0) {
+      const cents = parseDutchEuroInput(displayedBudget);
+      const mealCents = parseDutchEuroInputAllowZero(displayedMealBudget);
+      setBudgetError(cents === null ? "Vul een geldig weekbudget in." : null);
+      setMealBudgetError(mealCents === null ? "Vul een geldig maaltijdbudget in." : cents !== null && mealCents > cents ? "Het maaltijdbudget kan niet hoger zijn dan je weekbudget." : null);
+      if (cents === null || mealCents === null || mealCents > cents || !preparation.numberOfPeople || !preparation.numberOfDays) return;
+      if (cents !== budget.settings.budgetCents) week.setBudgetCents(cents);
+      if (mealCents !== preparation.mealBudgetCents) week.setMealBudgetCents(mealCents);
     }
-    week.setBudgetCents(cents);
-    setBudgetDraft(centsToDutchInput(cents));
-    setBudgetError(null);
-  }
-
-  function saveMealBudget(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const cents = parseDutchEuroInputAllowZero(displayedMealBudget);
-    if (cents === null) {
-      setMealBudgetError("Vul een geldig bedrag in, bijvoorbeeld 50 of 45,50.");
-      return;
-    }
-    if (budget.settings.budgetCents === null) {
-      setMealBudgetError("Stel eerst je totale weekbudget in.");
-      return;
-    }
-    if (cents > budget.settings.budgetCents) {
-      setMealBudgetError("Het maaltijd-budget kan niet hoger zijn dan je weekbudget.");
-      return;
-    }
-    week.setMealBudgetCents(cents);
-    setMealBudgetDraft(centsToDutchInput(cents));
-    setMealBudgetError(null);
+    goToStep(Math.min(3, currentStep + 1));
   }
 
   const progressMessage =
@@ -212,14 +197,18 @@ export function WeekPreparationView() {
           : "Alle dagen zijn verdeeld";
 
   return (
-    <div className="week-preparation-flow">
+    <div className="week-preparation-flow" ref={flowTop} tabIndex={-1}>
+      <nav className="ux-step-progress" aria-label="Weekvoorbereiding stappen">
+        <p>Stap {currentStep + 1} van 4</p>
+        <ol>{["Basis", "Maaltijden", "Voorkeuren", "Overzicht"].map((label, index) => <li key={label} aria-current={index === currentStep ? "step" : undefined}><span>{index + 1}</span>{label}</li>)}</ol>
+      </nav>
       {week.persistenceWarning ? (
         <p className="catalog-notice" role="status">
           {week.persistenceWarning}
         </p>
       ) : null}
 
-      {preparation.status !== "draft" ? (
+      {currentStep === 3 && preparation.status !== "draft" ? (
         <section className="dashboard-card prepared-week-overview" aria-labelledby="prepared-week-title">
           <div className="dashboard-card-heading">
             <div>
@@ -447,8 +436,7 @@ export function WeekPreparationView() {
                               </span>
                             </summary>
                             <div className="recipe-detail-content">
-                            <DishBudgetSummary preparation={preparation} dayIndex={day.dayIndex} />
-                            <DishImage
+                                                        <DishImage
                               asset={dishImage}
                               className="recipe-detail-hero"
                               sizes="(max-width: 560px) calc(100vw - 60px), 500px"
@@ -459,9 +447,13 @@ export function WeekPreparationView() {
                             </p>
 
 
+                            <h3>{dishTitle}</h3>
+                            <DishBudgetSummary preparation={preparation} dayIndex={day.dayIndex} />
+                            <details className="ux-ingredients"><summary>Wat je nodig hebt · {dayIngredients.length} ingrediënten</summary>
                             <DishIngredients ingredients={dayIngredients} dayIndex={day.dayIndex} renderAction={(ingredient) => ingredient.product && ingredient.price && ingredient.purchaseQuantity !== null ? (
                               <ProductAlternativeControl dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
                             ) : null} />
+                            </details>
 {day.category === "freeChoice" ? <FreeChoiceControl key={day.recipeId} dayIndex={day.dayIndex} initialDish={day.customDish} /> : !dishNeedsReview ? (
                               <MealReplacementControl
                                 dayIndex={day.dayIndex}
@@ -609,7 +601,7 @@ export function WeekPreparationView() {
         </section>
       ) : null}
 
-      <section className="dashboard-card current-list-context" aria-labelledby="current-list-title">
+      <section hidden={currentStep !== 3} className="dashboard-card current-list-context" aria-labelledby="current-list-title">
         <div className="dashboard-card-heading">
           <div>
             <p className="card-eyebrow">Blijft behouden</p>
@@ -634,7 +626,7 @@ export function WeekPreparationView() {
         )}
       </section>
 
-      <section className="dashboard-card week-basics" aria-labelledby="week-basics-title">
+      <section hidden={currentStep !== 0} className="dashboard-card week-basics" aria-labelledby="week-basics-title">
         <div>
           <p className="card-eyebrow">Stap 1</p>
           <h2 id="week-basics-title">Huishouden en budget</h2>
@@ -673,7 +665,7 @@ export function WeekPreparationView() {
             </select>
           </label>
         </div>
-        <form className="week-budget-form" onSubmit={saveBudget}>
+        <form className="week-budget-form" onSubmit={(event) => { event.preventDefault(); nextStep(); }}>
           <label htmlFor="week-preparation-budget">Weekbudget in euro&apos;s</label>
           <div className="budget-input-row">
             <span aria-hidden="true">€</span>
@@ -690,7 +682,6 @@ export function WeekPreparationView() {
               aria-invalid={budgetError ? "true" : "false"}
               aria-describedby={budgetError ? "week-budget-error" : undefined}
             />
-            <button type="submit">Bewaren</button>
           </div>
           {budgetError ? (
             <p id="week-budget-error" className="budget-input-error" role="alert">
@@ -700,7 +691,7 @@ export function WeekPreparationView() {
             <p className="budget-input-help">Dit is hetzelfde budget als op Budget.</p>
           )}
         </form>
-        <form className="week-budget-form meal-budget-form" onSubmit={saveMealBudget}>
+        <form className="week-budget-form meal-budget-form" onSubmit={(event) => { event.preventDefault(); nextStep(); }}>
           <label htmlFor="week-preparation-meal-budget">
             Maximaal voor avondmaaltijden
           </label>
@@ -723,7 +714,6 @@ export function WeekPreparationView() {
                   : "meal-budget-help"
               }
             />
-            <button type="submit">Bewaren</button>
           </div>
           {mealBudgetError ? (
             <p id="meal-budget-error" className="budget-input-error" role="alert">
@@ -740,7 +730,7 @@ export function WeekPreparationView() {
         </form>
       </section>
 
-      <section className="dashboard-card week-preferences" aria-labelledby="week-preferences-title">
+      <section hidden={currentStep !== 2} className="dashboard-card week-preferences" aria-labelledby="week-preferences-title">
         <div>
           <p className="card-eyebrow">Voorkeuren</p>
           <h2 id="week-preferences-title">Wat is belangrijk?</h2>
@@ -781,7 +771,7 @@ export function WeekPreparationView() {
         </div>
       </section>
 
-      <section className="dashboard-card week-distribution" aria-labelledby="week-distribution-title">
+      <section hidden={currentStep !== 1} className="dashboard-card week-distribution" aria-labelledby="week-distribution-title">
         <div className="dashboard-card-heading">
           <div>
             <p className="card-eyebrow">Stap 2</p>
@@ -827,28 +817,29 @@ export function WeekPreparationView() {
           />
           <strong>{progressMessage}</strong>
         </div>
-        <button
-          className="primary-action"
-          type="button"
-          disabled={!ready}
-          onClick={week.confirmPreparation}
-        >
-          Week voorbereiden
-        </button>
-        {!ready && progress.state === "exact" ? (
-          <p className="week-required-note" role="status">
-            Kies personen, dagen, een weekbudget en een maaltijd-budget om verder te gaan.
-          </p>
-        ) : null}
       </section>
 
+      {currentStep === 3 && preparation.status === "draft" ? <section className="dashboard-card ux-preparation-review" aria-label="Controleer je week">
+        <h2>Klaar voor jouw week?</h2>
+        <p>{preparation.numberOfPeople} personen · {preparation.numberOfDays} dagen</p>
+        <p>Weekbudget: {formatCents(budget.settings.budgetCents ?? 0)} · Maaltijden: maximaal {formatCents(preparation.mealBudgetCents ?? 0)}</p>
+        <ul>{MEAL_CATEGORIES.filter((category) => preparation.categoryDistribution[category] > 0).map((category) => <li key={category}>{preparation.categoryDistribution[category]} × {MEAL_CATEGORY_LABELS[category]}</li>)}</ul>
+        <p>Je huidige boodschappen blijven behouden.</p>
+      </section> : null}
+      <div className="ux-step-actions">
+        {currentStep > 0 ? <button type="button" onClick={() => goToStep(currentStep - 1)} disabled={preparation.status === "generating"}>Terug</button> : null}
+        {currentStep < 3 ? <button type="button" className="primary-action" onClick={nextStep} disabled={currentStep === 0 ? !preparation.numberOfPeople || !preparation.numberOfDays : currentStep === 1 ? progress.state !== "exact" : false}>Volgende</button> : preparation.status === "draft" || preparation.status === "generationError" ? <button className="primary-action" type="button" disabled={!ready} onClick={week.confirmPreparation}>Week voorbereiden</button> : preparation.status !== "generating" ? <button type="button" onClick={() => goToStep(0)}>Weekinstellingen aanpassen</button> : null}
+      </div>
+      <details className="ux-advanced"><summary>Nieuwe week en extra opties</summary>
       <NewWeekControl
         onStartNew={async () => {
           await week.startNewPreparation();
+          goToStep(0);
           setBudgetDraft(null);
           setMealBudgetDraft(null);
         }}
       />
+      </details>
     </div>
   );
 }

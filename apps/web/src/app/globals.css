@@ -4311,3 +4311,70 @@ html {
 @media (prefers-reduced-motion: reduce) {
   :where(button, a, input, select, textarea, summary) { transition: none; }
 }
+/* Guided UX: retain the approved palette and keep secondary information quiet. */
+[hidden] { display: none !important; }
+.ux-greeting h1 { font-size: 1.35rem; margin: 0 0 6px; }
+.ux-greeting p { color: var(--color-muted); margin: 0; }
+.ux-home-actions { display: grid; gap: 10px; }
+.ux-home-actions .home-primary-action > span { display: grid; gap: 3px; }
+.ux-home-actions .home-primary-action small { font-size: .8rem; font-weight: 400; }
+.ux-secondary-action { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 48px; border-radius: var(--radius-small); background: var(--color-primary-soft); color: var(--color-primary-dark); font-weight: 700; text-decoration: none; }
+.ux-budget-hero { display: grid; gap: 5px; padding: 12px 0; }
+.ux-budget-hero strong { font-size: clamp(1.7rem, 8vw, 2.3rem); color: var(--color-primary-dark); }
+.ux-budget-hero small { color: var(--color-muted); }
+.ux-budget-hero[data-tone="danger"] strong { color: var(--color-danger); }
+.ux-step-progress { padding: 12px 0; }
+.ux-step-progress p { color: var(--color-muted); font-size: .85rem; }
+.ux-step-progress ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; list-style: none; padding: 0; }
+.ux-step-progress li { display: grid; gap: 6px; justify-items: center; font-size: .75rem; color: var(--color-muted); text-align: center; overflow-wrap: anywhere; }
+.ux-step-progress li span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--color-primary-soft); }
+.ux-step-progress li[aria-current="step"] { color: var(--color-primary-dark); font-weight: 800; }
+.ux-step-progress li[aria-current="step"] span { color: var(--color-on-primary); background: var(--color-primary); }
+.ux-step-actions { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 5; display: flex; gap: 12px; padding: 12px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-medium); box-shadow: var(--shadow-card); }
+.ux-step-actions .primary-action { flex: 1; justify-content: center; }
+.ux-step-actions > button { min-height: 48px; }
+.ux-advanced, .ux-future-options { margin-top: 16px; color: var(--color-muted); }
+.ux-advanced summary, .ux-future-options summary, .ux-budget-breakdown summary, .ux-ingredients summary, .ux-app-info summary { min-height: 44px; padding: 12px 4px; cursor: pointer; color: var(--color-primary-dark); font-weight: 650; }
+.ux-ingredients { border-top: 1px solid var(--color-border); }
+.ux-budget-breakdown { margin-block: 12px; }
+.ux-budget-layout { display: grid; grid-template-columns: 1fr; justify-items: center; }
+.ux-budget-layout .budget-donut { width: min(230px, 100%); }
+.ux-budget-layout .budget-donut strong { font-size: clamp(1.2rem, 6vw, 1.8rem); }
+.ux-budget-layout .budget-donut span { font-size: .95rem; }
+.ux-budget-layout .budget-donut > div { max-width: 65%; overflow-wrap: anywhere; }
+.free-choice-routes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.free-choice-routes button { padding: 12px 6px; font-size: .9rem; }
+.free-choice-results > li { display: block; padding: 0; }
+.free-choice-results .ux-dish-result { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; border: 0; padding: 12px; background: var(--color-surface); color: var(--color-text); }
+.ux-dish-result > div { min-width: 0; }
+.ux-dish-result p { font-size: .85rem; color: var(--color-muted); margin: 4px 0; }
+.ux-list-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.ux-list-filters button { min-height: 44px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-primary-dark); font-size: .8rem; }
+.ux-list-filters button[aria-pressed="true"] { background: var(--color-primary); color: var(--color-on-primary); }
+.ux-shopping-category h3 { margin: 16px 0 8px; font-size: 1rem; color: var(--color-primary-dark); }
+.shopping-item-card.ux-shopping-row { grid-template-columns: 44px minmax(0, 1fr) 44px; padding: 10px 8px; box-shadow: none; gap: 4px 8px; }
+.ux-shopping-row .shopping-item-image { display: none; }
+.ux-shopping-row .shopping-item-copy { grid-column: 2; }
+.ux-shopping-row .shopping-item-copy h2 { display: block; overflow: visible; font-size: .95rem; line-height: 1.4; }
+.ux-shopping-row .shopping-item-copy p { font-size: .8rem; }
+.ux-check-item { width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer; }
+.ux-check-item input { width: 24px; height: 24px; min-height: 24px; accent-color: var(--color-success-text); }
+.ux-shopping-row[data-checked="true"] { background: var(--color-success-soft); }
+.ux-shopping-row[data-checked="true"] .shopping-item-copy h2 { text-decoration: line-through; }
+.ux-shopping-row .quantity-control { grid-column: 2 / 4; }
+.ux-item-source { font-size: .75rem; color: var(--color-muted); }
+.ux-item-source summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+.product-card.ux-product-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; padding: 12px; gap: 8px; }
+.ux-product-row .product-detail-link { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 0; }
+.ux-product-row .product-image { width: 52px; height: 64px; min-height: 0; }
+.ux-product-row .product-details { min-width: 0; }
+.ux-product-row .product-details h2 { font-size: .95rem; overflow-wrap: anywhere; }
+.ux-product-row .product-add-row { display: grid; margin: 0; padding: 0; gap: 4px; }
+.ux-product-row .product-add-button { min-width: 44px; min-height: 44px; padding: 0; justify-content: center; }
+.ux-product-row .product-list-quantity { font-size: .7rem; text-align: center; }
+.ux-app-info { display: block; }
+@media (max-width: 600px) {
+  .product-grid { grid-template-columns: minmax(0, 1fr); }
+  .ux-step-actions { bottom: calc(68px + env(safe-area-inset-bottom)); }
+  .ux-home .week-hero-card { padding: 14px; }
+}

@@ -61,7 +61,7 @@ describe("dashboard rendering", () => {
     expect(html).toContain("Jouw week");
     expect(html).toContain("Deze week");
     expect(html).toContain("Nog geen gerechten gekozen");
-    expect(html).toContain("Boodschappenlijst");
+    expect(html).toContain("Verder met mijn lijst");
     expect(html).toContain('href="/budget"');
     expect(html).toContain("Bekijk weekbudget");
     expect(html).toContain('aria-label="Bekijk je weekbudget"');
@@ -80,7 +80,7 @@ describe("dashboard rendering", () => {
   it("toont echte actieve-lijstinformatie in de compacte Home-snelkoppeling", () => {
     const html = renderWithList(createElement(HomePage), true);
 
-    expect(html).toContain("Boodschappenlijst");
+    expect(html).toContain("Verder met mijn lijst");
     expect(html).toContain("1 product");
     expect(html).toContain("€ 0,00 bekend");
   });

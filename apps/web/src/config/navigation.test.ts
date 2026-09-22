@@ -8,7 +8,7 @@ describe("mobiele hoofdnavigatie", () => {
       { label: "Home", href: "/" },
       { label: "Menu", href: "/week-voorbereiden" },
       { label: "Lijst", href: "/lijst" },
-      { label: "Producten", href: "/producten" },
+      { label: "Budget", href: "/budget" },
       { label: "Meer", href: "/meer" },
     ]);
   });

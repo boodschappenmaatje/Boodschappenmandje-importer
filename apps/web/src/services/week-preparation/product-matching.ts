@@ -468,6 +468,7 @@ export function applyProductToRequirement(
       imageUrl: product.imageUrl,
       supermarket: product.supermarket,
       sourceUrl: product.sourceUrl,
+      category: product.category,
     },
     price:
       resolvedPrice && amountCents !== null
@@ -523,6 +524,7 @@ export function applyManualProductToRequirement(
       imageUrl: product.imageUrl,
       supermarket: product.supermarket,
       sourceUrl: product.sourceUrl,
+      category: product.category,
     },
     price:
       resolvedPrice && amountCents !== null

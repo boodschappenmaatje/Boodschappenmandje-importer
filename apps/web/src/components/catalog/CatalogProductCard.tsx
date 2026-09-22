@@ -79,7 +79,7 @@ export function CatalogProductCard({
   const description = [product.brand, product.packageText].filter(Boolean).join(" · ");
 
   return (
-    <article className="product-card">
+    <article className="product-card ux-product-row">
       <Link
         className="product-detail-link"
         href={`/producten/${encodeURIComponent(product.id)}`}
@@ -95,9 +95,6 @@ export function CatalogProductCard({
           {!imageStyle ? <Icon name="products" size={27} /> : null}
         </div>
         <div className="product-details">
-          <p className="product-category">
-            {product.category ?? product.productType ?? product.supermarket}
-          </p>
           <h2>{product.name}</h2>
           {description ? <p className="product-description">{description}</p> : null}
           <CatalogPriceBlock product={product} />
@@ -112,7 +109,7 @@ export function CatalogProductCard({
           onClick={onAdd}
         >
           <Icon name="plus" size={18} />
-          {isAdding ? "Toevoegen…" : listQuantity > 0 ? "Nog één" : "Toevoegen"}
+          <span className="visually-hidden">{isAdding ? "Toevoegen…" : "Toevoegen"}</span>
         </button>
         {listQuantity > 0 ? (
           <span className="product-list-quantity">Op je lijst · {listQuantity}</span>

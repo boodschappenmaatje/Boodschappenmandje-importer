@@ -1,4 +1,3 @@
-import { useId, useRef } from "react";
 import { formatCents } from "@/services/budget/budget-engine";
 import { calculateDishCostSummary } from "@/services/week-preparation/week-generation";
 import type { WeekPreparation } from "@/types/week-preparation";
@@ -9,8 +8,6 @@ export function DishBudgetSummary({ preparation, dayIndex, expandable = false }:
   dayIndex: number;
   expandable?: boolean;
 }) {
-  const details = useRef<HTMLDetailsElement>(null);
-  const detailsId = useId();
   const ingredients = preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex));
   const cost = calculateDishCostSummary(dayIndex, preparation.ingredients);
   const remaining = preparation.generation?.mealBudgetRemainingCents ?? null;
@@ -23,11 +20,11 @@ export function DishBudgetSummary({ preparation, dayIndex, expandable = false }:
     {remaining !== null ? <p>Maaltijdbudget na keuze: {formatCents(remaining)} over{!preparation.generation?.isMealBudgetComplete ? " · voorlopig" : ""}</p> : null}
     <p>Benodigd: {new Set(ingredients.map((item) => item.product?.productId ?? item.ingredientId)).size} producten</p>
     {expandable ? <>
-      <button type="button" className="text-action" aria-controls={detailsId} onClick={() => { if (details.current) details.current.open = true; details.current?.scrollIntoView({ block: "start" }); }}>Bekijk ingrediënten</button>
-      <details ref={details} id={detailsId}>
-        <summary>Ingrediënten en producten</summary>
+      <details className="ux-ingredients">
+        <summary>Wat je nodig hebt · {ingredients.length} ingrediënten</summary>
         <DishIngredients ingredients={ingredients} dayIndex={dayIndex} />
       </details>
+      {ingredients.some((item) => item.kind === "mealMix") ? <details className="ux-ingredients"><summary>In de verpakking</summary>{ingredients.filter((item) => item.kind === "mealMix").map((item) => <p key={item.ingredientId}><strong>{item.product?.name ?? item.name}</strong> · {item.product?.packageText ?? "Zie productinformatie"}</p>)}</details> : null}
     </> : null}
   </div>;
 }

@@ -9,9 +9,11 @@ import { ListBudgetSummary } from "@/components/budget/ListBudgetSummary";
 import { ShoppingListItemCard } from "@/components/shopping-list/ShoppingListItemCard";
 import { ShoppingListProductSearch } from "@/components/shopping-list/ShoppingListProductSearch";
 import { ShoppingListTotalCard } from "@/components/shopping-list/ShoppingListTotalCard";
+import { groupShoppingListItems, type ShoppingListFilter } from "@/services/shopping-list/shopping-list";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 
 export function ActiveShoppingListView() {
+  const [filter, setFilter] = useState<ShoppingListFilter>("all");
   const [searchOpen, setSearchOpen] = useState(false);
   const {
     status,
@@ -19,6 +21,7 @@ export function ActiveShoppingListView() {
     total,
     persistenceWarning,
     lastRemoved,
+    toggleChecked,
     increase,
     decrease,
     remove,
@@ -62,7 +65,11 @@ export function ActiveShoppingListView() {
         <p className="catalog-notice" role="status">{persistenceWarning}</p>
       ) : null}
 
+      <ShoppingListTotalCard total={total} />
       <ListBudgetSummary />
+      <div className="ux-list-filters" role="group" aria-label="Boodschappen filteren">
+        {([["all", "Alles"], ["remaining", "Nog te halen"], ["checked", "Afgevinkt"]] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} ({value === "all" ? list.items.length : list.items.filter((item) => value === "checked" ? item.checked : !item.checked).length})</button>)}
+      </div>
 
       {list.items.length === 0 ? (
         <section className="dashboard-card route-empty-card">
@@ -97,19 +104,15 @@ export function ActiveShoppingListView() {
             </button>
           </div>
 
-          <ul className="shopping-items">
-            {list.items.map((item) => (
-              <ShoppingListItemCard
-                key={item.productId}
-                item={item}
-                onIncrease={() => void increase(item.productId)}
-                onDecrease={() => void decrease(item.productId)}
-                onRemove={() => void remove(item.productId)}
-              />
-            ))}
-          </ul>
+          {groupShoppingListItems(list.items, filter).map(([category, items]) => <section className="ux-shopping-category" key={category} aria-label={category}>
+            <h3>{category}</h3>
+            <ul className="shopping-items">{items.map((item) => <ShoppingListItemCard key={item.productId} item={item}
+              onToggleChecked={() => void toggleChecked(item.productId)}
+              onIncrease={() => void increase(item.productId)} onDecrease={() => void decrease(item.productId)} onRemove={() => void remove(item.productId)} />)}</ul>
+          </section>)}
+          {groupShoppingListItems(list.items, filter).length === 0 ? <p role="status">{filter === "checked" ? "Nog niets afgevinkt." : "Alles is afgevinkt. Klaar voor deze ronde!"}</p> : null}
+          <Link className="secondary-text-link" href="/producten">Producten zoeken</Link>
 
-          <ShoppingListTotalCard total={total} />
         </section>
       )}
 

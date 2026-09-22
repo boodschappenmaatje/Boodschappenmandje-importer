@@ -39,6 +39,16 @@ function week(): WeekPreparation {
 const dish: CustomDish = { name: "Mijn pasta", servings: 6, ingredients: [{ id: "row1", name: "pasta", quantity: 600, unit: "g", productId: null }] };
 
 describe("PWA 13 vrije keuze", () => {
+  it.each(["recipe", "mix"] as const)("scheidt route %s vóór de resultaatlimiet en behoudt het volledige mixaanbod", async (route) => {
+    const profiles = reviewedProfiles as MealMixProfile[];
+    const mixes = profiles.map(profile => ({ ...pasta, id: profile.productId!, sourceKey: profile.recipeSourceKey, name: `spaghetti ${profile.dishName}` }));
+    const repository = { loadCatalog: async () => ({ ...catalog, recipes: [...mixes, pasta], relations: [], mealMixProfiles: profiles }) };
+    const cache = createWeekPlanningSnapshotCache({ persistentRepository: { load: async () => ({ available: false, readiness: [], matches: [] }) } });
+    const found = await searchFreeChoice(week(), 0, "spaghetti", repository, products, undefined, cache, route);
+    expect(found.map(item => item.recipe.id)).toEqual(route === "recipe" ? [pasta.id] : mixes.map(item => item.id));
+    expect(found.every(item => route === "recipe" ? item.brand === null : item.brand !== null)).toBe(true);
+  });
+
   it.each(["Knorr mix", "mix"])("keeps every matching catalog mix beyond twenty results for %s", async (query) => {
     const profiles = reviewedProfiles as MealMixProfile[];
     const variants = profiles.map(profile => ({ ...pasta, id: profile.productId!, sourceKey: profile.recipeSourceKey, name: profile.dishName }))

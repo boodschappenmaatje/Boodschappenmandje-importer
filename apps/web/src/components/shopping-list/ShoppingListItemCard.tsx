@@ -39,18 +39,21 @@ export function ShoppingListItemCard({
   onIncrease,
   onDecrease,
   onRemove,
+  onToggleChecked,
 }: {
   item: ShoppingListItem;
   onIncrease: () => void;
   onDecrease: () => void;
   onRemove: () => void;
+  onToggleChecked?: () => void;
 }) {
   const productImageStyle = imageStyle(item.imageUrl);
   const description = shoppingListItemDescription(item);
   const usedInLabel = shoppingListUsedInLabel(item.usedIn);
 
   return (
-    <li className="shopping-item-card">
+    <li className="shopping-item-card ux-shopping-row" data-checked={Boolean(item.checked)}>
+      <label className="ux-check-item"><input type="checkbox" checked={Boolean(item.checked)} onChange={onToggleChecked} aria-label={`Afvinken ${item.name}`} /><span className="visually-hidden">{item.name}</span></label>
       <div
         className="shopping-item-image"
         data-has-image={Boolean(productImageStyle)}
@@ -81,7 +84,7 @@ export function ShoppingListItemCard({
             Prijs tijdelijk niet beschikbaar
           </span>
         )}
-        {usedInLabel ? <p className="shopping-item-used-in">{usedInLabel}</p> : null}
+        {usedInLabel ? <details className="ux-item-source"><summary>Voor je maaltijden</summary><p>{usedInLabel}</p></details> : null}
       </div>
 
       <button

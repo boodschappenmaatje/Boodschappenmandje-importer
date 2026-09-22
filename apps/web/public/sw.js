@@ -1,6 +1,6 @@
 /* BoodschappenMaatje PWA-shell. Geen database- of gebruikersdata wordt hier gecachet. */
 const CACHE_PREFIX = "boodschappenmaatje-shell";
-const CACHE_VERSION = "metallic-blue-v1-2026-09-22";
+const CACHE_VERSION = "metallic-blue-ux-v1-2026-09-22";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const APP_SHELL = [
   "/",

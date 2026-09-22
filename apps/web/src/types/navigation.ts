@@ -1,4 +1,4 @@
-export type NavigationIcon = "home" | "menu" | "list" | "products" | "more";
+export type NavigationIcon = "home" | "menu" | "list" | "products" | "budget" | "more";
 
 export interface NavigationItem {
   href: string;
