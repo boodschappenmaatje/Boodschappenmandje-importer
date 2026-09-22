@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export const SERVICE_WORKER_RELEASE = "app-icon-maatje-v1-2026-09-20";
+export const SERVICE_WORKER_RELEASE = "metallic-blue-v1-2026-09-22";
 
 export function PwaRegistrar() {
   useEffect(() => {
