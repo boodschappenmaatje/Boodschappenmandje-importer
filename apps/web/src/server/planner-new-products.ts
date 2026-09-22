@@ -100,6 +100,7 @@ export async function maintainPlannerForNewProducts(
     // Compare-and-set: a concurrent repair/invalidation must never be overwritten.
     const result = await client.from("ingredient_product_matches").update({
       product_id: product.id,
+      candidate_product_ids: [product.id],
       match_status: "valid",
       failure_reason: null,
       product_updated_at: product.updatedAt,
@@ -114,12 +115,36 @@ export async function maintainPlannerForNewProducts(
     if (result.error) throw new Error("new-product-match-write-failed");
     if (result.data?.length) changedMatchKeys.push(match.match_key);
   }
+  // Existing valid matches also need newly available alternatives. Keep the
+  // candidate set; the shared quantity-aware selector chooses the final pack.
+  const valid = await client.from("ingredient_product_matches").select("*")
+    .eq("match_status", "valid").eq("refresh_status", "current")
+    .eq("matcher_version", PLANNER_MATCHER_VERSION).limit(1001);
+  if (valid.error || !Array.isArray(valid.data) || valid.data.length > 1000) throw new Error("valid-match-scope-read-failed");
+  for (const match of valid.data as PersistentProductMatchRow[]) {
+    const descriptor = matchDescriptor(match.match_key);
+    const ingredient = catalog.ingredients.find((item) => item.sourceKey === match.ingredient_source_key);
+    if (!descriptor || !ingredient) continue;
+    const brand = descriptor.brandConstraint === "Knorr" || descriptor.brandConstraint === "Honig" ? descriptor.brandConstraint : null;
+    const existing = match.candidate_product_ids ?? (match.product_id ? [match.product_id] : []);
+    const additions = products.filter((product) => !existing.includes(product.id) &&
+      isReliableIngredientMatch(ingredient, product, brand) &&
+      (descriptor.kind === "mealMix" || productPackageCapacity(product, descriptor.unit as WeekIngredientUnit) !== null));
+    if (!additions.length) continue;
+    const result = await client.from("ingredient_product_matches").update({
+      candidate_product_ids: [...existing, ...additions.map((product) => product.id)],
+      checked_at: now.toISOString(),
+    }).eq("match_key", match.match_key).eq("checked_at", match.checked_at)
+      .eq("refresh_status", "current").select("match_key");
+    if (result.error) throw new Error("candidate-match-write-failed");
+    if (result.data?.length) changedMatchKeys.push(match.match_key);
+  }
   // Also resume after an interrupted notification: valid matches are NOT rewritten.
   // Existing match-change triggers have already marked dependent rows pending.
   const linked = await client.from("ingredient_product_matches").select("match_key")
     .eq("match_status", "valid").eq("refresh_status", "current").in("product_id", ids);
   if (linked.error || !Array.isArray(linked.data)) throw new Error("linked-match-read-failed");
-  const keys = linked.data.map((row) => row.match_key as string);
+  const keys = [...new Set([...changedMatchKeys, ...linked.data.map((row) => row.match_key as string)])];
   let refreshedReadinessCount = 0;
   const affectedRecipeIds = new Set<string>();
   if (keys.length > 0) {

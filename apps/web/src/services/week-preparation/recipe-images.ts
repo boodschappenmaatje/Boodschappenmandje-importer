@@ -1,8 +1,11 @@
 import type { Recipe } from "@/types/catalog";
 import type { RecipeCatalog } from "@/services/week-preparation/recipe-repository";
 import type { RecipeMealCategory } from "@/types/week-preparation";
+import { MEAL_MIX_IMAGES, MEAL_MIX_IMAGE_KEYS, MEAL_MIX_RECIPE_IMAGE_KEYS } from "./meal-mix-images";
+import { mealMixProfileForRecipe } from "./meal-mix-profiles";
 
 export const DISH_IMAGE_KEYS = [
+  ...MEAL_MIX_IMAGE_KEYS,
   "pasta-spaghetti-bolognese",
   "pasta-macaroni",
   "pasta-chicken-pesto",
@@ -151,7 +154,6 @@ export const RECIPE_IMAGE_KEYS = {
   "pasta-caprese": "pasta-caprese-pesto",
   "tonijn-pastasalade": "pasta-tuna-salad",
   "ovenpasta-kip": "pasta-oven-mozzarella",
-  "honig-macaroni": "pasta-macaroni",
   "friet-snack-keuze": "comfort-chicken-nuggets-fries",
   "broodje-kipshoarma": "comfort-chicken-shawarma-pita",
   "kapsalon-kipshoarma": "comfort-kapsalon",
@@ -168,7 +170,6 @@ export const RECIPE_IMAGE_KEYS = {
   "vissticks-friet": "comfort-fishsticks-fries",
   "loaded-fries-kip": "comfort-loaded-fries",
   "zelfgemaakte-groentepizza": "comfort-vegetable-pizza",
-  "honig-nasi-speciaal": "world-nasi-chicken",
   "bami-goreng-kip": "world-bami-chicken",
   "zoetzure-kip-rijst": "world-sweet-sour-chicken",
   "kip-curry-rijst": "world-chicken-curry-rice",
@@ -182,7 +183,6 @@ export const RECIPE_IMAGE_KEYS = {
   "chili-con-carne-rijst": "vegetarian-chili-rice",
   "mango-kipcurry": "world-chicken-curry-rice",
   "tofu-rijst-groente": "world-tofu-rice-vegetables",
-  "knorr-burritos": "world-beef-burrito",
   "knorr-kip-siam": "healthy-chicken-stirfry-rice",
   "knorr-hokkien-mie": "world-bami-chicken",
   "knorr-surinaamse-roti": "world-surinamese-roti",
@@ -198,6 +198,7 @@ export const RECIPE_IMAGE_KEYS = {
   "falafel-pita": "vegetarian-falafel-pita",
   "vegetarische-noedelbowl": "vegetarian-noodle-bowl-tofu",
   "zalm-traybake": "healthy-salmon-traybake",
+  ...MEAL_MIX_RECIPE_IMAGE_KEYS,
 } as const satisfies Record<string, DishImageKey>;
 
 export const RECIPE_IMAGE_STATUSES = [
@@ -443,7 +444,7 @@ function imageAsset(key: DishImageKey, recipeId: string): DishImageAsset {
       sourceType: "generated",
       status: "approved",
       version: AI_GENERATED_RECIPE_IDS.has(recipeId) ? 2 : 1,
-      updatedAt: "2026-09-17",
+      updatedAt: key.startsWith("mix-") ? "2026-09-21" : "2026-09-17",
     },
   };
 }
@@ -482,7 +483,9 @@ function semanticTagsForText(value: string): Set<RecipeImageSemanticTag> {
 }
 
 function imageTags(key: DishImageKey): Set<RecipeImageSemanticTag> {
+  const reviewed = Object.values(MEAL_MIX_IMAGES).find(image => image.key === key);
   return new Set([
+    ...semanticTagsForText(reviewed?.description ?? ""),
     ...semanticTagsForText(key.replaceAll("-", " ")),
     ...(IMAGE_TAG_OVERRIDES[key] ?? []),
   ]);
@@ -595,6 +598,10 @@ export function evaluateRecipeImageQuality(
     issues.push("insufficient_image_metadata");
   } else if (issues.length > 0) {
     status = "mismatch";
+  } else if (context.recipeSourceKey in MEAL_MIX_IMAGES) {
+    // These exact stable recipe IDs have individual visual review records.
+    // Conflicting dish/ingredient tags above still reject a changed recipe.
+    status = "verified";
   } else if (
     matchingPrimary.length >= 2 ||
     (recipeNameMatch && matchingPrimary.length >= 1)
@@ -652,11 +659,14 @@ export function recipeImageContextFromCatalog(
   const ingredientsById = new Map(
     catalog.ingredients.map((ingredient) => [ingredient.id, ingredient]),
   );
+  const mix = mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles);
   return {
     recipeSourceKey: recipe.sourceKey,
     recipeName: recipe.name,
     categories,
-    ingredients: catalog.relations
+    ingredients: mix ? mix.supplements.map((item, position) => ({
+      sourceKey: item.sourceKey, name: item.name, category: item.category, position, optional: false,
+    })) : catalog.relations
       .filter((relation) => relation.recipeId === recipe.id)
       .map((relation) => {
         const ingredient = ingredientsById.get(relation.ingredientId);
@@ -683,4 +693,4 @@ export function recipeImageFor(
 
 export const SPECIFIC_RECIPE_IMAGE_COUNT = Object.keys(RECIPE_IMAGE_KEYS).length;
 export const CATEGORY_FALLBACK_IMAGE_COUNT = 0;
-export const AI_GENERATED_RECIPE_IMAGE_COUNT = AI_GENERATED_RECIPE_IMAGE_IDS.length;
+export const AI_GENERATED_RECIPE_IMAGE_COUNT = AI_GENERATED_RECIPE_IMAGE_IDS.length + MEAL_MIX_IMAGE_KEYS.length;

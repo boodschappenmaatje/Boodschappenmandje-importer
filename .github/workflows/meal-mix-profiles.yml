@@ -1,0 +1,33 @@
+name: Honig en Knorr profielonderhoud
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "45 6 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: meal-mix-profile-maintenance
+  cancel-in-progress: false
+
+jobs:
+  profiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Bestaande en gewijzigde maaltijdmixprofielen bijwerken
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node src/meal-mix-profile-maintenance.mjs

@@ -1,0 +1,77 @@
+[
+  {
+    "product": {
+      "id": "672987fb-3486-4a58-8db4-bbe1cc781518",
+      "supermarket": "Hoogvliet",
+      "sku": "665854000",
+      "name": "Honig Mix voor boerenomelet",
+      "brand": "Honig",
+      "category": "Internationale keuken, pasta, rijst/Hollandse keuken/Maaltijdmixen",
+      "package_text": "38 gram",
+      "weight_grams": 38,
+      "image_url": "https://cdn.hoogvliet.com/Images/Product/XL/665854000.jpg",
+      "source_url": "https://www.hoogvliet.com/product/honig-mix-voor-boerenomelet",
+      "is_available": true,
+      "created_at": "2026-09-10T04:53:35.640693+00:00",
+      "updated_at": "2026-09-10T04:53:20.041+00:00",
+      "product_type": "Pasta",
+      "last_seen_at": null,
+      "missing_checks": 0
+    },
+    "title": "Honig Mix voor boerenomelet",
+    "text": "Gebruiksaanwijzing Bereidingswijze: Zelf toevoegen\n6 middelgrote eieren\n1 middelgrote ui\n125 g (kastanje) champignons\n4 sneetjes volkoren brood\nVariatie tip\nLekker met wat gesneden bosui!\nAlgemene bereidingswijze\n1 Klop met een vork de eieren met 1 theel. water in een beslagkom los.\n2 Roer de inhoud van 1 zakje Honig basis voor Boerenomelet erdoor en laat het omeletmengsel 2 à 3 minuten staan.\n3 Verhit 2 eetl. olijfolie in een pan en bak hierin de gesnipperde ui en de in schijfjes gesneden champignons. Giet vervolgens het omeletmengsel in de pan.\n4 Bak de omelet, met een deksel op de pan, op middelhoog vuur in enkele minuten goudgeel.\n5 Serveer de omelet op (geroosterd) brood en garneer eventueel met wat peterselie.\n10 min\nNetto-inhoud: 38.00 GR",
+    "sourceUrl": "https://www.hoogvliet.com/product/honig-mix-voor-boerenomelet",
+    "fetchedAt": "2026-09-21T14:00:00Z",
+    "capture": "Preparation text read from product DOM; whitespace normalized. See preparationFingerprint."
+  },
+  {
+    "product": {
+      "id": "6e1f5818-c230-44d2-9d56-d3daa5fa7317",
+      "supermarket": "Hoogvliet",
+      "sku": "704893000",
+      "name": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+      "brand": "Knorr",
+      "category": "Internationale keuken, pasta, rijst/Italiaanse keuken/Maaltijdmixen, maaltijdpakketten",
+      "package_text": "257 gram",
+      "weight_grams": 257,
+      "image_url": "https://cdn.hoogvliet.com/Images/Product/XL/704893000.jpg",
+      "source_url": "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakketten-italiaanse-risotto",
+      "is_available": true,
+      "created_at": "2026-09-20T03:51:54.820347+00:00",
+      "updated_at": "2026-09-20T03:51:26.739+00:00",
+      "product_type": "Pasta",
+      "last_seen_at": "2026-09-20T03:51:26.739+00:00",
+      "missing_checks": 0
+    },
+    "title": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+    "text": "Gebruiksaanwijzing Bereidingswijze: Recept met lekker veel groenteBoodschappenlijstje 225 g kipfilet(blokjes) 250 g champignons 2 uien 1 courgette 1 prei OlieZo maak je 't (40 min) 1. Meng de specerijenmix met 2 el olie en marineer hierin de kipfiletblokjes ca. 10 min. Snij de champignons in vieren, de courgette in blokjes en de prei in halve ringen. Snipper de uien. 2. Verhit een hapjespan en bak de kipblokjes goudbruin en gaar. Voeg de champignons, uien, prei en courgette toe en bak deze ca. 3 min. mee. 3. Voeg de kruidenmix, 500 ml water en de rijstmix toe. Breng het geheel al roerend aan de kook en laat het ca. 17 min. zachtjes doorkoken. Roer af en toe door, totdat het vocht bijna is opgenomen. 4. Neem de pan van het vuur, roer het geheel goed door elkaar en laat het ca. 2 min. staan. De Risotto hoort bij het serveren smeuïg te zijn.\nNetto-inhoud: 257.00 GR",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakketten-italiaanse-risotto",
+    "fetchedAt": "2026-09-21T14:00:00Z",
+    "capture": "Preparation text read from product DOM; whitespace normalized. See preparationFingerprint."
+  },
+  {
+    "product": {
+      "id": "29da05dd-8ee6-4aeb-a87b-1b7756af7c3b",
+      "supermarket": "Hoogvliet",
+      "sku": "730051000",
+      "name": "Knorr Maaltijdmix kebab",
+      "brand": "Knorr",
+      "category": "Internationale keuken, pasta, rijst/Oosterse keuken/Maaltijdmixen",
+      "package_text": "30 gram",
+      "weight_grams": 30,
+      "image_url": "https://cdn.hoogvliet.com/Images/Product/XL/730051000.jpg",
+      "source_url": "https://www.hoogvliet.com/product/knorr-maaltijdmix-kebab",
+      "is_available": true,
+      "created_at": "2026-09-07T18:29:19.162308+00:00",
+      "updated_at": "2026-09-14T02:26:53.497251+00:00",
+      "product_type": "Pasta",
+      "last_seen_at": null,
+      "missing_checks": 0
+    },
+    "title": "Knorr Maaltijdmix kebab",
+    "text": "Gebruiksaanwijzing Bereidingswijze: Zelf toevoegen: ? 1 rode ui ? 1 komkommer ? 1 krop ijsbergsla ? 400 g kipfilet ? Pitabroodjes (400 g) ? 1 el olieVoorbereiding: Zie voorzijde voor de zelf toe te voegen ingrediënten. Snij de rode ui in ringen en de komkommer in plakjes. Was de ijsbergsla en snij deze in stukjes. Snij de kipfilet in blokjes. Verwarm de pitabroodjes volgens de bereidingswijze op de verpakking. Bereidingswijze: 1. Meng de inhoud van dit zakje met 1 el olie in een schaaltje en marineer hierin de blokjes kipfilet. 2. Verhit een wok of hapjespan en bak hierin de kipblokjes goudbruin en gaar. 3. Snij de pitabroodjes open en vul ze met komkommer, ui en sla. Verdeel de kipblokjes over de broodjes en serveer ze. Lekker met een yoghurt- of knoflooksaus.\nNetto-inhoud: 30.00 GR",
+    "sourceUrl": "https://www.hoogvliet.com/product/knorr-maaltijdmix-kebab",
+    "fetchedAt": "2026-09-21T14:00:00Z",
+    "capture": "Preparation text read from product DOM; whitespace normalized. See preparationFingerprint."
+  }
+]

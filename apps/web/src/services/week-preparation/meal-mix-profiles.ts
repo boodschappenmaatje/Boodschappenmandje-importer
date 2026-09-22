@@ -13,6 +13,7 @@ export interface MealMixSupplement {
 }
 
 export interface MealMixProfile {
+  productId?: string;
   recipeSourceKey: string;
   dishName: string;
   brand: MealMixBrand;
@@ -20,9 +21,13 @@ export interface MealMixProfile {
   productName: string;
   productAliases: string[];
   servingsPerPackage: number;
+  /** People covered by the printed shopping list (one sachet may be part of a multipack). */
+  supplementServings?: number;
+  preparationMinutes?: number;
   supplements: MealMixSupplement[];
   sourceUrl: string;
   verificationStatus: "verified";
+  waterOnly?: boolean;
 }
 
 function supplement(
@@ -226,8 +231,8 @@ const profileByIngredient = new Map(
   MEAL_MIX_PROFILES.map((profile) => [profile.productIngredientSourceKey, profile]),
 );
 
-export function mealMixProfileForRecipe(sourceKey: string): MealMixProfile | null {
-  return profileByRecipe.get(sourceKey) ?? null;
+export function mealMixProfileForRecipe(sourceKey: string, profiles?: readonly MealMixProfile[]): MealMixProfile | null {
+  return profiles?.find((profile) => profile.recipeSourceKey === sourceKey) ?? profileByRecipe.get(sourceKey) ?? null;
 }
 
 export function mealMixProfileForIngredient(sourceKey: string): MealMixProfile | null {
@@ -246,23 +251,38 @@ export function inferMealMixBrand(
 
 export function enrichIngredientsForMealMixes(
   ingredients: RecipeIngredientDefinition[],
+  profiles: readonly MealMixProfile[] = MEAL_MIX_PROFILES,
 ): RecipeIngredientDefinition[] {
   const bySourceKey = new Map(ingredients.map((ingredient) => [ingredient.sourceKey, ingredient]));
 
-  for (const profile of MEAL_MIX_PROFILES) {
+  for (const profile of [...MEAL_MIX_PROFILES, ...profiles]) {
     const mealMix = bySourceKey.get(profile.productIngredientSourceKey);
     if (mealMix) {
       bySourceKey.set(profile.productIngredientSourceKey, {
         ...mealMix,
+        productId: profile.productId,
         aliases: [...new Set([...mealMix.aliases, profile.productName, ...profile.productAliases])],
+      });
+    } else if (profile.productId) {
+      bySourceKey.set(profile.productIngredientSourceKey, {
+        id: `meal-mix-ingredient:${profile.productIngredientSourceKey}`, sourceKey: profile.productIngredientSourceKey,
+        name: profile.productName, normalizedName: profile.productName.toLowerCase(), defaultUnit: "piece",
+        category: "Maaltijdcomponenten", aliases: profile.productAliases, productId: profile.productId,
       });
     }
     for (const item of profile.supplements) {
+      // Hoogvliet labels these fresh vegetable mixes "Italiaanse roerbak".
+      // Keep the package ingredient unchanged; the regular matcher still checks
+      // product category, preparation form, price and purchasable quantity.
+      const aliases = [...new Set([...item.aliases, ...mealMixSupplementAliases(item.name),
+        ...(item.category === "Groente" && /^italiaans[e]? (?:groentepakket|groentemix|roerbakmix|roerbakgroenten|wokgroenten)$/i.test(item.name.trim())
+          ? ["Italiaanse roerbak"] : []),
+      ])];
       const existing = bySourceKey.get(item.sourceKey);
       if (existing) {
         bySourceKey.set(item.sourceKey, {
           ...existing,
-          aliases: [...new Set([...existing.aliases, ...item.aliases])],
+          aliases: [...new Set([...existing.aliases, ...aliases])],
         });
       } else {
         bySourceKey.set(item.sourceKey, {
@@ -272,11 +292,41 @@ export function enrichIngredientsForMealMixes(
           normalizedName: item.name.toLocaleLowerCase("nl-NL"),
           defaultUnit: item.unit,
           category: item.category,
-          aliases: item.aliases,
+          aliases,
         });
       }
     }
   }
 
   return [...bySourceKey.values()];
+}
+
+/** Catalog spelling equivalents, limited to the branded package supplements. */
+export function mealMixSupplementAliases(name: string): string[] {
+  const key = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  const aliases: Record<string, string[]> = {
+    "voorgekookte mini krieltjes": ["minikrieltjes"],
+    "voorgekookte krieltjes": ["krieltjes", "minikrieltjes"],
+    "voorgekookte aardappelpartjes": ["aardappelpart met schil"],
+    "spaghetti original": ["spaghetti"],
+    "pasta": ["macaroni", "penne", "fusilli"],
+    "appel": ["Elstar", "Jonagold", "Granny Smith", "Pink Lady"],
+    "mie nestjes": ["eiermie"],
+    "mie": ["eiermie"],
+    "chinese wokgroente": ["Chinese wok"],
+    "oosterse wokgroenten": ["Oosterse wok"],
+    "hollandse bruine bonen": ["bruine bonen"],
+    "gezeefde tomaten": ["tomato gezeefd"],
+    "mais blik": ["maiskorrels", "crispy mais"],
+    "wortels": ["worteltjes", "winterpeen"],
+    "wortel": ["worteltjes", "winterpeen"],
+    "spinazie diepvries": ["spinazie fijn gehakt", "spinazie grof gehakt"],
+    "kastanjechampignons": ["champignons"],
+    "hamblokjes": ["achterham"],
+    "creme fraiche light": ["demi creme fraiche"],
+    "nasi/bami groenten": ["Chinese wok"],
+    "nasi groentepakket": ["Chinese wok"],
+    "bami groentepakket": ["Chinese wok"],
+  };
+  return aliases[key] ?? [];
 }

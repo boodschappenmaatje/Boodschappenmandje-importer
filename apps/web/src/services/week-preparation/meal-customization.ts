@@ -312,7 +312,12 @@ function buildAlternative(
     preparation.numberOfPeople!,
     catalog,
   );
-  const ingredients = applyReadinessProducts(requirements, readiness);
+  const ingredients = [
+    ...applyReadinessProducts(requirements, readiness),
+    ...preparation.ingredients.filter((item) => item.usedIn.some((use) =>
+      use.dayIndex !== day.dayIndex && preparation.days.some((selected) => selected.dayIndex === use.dayIndex && selected.customDish),
+    )),
+  ];
   const next = rebuildPreparedWeekSelection(preparation, days, ingredients, list, now);
   const currentCost = calculateDishCostSummary(day.dayIndex, preparation.ingredients);
   const alternativeCost = calculateDishCostSummary(day.dayIndex, ingredients);
@@ -661,8 +666,7 @@ export async function commitExplicitRecipeAlternative(
   if (
     alternative.preparation.id !== current.id ||
     alternative.recipe.id !== selectedDay?.recipeId ||
-    selectedDay.freeChoice ||
-    selectedDay.category === "freeChoice"
+    selectedDay.freeChoice
   ) {
     return { ok: false, reason: "day_not_found" };
   }
@@ -678,7 +682,8 @@ export async function commitExplicitRecipeAlternative(
   const canReuseSnapshot =
     alternative.basePreparationUpdatedAt === current.updatedAt &&
     recipeSnapshotIsFresh(alternative, now) &&
-    !hasIngredientLevelCustomizations(alternative.preparation);
+    !hasIngredientLevelCustomizations(alternative.preparation) &&
+    !alternative.preparation.days.some((day) => day.customDish);
 
   if (!canReuseSnapshot) {
     const tentativeDecision = recipeBudgetDecision(
@@ -689,7 +694,16 @@ export async function commitExplicitRecipeAlternative(
       now,
     );
     const tentative = withRecipeBudgetDecision(
-      alternative.preparation,
+      alternative.basePreparationUpdatedAt === current.updatedAt
+        ? alternative.preparation
+        : {
+            ...current,
+            days: current.days.map((day) => day.dayIndex === dayIndex ? selectedDay : day),
+            customizations: [
+              ...current.customizations.filter((item) => item.dayIndex !== dayIndex),
+              ...alternative.preparation.customizations.filter((item) => item.dayIndex === dayIndex),
+            ],
+          },
       dayIndex,
       tentativeDecision,
     );
@@ -1120,7 +1134,7 @@ function manualAdditionRequirement(
   );
 }
 
-function budgetImpact(
+export function budgetImpact(
   preparation: WeekPreparation,
   next: WeekPreparation,
   list: ActiveShoppingList,

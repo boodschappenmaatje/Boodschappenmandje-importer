@@ -34,6 +34,7 @@ interface ReadinessBucket {
   expiresAt: number;
   recipes: Map<string, RecipeReadinessResult>;
   matchedProductsByRequirement: Map<string, Product>;
+  candidatesByRequirement: Map<string, { ingredient: RecipeCatalog["ingredients"][number]; products: Product[] }>;
   pending: Promise<void> | null;
 }
 
@@ -142,6 +143,9 @@ export function createCachedCatalogRepository(
     getPage: (request) => source.getPage(request),
     query: (request) => source.query(request),
     getFilterOptions: (request) => source.getFilterOptions(request),
+    ...(source.searchCandidates ? { searchCandidates: (term: string) => cached(
+      searches, `all:${searchKey(term, {})}`, () => source.searchCandidates!(term), now, ttlMs,
+    ) } : {}),
     search(term, request = {}) {
       if (request.signal) return source.search(term, request);
       const key = searchKey(term, request);
@@ -206,6 +210,7 @@ export function createWeekPlanningSnapshotCache(
       expiresAt: timestamp + ttlMs,
       recipes: new Map(),
       matchedProductsByRequirement: new Map(),
+      candidatesByRequirement: new Map(),
       pending: null,
     };
     byPeople.set(numberOfPeople, created);
@@ -241,6 +246,7 @@ export function createWeekPlanningSnapshotCache(
       for (const [key, product] of resolution.gate.matchedProductsByRequirement) {
         bucket.matchedProductsByRequirement.set(key, product);
       }
+      for (const [key, candidates] of resolution.gate.candidatesByRequirement ?? []) bucket.candidatesByRequirement.set(key, candidates);
     });
     try {
       await bucket.pending;
@@ -285,6 +291,7 @@ export function createWeekPlanningSnapshotCache(
           matchedProductsByRequirement: new Map(
             bucket.matchedProductsByRequirement,
           ),
+          candidatesByRequirement: new Map(bucket.candidatesByRequirement),
         },
         hitCount: hitCount + fill.persistentHits,
         missCount: fill.fallbackCount,

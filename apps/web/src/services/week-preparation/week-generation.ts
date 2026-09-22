@@ -1,6 +1,7 @@
 import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
+import { matchCustomDishes } from "@/services/week-preparation/custom-dish";
 import {
   applyManualProductToRequirement,
   applyProductToRequirement,
@@ -1225,14 +1226,25 @@ export async function generatePreparedWeek(
     return preparation;
   }
 
+  const explicitDays = preparation.days.filter((day) => day.category === "freeChoice" && day.recipe);
+  if (explicitDays.length) {
+    const automatic = await generatePreparedWeek({
+      ...preparation,
+      days: preparation.days.map((day) => explicitDays.includes(day) ? { ...day, freeChoice: true, recipeId: null, recipe: null, customDish: undefined } : day),
+    }, recipeRepository, catalogRepository, now, list, options);
+    return (await revalidatePreparedWeek({ ...automatic,
+      days: automatic.days.map((day) => explicitDays.find((chosen) => chosen.dayIndex === day.dayIndex) ?? day),
+      customizations: preparation.customizations,
+    }, recipeRepository, catalogRepository, now, list)).preparation;
+  }
   const catalogStartedAt = monotonicNow();
   const loadedCatalog = await recipeRepository.loadCatalog();
   const catalog = options.cache?.prepareCatalog(loadedCatalog, () => ({
     ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients, loadedCatalog.mealMixProfiles),
   })) ?? {
     ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients, loadedCatalog.mealMixProfiles),
   };
   const catalogMs = monotonicNow() - catalogStartedAt;
   const cacheLookupStartedAt = monotonicNow();
@@ -1341,33 +1353,38 @@ export async function revalidatePreparedWeek(
   catalogRepository: CatalogRepository,
   now: Date = new Date(),
   list: ActiveShoppingList = EMPTY_LIST,
+  planningCache?: WeekPlanningSnapshotCache,
 ): Promise<PreparedWeekReadinessResult> {
   if (preparation.numberOfPeople === null) {
     return { ready: false, preparation };
   }
   const loadedCatalog = await recipeRepository.loadCatalog();
-  const catalog: RecipeCatalog = {
+  const prepareCatalog = (): RecipeCatalog => ({
     ...loadedCatalog,
-    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients),
-  };
+    ingredients: enrichIngredientsForMealMixes(loadedCatalog.ingredients, loadedCatalog.mealMixProfiles),
+  });
+  const catalog = planningCache?.prepareCatalog(loadedCatalog, prepareCatalog) ?? prepareCatalog();
   const selectedIds = new Set(
     preparation.days
       .map((day) => day.recipeId)
       .filter((id): id is string => Boolean(id)),
   );
   const selectedRecipes = catalog.recipes.filter((recipe) => selectedIds.has(recipe.id));
-  const readiness = (await resolveRecipeReadiness(
+  const readiness = planningCache ? (await planningCache.evaluateReadiness(
+    loadedCatalog, selectedRecipes, preparation.numberOfPeople, catalog, catalogRepository,
+  )).gate : (await resolveRecipeReadiness(
     selectedRecipes,
     preparation.numberOfPeople,
     catalog,
     catalogRepository,
     createPersistentRecipeReadinessRepository(),
+    now,
   )).gate;
   const readyIds = readyRecipeIds(readiness);
   const hasDayGap = preparation.days.some(
     (day) =>
       !day.freeChoice &&
-      (!day.recipeId || !readyIds.has(day.recipeId)),
+      (!day.recipeId || (!day.customDish && !readyIds.has(day.recipeId))),
   );
   const requirements = aggregateWeekIngredients(
     preparation.days,
@@ -1376,7 +1393,7 @@ export async function revalidatePreparedWeek(
   );
   const ingredients = await applyStoredCustomizations(
     preparation,
-    applyReadinessProducts(requirements, readiness),
+    [...applyReadinessProducts(requirements, readiness), ...await matchCustomDishes(preparation, catalog, catalogRepository)],
     catalog,
     catalogRepository,
   );

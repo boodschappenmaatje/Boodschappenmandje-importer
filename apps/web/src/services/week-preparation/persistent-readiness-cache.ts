@@ -16,8 +16,8 @@ import type { RecipeCatalog } from "@/services/week-preparation/recipe-repositor
 import type { Product, Recipe } from "@/types/catalog";
 import type { PreparedDay } from "@/types/week-preparation";
 
-export const PLANNER_MATCHER_VERSION = 1;
-export const PLANNER_READINESS_EVALUATOR_VERSION = 1;
+export const PLANNER_MATCHER_VERSION = 2;
+export const PLANNER_READINESS_EVALUATOR_VERSION = 2;
 export const PLANNER_READINESS_TTL_MS = 24 * 60 * 60 * 1000;
 
 type RefreshStatus = "current" | "pending" | "failed";
@@ -31,6 +31,7 @@ export interface PersistentProductMatchRow {
   requirement_kind: string;
   brand_constraint: string;
   product_id: string | null;
+  candidate_product_ids?: string[];
   match_status: MatchStatus;
   failure_reason: string | null;
   matcher_version: number;
@@ -273,7 +274,7 @@ export async function resolveRecipeReadiness(
     ...new Set(
       [...matchByKey.values()].flatMap((match) =>
         match.match_status === "valid" && match.product_id
-          ? [match.product_id]
+          ? [match.product_id, ...(match.candidate_product_ids ?? [])]
           : [],
       ),
     ),
@@ -282,6 +283,7 @@ export async function resolveRecipeReadiness(
     ? await loadProductsInBatches(catalogRepository, productIds)
     : new Map<string, Product>();
   const usableProductsByRequirement = new Map<string, Product>();
+  const candidatesByRequirement = new Map<string, { ingredient: RecipeCatalog["ingredients"][number]; products: Product[] }>();
   const usableMatchKeys = new Set<string>();
   for (const [key, match] of matchByKey) {
     if (match.match_status === "invalid") {
@@ -292,6 +294,8 @@ export async function resolveRecipeReadiness(
     if (product && productStillMatchesSnapshot(match, product)) {
       usableMatchKeys.add(key);
       usableProductsByRequirement.set(key, product);
+      const ingredient = catalog.ingredients.find((item) => item.sourceKey === match.ingredient_source_key);
+      if (ingredient) candidatesByRequirement.set(key, { ingredient, products: (match.candidate_product_ids ?? [product.id]).flatMap((id) => products.get(id) ?? []) });
     }
   }
 
@@ -325,9 +329,9 @@ export async function resolveRecipeReadiness(
         numberOfPeople,
         catalog,
         catalogRepository,
-        { matchedProductsByRequirement: usableProductsByRequirement },
+        { matchedProductsByRequirement: usableProductsByRequirement, candidatesByRequirement },
       )
-    : { recipes: [], matchedProductsByRequirement: new Map<string, Product>() };
+    : { recipes: [], matchedProductsByRequirement: new Map<string, Product>(), candidatesByRequirement: new Map() };
   const fallbackByRecipe = new Map(
     fallback.recipes.map((result) => [result.recipeId, result]),
   );
@@ -335,6 +339,7 @@ export async function resolveRecipeReadiness(
   for (const [key, product] of fallback.matchedProductsByRequirement) {
     matchedProductsByRequirement.set(key, product);
   }
+  for (const [key, candidates] of fallback.candidatesByRequirement ?? []) candidatesByRequirement.set(key, candidates);
 
   if (fallbackRecipes.length > 0 && persistentRepository?.requestRefresh) {
     void persistentRepository
@@ -352,6 +357,7 @@ export async function resolveRecipeReadiness(
         return result ? [result] : [];
       }),
       matchedProductsByRequirement,
+      candidatesByRequirement,
     },
     persistentHitCount: persistentResults.size,
     fallbackCount: fallbackRecipes.length,
@@ -383,6 +389,7 @@ const MATCH_SELECT = [
   "requirement_kind",
   "brand_constraint",
   "product_id",
+  "candidate_product_ids",
   "match_status",
   "failure_reason",
   "matcher_version",

@@ -23,6 +23,28 @@ import type { WeekIngredientRequirement } from "@/types/week-preparation";
 
 const NOW = "2026-09-15T12:00:00.000Z";
 
+it.each(["Italiaanse groentemix", "Italiaans groentepakket", "Italiaanse roerbakmix", "Italiaanse wokgroenten"])("herkent de catalogusnaam Italiaanse roerbak voor %s zonder andere gerechten toe te laten", (name) => {
+  const base = MEAL_MIX_PROFILES[0];
+  const profile = { ...base, supplements: [{ sourceKey: "italian-vegetables", name, aliases: [name], category: "Groente", quantity: 400, unit: "g" as const }] };
+  const ingredient = enrichIngredientsForMealMixes([], [profile]).find(item => item.sourceKey === "italian-vegetables")!;
+  const vegetables = product({ id: "italian", sku: "italian", name: "Italiaanse roerbak", category: "Aardappelen, groente, fruit/Groente/Groentemixen", productType: "Aardappelen", packageText: "400 gram" });
+  expect(isReliableIngredientMatch(ingredient, vegetables)).toBe(true);
+  for (const wrong of [
+    { name: "Oosterse roerbak" },
+    { name: "Italiaanse roerbak saus", category: "Sauzen" },
+    { name: "Italiaanse roerbak maaltijd", category: "Maaltijden" },
+  ]) expect(isReliableIngredientMatch(ingredient, { ...vegetables, ...wrong })).toBe(false);
+  expect(profile.supplements[0].aliases).toEqual([name]);
+});
+
+it("behoudt een expliciete diepvries-eis ook bij een generieke zoekalias", () => {
+  const ingredient = { id: "frozen-spinach", sourceKey: "frozen-spinach", name: "spinazie diepvries",
+    normalizedName: "spinazie diepvries", defaultUnit: "g", category: "Groente", aliases: ["spinazie"] };
+  const fresh = product({ id: "fresh", sku: "fresh", name: "Spinazie", category: "Groente/Bladgroente", productType: "Groente" });
+  expect(isReliableIngredientMatch(ingredient, fresh)).toBe(false);
+  expect(isReliableIngredientMatch(ingredient, { ...fresh, id: "frozen", sku: "frozen", category: "Diepvries/Groente" })).toBe(true);
+});
+
 function product(input: Partial<Product> & Pick<Product, "id" | "sku" | "name">): Product {
   return {
     supermarket: "Hoogvliet",
@@ -70,6 +92,39 @@ function requirement(
 }
 
 describe("merkgebonden maaltijdmixprofielen", () => {
+  it.each(Array.from({ length: 10 }, (_, index) => index + 1))("rekent een vierpersoonsmix voor %i personen uitsluitend per pak", (people) => {
+    const profile = { ...MEAL_MIX_PROFILES.find(item => item.servingsPerPackage === 4)!, productId: "exact-mix" };
+    const recipe: Recipe = { id: "four", sourceKey: profile.recipeSourceKey, name: profile.dishName, normalizedName: "four", symbol: "fork.knife", preparationMinutes: 20, vegetarian: false, containsPork: false, kidFriendly: true, healthy: false, budgetTier: "standard" };
+    const catalog: RecipeCatalog = { recipes: [recipe], mealMixProfiles: [profile], ingredients: enrichIngredientsForMealMixes([], [profile]), relations: [] };
+    const requirements = aggregateWeekIngredients([{ dayIndex: 0, category: "freeChoice", freeChoice: false, recipeId: recipe.id, recipe, status: "recipeSelected" }], people, catalog);
+    const mix = requirements.find(item => item.kind === "mealMix")!;
+    expect(applyProductToRequirement(mix, product({ id: "exact-mix", sku: "four", name: profile.productName, packageText: "41 gram" })).purchaseQuantity).toBe(Math.ceil(people / 4));
+  });
+
+  it("vergelijkt alle geschikte producten op kosten voor de benodigde hoeveelheid", () => {
+    const ingredient: RecipeIngredientDefinition = { id: "spaghetti", sourceKey: "spaghetti", name: "spaghetti", normalizedName: "spaghetti", aliases: [], category: "Pasta, rijst & granen", defaultUnit: "g" };
+    const priced = (id: string, name: string, grams: number, price: number) => product({ id, sku: id, name, category: "Pasta", productType: "Pasta", packageText: `${grams} g`, currentPrice: { productId: id, price, oldPrice: null, isOffer: false, offerText: null, validFrom: null, validUntil: null, fetchedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } });
+    const premium = priced("premium", "A-merk Spaghetti", 500, 4);
+    const small = priced("small", "Huismerk Spaghetti", 200, 1.5);
+    const large = priced("large", "Huismerk Spaghetti voordeelpak", 1000, 3.5);
+    expect(selectIngredientProduct(ingredient, [premium, large, small], null, "g", 100)?.id).toBe("small");
+    expect(selectIngredientProduct(ingredient, [premium, small, large], null, "g", 600)?.id).toBe("large");
+    expect(selectIngredientProduct(ingredient, [premium, small], null, "g", 300)?.id).toBe("small");
+  });
+
+  it("laat een lage prijs nooit receptvereisten of voedselgeschiktheid passeren", () => {
+    const definition = (name: string, category: string): RecipeIngredientDefinition => ({ id: name, sourceKey: name, name, normalizedName: name, aliases: [], category, defaultUnit: "g" });
+    const cases = [
+      [definition("kipfilet", "Vlees"), "Iglo Pasta kipfilet Boursin", "Diepvries"],
+      [definition("spaghetti", "Pasta, rijst & granen"), "Spaghetti bolognese", "Verse maaltijden, salades/Maaltijden"],
+      [definition("kipfilet", "Vlees"), "Gerookte kipfilet", "Vleeswaren"],
+      [definition("olie", "Sauzen & smaakmakers"), "Derlon bad douche olie", "Drogisterij"],
+      [definition("tomaten", "Groente"), "Bio Tomatenpuree", "Groente"],
+      [definition("geraspte 30+ kaas", "Zuivel & eieren"), "Geraspte kaas 48+", "Zuivel"],
+    ] as const;
+    for (const [ingredient, name, category] of cases) expect(isReliableIngredientMatch(ingredient, product({ id: name, sku: name, name, category }))).toBe(false);
+    expect(productPackageCapacity(product({ id: "onions", sku: "onions", name: "Rode uien net 3 stuks", packageText: "1 stuk" }), "piece")).toBe(3);
+  });
   it("bevat acht Knorr- en twee Honig-profielen met gevalideerde bron", () => {
     expect(MEAL_MIX_PROFILES).toHaveLength(10);
     expect(MEAL_MIX_PROFILES.filter((item) => item.brand === "Knorr")).toHaveLength(8);

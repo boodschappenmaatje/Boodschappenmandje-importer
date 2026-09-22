@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository";
+import type { CatalogRepository } from "@/services/catalog/catalog-repository";
+import { createCachedCatalogRepository } from "@/services/week-preparation/planning-cache";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
 import {
   isReliableIngredientMatch,
@@ -196,6 +198,7 @@ export function rowsForGate(
       requirement_kind: descriptor.kind,
       brand_constraint: descriptor.brandConstraint,
       product_id: product?.id ?? null,
+      candidate_product_ids: gate.candidatesByRequirement?.get(key)?.products.map((candidate) => candidate.id) ?? (product ? [product.id] : []),
       match_status: product ? "valid" : "invalid",
       failure_reason: product ? null : ingredient.reason ?? "matcher_failed",
       matcher_version: PLANNER_MATCHER_VERSION,
@@ -236,7 +239,7 @@ export async function loadCatalog(client: SupabaseClient): Promise<RecipeCatalog
   const loaded = await new SupabaseRecipeRepository(client).loadCatalog();
   return {
     ...loaded,
-    ingredients: enrichIngredientsForMealMixes(loaded.ingredients),
+    ingredients: enrichIngredientsForMealMixes(loaded.ingredients, loaded.mealMixProfiles),
   };
 }
 
@@ -267,8 +270,8 @@ async function refreshWithCatalog(
   recipes: Recipe[],
   numberOfPeople: number,
   now: Date,
+  catalogRepository: CatalogRepository = new SupabaseCatalogRepository(client),
 ): Promise<PlannerCacheRefreshResult> {
-  const catalogRepository = new SupabaseCatalogRepository(client);
   const persistentRepository = new SupabasePersistentRecipeReadinessRepository(client);
   const resolution = await resolveRecipeReadiness(
     recipes,
@@ -356,6 +359,7 @@ export async function maintainPlannerReadiness(
   let refreshed = 0;
   let persistentHits = 0;
   let fallbackCount = 0;
+  const catalogRepository = createCachedCatalogRepository(new SupabaseCatalogRepository(client));
   for (const target of targets) {
     const targetIds = new Set(target.recipeIds);
     const result = await refreshWithCatalog(
@@ -364,6 +368,7 @@ export async function maintainPlannerReadiness(
       recipes.filter((recipe) => targetIds.has(recipe.id)),
       target.numberOfPeople,
       now,
+      catalogRepository,
     );
     refreshed += result.refreshed;
     persistentHits += result.persistentHits;

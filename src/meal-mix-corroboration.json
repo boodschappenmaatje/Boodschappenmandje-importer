@@ -1,0 +1,151 @@
+{
+  "181722000": {
+    "preparationFingerprint": "8d2a4b7608286f687c12a1299f4139668d25d2ae7128968c7494e49d6ea9d5c6",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi37921/honig-basis-voor-spaghettisaus-bolognese",
+    "evidence": "41 g; Aantal porties: 4.",
+    "servings": 4
+  },
+  "703080000": {
+    "preparationFingerprint": "fffa8a3e5b57011ef97dede720fdf253defb0869a07fe1c0fc99f15ad2e07906",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi232612/knorr-spaghetteria-carbonara",
+    "evidence": "154 g; Aantal porties: 2. Alleen 500 ml water toevoegen.",
+    "servings": 2,
+    "supplementList": "500 ml water",
+    "waterOnly": true
+  },
+  "703081000": {
+    "preparationFingerprint": "3fbe785dcd801ed2301129a59808d0261fbc7cc9469a094ba0fdbe552f7d22eb",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi232605/spaghetteria-al-pesto",
+    "evidence": "155 g; Aantal porties: 2. Standaardbereiding met alleen 500 ml water; serveertips zijn optioneel.",
+    "servings": 2,
+    "supplementList": "500 ml water",
+    "waterOnly": true
+  },
+  "704882000": {
+    "preparationFingerprint": "a9828342f0a440a8f6c871498c19484eafab6e47c1986e95a592501febfd6e59",
+    "sourceUrl": "https://www.jumbo.com/producten/knorr-wereldgerecht-mexicaanse-taco-s-136g-390317DS",
+    "evidence": "136 g; verpakking bevat 3 porties.",
+    "servings": 3
+  },
+  "709603000": {
+    "preparationFingerprint": "c99f9277593dfafafa34af94790832fbdb48af2a6d2e84fe0adfbf3e498f690a",
+    "sourceUrl": "https://www.knorr.com/nl/p/mix-voor-nasi.html/08710522979549",
+    "evidence": "Fabrikant specificeert 125 g taugé, Hoogvliet mist de unit.",
+    "replacements": [
+      [
+        "Nasi groentepakket (450 g) 125 taugé",
+        "450 g Nasi groentepakket\n125 g taugé"
+      ]
+    ]
+  },
+  "709641000": {
+    "preparationFingerprint": "6819c8187c42b3ad85d1b0002d0d434d91ca7e4a52c4f69c3fdf027dfc12cd6b",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi164103/maaltijdmix-macaroni-carbonara",
+    "evidence": "64 g; Aantal porties: 4. Toevoegingen uit productetiket, olie 2 el in bereiding.",
+    "servings": 4,
+    "supplementList": "250 g champignons\n1 ui\n125 g hamblokjes\n500 ml magere melk\n300 g macaroni\n30 ml olie"
+  },
+  "709741000": {
+    "preparationFingerprint": "247f18caedff3120dcfb344b30d6ffb546c4460bb2a26431577cc492e19e782a",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi173552/maaltijdmix-tagliatelle",
+    "evidence": "62 g; Aantal porties: 4.",
+    "servings": 4
+  },
+  "714983000": {
+    "preparationFingerprint": "af68654a20f5775bc7e78c9598f675bdea5d49c856ff3f114fbd9ce0175a767c",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi199022/honig-mix-voor-kapucijners",
+    "evidence": "45 g; Aantal porties: 4.",
+    "servings": 4
+  },
+  "718160000": {
+    "preparationFingerprint": "f0d2ba5b062a717b6a556f118e9abb4885e8d7158452276188121d0fe16cd3c9",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi3495/honig-basis-voor-bami-speciaal",
+    "evidence": "37 g; Aantal porties: 4.",
+    "servings": 4
+  },
+  "718350000": {
+    "preparationFingerprint": "88e27782389205d2fc8e36fc5397ac63218ebfd11b264a9313d1d972eb60a67c",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi123658/honig-basis-voor-chili-con-carne",
+    "evidence": "42 g; Aantal porties: 4.",
+    "servings": 4
+  },
+  "718363000": {
+    "preparationFingerprint": "d3b0c2d489d011966c1c8a446624888952c7f8acc43491df1a4e6d7ca755e150",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi37912/honig-mix-voor-italiaanse-kruidensaus",
+    "evidence": "68 g; Aantal porties: 4. Basilicum blijft in eetlepels; geen verzonnen gewicht.",
+    "servings": 4
+  },
+  "729332000": {
+    "preparationFingerprint": "6646b5dc47aaf37ff14932ec59459cb6099e99941b1f589f8e87fb160e33cb8c",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi594806/knorr-risotteria-bospaddenstoelen",
+    "evidence": "175 g; Aantal porties: 2. Standaardbereiding met alleen 500 ml water.",
+    "servings": 2,
+    "supplementList": "500 ml water",
+    "waterOnly": true
+  },
+  "729333000": {
+    "preparationFingerprint": "c4cf6268887e5e4d0620d32036fbd95a918a47f9f9619024157aa6cdb705acd5",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi594780/knorr-risotteria-truffel",
+    "evidence": "175 g; Aantal porties: 2. Standaardbereiding met alleen 500 ml water.",
+    "servings": 2,
+    "supplementList": "500 ml water",
+    "waterOnly": true
+  },
+  "730049000": {
+    "preparationFingerprint": "1f7ead9162d2aa59665eddde95f572f303f84afab797c4f25d1c3681efe53ace",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi594774/0800-022%2030%2055",
+    "evidence": "64 g; Aantal porties: 4.",
+    "servings": 4
+  },
+  "730051000": {
+    "preparationFingerprint": "d24700178fe11f1a5c167bd9fd7cf66df6d2aeb419f43b163a9700e2706608d2",
+    "sourceUrl": "https://www.plus.nl/product/knorr-maaltijdmix-kebab-stazak-30-g-417907",
+    "evidence": "30 g; gerecht voor 3 tot 4 personen.",
+    "servings": 4
+  },
+  "731727000": {
+    "preparationFingerprint": "08c5eb92258a8b467428f8bac90b4e74fb854fa350e9e667b71108764c3f728d",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi605440/honig-mix-aardappel-boontjes-gehaktballetjes",
+    "evidence": "36 g; Voor 4 personen. Olie in de lijst is olijfolie.",
+    "servings": 4,
+    "replacements": [
+      [
+        "olfolie",
+        "olijfolie"
+      ]
+    ]
+  },
+  "731728000": {
+    "preparationFingerprint": "5c9ff0caea98110f13628ea4a8645b3852fc17a53eb24e5ab360b496beed01fc",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi605445/honig-mix-aardappel-broccoli-en-rundervink",
+    "evidence": "36 g; Voor 4 personen.",
+    "servings": 4
+  },
+  "731729000": {
+    "preparationFingerprint": "9b0b1e59d4e6968ba925e9b29126bc3c1f40e3dc5d24cadc5076470ed6854c85",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi605446/honig-mix-aardappel-courgette-en-kip",
+    "evidence": "36 g; Voor 4 personen.",
+    "servings": 4
+  },
+  "732786000": {
+    "preparationFingerprint": "6cc82137890d9004af88e9335c71348358aba637864059de283b233e59bd822a",
+    "sourceUrl": "https://www.knorr.com/nl/p/spaghetteria-pomodoro.html/08720182422248",
+    "evidence": "Exacte Pomodoro mozzarella-variant (163 g op BE pagina met dezelfde GTIN). Maaltijd voor 1-2 personen, alleen 500 ml water.",
+    "servings": 2,
+    "supplementList": "500 ml water",
+    "waterOnly": true
+  },
+  "733174000": {
+    "preparationFingerprint": "8bcf616bf1e3de5d720baea2daf8fab8a04ae4891ee639f7c216f5b3580024cb",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi615444/0800%20-%20022%2030%2055",
+    "evidence": "70 g; Aantal porties: 3. Fabrikant bevestigt 400 g kipfilet en 3 el olie.",
+    "servings": 3,
+    "supplementList": "400 g kipfilet\n45 ml olie"
+  },
+  "083039000": {
+    "preparationFingerprint": "215a316cd45296e002f5b381c87be83ad572609ae14dd2cde997639cfc60b7ad",
+    "sourceUrl": "https://www.ah.nl/producten/product/wi215238/honig-maaltijdsoep-erwten",
+    "evidence": "137 g; Aantal porties: 4. Halve rookworst zonder gewicht; niet invullen.",
+    "servings": 4
+  }
+}
