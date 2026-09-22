@@ -15,8 +15,7 @@ export function NewWeekControl({
   const [starting, setStarting] = useState(false);
 
   return (
-    <section className="dashboard-card new-week-card" aria-labelledby="new-week-title">
-      <h2 id="new-week-title">Nieuwe week</h2>
+    <section className="dashboard-card new-week-card" aria-label="Nieuwe week">
       {confirming ? (
         <div
           className="new-week-confirm"
