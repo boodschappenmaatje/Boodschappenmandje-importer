@@ -4383,6 +4383,29 @@ html {
 .custom-product-options button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
 .custom-product-options button > span:last-child { min-width: 0; }
 .new-week-card .week-reset-button { background: var(--color-primary-soft); }
+
+/* Final polish: keep the existing content, controls and logo-blue tokens. */
+.app-shell:has(.ux-home) { padding-top: max(12px, env(safe-area-inset-top)); }
+.app-shell:has(.ux-home) .app-header { min-height: 0; padding-block: 0 12px; }
+.week-distribution .category-stepper { min-height: 60px; padding-block: 6px; }
+.week-distribution .category-stepper button { border-radius: var(--radius-small); }
+.recipe-days > li { gap: 6px; }
+.recipe-days .recipe-day-entry { gap: 6px; }
+.recipe-days .prepared-day-category { padding-block: 3px; }
+.recipe-days .recipe-detail > summary { min-height: 66px; padding-block: 8px; }
+.dish-budget-summary > .recipe-cost-summary,
+.dish-budget-summary > .dish-budget-remaining {
+  margin-block: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.dish-budget-summary > .recipe-cost-summary { background: var(--color-primary-soft); }
+.dish-budget-summary > .dish-budget-remaining { background: var(--color-surface); }
+
 @media (max-width: 600px) {
   .free-choice-routes { grid-template-columns: minmax(0, 1fr); }
   .prepared-days .free-choice-control .free-choice-routes button { flex-direction: row; gap: .3em; min-height: 48px; font-size: 1rem; }

@@ -17,7 +17,7 @@ export function DishBudgetSummary({ preparation, dayIndex, expandable = false }:
       <strong>Totaal gerecht: {!cost.complete && cost.knownCostCents === 0 ? "nog niet bekend" : formatCents(cost.knownCostCents)}</strong>
       {!cost.complete ? `${cost.knownCostCents > 0 ? " bekend" : ""} · totaal nog onvolledig` : null}
     </p>
-    {remaining !== null ? <p>Maaltijdbudget na keuze: {formatCents(remaining)} over{!preparation.generation?.isMealBudgetComplete ? " · voorlopig" : ""}</p> : null}
+    {remaining !== null ? <p className="dish-budget-remaining">Maaltijdbudget na keuze: {formatCents(remaining)} over{!preparation.generation?.isMealBudgetComplete ? " · voorlopig" : ""}</p> : null}
     <p>Benodigd: {new Set(ingredients.map((item) => item.product?.productId ?? item.ingredientId)).size} producten</p>
     {expandable ? <>
       <details className="ux-ingredients">
