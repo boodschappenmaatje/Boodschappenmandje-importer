@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { DishImage } from "@/components/ui/DishImage";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
@@ -23,6 +23,7 @@ const routes = [
 
 export function FreeChoiceWeekView({ initialDay = null }: { initialDay?: number | null }) {
   const week = useWeekPreparation();
+  const actionGrid = useRef<HTMLDivElement>(null);
   const [selectedDay, setSelectedDay] = useState<number | null>(initialDay);
   const [mode, setMode] = useState<FreeChoiceRoute | null>(null);
   const [choosingSlot, setChoosingSlot] = useState(false);
@@ -36,6 +37,7 @@ export function FreeChoiceWeekView({ initialDay = null }: { initialDay?: number 
   const day = ready ? slots.find(item => item.dayIndex === selectedDay) ?? slots.find(item => !item.recipe) : undefined;
   function close() { setMode(null); setChoosingSlot(false); setSelectedDay(null); setPendingDish(undefined); }
   function chooseRoute(next: FreeChoiceRoute) {
+    if (day) setSelectedDay(day.dayIndex);
     setMode(next);
     setChoosingSlot((next === "recipe" || next === "mix") && !day);
   }
@@ -51,7 +53,7 @@ export function FreeChoiceWeekView({ initialDay = null }: { initialDay?: number 
       {progress.total > 0 ? <progress aria-label="Gekozen vrije maaltijden" value={Math.min(progress.chosen, progress.total)} max={progress.total} /> : null}
       <p>Kies wat bij jullie past. Je kunt altijd later nog wijzigen.</p>
     </header>
-    <div className="free-choice-action-grid" aria-label="Wat wil je toevoegen?">
+    <div ref={actionGrid} className="free-choice-action-grid" aria-label="Wat wil je toevoegen?">
       {routes.map(route => <button type="button" key={route.mode} aria-label={route.title} disabled={week.customizationBusy || (!ready && (route.mode === "recipe" || route.mode === "mix"))} onClick={() => chooseRoute(route.mode)}>
         <span className="free-choice-action-icon" data-route={route.mode}><Icon name={route.icon} size={27} /></span>
         <strong>{route.title}</strong><span className="free-choice-action-description">{route.description}</span><Icon name="arrow" size={18} />
@@ -78,7 +80,7 @@ export function FreeChoiceWeekView({ initialDay = null }: { initialDay?: number 
             <strong>{cost.complete ? formatCents(cost.knownCostCents) : "Prijs onvolledig"}</strong><span className="meal-chevron" aria-hidden="true">›</span>
           </summary>
           <CompactRecipeDetail preparation={preparation} dayIndex={item.dayIndex} />
-          <button type="button" className="text-action" disabled={!ready || week.customizationBusy} onClick={() => { setSelectedDay(item.dayIndex); setChoosingSlot(true); }}>Deze vrije keuze vervangen</button>
+          <button type="button" className="text-action" disabled={!ready || week.customizationBusy} onClick={() => { setSelectedDay(item.dayIndex); setChoosingSlot(false); actionGrid.current?.querySelector("button")?.focus(); }}>Deze vrije keuze vervangen</button>
         </details>;
       }) : <p>Je hebt nog geen vrije maaltijden gekozen.</p>}
     </section>

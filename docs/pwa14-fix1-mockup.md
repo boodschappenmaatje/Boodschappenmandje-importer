@@ -18,8 +18,10 @@ Geen wijziging aan matching-, hoeveelheid-, budget- of lijstsyncservices. Bestaa
 ## Lokale controle
 
 - Lint en TypeScript geslaagd.
-- 538 webtests / 50 bestanden geslaagd, inclusief PWA 13/14 en zeven aanvullende scherm-/navigatiechecks.
+- 539 webtests / 50 bestanden geslaagd, inclusief PWA 13/14 en acht aanvullende scherm-/navigatiechecks.
 - 189 importerregressies geslaagd; uitsluitend fixtures, geen productimport.
 - Production-build lokaal geslaagd (18 pagina's).
 
 Previewcontrole volgt op de featurebranch. Fysieke iPhone-controle blijft de gebruikersacceptatietest.
+
+Preview-vinding: expliciet geopend receptdetail krijgt voorrang op een ouder concept voor dezelfde weekdag. Hierdoor blijft de gekozen personenbasis bij vervangen behouden. Reguliere editor blijft concepten herstellen; extra regressietest toegevoegd. De gekozen weekplek blijft vaststaan tijdens bevestigen.

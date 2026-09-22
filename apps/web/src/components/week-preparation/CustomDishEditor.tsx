@@ -10,6 +10,13 @@ import { customDraftHasChanges, customDraftKey, loadCustomDraft, loadMyRecipes, 
 import type { RecipeAlternative } from "@/services/week-preparation/meal-customization";
 import type { CustomDish } from "@/types/week-preparation";
 
+/** An explicitly opened detail wins over an older editor draft for the same recipe. */
+export function customDishForOpening(initialDish: CustomDish | undefined, initialView: "editor" | "library" | "detail", stored: CustomDish | null, recipes: SavedCustomRecipe[]): CustomDish | undefined {
+  if (initialView === "detail" && initialDish) return initialDish;
+  const sameRecipe = !initialDish || (stored?.savedRecipeId && stored.savedRecipeId === initialDish.savedRecipeId);
+  return stored && sameRecipe && customDraftHasChanges(stored, recipes) ? stored : initialDish;
+}
+
 export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor", onClose, onChooseSlot }: {
   dayIndex: number; initialDish?: CustomDish; initialView?: "editor" | "library" | "detail"; onClose?: () => void; onChooseSlot?: (dish: CustomDish) => void;
 }) {
@@ -17,6 +24,7 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
   const [view, setView] = useState<"editor" | "library" | "detail">(initialView);
   const draftKey = customDraftKey(week.preparation?.id ?? "unprepared", dayIndex);
   const initial = useRef(initialDish);
+  const openingView = useRef(initialView);
   const people = week.preparation?.numberOfPeople ?? 4;
   const [dish, setDish] = useState<CustomDish | null>(initialDish ?? null);
   const [recipes, setRecipes] = useState<SavedCustomRecipe[]>([]);
@@ -41,9 +49,7 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
       catch { setStorageError("Mijn recepten kan niet worden gelezen. Bestaande opslag is behouden; opslaan is nu niet mogelijk."); }
       try {
         const stored = loadCustomDraft(window.localStorage, draftKey);
-        const unfinished = stored && customDraftHasChanges(stored, loadedRecipes);
-        const sameRecipe = !initial.current || (stored?.savedRecipeId && stored.savedRecipeId === initial.current.savedRecipeId);
-        const saved = unfinished && sameRecipe ? stored : initial.current;
+        const saved = customDishForOpening(initial.current, openingView.current, stored, loadedRecipes);
         setDish(saved ?? fallback);
         dirty.current = customDraftHasChanges(saved ?? fallback, loadedRecipes);
       } catch { setDish(fallback); setStorageError("Je concept kon niet worden gelezen. Je opgeslagen recepten blijven behouden."); }
@@ -155,7 +161,7 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
       {dayIndex < 0 ? <p>Kies een vrije-keuzeplek om dit recept aan je week toe te voegen.</p> : null}
       <div className="recipe-screen-actions recipe-detail-actions">
         <button type="button" disabled={week.customizationBusy} onClick={() => setView("editor")}>Bewerk recept</button>
-        <button type="button" className="primary-action" disabled={busy || week.customizationBusy || !preview || (dayIndex < 0 && !onChooseSlot)} onClick={() => { if (dayIndex < 0) onChooseSlot?.(dish); else void apply(); }}>{week.customizationBusy ? "Toevoegen…" : dayIndex < 0 ? "Kies een vrije plek" : preview?.impact.requiresBudgetOverride ? "Toch toevoegen aan lijst" : "Voeg toe aan lijst"}</button>
+        <button type="button" className="primary-action" disabled={busy || week.customizationBusy || !preview || (dayIndex < 0 && !onChooseSlot)} onClick={() => { if (dayIndex < 0) onChooseSlot?.(dish); else void apply(); }}>{week.customizationBusy ? "Toevoegen…" : preview?.impact.requiresBudgetOverride && dayIndex >= 0 ? "Toch toevoegen aan lijst" : "Voeg toe aan lijst"}</button>
       </div>
     </> : null}
     {view !== "library" && completeInput && !busy && !preview ? <button type="button" className="text-action" onClick={() => { revision.current++; setRefresh(value => value + 1); }}>Controleer producten en prijs</button> : null}

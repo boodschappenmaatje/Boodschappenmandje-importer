@@ -4546,3 +4546,10 @@ html {
   .custom-ingredient-amount { max-width: 170px; }
   .custom-ingredient-actions { gap: 0; }
 }
+.custom-dish-fields input, .custom-dish-fields select { border: 1px solid var(--color-border); border-radius: var(--radius-small); background-color: var(--color-surface); color: var(--color-text); }
+.custom-ingredient-amount input, .custom-ingredient-amount select { background-color: var(--color-background); }
+.custom-ingredient-actions .text-action { border: 0; background: transparent; color: var(--color-muted); box-shadow: none; }
+.custom-ingredient-actions .text-action:hover { color: var(--color-primary-dark); }
+.recipe-screen-navigation { grid-template-columns: 88px minmax(0, 1fr) 88px; }
+.recipe-screen-navigation h2 { text-align: center; }
+.compact-recipe-detail[data-presentation="screen"] .recipe-summary-image[data-has-image="false"] > svg { width: 44px; height: 44px; }

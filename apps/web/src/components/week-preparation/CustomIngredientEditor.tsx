@@ -79,7 +79,7 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
         <input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={row.packageCapacityOverride ?? ""} onChange={event => onChange({ ...row, packageCapacityOverride: Number(event.target.value) > 0 ? Number(event.target.value) : undefined })} />
         <span>We kunnen dit niet veilig omrekenen. Lees de inhoud op de verpakking of kies een andere eenheid/product.</span>
       </label> : null}
-      {packages !== null && price !== null && available ? <p className="custom-package-summary">{packages} {packages === 1 ? "verpakking" : "verpakkingen"} · {formatCents(packages * price)}{row.packageCapacityOverride && catalogCapacity === null ? " · inhoud zelf ingevuld" : ""}</p> : null}
+      {packages !== null && price !== null && available ? <p className="custom-package-summary">{packages} {packages === 1 ? "verpakking" : "verpakkingen"}{row.packageCapacityOverride && catalogCapacity === null ? " · inhoud zelf ingevuld" : ""}</p> : null}
 
     </> : null}
     {search ? <div>

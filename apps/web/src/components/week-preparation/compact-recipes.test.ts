@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { CompactRecipeDetail } from "./CompactRecipeDetail";
-import { CustomDishEditor } from "./CustomDishEditor";
+import { CustomDishEditor, customDishForOpening } from "./CustomDishEditor";
 import { FreeChoiceWeekView } from "./FreeChoiceWeekView";
 import { createWeekPreparation, distributeCategories } from "@/services/week-preparation/week-preparation";
 import { recalculateMealBudgetSummary } from "@/services/week-preparation/week-generation";
@@ -99,6 +99,15 @@ describe("PWA 14 Fix 1 compact view and separate editor", () => {
     expect(html).toContain('class="recipe-screen-actions recipe-detail-actions"');
     expect(html).toContain('disabled="">Voeg toe aan lijst');
     expect(html).not.toContain("Naam van je gerecht");
+  });
+
+  it("preserves explicitly selected servings when moving a saved detail into a replacement slot", () => {
+    const selected = { name: "Pasta", servings: 4, targetServings: 4, savedRecipeId: "saved", ingredients: [] };
+    const olderDraft = { ...selected, targetServings: 6 };
+    expect(customDishForOpening(selected, "detail", olderDraft, [])).toBe(selected);
+    expect(customDishForOpening(selected, "editor", olderDraft, [])).toBe(olderDraft);
+    expect(customDishForOpening(undefined, "editor", olderDraft, [])).toBe(olderDraft);
+    expect(olderDraft.targetServings).toBe(6);
   });
 
 });
