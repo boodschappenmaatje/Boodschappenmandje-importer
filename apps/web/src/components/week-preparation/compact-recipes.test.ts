@@ -65,4 +65,40 @@ describe("PWA 14 Fix 1 compact view and separate editor", () => {
     expect(html).toContain("Mijn recepten"); expect(html).not.toContain("Voeg toe aan lijst");
     expect(html).toContain('aria-current="page" href="/vrije-keuze"');
   });
+  it("shows all four home routes before slot selection, followed by selected meals", () => {
+    current = fixture();
+    const html = renderToStaticMarkup(createElement(FreeChoiceWeekView));
+    for (const title of ["Gerecht kiezen", "Maaltijdmix kiezen", "Zelf maken", "Mijn recepten"]) expect(html).toContain(`aria-label="${title}"`);
+    expect(html).toContain('class="free-choice-action-grid"');
+    expect(html.indexOf('class="free-choice-action-grid"')).toBeLessThan(html.indexOf('aria-label="Al gekozen"'));
+    expect(html).toContain('class="free-choice-selected-meal"');
+    expect(html).toContain("Dag 1 · 4 personen");
+    expect(html).not.toContain("<select");
+  });
+  it("retains recipe management while a reduced week awaits retention confirmation", () => {
+    current = { ...fixture(), status: "draft" };
+    const html = renderToStaticMarkup(createElement(FreeChoiceWeekView));
+    expect(html).toContain('aria-label="Gerecht kiezen" disabled=""');
+    expect(html).toContain('aria-label="Maaltijdmix kiezen" disabled=""');
+    expect(html).not.toContain('aria-label="Mijn recepten" disabled');
+    expect(html).not.toContain('aria-label="Zelf maken" disabled');
+    expect(html).toContain("Je gekozen maaltijden blijven bewaard");
+    expect(html).toContain("Pasta voor mijn gezin");
+  });
+  it("renders the screen detail with quantities separated from products and five initial rows", () => {
+    const html = renderToStaticMarkup(createElement(CompactRecipeDetail, { preparation: fixture(), dayIndex: 0, presentation: "screen" }));
+    expect(html).toContain('data-presentation="screen"');
+    expect(html).toContain("Ingrediënten (5 van 7)");
+    expect(html).toContain('class="compact-ingredient-quantity">600 g');
+    expect(html.split('<details')[0].match(/class="compact-ingredient-quantity"/g)).toHaveLength(5);
+    expect(html).not.toContain("<input");
+  });
+  it("groups explicit edit and add actions even while current prices load", () => {
+    current = fixture();
+    const html = renderToStaticMarkup(createElement(CustomDishEditor, { dayIndex: 0, initialView: "detail", initialDish: { name: "Mijn pasta", servings: 4, ingredients: [] } }));
+    expect(html).toContain('class="recipe-screen-actions recipe-detail-actions"');
+    expect(html).toContain('disabled="">Voeg toe aan lijst');
+    expect(html).not.toContain("Naam van je gerecht");
+  });
+
 });

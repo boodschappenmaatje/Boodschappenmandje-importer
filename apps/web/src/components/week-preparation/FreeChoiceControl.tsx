@@ -11,10 +11,12 @@ import type { FreeChoiceResult } from "@/services/week-preparation/free-choice";
 import type { RecipeAlternative } from "@/services/week-preparation/meal-customization";
 import type { CustomDish } from "@/types/week-preparation";
 
-export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number; initialDish?: CustomDish }) {
+export type FreeChoiceRoute = "recipe" | "mix" | "custom" | "library";
+
+export function FreeChoiceControl({ dayIndex, initialDish, initialMode = null, onClose }: { dayIndex: number; initialDish?: CustomDish; initialMode?: FreeChoiceRoute | null; onClose?: () => void }) {
   const week = useWeekPreparation();
   const [selectedResult, setSelectedResult] = useState<FreeChoiceResult | null>(null);
-  const [mode, setMode] = useState<"recipe" | "mix" | "custom" | "library" | null>(null);
+  const [mode, setMode] = useState<FreeChoiceRoute | null>(initialMode);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FreeChoiceResult[]>([]);
   const [message, setMessage] = useState("");
@@ -43,19 +45,19 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
   async function apply() {
     if (!preview) return;
     const result = await week.applyExplicitRecipe(dayIndex, preview, preview.impact.requiresBudgetOverride);
-    if (result.applied) { setPreview(null); setMode(null); setMessage("Gerecht opgeslagen en boodschappenlijst bijgewerkt."); }
+    if (result.applied) { setPreview(null); setMode(null); setMessage("Gerecht opgeslagen en boodschappenlijst bijgewerkt."); onClose?.(); }
     else if (result.revalidatedPreview) setPreview(result.revalidatedPreview.alternative);
   }
-  if (mode === "custom" || mode === "library") return <CustomDishEditor key={`${week.preparation?.id}:${dayIndex}:${mode}`} dayIndex={dayIndex} initialDish={initialDish} initialView={mode === "library" ? "library" : "editor"} onClose={() => setMode(null)} />;
+  if (mode === "custom" || mode === "library") return <CustomDishEditor key={`${week.preparation?.id}:${dayIndex}:${mode}`} dayIndex={dayIndex} initialDish={initialDish} initialView={mode === "library" ? "library" : "editor"} onClose={() => { setMode(null); onClose?.(); }} />;
   return <section className="free-choice-control" aria-label={`Vrije keuze dag ${dayIndex + 1}`}>
     {!mode ? <div className="free-choice-routes" aria-label="Wat wil je toevoegen?">
       <button type="button" aria-label="Gerecht kiezen" disabled={week.customizationBusy} onClick={() => { setMode("recipe"); setQuery(""); setResults([]); setMessage(""); }}><span>Gerecht</span><span>kiezen</span></button>
       <button type="button" aria-label="Maaltijdmix kiezen" disabled={week.customizationBusy} onClick={() => { setMode("mix"); setQuery(""); setResults([]); setMessage(""); }}><span>Maaltijdmix</span><span>kiezen</span></button>
       <button type="button" aria-label="Zelf maken" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setSelectedResult(null); setMessage(""); }}><span>Zelf</span><span>maken</span></button>
       <button type="button" onClick={() => setMode("library")}>Mijn recepten</button>
-    </div> : <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => { revision.current++; if (preview) setPreview(null); else setMode(null); setMessage(""); setBusy(false); }}>{preview ? "Terug naar je keuze" : "Andere route kiezen"}</button>}
+    </div> : <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => { revision.current++; if (preview) setPreview(null); else { setMode(null); onClose?.(); } setMessage(""); setBusy(false); }}>{preview ? "Terug naar je keuze" : "Andere route kiezen"}</button>}
     {preview ? <div className="customization-confirm" ref={confirmation} tabIndex={-1}>
-      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} />
+      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} presentation="screen" />
       {selectedResult?.brand ? <small>{selectedResult.brand}</small> : null}
       <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
       <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>

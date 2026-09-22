@@ -1,6 +1,6 @@
 import type { NavigationIcon } from "@/types/navigation";
 
-type IconName = NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back";
+type IconName = "bowl" | "chef" | "book" | NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back";
 
 interface IconProps {
   name: IconName;
@@ -21,6 +21,12 @@ export function Icon({ name, size = 24 }: IconProps) {
   };
 
   switch (name) {
+    case "bowl":
+      return <svg {...common}><path d="M3 11h18a9 9 0 0 1-18 0ZM8 21h8M8 7c-2-2 2-2 0-4M13 7c-2-2 2-2 0-4M18 7c-2-2 2-2 0-4" /></svg>;
+    case "chef":
+      return <svg {...common}><path d="M6 14a4 4 0 1 1 2-7 4 4 0 0 1 8 0 4 4 0 1 1 2 7v7H6v-7ZM6 17h12M10 12v5M14 12v5" /></svg>;
+    case "book":
+      return <svg {...common}><rect x="5" y="3" width="15" height="18" rx="2" /><path d="M5 7H3M5 12H3M5 17H3M10 7h6M10 11h6M10 15h3" /></svg>;
     case "home":
       return <svg {...common}><path d="m3 11 9-8 9 8" /><path d="M5 10v11h14V10" /><path d="M9 21v-7h6v7" /></svg>;
     case "menu":

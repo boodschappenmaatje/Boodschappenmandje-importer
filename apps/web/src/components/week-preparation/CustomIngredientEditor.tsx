@@ -62,15 +62,16 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
     setLoaded({ id: next.id, product: next, refresh }); setSearch(false); setMessage("");
   }
   return <fieldset className="custom-ingredient-editor">
-    <legend>{row.productId ? row.name : "Nieuw ingrediënt"}</legend>
+    <legend className="visually-hidden">{row.productId ? row.name : "Nieuw ingrediënt"}</legend>
     {row.productId ? <>
-      <div className="custom-selected-product"><ProductThumbnail className="manual-product-image" imageUrl={product?.imageUrl ?? null} name={row.name} />
+      <div className="custom-ingredient-main"><div className="custom-selected-product"><ProductThumbnail className="manual-product-image" imageUrl={product?.imageUrl ?? null} name={row.name} />
         <div><strong>{product?.name ?? row.name}</strong><p>{product?.packageText ?? "Verpakking onbekend"}{price !== null ? ` · ${formatCents(price)}` : ""}</p></div>
       </div>
+      {packages !== null && price !== null && available ? <strong className="custom-ingredient-cost">{formatCents(packages * price)}</strong> : null}</div>
       {loading ? <p role="status">Actueel product ophalen…</p> : !available ? <p role="alert">Dit product is niet beschikbaar. Kies opnieuw een product.</p> : price === null ? <p role="alert">Voor dit ingrediënt ontbreekt een actuele geldige prijs. Kies een ander product of probeer later opnieuw.</p> : null}
       <div className="custom-ingredient-amount">
-        <label>Benodigde hoeveelheid<input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={quantity || ""} onChange={event => onChange({ ...row, quantity: Number(event.target.value) * dish.servings / (dish.targetServings ?? dish.servings) })} /></label>
-        <label>Eenheid<select value={row.unit} onChange={event => onChange({ ...row, unit: event.target.value as WeekIngredientUnit, packageCapacityOverride: undefined })}>
+        <label><span className="visually-hidden">Benodigde hoeveelheid</span><input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={quantity || ""} onChange={event => onChange({ ...row, quantity: Number(event.target.value) * dish.servings / (dish.targetServings ?? dish.servings) })} /></label>
+        <label><span className="visually-hidden">Eenheid</span><select value={row.unit} onChange={event => onChange({ ...row, unit: event.target.value as WeekIngredientUnit, packageCapacityOverride: undefined })}>
           {[["g", "gram"], ["kg", "kilo"], ["ml", "milliliter"], ["l", "liter"], ["piece", "stuks"], ["loaf", "broden"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
       </div>
@@ -78,8 +79,8 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
         <input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={row.packageCapacityOverride ?? ""} onChange={event => onChange({ ...row, packageCapacityOverride: Number(event.target.value) > 0 ? Number(event.target.value) : undefined })} />
         <span>We kunnen dit niet veilig omrekenen. Lees de inhoud op de verpakking of kies een andere eenheid/product.</span>
       </label> : null}
-      {packages !== null && price !== null && available ? <p>{packages} {packages === 1 ? "verpakking" : "verpakkingen"} · {formatCents(packages * price)}{row.packageCapacityOverride && catalogCapacity === null ? " · inhoud zelf ingevuld" : ""}</p> : null}
-      <button type="button" className="text-action" onClick={() => { setSearch(!search); setQuery(row.name); setMessage(""); }}>Ingrediënt vervangen</button>
+      {packages !== null && price !== null && available ? <p className="custom-package-summary">{packages} {packages === 1 ? "verpakking" : "verpakkingen"} · {formatCents(packages * price)}{row.packageCapacityOverride && catalogCapacity === null ? " · inhoud zelf ingevuld" : ""}</p> : null}
+
     </> : null}
     {search ? <div>
       <label>Zoek product<input type="search" value={query} placeholder="Bijvoorbeeld spaghetti" onChange={event => {
@@ -98,6 +99,9 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
       {row.productId ? <button type="button" onClick={() => setSearch(false)}>Vervangen annuleren</button> : null}
     </div> : null}
     {message ? <p role="status">{message}</p> : null}
-    <button type="button" className="text-action" onClick={onRemove}>Ingrediënt verwijderen</button>
+    <div className="custom-ingredient-actions">
+      {row.productId ? <button type="button" className="text-action" onClick={() => { setSearch(!search); setQuery(row.name); setMessage(""); }} aria-label="Ingrediënt vervangen">Vervang</button> : null}
+      <button type="button" className="text-action" onClick={onRemove} aria-label="Ingrediënt verwijderen">Verwijder</button>
+    </div>
   </fieldset>;
 }
