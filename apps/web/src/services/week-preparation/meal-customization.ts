@@ -663,7 +663,10 @@ export async function commitExplicitRecipeAlternative(
   const selectedDay = alternative.preparation.days.find(
     (day) => day.dayIndex === dayIndex,
   );
+  const currentDay = current.days.find(day => day.dayIndex === dayIndex);
   if (
+    !currentDay || current.status === "draft" ||
+    (selectedDay?.category === "freeChoice" && currentDay.category !== "freeChoice") ||
     alternative.preparation.id !== current.id ||
     alternative.recipe.id !== selectedDay?.recipeId ||
     selectedDay.freeChoice

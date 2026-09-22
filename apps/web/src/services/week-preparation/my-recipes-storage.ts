@@ -52,7 +52,7 @@ export function loadMyRecipes(storage: KeyValueStorage): SavedCustomRecipe[] {
   const raw = storage.getItem(MY_RECIPES_KEY);
   if (!raw) return [];
   const data = JSON.parse(raw);
-  if (data?.schemaVersion !== 1 || !Array.isArray(data.recipes) || data.recipes.length > 200 ||
+  if (data?.schemaVersion !== 1 || !Array.isArray(data.recipes) ||
     !data.recipes.every((entry: SavedCustomRecipe) => entry?.schemaVersion === 1 && typeof entry.id === "string" && entry.id.length > 0 &&
       validCustomDish(entry.dish) && entry.dish.savedRecipeId === entry.id && entry.photo?.kind === "fallback" &&
       typeof entry.createdAt === "string" && Number.isFinite(Date.parse(entry.createdAt)) && typeof entry.updatedAt === "string" && Number.isFinite(Date.parse(entry.updatedAt))) ||
@@ -65,7 +65,6 @@ export function saveMyRecipe(storage: KeyValueStorage, dish: CustomDish, id: str
   // Fresh read prevents a stale tab from dropping recipes saved by another tab.
   const existing = loadMyRecipes(storage);
   const prior = existing.find(entry => entry.id === id);
-  if (!prior && existing.length >= 200) throw new Error("recipe-limit");
   const record: SavedCustomRecipe = { schemaVersion: 1, id, dish: cleanDish({ ...dish, savedRecipeId: id }), photo: { kind: "fallback" }, createdAt: prior?.createdAt ?? now.toISOString(), updatedAt: now.toISOString() };
   storage.setItem(MY_RECIPES_KEY, JSON.stringify({ schemaVersion: 1, recipes: [record, ...existing.filter(entry => entry.id !== id)] }));
   return record;

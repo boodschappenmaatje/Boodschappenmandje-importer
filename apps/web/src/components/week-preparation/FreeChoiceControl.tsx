@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
-import { DishBudgetSummary } from "@/components/week-preparation/DishBudgetSummary";
+import { CompactRecipeDetail } from "./CompactRecipeDetail";
 import { CustomDishEditor } from "./CustomDishEditor";
 import { DishImage } from "@/components/ui/DishImage";
 import { recipeImageFor } from "@/services/week-preparation/recipe-images";
@@ -14,7 +14,7 @@ import type { CustomDish } from "@/types/week-preparation";
 export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number; initialDish?: CustomDish }) {
   const week = useWeekPreparation();
   const [selectedResult, setSelectedResult] = useState<FreeChoiceResult | null>(null);
-  const [mode, setMode] = useState<"recipe" | "mix" | "custom" | null>(null);
+  const [mode, setMode] = useState<"recipe" | "mix" | "custom" | "library" | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FreeChoiceResult[]>([]);
   const [message, setMessage] = useState("");
@@ -46,19 +46,17 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
     if (result.applied) { setPreview(null); setMode(null); setMessage("Gerecht opgeslagen en boodschappenlijst bijgewerkt."); }
     else if (result.revalidatedPreview) setPreview(result.revalidatedPreview.alternative);
   }
+  if (mode === "custom" || mode === "library") return <CustomDishEditor key={`${week.preparation?.id}:${dayIndex}:${mode}`} dayIndex={dayIndex} initialDish={initialDish} initialView={mode === "library" ? "library" : "editor"} onClose={() => setMode(null)} />;
   return <section className="free-choice-control" aria-label={`Vrije keuze dag ${dayIndex + 1}`}>
     {!mode ? <div className="free-choice-routes" aria-label="Wat wil je toevoegen?">
       <button type="button" aria-label="Gerecht kiezen" disabled={week.customizationBusy} onClick={() => { setMode("recipe"); setQuery(""); setResults([]); setMessage(""); }}><span>Gerecht</span><span>kiezen</span></button>
       <button type="button" aria-label="Maaltijdmix kiezen" disabled={week.customizationBusy} onClick={() => { setMode("mix"); setQuery(""); setResults([]); setMessage(""); }}><span>Maaltijdmix</span><span>kiezen</span></button>
       <button type="button" aria-label="Zelf maken" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setSelectedResult(null); setMessage(""); }}><span>Zelf</span><span>maken</span></button>
+      <button type="button" onClick={() => setMode("library")}>Mijn recepten</button>
     </div> : <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => { revision.current++; if (preview) setPreview(null); else setMode(null); setMessage(""); setBusy(false); }}>{preview ? "Terug naar je keuze" : "Andere route kiezen"}</button>}
     {preview ? <div className="customization-confirm" ref={confirmation} tabIndex={-1}>
-      <DishImage asset={recipeImageFor({ recipeSourceKey: preview.recipe.sourceKey, recipeName: preview.recipe.name, categories: [], ingredients: preview.preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)).map((item) => ({ sourceKey: item.sourceKey, name: item.name, optional: item.optional })) })} className="recipe-detail-hero" sizes="(max-width: 560px) 90vw, 500px" title={preview.recipe.name} />
-      <h3>{preview.recipe.name}</h3>
-      {selectedResult?.brand ? <p>{selectedResult.brand}</p> : null}
-      {selectedResult?.recipe.preparationMinutes ? <p>{selectedResult.recipe.preparationMinutes} minuten</p> : null}
-      <p>Controleer je ingrediënten en verpakkingen voor {preview.preparation.numberOfPeople} personen.</p>
-      <DishBudgetSummary preparation={preview.preparation} dayIndex={dayIndex} expandable />
+      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} />
+      {selectedResult?.brand ? <small>{selectedResult.brand}</small> : null}
       <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
       <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>
       <p>Totaal deze week: {formatCents(preview.impact.nextTotalWeekCostCents)}</p>
@@ -77,7 +75,6 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
         </div>
       </button></li>)}</ul>
     </> : null}
-    {mode === "custom" && !preview ? <CustomDishEditor key={`${week.preparation?.id}:${dayIndex}`} dayIndex={dayIndex} initialDish={initialDish} /> : null}
     {message ? <p role="status">{message}</p> : null}
   </section>;
 }

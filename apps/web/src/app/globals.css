@@ -4423,3 +4423,29 @@ html {
 .custom-product-options button > span:last-child, .my-recipes .ux-dish-result > span:last-child { display: grid; gap: 4px; min-width: 0; text-align: left; }
 .custom-ingredient-editor label > span, .custom-draft-status, .my-recipes > p { color: var(--color-muted); font-size: 0.8rem; }
 .custom-dish-fields input, .custom-dish-fields select { min-width: 0; max-width: 100%; }
+
+/* PWA 14 Fix 1: one compact read view; editing remains a separate screen. */
+.meal-route-navigation { display: flex; gap: 8px; margin-bottom: 16px; }
+.meal-route-navigation a { display: grid; place-items: center; min-height: 44px; padding: 8px 18px; border-radius: 12px; color: var(--color-primary-dark); background: var(--color-primary-soft); font-weight: 700; text-decoration: none; }
+.meal-route-navigation a[aria-current="page"] { background: var(--color-primary-dark); color: var(--color-on-primary); }
+.compact-recipe-detail { min-width: 0; display: grid; gap: 8px; }
+.compact-recipe-heading { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; align-items: center; }
+.compact-recipe-heading h3, .compact-recipe-heading p { margin: 0; overflow-wrap: anywhere; }
+.compact-recipe-heading .recipe-summary-image { width: 64px; height: 64px; }
+.compact-recipe-detail .compact-budget-status { margin: 0; font-size: 13px; }
+.compact-recipe-ingredients { list-style: none; margin: 0; padding: 0; }
+.compact-recipe-ingredients li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
+.compact-ingredient-image { width: 36px; height: 36px; object-fit: contain; }
+.compact-recipe-ingredients li > div { min-width: 0; }
+.compact-recipe-ingredients span, .compact-recipe-ingredients small { display: block; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.compact-recipe-ingredients strong { font-size: 13px; overflow-wrap: anywhere; }
+.compact-ingredient-cost { max-width: 72px; text-align: right; }
+.compact-more-ingredients summary, .compact-recipe-manage summary, .compact-selected-recipe summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
+.custom-editor-navigation { display: flex; justify-content: space-between; gap: 8px; }
+.custom-editor-navigation button, .custom-dish-editor button, .free-choice-week button { min-height: 44px; }
+.free-choice-week { display: grid; gap: 14px; min-width: 0; }
+.free-choice-week label { display: grid; gap: 6px; }
+.free-choice-week select { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
+.free-choice-week progress { width: 100%; accent-color: var(--color-primary); height: 8px; }
+.free-choice-routes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.customization-confirm > label { display: flex; gap: 10px; align-items: center; min-height: 44px; }
