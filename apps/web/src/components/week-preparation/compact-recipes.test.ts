@@ -5,6 +5,8 @@ import { CompactRecipeDetail } from "./CompactRecipeDetail";
 import { CustomDishEditor } from "./CustomDishEditor";
 import { FreeChoiceWeekView } from "./FreeChoiceWeekView";
 import { createWeekPreparation, distributeCategories } from "@/services/week-preparation/week-preparation";
+import { recalculateMealBudgetSummary } from "@/services/week-preparation/week-generation";
+import { createEmptyActiveShoppingList } from "@/services/shopping-list/shopping-list";
 import type { WeekPreparation } from "@/types/week-preparation";
 let current: WeekPreparation;
 vi.mock("@/features/week-preparation/WeekPreparationProvider", () => ({ useWeekPreparation: () => ({ preparation: current, previewCustomDish: vi.fn(), matchCustomIngredient: vi.fn(), searchCatalogProducts: vi.fn() }) }));
@@ -24,6 +26,17 @@ describe("PWA 14 Fix 1 compact view and separate editor", () => {
     expect(html).toContain("Toon alle ingrediënten (7)");
     expect(html.split('<details')[0]).not.toContain("Ingrediënt 5");
     expect(html).not.toContain("<input"); expect(html).not.toContain("<select"); expect(html).not.toContain("Ingrediënt verwijderen");
+  });
+  it("shows the actual overage instead of the zero-clamped remainder", () => {
+    const preparation = recalculateMealBudgetSummary({ ...fixture(), mealBudgetCents: 1000, generation: {
+      generatedAt: new Date().toISOString(), knownPurchaseCostCents: 1400, mealPlanKnownCostCents: 1400, mealBudgetRemainingCents: 0,
+      nonMealReservedCents: 9000, totalKnownWeekCostCents: 1400, mealBudgetStatus: "overMealBudget", weekBudgetStatus: "underBudget", isMealBudgetComplete: true,
+      mealBudgetCandidateCount: 0, mealBudgetRejectedCount: 0, matchedProductCount: 7, missingProductMatchCount: 0, missingPackageCalculationCount: 0, missingPriceCount: 0,
+    } }, createEmptyActiveShoppingList());
+    const html = renderToStaticMarkup(createElement(CompactRecipeDetail, { preparation, dayIndex: 0 }));
+    expect(html).toContain("€ 4,00"); expect(html).toContain("boven budget"); expect(html).not.toContain("€ 0,00 over");
+    const privateOnly = renderToStaticMarkup(createElement(CompactRecipeDetail, { preparation, dayIndex: 0, showBudget: false }));
+    expect(privateOnly).not.toContain("Maaltijdbudget:");
   });
   it("shows the custom target people and warns for missing prices", () => {
     const preparation = fixture();

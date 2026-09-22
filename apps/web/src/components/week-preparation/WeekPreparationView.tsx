@@ -826,7 +826,7 @@ export function WeekPreparationView() {
       {freeProgress.needsRetention ? <fieldset className="customization-confirm">
         <legend>Welke vrije keuzes wil je behouden?</legend>
         <p>Je hebt {freeProgress.chosen} maaltijden gekozen en nu {freeProgress.total} plekken. Selecteer {freeProgress.total} maaltijden. Tot bevestigen blijft alles bewaard.</p>
-        {freeProgress.selected.map(day => <label key={day.dayIndex}><input type="checkbox" checked={keepDayIndexes.includes(day.dayIndex)} onChange={event => setKeepDayIndexes(previous => event.target.checked ? [...previous, day.dayIndex] : previous.filter(index => index !== day.dayIndex))} />{day.recipe?.name}</label>)}
+        {freeProgress.selected.map(day => <label key={day.dayIndex}><input type="checkbox" checked={keepDayIndexes.includes(day.dayIndex)} onChange={event => setKeepDayIndexes(previous => event.target.checked ? [...previous, day.dayIndex] : previous.filter(index => index !== day.dayIndex))} />Dag {day.dayIndex + 1} · {day.recipe?.name}</label>)}
       </fieldset> : null}
       <div className="ux-step-actions">
         {currentStep > 0 ? <button type="button" onClick={() => goToStep(currentStep - 1)} disabled={preparation.status === "generating"}>Terug</button> : null}

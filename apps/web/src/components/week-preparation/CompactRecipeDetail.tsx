@@ -8,8 +8,8 @@ import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-pr
 import type { WeekPreparation } from "@/types/week-preparation";
 
 /** One read-only detail for generated dishes, meal mixes and private recipes. */
-export function CompactRecipeDetail({ preparation, dayIndex, children }: {
-  preparation: WeekPreparation; dayIndex: number; children?: ReactNode;
+export function CompactRecipeDetail({ preparation, dayIndex, children, showBudget = true }: {
+  preparation: WeekPreparation; dayIndex: number; children?: ReactNode; showBudget?: boolean;
 }) {
   const day = preparation.days.find(item => item.dayIndex === dayIndex);
   if (!day?.recipe) return null;
@@ -18,14 +18,16 @@ export function CompactRecipeDetail({ preparation, dayIndex, children }: {
   const people = day.customDish?.targetServings ?? preparation.numberOfPeople;
   const title = mealMixProfileForRecipe(day.recipe.sourceKey)?.dishName ?? day.recipe.name;
   const image = recipeImageFor({ recipeSourceKey: day.recipe.sourceKey, recipeName: title, categories: day.category === "freeChoice" ? [] : [day.category], ingredients });
-  const remaining = preparation.generation?.mealBudgetRemainingCents;
+  const remaining = preparation.mealBudgetCents !== null && preparation.generation
+    ? preparation.mealBudgetCents - preparation.generation.mealPlanKnownCostCents
+    : null;
   return <section className="compact-recipe-detail" aria-label={`Recept: ${title}`}>
     <header className="compact-recipe-heading">
       <DishImage asset={image} title={title} className="recipe-summary-image" sizes="64px" />
       <div><h3>{title}</h3><p>{people} personen · <strong>{cost.complete ? formatCents(cost.knownCostCents) : "Prijs onvolledig"}</strong></p>
         {cost.complete && people ? <small>{formatCents(Math.round(cost.knownCostCents / people))} per persoon</small> : null}</div>
     </header>
-    {remaining !== null && remaining !== undefined ? <p className="compact-budget-status">Maaltijdbudget: {formatCents(Math.abs(remaining))} {remaining < 0 ? "boven budget" : "over"}{!preparation.generation?.isMealBudgetComplete ? " · voorlopig" : ""}</p> : null}
+    {showBudget && remaining !== null && remaining !== undefined ? <p className="compact-budget-status">Maaltijdbudget: {formatCents(Math.abs(remaining))} {remaining < 0 ? "boven budget" : "over"}{!preparation.generation?.isMealBudgetComplete ? " · voorlopig" : ""}</p> : null}
     <DishIngredients ingredients={ingredients.slice(0, 5)} dayIndex={dayIndex} compact />
     {ingredients.length > 5 ? <details className="compact-more-ingredients"><summary>Toon alle ingrediënten ({ingredients.length})</summary><DishIngredients ingredients={ingredients.slice(5)} dayIndex={dayIndex} compact /></details> : null}
     {children}

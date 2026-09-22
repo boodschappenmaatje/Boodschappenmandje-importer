@@ -393,6 +393,18 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).not.toContain("SKU");
   });
 
+  it.each(["spaghetti-bolognese", "catalog-mix-honig-spaghetti", "custom-dish"])("opens %s as an inline Menu accordion without an editor or navigation link", sourceKey => {
+    const preparation = generated();
+    preparation.days[0] = { ...preparation.days[0], recipe: { ...preparation.days[0].recipe!, sourceKey } };
+    const html = render(createElement(PrepareWeekPage), preparation);
+    const summary = html.match(/<details class="recipe-detail"[^>]*><summary>([\s\S]*?)<\/summary>/)?.[1];
+    expect(summary).toBeDefined();
+    expect(summary).not.toContain("<a ");
+    expect(html).toContain('class="compact-recipe-detail"');
+    expect(html).not.toContain("Naam van je gerecht");
+    expect(html).toContain('aria-current="page" href="/week-voorbereiden"');
+  });
+
   it("toont gerecht, hoeveelheden, echte productmatch, kosten en lijstactie", () => {
     const html = render(createElement(PrepareWeekPage), generated());
     expect(html).toContain("Spaghetti bolognese");

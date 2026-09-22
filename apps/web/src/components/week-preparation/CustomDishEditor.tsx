@@ -149,13 +149,13 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
     {view === "detail" ? <button type="button" className="text-action" onClick={() => setView("editor")}>Bewerk recept</button> : null}
     {view === "detail" && !preview ? <p>{dish.name} · {dish.targetServings ?? dish.servings} personen · {dish.ingredients.length} ingrediënten. Actuele producten worden gecontroleerd. Gebruik Bewerk recept als een ingrediënt aandacht nodig heeft.</p> : null}
     {preview && view !== "library" ? <div className="customization-confirm">
-      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} />
-      <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
+      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} showBudget={dayIndex >= 0} />
+      {dayIndex >= 0 ? <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
         <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>
         <p>Totaal deze week: {formatCents(preview.impact.nextTotalWeekCostCents)}</p>
         {preview.impact.weekBudgetRemainingCents !== null ? <p>Resterend weekbudget: {formatCents(preview.impact.weekBudgetRemainingCents)}</p> : null}
-      </details>
-      {preview.impact.requiresBudgetOverride ? <p role="alert">Je overschrijdt het maaltijdbudget met {formatCents(preview.impact.mealBudgetOverageCents)} en het weekbudget met {formatCents(preview.impact.weekBudgetOverageCents)}. Bevestig alleen als je deze overschrijding accepteert.</p> : null}
+      </details> : null}
+      {dayIndex >= 0 && preview.impact.requiresBudgetOverride ? <p role="alert">Je overschrijdt het maaltijdbudget met {formatCents(preview.impact.mealBudgetOverageCents)} en het weekbudget met {formatCents(preview.impact.weekBudgetOverageCents)}. Bevestig alleen als je deze overschrijding accepteert.</p> : null}
       {dayIndex >= 0 ? <button type="button" className="primary-action compact-action" disabled={busy || week.customizationBusy} onClick={apply}>{week.customizationBusy ? "Toevoegen…" : preview.impact.requiresBudgetOverride ? "Toch toevoegen aan lijst" : "Voeg toe aan lijst"}</button> : <p>Kies een vrije-keuzeplek om dit recept aan je week toe te voegen.</p>}
     </div> : null}
     {storageError ? <p role="alert">{storageError}</p> : <p className="custom-draft-status">Je concept blijft op dit apparaat bewaard als je teruggaat.</p>}
