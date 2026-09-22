@@ -123,7 +123,7 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
       {recipes.length ? <ul className="free-choice-results">{recipes.map(entry => <li key={entry.id}>
         <button type="button" className="ux-dish-result" disabled={week.customizationBusy} onClick={() => requestOpen(entry)}>
           <DishImage asset={null} title={entry.dish.name} className="recipe-summary-image" sizes="58px" />
-          <span><strong>{entry.dish.name}</strong><span>{entry.dish.servings} personen · {entry.dish.ingredients.length} ingrediënten</span></span>
+          <span><strong>{entry.dish.name}</strong><span>{entry.dish.targetServings ?? entry.dish.servings} personen · {entry.dish.ingredients.length} {entry.dish.ingredients.length === 1 ? "ingrediënt" : "ingrediënten"}</span></span>
         </button>
       </li>)}</ul> : <p>Je hebt nog geen eigen recepten bewaard.</p>}
       <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => requestOpen("new")}>Nieuw recept</button>
