@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";

@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import HomePage from "@/app/page";
 import PrepareWeekPage from "@/app/week-voorbereiden/page";
@@ -506,6 +508,13 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(homeHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
     expect(weekHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
     expect(weekHtml).toContain("recipe-detail-hero");
+  });
+
+  it("biedt Nieuwe week alleen bij de weekacties op Home aan", () => {
+    const home = render(createElement(HomePage), generated());
+    const menu = render(createElement(PrepareWeekPage), generated());
+    expect(home).toContain("week-reset-button");
+    expect(menu).not.toContain("week-reset-button");
   });
 
   it("vraagt bevestiging voordat een bestaande voorbereiding wordt vervangen", () => {

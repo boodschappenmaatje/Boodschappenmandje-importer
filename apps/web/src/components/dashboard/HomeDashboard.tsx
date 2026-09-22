@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Icon } from "@/components/Icon";
+import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
@@ -20,6 +22,7 @@ import { MealDayCard } from "@/components/ui/MealDayCard";
 const DAY_LABELS = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"] as const;
 
 export function HomeDashboard() {
+  const router = useRouter();
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
@@ -87,6 +90,12 @@ export function HomeDashboard() {
       <div className="ux-home-actions">
         <Link className="home-primary-action" href="/lijst"><Icon name="list" size={24} /><span><strong>Verder met mijn lijst</strong><small>{shoppingList.list?.items.length ?? 0} {(shoppingList.list?.items.length ?? 0) === 1 ? "product" : "producten"}</small></span><Icon name="arrow" size={20} /></Link>
         <Link className="ux-secondary-action" href="/week-voorbereiden"><Icon name="week" size={22} />Maak mijn week</Link>
+        {week.status === "ready" && shoppingList.status === "ready" ? (
+          <NewWeekControl onStartNew={async () => {
+            await week.startNewPreparation();
+            router.push("/week-voorbereiden");
+          }} />
+        ) : null}
       </div>
 
       <section className="home-week-section" aria-labelledby="this-week-title">

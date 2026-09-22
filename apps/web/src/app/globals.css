@@ -4316,6 +4316,8 @@ html {
 .ux-greeting h1 { font-size: 1.35rem; margin: 0 0 6px; }
 .ux-greeting p { color: var(--color-muted); margin: 0; }
 .ux-home-actions { display: grid; gap: 10px; }
+.ux-home-actions .new-week-card { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.ux-home-actions .week-reset-button { width: 100%; min-height: 48px; }
 .ux-home-actions .home-primary-action > span { display: grid; gap: 3px; }
 .ux-home-actions .home-primary-action small { font-size: .8rem; font-weight: 400; }
 .ux-secondary-action { display: flex; justify-content: center; align-items: center; gap: 10px; min-height: 48px; border-radius: var(--radius-small); background: var(--color-primary-soft); color: var(--color-primary-dark); font-weight: 700; text-decoration: none; }
