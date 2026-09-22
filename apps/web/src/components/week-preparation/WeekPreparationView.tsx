@@ -442,7 +442,7 @@ export function WeekPreparationView() {
                               title={dishTitle}
                             />
                             <p>
-                              {MEAL_CATEGORY_LABELS[day.category]} · {preparation.numberOfPeople} personen
+                              {MEAL_CATEGORY_LABELS[day.category]} · {day.customDish?.targetServings ?? preparation.numberOfPeople} personen
                             </p>
 
 

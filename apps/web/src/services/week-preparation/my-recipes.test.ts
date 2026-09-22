@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { customDraftKey, loadCustomDraft, loadMyRecipes, saveCustomDraft, saveMyRecipe, MY_RECIPES_KEY } from "./my-recipes-storage";
+import { customDraftHasChanges, customDraftKey, loadCustomDraft, loadMyRecipes, saveCustomDraft, saveMyRecipe, MY_RECIPES_KEY } from "./my-recipes-storage";
 import { customIngredientQuantity, matchCustomDishes, validCustomDish } from "./custom-dish";
 import { previewFreeChoice } from "./free-choice";
 import { commitExplicitRecipeAlternative } from "./meal-customization";
@@ -53,6 +53,14 @@ describe("PWA 14 private recipes and drafts", () => {
     expect(saved.photo).toEqual({ kind: "fallback" });
     expect(saved.dish.ingredients.map(row => row.productId)).toEqual([pasta.id, cream.id, peppers.id]);
     expect(store.getItem(MY_RECIPES_KEY)).not.toMatch(/amountCents|currentPrice|priceSnapshot/);
+  });
+  it("does not warn about changes when reopening an unchanged saved draft", () => {
+    const store = storage();
+    const saved = saveMyRecipe(store, dish(), "mine");
+    saveCustomDraft(store, "draft", saved.dish);
+    expect(customDraftHasChanges(loadCustomDraft(store, "draft")!, loadMyRecipes(store))).toBe(false);
+    expect(customDraftHasChanges({ ...saved.dish, targetServings: 6 }, loadMyRecipes(store))).toBe(true);
+    expect(customDraftHasChanges({ ...dish(), name: "", ingredients: [] }, [])).toBe(false);
   });
   it("updates in place without duplicating recipes and preserves recipes from another tab", () => {
     const store = storage(); saveMyRecipe(store, dish(), "one", now); saveMyRecipe(store, dish(), "two", now);

@@ -70,3 +70,10 @@ export function saveMyRecipe(storage: KeyValueStorage, dish: CustomDish, id: str
   storage.setItem(MY_RECIPES_KEY, JSON.stringify({ schemaVersion: 1, recipes: [record, ...existing.filter(entry => entry.id !== id)] }));
   return record;
 }
+
+/** A restored draft is only dirty when its inputs differ from its saved recipe. */
+export function customDraftHasChanges(dish: CustomDish, recipes: SavedCustomRecipe[]): boolean {
+  if (!dish.name && dish.ingredients.length === 0) return false;
+  const saved = recipes.find(entry => entry.id === dish.savedRecipeId);
+  return !saved || JSON.stringify(cleanDish(dish)) !== JSON.stringify(cleanDish(saved.dish));
+}

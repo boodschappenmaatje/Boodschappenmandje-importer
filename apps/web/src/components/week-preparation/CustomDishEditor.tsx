@@ -6,7 +6,7 @@ import { DishBudgetSummary } from "./DishBudgetSummary";
 import { DishImage } from "@/components/ui/DishImage";
 import { formatCents } from "@/services/budget/budget-engine";
 import { validCustomDish } from "@/services/week-preparation/custom-dish";
-import { customDraftKey, loadCustomDraft, loadMyRecipes, saveCustomDraft, saveMyRecipe, type SavedCustomRecipe } from "@/services/week-preparation/my-recipes-storage";
+import { customDraftHasChanges, customDraftKey, loadCustomDraft, loadMyRecipes, saveCustomDraft, saveMyRecipe, type SavedCustomRecipe } from "@/services/week-preparation/my-recipes-storage";
 import type { RecipeAlternative } from "@/services/week-preparation/meal-customization";
 import type { CustomDish } from "@/types/week-preparation";
 
@@ -31,10 +31,14 @@ export function CustomDishEditor({ dayIndex, initialDish }: { dayIndex: number; 
     queueMicrotask(() => {
       if (!active) return;
       const fallback = initial.current ?? { name: "", servings: people, targetServings: people, ingredients: [] };
-      try { const saved = loadCustomDraft(window.localStorage, draftKey); setDish(saved ?? fallback); dirty.current = !!saved; }
-      catch { setDish(fallback); setStorageError("Je concept kon niet worden gelezen. Je opgeslagen recepten blijven behouden."); }
-      try { setRecipes(loadMyRecipes(window.localStorage)); }
+      let loadedRecipes: SavedCustomRecipe[] = [];
+      try { loadedRecipes = loadMyRecipes(window.localStorage); setRecipes(loadedRecipes); }
       catch { setStorageError("Mijn recepten kan niet worden gelezen. Bestaande opslag is behouden; opslaan is nu niet mogelijk."); }
+      try {
+        const saved = loadCustomDraft(window.localStorage, draftKey);
+        setDish(saved ?? fallback);
+        dirty.current = customDraftHasChanges(saved ?? fallback, loadedRecipes);
+      } catch { setDish(fallback); setStorageError("Je concept kon niet worden gelezen. Je opgeslagen recepten blijven behouden."); }
     });
     return () => { active = false; };
   }, [draftKey, people]);
@@ -55,7 +59,7 @@ export function CustomDishEditor({ dayIndex, initialDish }: { dayIndex: number; 
     return () => { active = false; clearTimeout(timer); };
   }, [dish, dayIndex, refresh, previewCustomDish]);
   function update(next: CustomDish, edited = true) {
-    revision.current++; dirty.current = edited;
+    revision.current++; dirty.current = edited && customDraftHasChanges(next, recipes);
     setDish(next); setPreview(null); setBusy(false); setMessage("");
     try { saveCustomDraft(window.localStorage, draftKey, next); setStorageError(""); }
     catch { setStorageError("Je wijzigingen zijn nog niet op dit apparaat bewaard. Houd dit scherm open en probeer opnieuw op te slaan."); }
