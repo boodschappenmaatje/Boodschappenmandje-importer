@@ -54,11 +54,11 @@ export function NewWeekControl({
         </div>
       ) : (
         <button
-          className="week-reset-button"
+          className="secondary-action week-reset-button"
           type="button"
           onClick={() => setConfirming(true)}
         >
-          Nieuwe week starten
+          Nieuwe week
         </button>
       )}
     </section>

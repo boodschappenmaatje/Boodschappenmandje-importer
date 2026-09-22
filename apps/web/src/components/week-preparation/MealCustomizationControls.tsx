@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CatalogSearchField } from "@/components/catalog/CatalogSearchField";
-import { Icon } from "@/components/Icon";
 import { DishImage } from "@/components/ui/DishImage";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { euroAmountToCents, formatCents } from "@/services/budget/budget-engine";
-import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 import { resolveCurrentPrice } from "@/services/catalog/price";
 import type {
   ManualProductAction,
@@ -39,18 +38,7 @@ export interface MealIngredientOption {
 }
 
 function ProductImage({ product }: { product: Product }) {
-  const imageUrl = safeProductImageUrl(product.imageUrl);
-  return (
-    <span
-      className="manual-product-image"
-      data-has-image={Boolean(imageUrl)}
-      style={imageUrl ? { backgroundImage: `url(${JSON.stringify(imageUrl)})` } : undefined}
-      role="img"
-      aria-label={imageUrl ? `Afbeelding van ${product.name}` : "Geen productafbeelding"}
-    >
-      {!imageUrl ? <Icon name="products" size={20} /> : null}
-    </span>
-  );
+  return <ProductThumbnail className="manual-product-image" imageUrl={product.imageUrl} name={product.name} />;
 }
 
 function ManualProductFlow({

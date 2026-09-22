@@ -830,7 +830,6 @@ export function WeekPreparationView() {
         {currentStep > 0 ? <button type="button" onClick={() => goToStep(currentStep - 1)} disabled={preparation.status === "generating"}>Terug</button> : null}
         {currentStep < 3 ? <button type="button" className="primary-action" onClick={nextStep} disabled={currentStep === 0 ? !preparation.numberOfPeople || !preparation.numberOfDays : currentStep === 1 ? progress.state !== "exact" : false}>Volgende</button> : preparation.status === "draft" || preparation.status === "generationError" ? <button className="primary-action" type="button" disabled={!ready} onClick={week.confirmPreparation}>Week voorbereiden</button> : preparation.status !== "generating" ? <button type="button" onClick={() => goToStep(0)}>Weekinstellingen aanpassen</button> : null}
       </div>
-      <details className="ux-advanced"><summary>Nieuwe week en extra opties</summary>
       <NewWeekControl
         onStartNew={async () => {
           await week.startNewPreparation();
@@ -839,7 +838,6 @@ export function WeekPreparationView() {
           setMealBudgetDraft(null);
         }}
       />
-      </details>
     </div>
   );
 }

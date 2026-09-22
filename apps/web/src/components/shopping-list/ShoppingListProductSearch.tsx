@@ -1,6 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
+
 import { useEffect, useRef, useState } from "react";
 
 import { CatalogFilterSheet } from "@/components/catalog/CatalogFilterSheet";
@@ -12,7 +13,6 @@ import {
   createCatalogRepository,
   normalizeCatalogSearchRequest,
 } from "@/services/catalog/catalog-repository";
-import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
 import {
   DEFAULT_CATALOG_QUERY,
   activeCatalogFilters,
@@ -55,10 +55,6 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
   currency: "EUR",
 });
 
-function searchImageStyle(imageUrl: string | null): CSSProperties | undefined {
-  const safeUrl = safeProductImageUrl(imageUrl);
-  return safeUrl ? { backgroundImage: `url(${JSON.stringify(safeUrl)})` } : undefined;
-}
 
 function SearchResultCard({
   product,
@@ -73,21 +69,12 @@ function SearchResultCard({
   listReady: boolean;
   onAdd: () => void;
 }) {
-  const imageStyle = searchImageStyle(product.imageUrl);
   const price = resolveCurrentPrice(product.currentPrice);
   const description = [product.brand, product.packageText].filter(Boolean).join(" · ");
 
   return (
     <li className="search-result-card">
-      <div
-        className="search-result-image"
-        data-has-image={Boolean(imageStyle)}
-        style={imageStyle}
-        role="img"
-        aria-label={imageStyle ? `Afbeelding van ${product.name}` : "Geen productafbeelding"}
-      >
-        {!imageStyle ? <Icon name="products" size={22} /> : null}
-      </div>
+      <ProductThumbnail className="search-result-image" imageUrl={product.imageUrl} name={product.name} />
       <div className="search-result-copy">
         <h3>{product.name}</h3>
         {description ? <p>{description}</p> : null}

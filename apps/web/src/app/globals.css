@@ -970,10 +970,10 @@ button:focus-visible {
 .week-reset-button {
   justify-self: start;
   min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--color-danger);
+  padding: 10px 18px;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-dark);
   cursor: pointer;
   font-weight: 800;
 }
@@ -4343,7 +4343,8 @@ html {
 .ux-budget-layout .budget-donut span { font-size: .95rem; }
 .ux-budget-layout .budget-donut > div { max-width: 65%; overflow-wrap: anywhere; }
 .free-choice-routes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.free-choice-routes button { padding: 12px 6px; font-size: .9rem; }
+.prepared-days .free-choice-control .free-choice-routes button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 0; min-height: 64px; padding: 10px 6px; font-size: .875rem; line-height: 1.4; overflow-wrap: normal; word-break: normal; }
+.free-choice-routes button > span { white-space: nowrap; }
 .free-choice-results > li { display: block; padding: 0; }
 .free-choice-results .ux-dish-result { display: flex; align-items: center; gap: 12px; text-align: left; width: 100%; border: 0; padding: 12px; background: var(--color-surface); color: var(--color-text); }
 .ux-dish-result > div { min-width: 0; }
@@ -4352,16 +4353,17 @@ html {
 .ux-list-filters button { min-height: 44px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-primary-dark); font-size: .8rem; }
 .ux-list-filters button[aria-pressed="true"] { background: var(--color-primary); color: var(--color-on-primary); }
 .ux-shopping-category h3 { margin: 16px 0 8px; font-size: 1rem; color: var(--color-primary-dark); }
-.shopping-item-card.ux-shopping-row { grid-template-columns: 44px minmax(0, 1fr) 44px; padding: 10px 8px; box-shadow: none; gap: 4px 8px; }
-.ux-shopping-row .shopping-item-image { display: none; }
-.ux-shopping-row .shopping-item-copy { grid-column: 2; }
+.shopping-item-card.ux-shopping-row { grid-template-columns: 44px 48px minmax(0, 1fr) 44px; padding: 10px 8px; box-shadow: none; gap: 4px 8px; }
+.ux-shopping-row .shopping-item-image { display: grid; grid-column: 2; grid-row: 1; width: 48px; height: 56px; }
+.ux-shopping-row .shopping-item-copy { grid-column: 3; grid-row: 1; }
+.ux-shopping-row .shopping-remove { grid-column: 4; grid-row: 1; }
 .ux-shopping-row .shopping-item-copy h2 { display: block; overflow: visible; font-size: .95rem; line-height: 1.4; }
 .ux-shopping-row .shopping-item-copy p { font-size: .8rem; }
 .ux-check-item { width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer; }
 .ux-check-item input { width: 24px; height: 24px; min-height: 24px; accent-color: var(--color-success-text); }
 .ux-shopping-row[data-checked="true"] { background: var(--color-success-soft); }
 .ux-shopping-row[data-checked="true"] .shopping-item-copy h2 { text-decoration: line-through; }
-.ux-shopping-row .quantity-control { grid-column: 2 / 4; }
+.ux-shopping-row .quantity-control { grid-column: 3 / 5; }
 .ux-item-source { font-size: .75rem; color: var(--color-muted); }
 .ux-item-source summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
 .product-card.ux-product-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; padding: 12px; gap: 8px; }
@@ -4373,7 +4375,15 @@ html {
 .ux-product-row .product-add-button { min-width: 44px; min-height: 44px; padding: 0; justify-content: center; }
 .ux-product-row .product-list-quantity { font-size: .7rem; text-align: center; }
 .ux-app-info { display: block; }
+.product-thumbnail { flex: 0 0 auto; overflow: hidden; }
+.product-thumbnail > img { display: block; width: 100%; height: 100%; min-width: 0; object-fit: contain; }
+.product-thumbnail > span { display: grid; place-items: center; width: 100%; height: 100%; }
+.custom-product-options button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+.custom-product-options button > span:last-child { min-width: 0; }
+.new-week-card .week-reset-button { background: var(--color-primary-soft); }
 @media (max-width: 600px) {
+  .free-choice-routes { grid-template-columns: minmax(0, 1fr); }
+  .prepared-days .free-choice-control .free-choice-routes button { flex-direction: row; gap: .3em; min-height: 48px; font-size: 1rem; }
   .product-grid { grid-template-columns: minmax(0, 1fr); }
   .ux-step-actions { bottom: calc(68px + env(safe-area-inset-bottom)); }
   .ux-home .week-hero-card { padding: 14px; }

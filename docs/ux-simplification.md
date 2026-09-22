@@ -25,3 +25,14 @@ No Supabase schema, migrations, product import, matching/cache architecture or n
 - Existing product filters remain a sheet with active-filter chips. Keyboard focus is contained and restored.
 - Lint and TypeScript passed. Full web suite 453/453, focused PWA suite 90/90, importer fixtures 189/189. Production build passed, 17 static pages.
 - Preview/browser verification and the iPhone handoff are recorded in PR #26 after deployment. Browser viewport emulation remains unavailable; do not claim a physical iPhone test.
+
+## Targeted iPhone feedback — 22 September 2026
+
+Continues remote UX head bfe249f on PR #26. Only the four reported visual issues are changed:
+
+- Route labels use intact words, explicit accessible names and equal-height buttons. At widths up to 600px, the three choices stack with their full labels on one line; wider layouts retain three equal columns.
+- The list's `display: none` thumbnail rule is removed. Stored product photos are displayed alongside the checkbox and product copy. Existing quantity, check, price and ownership behaviour is unchanged.
+- List/search/ingredient thumbnails use the same lazy image component with fixed dimensions, contain sizing and an accessible placeholder for missing, unsafe or failed sources. Actual stored HTTPS URLs are retained, without new data requests or guessed replacement photos. The existing custom-ingredient product picker now also displays the available photo.
+- New week is a visible blue secondary button. The existing confirmation, cancellation and preservation of manual items are unchanged. It is no longer hidden behind the extra-options disclosure.
+
+Validation: lint, TypeScript and Production build passed (17 static pages); 93 relevant component, free-choice, thumbnail and shopping-check tests passed. Unchanged importer and planner calculations retain the earlier regression evidence. Live Preview findings are recorded in PR #26. Browser viewport emulation is unavailable; final iPhone layout verification remains physical.

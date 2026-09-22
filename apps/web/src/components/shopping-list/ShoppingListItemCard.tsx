@@ -1,7 +1,7 @@
-import type { CSSProperties } from "react";
+
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 
 import { Icon } from "@/components/Icon";
-import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
 import type { ShoppingListItem } from "@/types/shopping-list";
 
 const euroFormatter = new Intl.NumberFormat("nl-NL", {
@@ -9,12 +9,6 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
   currency: "EUR",
 });
 
-function imageStyle(imageUrl: string | null): CSSProperties | undefined {
-  const safeUrl = safeProductImageUrl(imageUrl);
-  return safeUrl
-    ? { backgroundImage: `url(${JSON.stringify(safeUrl)})` }
-    : undefined;
-}
 
 function normalizedCopy(value: string): string {
   return value.trim().toLocaleLowerCase("nl-NL").replace(/\s+/g, " ");
@@ -47,24 +41,13 @@ export function ShoppingListItemCard({
   onRemove: () => void;
   onToggleChecked?: () => void;
 }) {
-  const productImageStyle = imageStyle(item.imageUrl);
   const description = shoppingListItemDescription(item);
   const usedInLabel = shoppingListUsedInLabel(item.usedIn);
 
   return (
     <li className="shopping-item-card ux-shopping-row" data-checked={Boolean(item.checked)}>
       <label className="ux-check-item"><input type="checkbox" checked={Boolean(item.checked)} onChange={onToggleChecked} aria-label={`Afvinken ${item.name}`} /><span className="visually-hidden">{item.name}</span></label>
-      <div
-        className="shopping-item-image"
-        data-has-image={Boolean(productImageStyle)}
-        style={productImageStyle}
-        role="img"
-        aria-label={
-          productImageStyle ? `Afbeelding van ${item.name}` : "Geen productafbeelding"
-        }
-      >
-        {!productImageStyle ? <Icon name="products" size={24} /> : null}
-      </div>
+      <ProductThumbnail className="shopping-item-image" imageUrl={item.imageUrl} name={item.name} />
 
       <div className="shopping-item-copy">
         <h2>{item.name}</h2>

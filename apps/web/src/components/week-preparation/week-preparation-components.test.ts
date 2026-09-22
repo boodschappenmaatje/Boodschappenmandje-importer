@@ -403,7 +403,8 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Vervang gerecht");
     expect(html).toContain("recipe-detail-hero");
     expect(html).toContain("pasta-spaghetti-bolognese.webp");
-    expect(html).toContain("background-image");
+    expect(html).toContain('src="https://cdn.hoogvliet.com/rundergehakt.webp"');
+    expect(html).toContain('alt="Afbeelding van Hoogvliet rundergehakt"');
     expect(html).toContain("Nieuwe boodschappen");
     expect(html).toContain("Maak mijn lijst compleet");
     expect(html).not.toContain("871000000001");

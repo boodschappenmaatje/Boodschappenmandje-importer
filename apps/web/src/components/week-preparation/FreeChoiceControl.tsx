@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { DishBudgetSummary } from "@/components/week-preparation/DishBudgetSummary";
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 import { DishImage } from "@/components/ui/DishImage";
 import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import { formatCents, euroAmountToCents } from "@/services/budget/budget-engine";
@@ -57,7 +58,7 @@ function IngredientEditor({ row, onChange, onRemove }: { row: CustomDishIngredie
     <button type="button" onClick={() => { setSearch(!search); setQuery(row.name); }}>Zelf product kiezen</button>
     {search ? <div>
       <label>Zoek product<input value={query} onChange={(event) => { setQuery(event.target.value); setProducts([]); }} /></label>
-      <ul className="custom-product-options">{products.map((product) => <li key={product.id}><button type="button" onClick={() => { setMatch(product); onChange({ ...row, productId: product.id }); setSearch(false); setStatus(""); }}>{product.name} · {product.packageText}</button></li>)}</ul>
+      <ul className="custom-product-options">{products.map((product) => <li key={product.id}><button type="button" onClick={() => { setMatch(product); onChange({ ...row, productId: product.id }); setSearch(false); setStatus(""); }}><ProductThumbnail className="manual-product-image" imageUrl={product.imageUrl} name={product.name} /><span>{product.name} · {product.packageText}</span></button></li>)}</ul>
       {query.length >= 2 && products.length === 0 ? <p>Geen resultaten beschikbaar.</p> : null}
     </div> : null}
     <button type="button" className="text-action" onClick={onRemove}>Ingrediënt verwijderen</button>
@@ -113,9 +114,9 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
   }
   return <section className="free-choice-control" aria-label={`Vrije keuze dag ${dayIndex + 1}`}>
     {!mode ? <div className="free-choice-routes" aria-label="Wat wil je toevoegen?">
-      <button type="button" disabled={week.customizationBusy} onClick={() => { setMode("recipe"); setQuery(""); setResults([]); setMessage(""); }}>Gerecht kiezen</button>
-      <button type="button" disabled={week.customizationBusy} onClick={() => { setMode("mix"); setQuery(""); setResults([]); setMessage(""); }}>Maaltijdmix kiezen</button>
-      <button type="button" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setSelectedResult(null); setMessage(""); }}>Zelf maken</button>
+      <button type="button" aria-label="Gerecht kiezen" disabled={week.customizationBusy} onClick={() => { setMode("recipe"); setQuery(""); setResults([]); setMessage(""); }}><span>Gerecht</span><span>kiezen</span></button>
+      <button type="button" aria-label="Maaltijdmix kiezen" disabled={week.customizationBusy} onClick={() => { setMode("mix"); setQuery(""); setResults([]); setMessage(""); }}><span>Maaltijdmix</span><span>kiezen</span></button>
+      <button type="button" aria-label="Zelf maken" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setSelectedResult(null); setMessage(""); }}><span>Zelf</span><span>maken</span></button>
     </div> : <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => { revision.current++; if (preview) setPreview(null); else setMode(null); setMessage(""); setBusy(false); }}>{preview ? "Terug naar je keuze" : "Andere route kiezen"}</button>}
     {preview ? <div className="customization-confirm" ref={confirmation} tabIndex={-1}>
       <DishImage asset={recipeImageFor({ recipeSourceKey: preview.recipe.sourceKey, recipeName: preview.recipe.name, categories: [], ingredients: preview.preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)).map((item) => ({ sourceKey: item.sourceKey, name: item.name, optional: item.optional })) })} className="recipe-detail-hero" sizes="(max-width: 560px) 90vw, 500px" title={preview.recipe.name} />
