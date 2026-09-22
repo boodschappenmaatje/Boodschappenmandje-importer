@@ -4413,3 +4413,13 @@ html {
   .ux-step-actions { bottom: calc(68px + env(safe-area-inset-bottom)); }
   .ux-home .week-hero-card { padding: 14px; }
 }
+
+/* PWA 14 reuses existing cards, tokens and mobile controls. */
+.custom-dish-editor, .custom-dish-fields, .my-recipes { display: grid; gap: 12px; min-width: 0; }
+.custom-dish-fields { padding: 0; border: 0; margin: 0; }
+.custom-dish-fields > legend { font-weight: 800; margin-bottom: 10px; }
+.custom-selected-product, .custom-recipe-photo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.custom-selected-product > div { min-width: 0; overflow-wrap: anywhere; }
+.custom-product-options button > span:last-child, .my-recipes .ux-dish-result > span:last-child { display: grid; gap: 4px; min-width: 0; text-align: left; }
+.custom-ingredient-editor label > span, .custom-draft-status, .my-recipes > p { color: var(--color-muted); font-size: 0.8rem; }
+.custom-dish-fields input, .custom-dish-fields select { min-width: 0; max-width: 100%; }
