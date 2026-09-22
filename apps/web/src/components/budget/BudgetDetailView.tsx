@@ -100,13 +100,17 @@ export function BudgetDetailView() {
 
       <section className="budget-visual-card" aria-labelledby="budget-breakdown-title">
         <h2 id="budget-breakdown-title" className="visually-hidden">Dynamische budgetverdeling</h2>
-        <div className="budget-chart-layout">
+        <div className="budget-chart-layout ux-budget-layout">
           <div className="budget-donut" style={chartStyle}>
             <div>
-              <strong>{formatCents(plannedCents)}</strong>
-              <span>gepland</span>
+              <strong>{budgetCents === null ? "Niet ingesteld" : !complete ? "Nog onbekend" : formatCents(overBudgetCents || remainingCents)}</strong>
+              <span>{overBudgetCents > 0 ? "boven budget" : "over"}</span>
             </div>
           </div>
+
+        </div>
+
+        <details className="ux-budget-breakdown"><summary>Bekijk budgetverdeling</summary>
           <dl className="budget-legend">
             <div><dt><i data-color="meal" />Avondmaaltijden</dt><dd>{formatCents(mealCents)}</dd></div>
             <div><dt><i data-color="list" />Boodschappenlijst</dt><dd>{formatCents(existingCents)}</dd></div>
@@ -117,8 +121,6 @@ export function BudgetDetailView() {
               <div><dt><i data-color="unknown" />Nog niet geprijsd</dt><dd>{missingCount}</dd></div>
             ) : null}
           </dl>
-        </div>
-
         <div className="budget-detail-totals">
           <div><span>Totaal weekbudget</span><strong>{budgetCents === null ? "–" : formatCents(budgetCents)}</strong></div>
           <div><span>Gepland</span><strong>{formatCents(plannedCents)}</strong></div>
@@ -128,6 +130,7 @@ export function BudgetDetailView() {
           </div>
         </div>
 
+        </details>
         <BudgetProgress budgetCents={budgetCents} plannedCents={plannedCents} complete={complete} />
 
         <p className="budget-flex-note">

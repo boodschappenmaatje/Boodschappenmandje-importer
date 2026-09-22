@@ -100,6 +100,8 @@ function isShoppingListItem(value: unknown): value is ShoppingListItem {
   if (!isRecord(value)) return false;
   const contributions = value.quantityContributions;
   return (
+    (value.checked === undefined || typeof value.checked === "boolean") &&
+    (value.category === undefined || isNullableString(value.category)) &&
     typeof value.productId === "string" &&
     isNullableString(value.sku) &&
     typeof value.name === "string" &&
@@ -131,6 +133,8 @@ function isLegacyShoppingListItem(value: unknown): value is Omit<
 > {
   if (!isRecord(value)) return false;
   return (
+    (value.checked === undefined || typeof value.checked === "boolean") &&
+    (value.category === undefined || isNullableString(value.category)) &&
     typeof value.productId === "string" &&
     isNullableString(value.sku) &&
     typeof value.name === "string" &&

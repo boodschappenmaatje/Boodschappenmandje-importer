@@ -11,8 +11,10 @@ import { createCachedCatalogRepository, createWeekPlanningSnapshotCache, type We
 import { createPersistentRecipeReadinessRepository } from "./persistent-readiness-cache";
 import { enrichIngredientsForMealMixes } from "./meal-mix-profiles";
 
+export type FreeChoiceRoute = "all" | "recipe" | "mix";
+
 export interface FreeChoiceResult {
-  recipe: Pick<Recipe, "id" | "sourceKey" | "name">;
+  recipe: Pick<Recipe, "id" | "sourceKey" | "name"> & Partial<Pick<Recipe, "preparationMinutes">>;
   brand: string | null;
   alternative: RecipeAlternative | null;
 }
@@ -66,10 +68,13 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
   };
 }
 
-export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: number, query: string, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, planningCache = createWeekPlanningSnapshotCache({ persistentRepository: createPersistentRecipeReadinessRepository() })): Promise<FreeChoiceResult[]> {
+export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: number, query: string, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, planningCache = createWeekPlanningSnapshotCache({ persistentRepository: createPersistentRecipeReadinessRepository() }), route: FreeChoiceRoute = "all"): Promise<FreeChoiceResult[]> {
   if (query.trim().length < 2) return [];
   const catalog = await recipes.loadCatalog();
-  const matching = catalog.recipes.filter((recipe) => recipeMatchesQuery(recipe, query));
+  const matching = catalog.recipes.filter((recipe) => {
+    const mix = mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles) !== null;
+    return (route === "all" || (route === "mix" ? mix : !mix)) && recipeMatchesQuery(recipe, query);
+  });
   // Combined queries (e.g. "Knorr mix") must retain the complete matching mix
   // inventory too. Keep the existing bound for ordinary recipe results.
   const candidates = /^(honig|knorr)$/i.test(query.trim()) ? matching : matching.filter((recipe, index) =>
@@ -92,7 +97,7 @@ export async function searchFreeChoice(preparation: WeekPreparation, dayIndex: n
     results.push({ recipe, brand: mealMixProfileForRecipe(recipe.sourceKey, catalog.mealMixProfiles)?.brand ?? null,
       alternative: readyIds.has(recipe.id) ? await previewFreeChoice(preparation, dayIndex, { recipeId: recipe.id }, snapshotRecipes, snapshotProducts, list, new Date(), planningCache) : null });
   }
-  for (const recipe of catalog.unavailableMealMixes ?? []) {
+  for (const recipe of route === "recipe" ? [] : catalog.unavailableMealMixes ?? []) {
     if (recipeMatchesQuery(recipe, query) && !results.some(item => item.recipe.name === recipe.name)) results.push({ recipe, brand: recipe.brand, alternative: null });
   }
   return results.sort((a, b) => Number(!a.alternative) - Number(!b.alternative));

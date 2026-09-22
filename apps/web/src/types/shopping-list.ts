@@ -34,6 +34,8 @@ export interface ShoppingListPriceReference {
 }
 
 export interface ShoppingListItem {
+  checked?: boolean;
+  category?: string | null;
   productId: UUID;
   sku: string | null;
   name: string;

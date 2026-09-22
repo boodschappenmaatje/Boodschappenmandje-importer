@@ -27,6 +27,7 @@ import {
   removeMealPlanContributionsForWeek,
   removeShoppingListItem,
   restoreShoppingListItem,
+  toggleShoppingListItem,
 } from "@/services/shopping-list/shopping-list";
 import type { Product } from "@/types/catalog";
 import type { WeekIngredientRequirement } from "@/types/week-preparation";
@@ -52,6 +53,7 @@ interface ActiveShoppingListContextValue {
   removeMealPlanForWeek: (
     weekPreparationId: string,
   ) => Promise<ActiveShoppingList | null>;
+  toggleChecked: (productId: string) => Promise<void>;
   increase: (productId: string) => Promise<void>;
   decrease: (productId: string) => Promise<void>;
   remove: (productId: string) => Promise<void>;
@@ -223,6 +225,10 @@ export function ActiveShoppingListProvider({
     [persist],
   );
 
+  const toggleChecked = useCallback(async (productId: string) => {
+    await commit((current) => toggleShoppingListItem(current, productId));
+  }, [commit]);
+
   const increase = useCallback(
     async (productId: string) => {
       setLastRemoved(null);
@@ -283,6 +289,7 @@ export function ActiveShoppingListProvider({
       addProduct,
       completeFromWeek,
       removeMealPlanForWeek,
+      toggleChecked,
       increase,
       decrease,
       remove,
@@ -295,6 +302,7 @@ export function ActiveShoppingListProvider({
       completeFromWeek,
       decrease,
       dismissUndo,
+      toggleChecked,
       increase,
       lastRemoved,
       list,

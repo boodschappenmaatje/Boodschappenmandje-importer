@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 
 import {
   CatalogPriceBlock,
-  catalogProductImageStyle,
 } from "@/components/catalog/CatalogProductCard";
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 import { Icon } from "@/components/Icon";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { createCatalogRepository } from "@/services/catalog/catalog-repository";
@@ -25,10 +25,6 @@ export function ProductDetailView({ productId }: { productId: string }) {
   const [state, setState] = useState<ProductDetailState>({ status: "loading" });
   const [isAdding, setIsAdding] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const imageStyle =
-    state.status === "loaded"
-      ? catalogProductImageStyle(state.product.imageUrl)
-      : undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,15 +97,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
 
       {state.status === "loaded" ? (
         <article className="product-detail-card">
-          <div
-            className="product-detail-image"
-            data-has-image={Boolean(imageStyle)}
-            style={imageStyle}
-            role="img"
-            aria-label={imageStyle ? `Afbeelding van ${state.product.name}` : "Geen productafbeelding"}
-          >
-            {!imageStyle ? <Icon name="products" size={42} /> : null}
-          </div>
+          <ProductThumbnail className="product-detail-image" imageUrl={state.product.imageUrl} name={state.product.name} />
           <div className="product-detail-copy">
             <p className="product-category">
               {state.product.category ?? state.product.productType ?? "Hoogvliet"}

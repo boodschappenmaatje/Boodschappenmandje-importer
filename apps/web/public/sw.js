@@ -1,19 +1,19 @@
 /* BoodschappenMaatje PWA-shell. Geen database- of gebruikersdata wordt hier gecachet. */
 const CACHE_PREFIX = "boodschappenmaatje-shell";
-const CACHE_VERSION = "app-icon-maatje-v1-2026-09-20";
+const CACHE_VERSION = "app-icons-ios-2026-09-22";
 const CACHE_NAME = `${CACHE_PREFIX}-${CACHE_VERSION}`;
 const APP_SHELL = [
   "/",
   "/lijst",
   "/offline",
   "/manifest.webmanifest",
-  "/icons/maatje-v1-192.png",
-  "/icons/maatje-v1-512.png",
-  "/icons/maatje-v1-maskable-512.png",
-  "/icons/maatje-v1-apple-touch.png",
-  "/icons/maatje-v1-favicon.ico",
-  "/icons/maatje-v1-favicon-16.png",
-  "/icons/maatje-v1-favicon-32.png",
+  "/icons/maatje-v1-192.png?v=ios-2026-09-22",
+  "/icons/maatje-v1-512.png?v=ios-2026-09-22",
+  "/icons/maatje-v1-maskable-512.png?v=ios-2026-09-22",
+  "/icons/maatje-v1-apple-touch.png?v=ios-2026-09-22",
+  "/icons/maatje-v1-favicon.ico?v=ios-2026-09-22",
+  "/icons/maatje-v1-favicon-16.png?v=ios-2026-09-22",
+  "/icons/maatje-v1-favicon-32.png?v=ios-2026-09-22",
 ];
 
 self.addEventListener("install", (event) => {

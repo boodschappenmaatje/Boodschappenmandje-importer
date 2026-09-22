@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { DishBudgetSummary } from "@/components/week-preparation/DishBudgetSummary";
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 import { DishImage } from "@/components/ui/DishImage";
 import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import { formatCents, euroAmountToCents } from "@/services/budget/budget-engine";
@@ -57,7 +58,7 @@ function IngredientEditor({ row, onChange, onRemove }: { row: CustomDishIngredie
     <button type="button" onClick={() => { setSearch(!search); setQuery(row.name); }}>Zelf product kiezen</button>
     {search ? <div>
       <label>Zoek product<input value={query} onChange={(event) => { setQuery(event.target.value); setProducts([]); }} /></label>
-      <ul className="custom-product-options">{products.map((product) => <li key={product.id}><button type="button" onClick={() => { setMatch(product); onChange({ ...row, productId: product.id }); setSearch(false); setStatus(""); }}>{product.name} · {product.packageText}</button></li>)}</ul>
+      <ul className="custom-product-options">{products.map((product) => <li key={product.id}><button type="button" onClick={() => { setMatch(product); onChange({ ...row, productId: product.id }); setSearch(false); setStatus(""); }}><ProductThumbnail className="manual-product-image" imageUrl={product.imageUrl} name={product.name} /><span>{product.name} · {product.packageText}</span></button></li>)}</ul>
       {query.length >= 2 && products.length === 0 ? <p>Geen resultaten beschikbaar.</p> : null}
     </div> : null}
     <button type="button" className="text-action" onClick={onRemove}>Ingrediënt verwijderen</button>
@@ -66,7 +67,8 @@ function IngredientEditor({ row, onChange, onRemove }: { row: CustomDishIngredie
 
 export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number; initialDish?: CustomDish }) {
   const week = useWeekPreparation();
-  const [mode, setMode] = useState<"search" | "custom" | null>(null);
+  const [selectedResult, setSelectedResult] = useState<FreeChoiceResult | null>(null);
+  const [mode, setMode] = useState<"recipe" | "mix" | "custom" | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FreeChoiceResult[]>([]);
   const [message, setMessage] = useState("");
@@ -80,11 +82,11 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
   }, [preview]);
   const { searchDishes } = week;
   useEffect(() => {
-    if (mode !== "search" || query.trim().length < 2) return;
+    if ((mode !== "recipe" && mode !== "mix") || query.trim().length < 2) return;
     let active = true;
     const timer = setTimeout(() => {
       setBusy(true); setMessage("Gerechten en actuele prijzen zoeken…");
-      void searchDishes(dayIndex, query).then((found) => {
+      void searchDishes(dayIndex, query, mode).then((found) => {
         if (!active) return;
         setResults(found); setMessage(found.length ? "" : "Geen compleet gerecht gevonden voor deze zoekterm. Probeer een andere naam of maak zelf een gerecht.");
       }).catch(() => { if (active) setMessage("Zoeken lukt nu niet. Probeer opnieuw."); })
@@ -111,31 +113,37 @@ export function FreeChoiceControl({ dayIndex, initialDish }: { dayIndex: number;
     else if (result.revalidatedPreview) setPreview(result.revalidatedPreview.alternative);
   }
   return <section className="free-choice-control" aria-label={`Vrije keuze dag ${dayIndex + 1}`}>
-    <div className="free-choice-routes">
-      <button type="button" disabled={week.customizationBusy} onClick={() => { setMode("search"); setPreview(null); setMessage(""); }}>Zoek gerecht of maaltijdmix</button>
-      <button type="button" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setPreview(null); setMessage(""); }}>{initialDish ? "Eigen gerecht bewerken" : "Maak zelf een gerecht"}</button>
-    </div>
-    {mode ? <button type="button" className="text-action" onClick={() => { revision.current++; setMode(null); setPreview(null); setBusy(false); }}>Sluiten</button> : null}
+    {!mode ? <div className="free-choice-routes" aria-label="Wat wil je toevoegen?">
+      <button type="button" aria-label="Gerecht kiezen" disabled={week.customizationBusy} onClick={() => { setMode("recipe"); setQuery(""); setResults([]); setMessage(""); }}><span>Gerecht</span><span>kiezen</span></button>
+      <button type="button" aria-label="Maaltijdmix kiezen" disabled={week.customizationBusy} onClick={() => { setMode("mix"); setQuery(""); setResults([]); setMessage(""); }}><span>Maaltijdmix</span><span>kiezen</span></button>
+      <button type="button" aria-label="Zelf maken" disabled={week.customizationBusy} onClick={() => { setMode("custom"); setSelectedResult(null); setMessage(""); }}><span>Zelf</span><span>maken</span></button>
+    </div> : <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => { revision.current++; if (preview) setPreview(null); else setMode(null); setMessage(""); setBusy(false); }}>{preview ? "Terug naar je keuze" : "Andere route kiezen"}</button>}
     {preview ? <div className="customization-confirm" ref={confirmation} tabIndex={-1}>
-      <strong>{preview.recipe.name} · ± {formatCents(preview.alternativeDishCostCents)}</strong>
+      <DishImage asset={recipeImageFor({ recipeSourceKey: preview.recipe.sourceKey, recipeName: preview.recipe.name, categories: [], ingredients: preview.preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)).map((item) => ({ sourceKey: item.sourceKey, name: item.name, optional: item.optional })) })} className="recipe-detail-hero" sizes="(max-width: 560px) 90vw, 500px" title={preview.recipe.name} />
+      <h3>{preview.recipe.name}</h3>
+      {selectedResult?.brand ? <p>{selectedResult.brand}</p> : null}
+      {selectedResult?.recipe.preparationMinutes ? <p>{selectedResult.recipe.preparationMinutes} minuten</p> : null}
+      <p>Controleer je ingrediënten en verpakkingen voor {preview.preparation.numberOfPeople} personen.</p>
       <DishBudgetSummary preparation={preview.preparation} dayIndex={dayIndex} expandable />
+      <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
       <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>
       <p>Totaal deze week: {formatCents(preview.impact.nextTotalWeekCostCents)}</p>
       {preview.impact.weekBudgetRemainingCents !== null ? <p>Resterend weekbudget: {formatCents(preview.impact.weekBudgetRemainingCents)}</p> : null}
+      </details>
       {preview.impact.requiresBudgetOverride ? <p>Je overschrijdt het maaltijdbudget met {formatCents(preview.impact.mealBudgetOverageCents)} en het weekbudget met {formatCents(preview.impact.weekBudgetOverageCents)}.</p> : null}
-      <button type="button" className="primary-action compact-action" disabled={week.customizationBusy || busy} onClick={apply}>{week.customizationBusy ? "Opslaan…" : preview.impact.requiresBudgetOverride ? "Toch gebruiken en opslaan" : "Gerecht opslaan voor deze dag"}</button>
+      <button type="button" className="primary-action compact-action" disabled={week.customizationBusy || busy} onClick={apply}>{week.customizationBusy ? "Opslaan…" : preview.impact.requiresBudgetOverride ? "Toch toevoegen aan lijst" : "Voeg toe aan lijst"}</button>
     </div> : null}
-    {mode === "search" ? <>
-      <label>Zoek gerecht of maaltijdmix<input type="search" value={query} placeholder="Bijvoorbeeld Honig spaghetti" onChange={(event) => { setQuery(event.target.value); setResults([]); setPreview(null); setBusy(false); }} /></label>
-      <ul className="free-choice-results">{results.map((result) => <li key={result.recipe.id}>
+    {(mode === "recipe" || mode === "mix") && !preview ? <>
+      <label>{mode === "mix" ? "Zoek maaltijdmix" : "Zoek gerecht"}<input type="search" value={query} placeholder={mode === "mix" ? "Bijvoorbeeld Honig spaghetti of Knorr" : "Bijvoorbeeld spaghetti carbonara"} onChange={(event) => { setQuery(event.target.value); setResults([]); setPreview(null); setBusy(false); }} /></label>
+      <ul className="free-choice-results">{results.map((result) => <li key={result.recipe.id}><button className="ux-dish-result" type="button" disabled={!result.alternative || busy || week.customizationBusy} onClick={() => { setSelectedResult(result); setPreview(result.alternative); }}>
         <DishImage asset={recipeImageFor({ recipeSourceKey: result.recipe.sourceKey, recipeName: result.recipe.name, categories: [], ingredients: result.alternative?.preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)).map((item) => ({ sourceKey: item.sourceKey, name: item.name, optional: item.optional })) ?? [] })} className="recipe-summary-image" sizes="58px" title={result.recipe.name} />
         <div><strong>{result.recipe.name}</strong>{result.brand ? <p>{result.brand}</p> : null}<p>{week.preparation?.numberOfPeople} personen · schaalbaar</p>
           <p>{result.alternative ? `± ${formatCents(result.alternative.alternativeDishCostCents)}` : "Deze variant is nog niet compleet beschikbaar"}</p>
-          <button type="button" disabled={!result.alternative || busy || week.customizationBusy} onClick={() => setPreview(result.alternative)}>Gebruik dit gerecht</button>
+          {result.recipe.preparationMinutes ? <p>{result.recipe.preparationMinutes} minuten</p> : null}
         </div>
-      </li>)}</ul>
+      </button></li>)}</ul>
     </> : null}
-    {mode === "custom" ? <>
+    {mode === "custom" && !preview ? <>
       <label>Naam van je gerecht<input value={dish.name} maxLength={100} placeholder="Bijvoorbeeld pasta met kip" onChange={(event) => updateDish({ ...dish, name: event.target.value })} /></label>
       <p>Geef de totale hoeveelheden voor {dish.servings} personen op. Een pot of pak? Vul de inhoud in gram, milliliter of stuks in.</p>
       {dish.ingredients.map((row) => <IngredientEditor key={row.id} row={row} onChange={(changed) => updateDish({ ...dish, ingredients: dish.ingredients.map((item) => item.id === row.id ? changed : item) })} onRemove={() => updateDish({ ...dish, ingredients: dish.ingredients.filter((item) => item.id !== row.id) })} />)}

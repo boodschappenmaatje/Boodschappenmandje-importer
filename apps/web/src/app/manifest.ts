@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { appConfig } from "@/config/app";
+import { appIconUrl } from "@/config/app-icons";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -17,19 +18,19 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["shopping", "lifestyle", "productivity"],
     icons: [
       {
-        src: "/icons/maatje-v1-192.png",
+        src: appIconUrl("maatje-v1-192.png"),
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/maatje-v1-512.png",
+        src: appIconUrl("maatje-v1-512.png"),
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
       },
       {
-        src: "/icons/maatje-v1-maskable-512.png",
+        src: appIconUrl("maatje-v1-maskable-512.png"),
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",

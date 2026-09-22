@@ -1,7 +1,7 @@
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
+
 import type { ReactNode } from "react";
-import { Icon } from "@/components/Icon";
 import { formatCents } from "@/services/budget/budget-engine";
-import { safeProductImageUrl } from "@/services/catalog/catalog-presentation";
 import type { WeekIngredientRequirement } from "@/types/week-preparation";
 
 function quantityLabel(
@@ -43,9 +43,6 @@ export function DishIngredients({ ingredients, dayIndex, renderAction }: {
         ingredient,
         dayIndex,
       );
-      const imageUrl = ingredient.product
-        ? safeProductImageUrl(ingredient.product.imageUrl)
-        : null;
       return (
       <li key={ingredient.ingredientId}>
         <div>
@@ -58,15 +55,7 @@ export function DishIngredients({ ingredients, dayIndex, renderAction }: {
         </div>
         {ingredient.product ? (
           <div className="recipe-product-match">
-            <div
-              className="recipe-product-image"
-              data-has-image={Boolean(imageUrl)}
-              style={imageUrl ? { backgroundImage: `url(${JSON.stringify(imageUrl)})` } : undefined}
-              role="img"
-              aria-label={imageUrl ? `Afbeelding van ${ingredient.product.name}` : "Geen productafbeelding"}
-            >
-              {!imageUrl ? <Icon name="products" size={22} /> : null}
-            </div>
+            <ProductThumbnail className="recipe-product-image" imageUrl={ingredient.product.imageUrl} name={ingredient.product.name} />
             <div className="recipe-product-details">
               <strong>{ingredient.product.name}</strong>
               {[ingredient.product.brand, ingredient.product.packageText]

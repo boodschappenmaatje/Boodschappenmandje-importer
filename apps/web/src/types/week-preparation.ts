@@ -170,6 +170,7 @@ export interface WeekIngredientUse {
 }
 
 export interface WeekProductReference {
+  category?: string | null;
   productId: UUID;
   sku: string;
   name: string;

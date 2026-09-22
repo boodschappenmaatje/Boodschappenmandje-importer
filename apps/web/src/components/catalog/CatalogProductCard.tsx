@@ -1,10 +1,10 @@
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
+
 import Link from "next/link";
-import type { CSSProperties } from "react";
 
 import { Icon } from "@/components/Icon";
 import {
   priceUpdatedLabel,
-  safeProductImageUrl,
 } from "@/services/catalog/catalog-presentation";
 import {
   getPricePerKilogram,
@@ -17,12 +17,6 @@ const euroFormatter = new Intl.NumberFormat("nl-NL", {
   currency: "EUR",
 });
 
-export function catalogProductImageStyle(
-  imageUrl: string | null,
-): CSSProperties | undefined {
-  const safeUrl = safeProductImageUrl(imageUrl);
-  return safeUrl ? { backgroundImage: `url(${JSON.stringify(safeUrl)})` } : undefined;
-}
 
 export function CatalogPriceBlock({
   product,
@@ -75,29 +69,17 @@ export function CatalogProductCard({
   listReady: boolean;
   onAdd: () => void;
 }) {
-  const imageStyle = catalogProductImageStyle(product.imageUrl);
   const description = [product.brand, product.packageText].filter(Boolean).join(" · ");
 
   return (
-    <article className="product-card">
+    <article className="product-card ux-product-row">
       <Link
         className="product-detail-link"
         href={`/producten/${encodeURIComponent(product.id)}`}
         aria-label={`Bekijk ${product.name}`}
       >
-        <div
-          className="product-image"
-          data-has-image={Boolean(imageStyle)}
-          style={imageStyle}
-          role="img"
-          aria-label={imageStyle ? `Afbeelding van ${product.name}` : "Geen productafbeelding"}
-        >
-          {!imageStyle ? <Icon name="products" size={27} /> : null}
-        </div>
+        <ProductThumbnail className="product-image" imageUrl={product.imageUrl} name={product.name} />
         <div className="product-details">
-          <p className="product-category">
-            {product.category ?? product.productType ?? product.supermarket}
-          </p>
           <h2>{product.name}</h2>
           {description ? <p className="product-description">{description}</p> : null}
           <CatalogPriceBlock product={product} />
@@ -112,7 +94,7 @@ export function CatalogProductCard({
           onClick={onAdd}
         >
           <Icon name="plus" size={18} />
-          {isAdding ? "Toevoegen…" : listQuantity > 0 ? "Nog één" : "Toevoegen"}
+          <span className="visually-hidden">{isAdding ? "Toevoegen…" : "Toevoegen"}</span>
         </button>
         {listQuantity > 0 ? (
           <span className="product-list-quantity">Op je lijst · {listQuantity}</span>

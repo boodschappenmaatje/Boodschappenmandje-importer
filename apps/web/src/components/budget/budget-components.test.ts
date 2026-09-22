@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import HomePage from "@/app/page";
 import BudgetPage from "@/app/budget/page";
@@ -89,11 +91,11 @@ function render(
 }
 
 describe("PWA 9 budgetweergaven", () => {
-  it("toont op Home de drie echte budgetwaarden uit de mockup", () => {
+  it("zet op Home het resterende budget boven de geplande en totale bedragen", () => {
     const html = render(createElement(HomePage), activeList(10));
-    expect(html).toContain("Weekbudget");
-    expect(html).toContain("Gepland");
-    expect(html).toContain("Over");
+    expect(html).toContain("weekbudget");
+    expect(html).toContain("gepland");
+    expect(html).toContain("over voor deze week");
     expect(html).toContain("€ 100,00");
     expect(html).toContain("€ 90,00");
     expect(html).toContain('href="/budget"');
@@ -134,13 +136,13 @@ describe("PWA 9 budgetweergaven", () => {
       ...SETTINGS,
       budgetCents: null,
     });
-    expect(html).toContain("Niet ingesteld");
+    expect(html).toContain("Nog geen budget");
     expect(html).toContain("Stel een weekbudget in");
   });
 
   it("toont een concrete rustige waarschuwing boven budget", () => {
     const html = render(createElement(HomePage), activeList(120));
-    expect(html).toContain("Boven");
+    expect(html).toContain("boven budget");
     expect(html).toContain("Je zit € 20,00 boven je budget");
     expect(html).toContain('data-tone="danger"');
   });

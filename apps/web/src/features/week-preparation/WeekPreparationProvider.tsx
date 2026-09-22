@@ -84,7 +84,7 @@ import type {
 type WeekPreparationProviderStatus = "loading" | "ready" | "error";
 
 interface WeekPreparationContextValue {
-  searchDishes: (dayIndex: number, query: string) => Promise<FreeChoiceResult[]>;
+  searchDishes: (dayIndex: number, query: string, route?: "recipe" | "mix") => Promise<FreeChoiceResult[]>;
   previewCustomDish: (dayIndex: number, dish: CustomDish) => Promise<RecipeAlternative | null>;
   matchCustomIngredient: (name: string, unit: WeekIngredientUnit, productId?: string | null) => Promise<Product | null>;
   status: WeekPreparationProviderStatus;
@@ -794,9 +794,9 @@ export function WeekPreparationProvider({
     }, [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
   );
 
-  const searchDishes = useCallback(async (dayIndex: number, query: string) => {
+  const searchDishes = useCallback(async (dayIndex: number, query: string, route?: "recipe" | "mix") => {
     const current = preparationRef.current;
-    return current ? searchFreeChoice(current, dayIndex, query, recipeRepository(), catalogRepository(), currentList(), planningSnapshotCacheRef.current) : [];
+    return current ? searchFreeChoice(current, dayIndex, query, recipeRepository(), catalogRepository(), currentList(), planningSnapshotCacheRef.current, route) : [];
   }, [catalogRepository, currentList, recipeRepository]);
   const previewCustomDish = useCallback(async (dayIndex: number, customDish: CustomDish) => {
     const current = preparationRef.current;

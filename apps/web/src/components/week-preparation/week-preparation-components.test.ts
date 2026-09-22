@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import HomePage from "@/app/page";
 import PrepareWeekPage from "@/app/week-voorbereiden/page";
@@ -344,6 +346,17 @@ function render(
 }
 
 describe("PWA 10 weekvoorbereidingsweergaven", () => {
+  it("start een concept bij Basis en opent een opgeslagen week direct bij Overzicht", () => {
+    const draftHtml = render(createElement(PrepareWeekPage), draft());
+    const savedHtml = render(createElement(PrepareWeekPage), generated());
+    expect(draftHtml).toContain('aria-current="step"><span>1</span>Basis');
+    expect(draftHtml).toMatch(/<section hidden="" class="dashboard-card week-distribution"/);
+    expect(draftHtml).toMatch(/<section hidden="" class="dashboard-card week-preferences"/);
+    expect(draftHtml).toContain('value="50,00"');
+    expect(savedHtml).toContain('aria-current="step"><span>4</span>Overzicht');
+    expect(savedHtml).toContain("Spaghetti bolognese");
+    expect(savedHtml).toMatch(/<details class="ux-ingredients"><summary>Wat je nodig hebt/);
+  });
   it("toont zonder voorbereiding een veilige start en behoud van de bestaande lijst", () => {
     const html = render(createElement(PrepareWeekPage), null);
     expect(html).toContain("Start weekvoorbereiding");
@@ -392,7 +405,8 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Vervang gerecht");
     expect(html).toContain("recipe-detail-hero");
     expect(html).toContain("pasta-spaghetti-bolognese.webp");
-    expect(html).toContain("background-image");
+    expect(html).toContain('src="https://cdn.hoogvliet.com/rundergehakt.webp"');
+    expect(html).toContain('alt="Afbeelding van Hoogvliet rundergehakt"');
     expect(html).toContain("Nieuwe boodschappen");
     expect(html).toContain("Maak mijn lijst compleet");
     expect(html).not.toContain("871000000001");
@@ -447,20 +461,20 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     const readyHtml = render(createElement(HomePage), ready());
 
     expect(emptyHtml).toContain("Nog geen gerechten gekozen");
-    expect(emptyHtml).toContain("Menu maken");
+    expect(emptyHtml).toContain("Maak mijn week");
     expect(draftHtml).toContain("4 personen");
-    expect(draftHtml).toContain("6 dagen");
-    expect(draftHtml).toContain("Menu maken");
+    expect(draftHtml).toContain("0 maaltijden");
+    expect(draftHtml).toContain("Maak mijn week");
     expect(readyHtml).toContain("Jouw week");
     expect(readyHtml).toContain("Bekijk week");
   });
 
   it("behoudt Budget en boodschappenlijst op Home naast de weekkaarten", () => {
     const html = render(createElement(HomePage), draft());
-    expect(html).toContain("Weekbudget");
+    expect(html).toContain("Bekijk weekbudget");
     expect(html).toContain("€ 24,63");
-    expect(html).toContain("Boodschappenlijst");
-    expect(html).toContain("1 product");
+    expect(html).toContain("Verder met mijn lijst");
+    expect(html).toContain('href="/lijst"');
   });
 
   it("toont gegenereerde gerechten als horizontale dagkaarten met echte prijs en eigen gerechtfoto", () => {
@@ -471,7 +485,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("pasta-spaghetti-bolognese.webp");
     expect(html).toContain('data-image-source="recipe"');
     expect(html).not.toContain("rundergehakt.webp&quot; class=\"meal-day-image");
-    expect(html).toContain("Menu aanpassen");
+    expect(html).toContain("Maak mijn week");
   });
 
   it("gebruikt op weekkaart en gerechtdetail dezelfde nette fallback bij een niet-gevalideerde foto", () => {
@@ -494,6 +508,13 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(homeHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
     expect(weekHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
     expect(weekHtml).toContain("recipe-detail-hero");
+  });
+
+  it("biedt Nieuwe week alleen bij de weekacties op Home aan", () => {
+    const home = render(createElement(HomePage), generated());
+    const menu = render(createElement(PrepareWeekPage), generated());
+    expect(home).toContain("week-reset-button");
+    expect(menu).not.toContain("week-reset-button");
   });
 
   it("vraagt bevestiging voordat een bestaande voorbereiding wordt vervangen", () => {

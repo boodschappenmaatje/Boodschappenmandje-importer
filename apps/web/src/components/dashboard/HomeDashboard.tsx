@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { Icon } from "@/components/Icon";
+import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
@@ -15,11 +17,12 @@ import { BudgetProgress } from "@/components/ui/BudgetProgress";
 import { BudgetStatusCard } from "@/components/ui/BudgetStatusCard";
 import { MaatjeTipCard } from "@/components/ui/MaatjeTipCard";
 import { MealDayCard } from "@/components/ui/MealDayCard";
-import { QuickActionCard } from "@/components/ui/QuickActionCard";
+
 
 const DAY_LABELS = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"] as const;
 
 export function HomeDashboard() {
+  const router = useRouter();
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
@@ -40,19 +43,20 @@ export function HomeDashboard() {
   const generatedDays = preparation?.days.filter((day) => day.recipe || day.freeChoice) ?? [];
 
   return (
-    <div className="home-dashboard">
+    <div className="home-dashboard ux-home">
+      <header className="ux-greeting"><h1>Hallo, fijn dat je er bent</h1><p>Rustig overzicht voor jouw boodschappenweek.</p></header>
       <section className="week-hero-card" aria-labelledby="home-week-title">
         <div className="week-hero-heading">
           <div>
             <Icon name="week" size={24} />
-            <h1 id="home-week-title">Jouw week</h1>
+            <h2 id="home-week-title">Jouw week</h2>
           </div>
           <Link href="/week-voorbereiden">Wijzig</Link>
         </div>
 
         <div className="week-hero-facts" aria-label="Weekinstellingen">
           <span><Icon name="users" size={20} />{budget.settings.people ?? "–"} personen</span>
-          <span><Icon name="week" size={20} />{budget.settings.days ?? "–"} dagen</span>
+          <span><Icon name="week" size={20} />{generatedDays.filter((day) => !day.freeChoice).length} maaltijden</span>
           <span><Icon name="store" size={20} />Hoogvliet</span>
         </div>
 
@@ -61,25 +65,10 @@ export function HomeDashboard() {
             <span><Icon name="budget" size={19} />Bekijk weekbudget</span>
             <Icon name="arrow" size={18} />
           </span>
-          <div className="week-budget-metrics">
-            <div>
-              <span>Weekbudget</span>
-              <strong>{budgetCents === null ? "Niet ingesteld" : formatCents(budgetCents)}</strong>
-            </div>
-            <div>
-              <span>Gepland</span>
-              <strong>{formatCents(plannedCents)}{!pricesComplete ? " bekend" : ""}</strong>
-            </div>
-            <div data-tone={overBudgetCents > 0 ? "danger" : "success"}>
-              <span>{overBudgetCents > 0 ? "Boven" : "Over"}</span>
-              <strong>
-                {budgetCents === null
-                  ? "–"
-                  : !pricesComplete
-                    ? "Nog onbekend"
-                    : formatCents(overBudgetCents || remainingCents || 0)}
-              </strong>
-            </div>
+          <div className="ux-budget-hero" data-tone={overBudgetCents > 0 ? "danger" : "success"}>
+            <strong>{budgetCents === null ? "Nog geen budget" : !pricesComplete ? "Nog onbekend" : formatCents(overBudgetCents || remainingCents || 0)}</strong>
+            <span>{overBudgetCents > 0 ? "boven budget" : "over voor deze week"}</span>
+            <small>{formatCents(plannedCents)}{!pricesComplete ? " bekend" : " gepland"}{budgetCents !== null ? ` van ${formatCents(budgetCents)}` : ""}</small>
           </div>
           <BudgetProgress
             budgetCents={budgetCents}
@@ -97,6 +86,17 @@ export function HomeDashboard() {
           complete={pricesComplete}
         />
       </section>
+
+      <div className="ux-home-actions">
+        <Link className="home-primary-action" href="/lijst"><Icon name="list" size={24} /><span><strong>Verder met mijn lijst</strong><small>{shoppingList.list?.items.length ?? 0} {(shoppingList.list?.items.length ?? 0) === 1 ? "product" : "producten"}</small></span><Icon name="arrow" size={20} /></Link>
+        <Link className="ux-secondary-action" href="/week-voorbereiden"><Icon name="week" size={22} />Maak mijn week</Link>
+        {week.status === "ready" && shoppingList.status === "ready" ? (
+          <NewWeekControl onStartNew={async () => {
+            await week.startNewPreparation();
+            router.push("/week-voorbereiden");
+          }} />
+        ) : null}
+      </div>
 
       <section className="home-week-section" aria-labelledby="this-week-title">
         <div className="home-section-heading">
@@ -142,22 +142,6 @@ export function HomeDashboard() {
           </div>
         )}
       </section>
-
-      <Link className="home-primary-action" href="/week-voorbereiden">
-        <Icon name="prepare" size={25} />
-        <strong>{generatedDays.length ? "Menu aanpassen" : "Menu maken"}</strong>
-        <Icon name="arrow" size={21} />
-      </Link>
-
-      <div className="home-quick-actions" aria-label="Snelkoppelingen">
-        <QuickActionCard
-          href="/lijst"
-          icon="list"
-          label="Boodschappenlijst"
-          detail={shoppingList.list ? `${shoppingList.list.items.length} ${shoppingList.list.items.length === 1 ? "product" : "producten"}` : undefined}
-        />
-        <QuickActionCard href="/meer" icon="history" label="Geschiedenis" />
-      </div>
 
       <MaatjeTipCard>
         {preparation?.preferences.budgetImportant
