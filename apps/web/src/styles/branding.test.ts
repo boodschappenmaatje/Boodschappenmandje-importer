@@ -25,13 +25,13 @@ function contrast(a: string, b: string) {
   return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
 }
 
-describe("metallic blue visual contract", () => {
+describe("classic logo blue visual contract", () => {
   it("uses all five approved brand colours centrally", () => {
-    expect(value("--color-primary")).toBe("#4A7399");
-    expect(value("--color-primary-dark")).toBe("#385D7C");
-    expect(value("--color-steel")).toBe("#AFC3D4");
-    expect(value("--color-background")).toBe("#F2F6F9");
-    expect(value("--color-success")).toBe("#36B37E");
+    expect(value("--color-primary")).toBe("#4F86C6");
+    expect(value("--color-primary-dark")).toBe("#2E5E9E");
+    expect(value("--color-border")).toBe("#D7E3F1");
+    expect(value("--color-background")).toBe("#F6FAFF");
+    expect(value("--color-success")).toBe("#22C55E");
   });
 
   it("keeps browser chrome and install manifest aligned without changing install identity", () => {
@@ -55,7 +55,7 @@ describe("metallic blue visual contract", () => {
 
   it("keeps primary button text and normal/muted/status text above 4.5:1 contrast", () => {
     for (const [fg, bg] of [
-      ["on-primary", "primary"], ["on-primary", "primary-dark"],
+      ["on-primary", "primary-action"], ["on-primary", "primary-dark"],
       ["text", "surface"], ["text", "background"],
       ["muted", "surface"], ["muted", "background"], ["muted", "primary-soft"],
       ["primary-strong", "primary-soft"], ["success-text", "success-soft"],
