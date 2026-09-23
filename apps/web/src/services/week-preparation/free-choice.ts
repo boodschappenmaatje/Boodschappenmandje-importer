@@ -28,7 +28,7 @@ export function recipeMatchesQuery(recipe: Pick<Recipe, "name" | "sourceKey">, q
 
 export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: number, choice: { recipeId: string } | { customDish: CustomDish }, recipes: RecipeRepository, products: CatalogRepository, list?: ActiveShoppingList, now = new Date(), planningCache?: WeekPlanningSnapshotCache): Promise<RecipeAlternative | null> {
   const day = preparation.days.find((item) => item.dayIndex === dayIndex);
-  if (!day || !preparation.numberOfPeople) return null;
+  if (!day || day.category !== "freeChoice" || !preparation.numberOfPeople) return null;
   const custom = "customDish" in choice ? choice.customDish : undefined;
   if (custom && !validCustomDish(custom)) return null;
   const catalog = custom ? null : await recipes.loadCatalog();
@@ -41,10 +41,6 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
   const reference = { id: recipe.id, sourceKey: recipe.sourceKey, name: recipe.name };
   const next: WeekPreparation = {
     ...preparation,
-    categoryDistribution: { ...preparation.categoryDistribution,
-      [day.category]: preparation.categoryDistribution[day.category] - (day.category === "freeChoice" ? 0 : 1),
-      freeChoice: preparation.categoryDistribution.freeChoice + (day.category === "freeChoice" ? 0 : 1),
-    },
     days: preparation.days.map((item) => item.dayIndex === dayIndex ? {
       ...item, category: "freeChoice", freeChoice: false, recipeId: recipe.id, recipe: reference, customDish: custom, status: "recipeSelected",
     } : item),

@@ -1,7 +1,7 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeCatalog, RecipeIngredientDefinition } from "@/services/week-preparation/recipe-repository";
 import { applyProductToRequirement, searchIngredientProduct } from "@/services/week-preparation/product-matching";
-import type { CustomDish, WeekPreparation, WeekIngredientRequirement } from "@/types/week-preparation";
+import type { CustomDish, WeekPreparation, WeekIngredientRequirement, CustomDishIngredient } from "@/types/week-preparation";
 
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("nl-NL").trim();
 
@@ -10,13 +10,16 @@ export function validCustomDish(value: unknown): value is CustomDish {
   const dish = value as CustomDish;
   return typeof dish.name === "string" && dish.name.trim().length > 0 && dish.name.length <= 100 &&
     Number.isInteger(dish.servings) && dish.servings >= 1 && dish.servings <= 12 &&
+    (dish.targetServings === undefined || (Number.isInteger(dish.targetServings) && dish.targetServings >= 1 && dish.targetServings <= 12)) &&
+    (dish.savedRecipeId === undefined || (typeof dish.savedRecipeId === "string" && dish.savedRecipeId.length > 0 && dish.savedRecipeId.length <= 100)) &&
     Array.isArray(dish.ingredients) && dish.ingredients.length > 0 && dish.ingredients.length <= 40 &&
     new Set(dish.ingredients.map((row) => row?.id)).size === dish.ingredients.length &&
     dish.ingredients.every((row) => row && typeof row.id === "string" && row.id.length > 0 &&
       typeof row.name === "string" && row.name.trim().length > 0 && row.name.length <= 100 &&
       Number.isFinite(row.quantity) && row.quantity > 0 && row.quantity <= 100000 &&
       ["g", "kg", "ml", "l", "piece", "loaf"].includes(row.unit) &&
-      (row.productId === null || typeof row.productId === "string"));
+      (row.productId === null || (typeof row.productId === "string" && row.productId.length > 0)) &&
+      (row.packageCapacityOverride === undefined || (Number.isFinite(row.packageCapacityOverride) && row.packageCapacityOverride > 0 && row.packageCapacityOverride <= 100000)));
 }
 
 export function customIngredientDefinition(name: string, id: string, catalog: RecipeCatalog): RecipeIngredientDefinition {
@@ -31,25 +34,44 @@ export function customIngredientDefinition(name: string, id: string, catalog: Re
 /** Uses the same canonical matcher, package calculation and price validation as the planner. */
 export async function matchCustomDishes(preparation: WeekPreparation, catalog: RecipeCatalog, repository: CatalogRepository): Promise<WeekIngredientRequirement[]> {
   const result: WeekIngredientRequirement[] = [];
+  const ids = [...new Set(preparation.days.flatMap(day => day.customDish?.ingredients.map(row => row.productId).filter((id): id is string => !!id) ?? []))];
+  const selected = new Map((ids.length ? (await repository.getByIds(ids)).products : []).map(product => [product.id, product]));
   for (const day of preparation.days) {
     if (!day.customDish || !day.recipe || !validCustomDish(day.customDish)) continue;
     for (const row of day.customDish.ingredients) {
       const id = `custom:${day.dayIndex}:${row.id}`;
       const definition = customIngredientDefinition(row.name, id, catalog);
-      const quantity = row.quantity * (preparation.numberOfPeople ?? day.customDish.servings) / day.customDish.servings;
+      const quantity = customIngredientQuantity(row, day.customDish, preparation.numberOfPeople ?? day.customDish.servings);
       const unit = row.unit === "kg" ? "g" : row.unit === "l" ? "ml" : row.unit;
       const requiredQuantity = quantity * (row.unit === "kg" || row.unit === "l" ? 1000 : 1);
       const product = row.productId
-        ? (await repository.getByIds([row.productId])).products.find((item) => item.id === row.productId && item.isAvailable !== false && item.supermarket === "Hoogvliet") ?? null
+        ? selected.get(row.productId) ?? null
         : (await searchIngredientProduct(repository, definition, null, unit, requiredQuantity)).product;
-      result.push(applyProductToRequirement({
+      result.push(applyCustomProduct({
         ingredientId: id, sourceKey: definition.sourceKey, name: row.name, unit, optional: false,
         servingsBase: 1, kind: "ingredient", brandConstraint: null, requiredQuantity,
         purchaseQuantity: null, packageCapacity: null,
         usedIn: [{ recipeId: day.recipe.id, recipeName: day.recipe.name, dayIndex: day.dayIndex, requiredQuantity }],
         product: null, price: null, productMatchMissing: true, packageCalculationMissing: true,
-      }, product));
+      }, row, product));
     }
   }
   return result;
+}
+
+/** Round conversion noise only, never round the number of required pieces. */
+export function customIngredientQuantity(row: CustomDishIngredient, dish: CustomDish, householdPeople = dish.servings): number {
+  return Math.round(row.quantity * (dish.targetServings ?? householdPeople) / dish.servings * 1e9) / 1e9;
+}
+
+export function applyCustomProduct(requirement: WeekIngredientRequirement, row: CustomDishIngredient, product: import("@/types/catalog").Product | null): WeekIngredientRequirement {
+  const available = product && product.isAvailable !== false && product.supermarket === "Hoogvliet" && product.sku.trim() ? product : null;
+  const applied = applyProductToRequirement(requirement, available);
+  const matched = { ...applied, price: applied.price?.freshness === "fresh" && applied.price.amountCents > 0 ? applied.price : null };
+  // An explicit content override is only valid for the exact selected product.
+  // Prefer current catalog packaging when it can be read safely.
+  if (!available || matched.packageCapacity !== null || !row.packageCapacityOverride || row.productId !== available.id) return matched;
+  const factor = row.unit === "kg" || row.unit === "l" ? 1000 : 1;
+  const capacity = row.packageCapacityOverride * factor;
+  return { ...matched, packageCapacity: capacity, purchaseQuantity: Math.max(1, Math.ceil(requirement.requiredQuantity / capacity)), packageCalculationMissing: false };
 }

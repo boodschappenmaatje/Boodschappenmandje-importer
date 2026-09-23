@@ -140,7 +140,7 @@ export function updateWeekSettings(
         ? preparation.mealBudgetCents
         : null,
   });
-  if (daysChanged) {
+  if (daysChanged && !preparation.days.some(day => day.category === "freeChoice" && day.recipe)) {
     return {
       ...next,
       days: [],
@@ -150,6 +150,7 @@ export function updateWeekSettings(
       status: "draft",
     };
   }
+  if (daysChanged) return { ...next, status: "draft" };
   return requiredSettingMissing
     ? { ...next, ingredients: [], generation: null, customizations: [], status: "draft" }
     : next;
@@ -194,10 +195,10 @@ export function setCategoryCount(
       ...preparation.categoryDistribution,
       [category]: count,
     },
-    days: [],
-    ingredients: [],
-    generation: null,
-    customizations: [],
+    days: preparation.days,
+    ingredients: preparation.ingredients,
+    generation: preparation.generation,
+    customizations: preparation.customizations,
     status: "draft",
   });
 }
@@ -268,21 +269,40 @@ export function distributeCategories(
   }));
 }
 
+/** Count week slots independently of the unlimited private recipe collection. */
+export function freeChoiceProgress(preparation: WeekPreparation) {
+  const selected = preparation.days.filter(day => day.category === "freeChoice" && day.recipe);
+  const total = preparation.categoryDistribution.freeChoice;
+  return { selected, total, chosen: selected.length, remaining: Math.max(0, total - selected.length), needsRetention: selected.length > total };
+}
+
 export function prepareWeek(
   preparation: WeekPreparation,
   listContext: ExistingListContext,
   now: Date = new Date(),
+  keepDayIndexes?: number[],
 ): WeekPreparation {
-  if (!canPrepareWeek(preparation) || preparation.numberOfDays === null) {
-    return preparation;
+  if (!canPrepareWeek(preparation) || preparation.numberOfDays === null) return preparation;
+  const progress = freeChoiceProgress(preparation);
+  if (progress.needsRetention && (!keepDayIndexes || new Set(keepDayIndexes).size !== progress.total ||
+      keepDayIndexes.some(index => !progress.selected.some(day => day.dayIndex === index)))) return preparation;
+  const selected = progress.needsRetention ? progress.selected.filter(day => keepDayIndexes!.includes(day.dayIndex)) : progress.selected;
+  const days = distributeCategories(preparation.categoryDistribution, preparation.numberOfDays);
+  const remap = new Map<number, number>();
+  // Keep a chosen dish on its day where possible, then use another free slot.
+  const available = days.filter(day => day.category === "freeChoice");
+  for (const old of selected) {
+    const slot = available.find(day => day.dayIndex === old.dayIndex) ?? available[0];
+    if (!slot) return preparation;
+    remap.set(old.dayIndex, slot.dayIndex);
+    days[slot.dayIndex] = { ...old, dayIndex: slot.dayIndex };
+    available.splice(available.indexOf(slot), 1);
   }
   return withUpdatedAt(preparation, now, {
     existingListKnownSubtotalCents: listContext.knownSubtotalCents,
     existingListUnpricedCount: listContext.unpricedItemCount,
-    days: distributeCategories(
-      preparation.categoryDistribution,
-      preparation.numberOfDays,
-    ),
+    days,
+    customizations: preparation.customizations.filter(item => remap.has(item.dayIndex)).map(item => ({ ...item, dayIndex: remap.get(item.dayIndex)! })),
     status: "readyForGeneration",
   });
 }

@@ -7,6 +7,7 @@ import { Icon } from "@/components/Icon";
 import { primaryNavigation } from "@/config/navigation";
 
 function isCurrentPath(pathname: string, href: string): boolean {
+  if (href === "/week-voorbereiden" && pathname.startsWith("/vrije-keuze")) return true;
   return href === "/" ? pathname === href : pathname.startsWith(href);
 }
 

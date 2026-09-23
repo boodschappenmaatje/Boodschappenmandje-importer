@@ -152,11 +152,17 @@ export interface CustomDishIngredient {
   quantity: number;
   unit: WeekIngredientUnit;
   productId: string | null;
+  /** Explicit package contents entered by the user, in this row's unit. */
+  packageCapacityOverride?: number;
 }
 
 export interface CustomDish {
+  /** Stable link to a private recipe on this device; no public recipe ID. */
+  savedRecipeId?: string;
   name: string;
   servings: number;
+  /** Absent in PWA 13: those recipes continue to follow the household count. */
+  targetServings?: number;
   ingredients: CustomDishIngredient[];
 }
 

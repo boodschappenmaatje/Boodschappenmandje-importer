@@ -27,12 +27,13 @@ function packagesForDay(
 
 
 /** Shared cards for the active planner dish and a proposed free-choice dish. */
-export function DishIngredients({ ingredients, dayIndex, renderAction }: {
+export function DishIngredients({ ingredients, dayIndex, renderAction, compact = false }: {
   ingredients: WeekIngredientRequirement[];
   dayIndex: number;
+  compact?: boolean;
   renderAction?: (ingredient: WeekIngredientRequirement) => ReactNode;
 }) {
-  return (<ul className="recipe-ingredients">
+  return (<ul className={compact ? "compact-recipe-ingredients" : "recipe-ingredients"}>
     {ingredients.map((ingredient) => {
       const use = ingredient.usedIn.find(
         (item) => item.dayIndex === dayIndex,
@@ -43,6 +44,13 @@ export function DishIngredients({ ingredients, dayIndex, renderAction }: {
         ingredient,
         dayIndex,
       );
+      if (compact) return <li key={ingredient.ingredientId}>
+        <ProductThumbnail className="compact-ingredient-image" imageUrl={ingredient.product?.imageUrl ?? null} name={ingredient.product?.name ?? ingredient.name} />
+        <div><strong>{ingredient.name}</strong>{ingredient.product?.name === ingredient.name ? null : <span>{ingredient.product?.name ?? "Kies opnieuw een product"}</span>}
+          <small>{packages === null ? "Verpakkingsinhoud nodig" : `${packages} × ${ingredient.product?.packageText ?? "verpakking"}`}</small></div>
+        <span className="compact-ingredient-quantity">{quantityLabel(requiredQuantity, ingredient.unit)}</span>
+        <strong className="compact-ingredient-cost">{ingredient.price && packages !== null ? formatCents(ingredient.price.amountCents * packages) : "Prijs ontbreekt"}</strong>
+      </li>;
       return (
       <li key={ingredient.ingredientId}>
         <div>

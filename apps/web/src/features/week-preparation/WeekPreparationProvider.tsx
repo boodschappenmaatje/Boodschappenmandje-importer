@@ -58,6 +58,7 @@ import {
   calculateWeekBudgetSummary,
   budgetOverrideReapprovalPreview,
   generatePreparedWeek,
+  hasValidUserApprovedBudgetOverride,
   markWeekGenerating,
   markWeekGenerationFailed,
   recalculateMealBudgetSummary,
@@ -99,7 +100,7 @@ interface WeekPreparationContextValue {
   setMealBudgetCents: (value: number) => void;
   adjustCategory: (category: MealCategory, change: -1 | 1) => void;
   setPreference: (preference: keyof WeekPreferences, value: boolean) => void;
-  confirmPreparation: () => void;
+  confirmPreparation: (keepDayIndexes?: number[]) => void;
   retryGeneration: () => void;
   completeShoppingList: () => void;
   pendingBudgetReapproval: BudgetOverrideReapprovalPreview | null;
@@ -319,6 +320,11 @@ export function WeekPreparationProvider({
           { cache: planningSnapshotCacheRef.current },
         );
         if (generationRunRef.current !== run) return;
+        const maySync = generated.generation?.isMealBudgetComplete &&
+          (["withinMealBudget", "exactlyMealBudget"].includes(generated.generation.mealBudgetStatus) || hasValidUserApprovedBudgetOverride(generated));
+        if (maySync && (base.days.some(day => day.category === "freeChoice" && day.recipe) || shoppingList.list?.items.some(item => item.quantityContributions.mealPlans.some(contribution => contribution.weekPreparationId === base.id)))) {
+          await shoppingList.completeFromWeek(generated.ingredients, generated.id);
+        }
         refreshedWeekRef.current = generated.id;
         replace(generated);
       } catch {
@@ -328,7 +334,7 @@ export function WeekPreparationProvider({
         generationInFlightRef.current = false;
       }
     },
-    [catalogRepository, recipeRepository, replace, shoppingList.list],
+    [catalogRepository, recipeRepository, replace, shoppingList],
   );
 
   useEffect(() => {
@@ -547,10 +553,10 @@ export function WeekPreparationProvider({
     [commit],
   );
 
-  const confirmPreparation = useCallback(() => {
+  const confirmPreparation = useCallback((keepDayIndexes?: number[]) => {
     const current = preparationRef.current;
     if (!current) return;
-    const prepared = prepareWeek(current, currentListContext());
+    const prepared = prepareWeek(current, currentListContext(), new Date(), keepDayIndexes);
     if (prepared.status !== "readyForGeneration") return;
     void runGeneration(prepared);
   }, [currentListContext, runGeneration]);
@@ -800,7 +806,8 @@ export function WeekPreparationProvider({
   }, [catalogRepository, currentList, recipeRepository]);
   const previewCustomDish = useCallback(async (dayIndex: number, customDish: CustomDish) => {
     const current = preparationRef.current;
-    return current ? previewFreeChoice(current, dayIndex, { customDish }, recipeRepository(), catalogRepository(), currentList()) : null;
+    const previewBase = current && dayIndex === -1 ? { ...current, days: [...current.days, { dayIndex: -1, category: "freeChoice" as const, freeChoice: true, recipeId: null, recipe: null, status: "freeChoice" as const }] } : current;
+    return previewBase ? previewFreeChoice(previewBase, dayIndex, { customDish }, recipeRepository(), catalogRepository(), currentList()) : null;
   }, [catalogRepository, currentList, recipeRepository]);
   const matchCustomIngredient = useCallback(async (name: string, unit: WeekIngredientUnit, productId?: string | null) => {
     if (productId) return (await catalogRepository().getByIds([productId])).products.find((product) => product.id === productId) ?? null;

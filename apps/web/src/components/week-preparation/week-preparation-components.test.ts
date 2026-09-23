@@ -355,7 +355,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(draftHtml).toContain('value="50,00"');
     expect(savedHtml).toContain('aria-current="step"><span>4</span>Overzicht');
     expect(savedHtml).toContain("Spaghetti bolognese");
-    expect(savedHtml).toMatch(/<details class="ux-ingredients"><summary>Wat je nodig hebt/);
+    expect(savedHtml).toContain('class="compact-recipe-ingredients"');
   });
   it("toont zonder voorbereiding een veilige start en behoud van de bestaande lijst", () => {
     const html = render(createElement(PrepareWeekPage), null);
@@ -393,6 +393,18 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).not.toContain("SKU");
   });
 
+  it.each(["spaghetti-bolognese", "catalog-mix-honig-spaghetti", "custom-dish"])("opens %s as an inline Menu accordion without an editor or navigation link", sourceKey => {
+    const preparation = generated();
+    preparation.days[0] = { ...preparation.days[0], recipe: { ...preparation.days[0].recipe!, sourceKey } };
+    const html = render(createElement(PrepareWeekPage), preparation);
+    const summary = html.match(/<details class="recipe-detail"[^>]*><summary>([\s\S]*?)<\/summary>/)?.[1];
+    expect(summary).toBeDefined();
+    expect(summary).not.toContain("<a ");
+    expect(html).toContain('class="compact-recipe-detail"');
+    expect(html).not.toContain("Naam van je gerecht");
+    expect(html).toContain('aria-current="page" href="/week-voorbereiden"');
+  });
+
   it("toont gerecht, hoeveelheden, echte productmatch, kosten en lijstactie", () => {
     const html = render(createElement(PrepareWeekPage), generated());
     expect(html).toContain("Spaghetti bolognese");
@@ -401,9 +413,9 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(html).toContain("Hoogvliet rundergehakt");
     expect(html).toContain("Hoogvliet · 500 g");
     expect(html).toContain("2 verpakkingen · € 8,98");
-    expect(html).toContain("Totaal gerecht: € 8,98");
+    expect(html).toContain("€ 2,25 per persoon");
     expect(html).toContain("Vervang gerecht");
-    expect(html).toContain("recipe-detail-hero");
+    expect(html).toContain("compact-recipe-heading");
     expect(html).toContain("pasta-spaghetti-bolognese.webp");
     expect(html).toContain('src="https://cdn.hoogvliet.com/rundergehakt.webp"');
     expect(html).toContain('alt="Afbeelding van Hoogvliet rundergehakt"');
@@ -494,7 +506,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
 
     expect(homeHtml).toContain('data-image-source="placeholder"');
     expect(weekHtml).toContain('data-image-source="placeholder"');
-    expect(weekHtml).toContain("recipe-detail-hero");
+    expect(weekHtml).toContain("compact-recipe-heading");
     expect(homeHtml).not.toContain("future-recipe-without-image.webp");
     expect(weekHtml).not.toContain("future-recipe-without-image.webp");
   });
@@ -507,7 +519,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(weekHtml).toContain("dutch-potatoes-spinach-egg.webp");
     expect(homeHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
     expect(weekHtml).toContain('alt="Gerecht: Aardappelen, spinazie en ei"');
-    expect(weekHtml).toContain("recipe-detail-hero");
+    expect(weekHtml).toContain("compact-recipe-heading");
   });
 
   it("biedt Nieuwe week alleen bij de weekacties op Home aan", () => {

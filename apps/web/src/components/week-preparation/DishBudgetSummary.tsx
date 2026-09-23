@@ -10,9 +10,10 @@ export function DishBudgetSummary({ preparation, dayIndex, expandable = false }:
 }) {
   const ingredients = preparation.ingredients.filter((item) => item.usedIn.some((use) => use.dayIndex === dayIndex));
   const cost = calculateDishCostSummary(dayIndex, preparation.ingredients);
+  const customDish = preparation.days.find(day => day.dayIndex === dayIndex)?.customDish;
   const remaining = preparation.generation?.mealBudgetRemainingCents ?? null;
   return <div className="dish-budget-summary">
-    <p>{preparation.numberOfPeople} personen</p>
+    <p>{customDish?.targetServings ?? preparation.numberOfPeople} personen</p>
     <p className="recipe-cost-summary" data-complete={cost.complete}>
       <strong>Totaal gerecht: {!cost.complete && cost.knownCostCents === 0 ? "nog niet bekend" : formatCents(cost.knownCostCents)}</strong>
       {!cost.complete ? `${cost.knownCostCents > 0 ? " bekend" : ""} · totaal nog onvolledig` : null}

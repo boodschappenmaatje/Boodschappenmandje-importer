@@ -235,3 +235,33 @@ describe("PWA 13 vrije keuze", () => {
     expect(results[0].alternative).toBeNull();
   });
 });
+
+describe("PWA 14 Fix 1 slot boundaries", () => {
+  it.each([1, 2, 4, 6, 7])("blocks a slot beyond the %i configured slots", async count => {
+    const base = week();
+    const current = { ...base, numberOfDays: count, categoryDistribution: { ...base.categoryDistribution, freeChoice: count }, days: Array.from({ length: count }, (_, dayIndex) => ({ ...base.days[0], dayIndex })) };
+    expect(await previewFreeChoice(current, count, { recipeId: pasta.id }, recipes, products)).toBeNull();
+    expect(current.days).toHaveLength(count);
+  });
+  it("cannot silently turn an automatically generated day into an extra free choice", async () => {
+    const current = week();
+    current.days[1] = { ...current.days[1], category: "pasta", freeChoice: false, recipeId: pasta.id, recipe: pasta, status: "recipeSelected" };
+    const preview = await previewFreeChoice(week(), 1, { recipeId: pasta.id }, recipes, products);
+    expect(preview).not.toBeNull();
+    expect(await previewFreeChoice(current, 1, { recipeId: pasta.id }, recipes, products)).toBeNull();
+    const result = await commitExplicitRecipeAlternative(current, 1, preview!, true, recipes, products);
+    expect(result).toMatchObject({ ok: false, reason: "day_not_found" });
+  });
+  it("rejects a preview while the user is changing the week distribution", async () => {
+    const preview = await previewFreeChoice(week(), 0, { recipeId: pasta.id }, recipes, products);
+    expect(await commitExplicitRecipeAlternative({ ...week(), status: "draft" }, 0, preview!, true, recipes, products)).toMatchObject({ ok: false });
+  });
+  it("allows replacement at maximum without creating another slot", async () => {
+    const first = await previewFreeChoice(week(), 0, { recipeId: pasta.id }, recipes, products);
+    const full = await previewFreeChoice(first!.preparation, 1, { recipeId: pasta.id }, recipes, products);
+    const replacement = await previewFreeChoice(full!.preparation, 0, { customDish: dish }, recipes, products);
+    expect(replacement!.preparation.days).toHaveLength(2);
+    expect(replacement!.preparation.categoryDistribution.freeChoice).toBe(2);
+    expect(replacement!.preparation.days.every(day => day.recipeId)).toBe(true);
+  });
+});

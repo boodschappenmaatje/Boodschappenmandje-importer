@@ -3,7 +3,10 @@
 import { useRef, useState } from "react";
 
 import { DishImage } from "@/components/ui/DishImage";
-import { FreeChoiceControl } from "@/components/week-preparation/FreeChoiceControl";
+import Link from "next/link";
+import { CompactRecipeDetail } from "./CompactRecipeDetail";
+import { CustomDishEditor } from "./CustomDishEditor";
+import { MealRouteNavigation } from "./MealRouteNavigation";
 import {
   MealReplacementControl,
   ProductAlternativeControl,
@@ -22,13 +25,14 @@ import {
   missingPriceLabel,
 } from "@/services/budget/budget-presentation";
 import { DishIngredients } from "@/components/week-preparation/DishIngredients";
-import { DishBudgetSummary } from "@/components/week-preparation/DishBudgetSummary";
+
 import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
 import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import {
   MEAL_CATEGORY_LABELS,
   canPrepareWeek,
   distributionProgress,
+  freeChoiceProgress,
 } from "@/services/week-preparation/week-preparation";
 import {
   calculateDishCostSummary,
@@ -58,6 +62,9 @@ function listCountLabel(count: number): string {
 }
 
 export function WeekPreparationView() {
+  const [editingDay, setEditingDay] = useState<number | null>(null);
+  const [keepDayIndexes, setKeepDayIndexes] = useState<number[]>([]);
+  const [categoryChange, setCategoryChange] = useState<{ dayIndex: number; category: MealCategory } | null>(null);
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
@@ -108,6 +115,7 @@ export function WeekPreparationView() {
   }
 
   const preparation = week.preparation;
+  const freeProgress = freeChoiceProgress(preparation);
   const currentStep = step ?? (preparation.status === "draft" ? 0 : 3);
   const progress = distributionProgress(
     preparation.categoryDistribution,
@@ -195,8 +203,10 @@ export function WeekPreparationView() {
           ? `${Math.abs(progress.difference)} ${Math.abs(progress.difference) === 1 ? "dag" : "dagen"} te veel gekozen`
           : "Alle dagen zijn verdeeld";
 
+  if (editingDay !== null) return <CustomDishEditor dayIndex={editingDay} initialDish={preparation.days.find(day => day.dayIndex === editingDay)?.customDish} onClose={() => setEditingDay(null)} />;
   return (
     <div className="week-preparation-flow" ref={flowTop} tabIndex={-1}>
+      <MealRouteNavigation current="menu" />
       <nav className="ux-step-progress" aria-label="Weekvoorbereiding stappen">
         <p>Stap {currentStep + 1} van 4</p>
         <ol>{["Basis", "Maaltijden", "Voorkeuren", "Overzicht"].map((label, index) => <li key={label} aria-current={index === currentStep ? "step" : undefined}><span>{index + 1}</span>{label}</li>)}</ol>
@@ -387,12 +397,12 @@ export function WeekPreparationView() {
                         <select
                           id={`prepared-day-${day.dayIndex}`}
                           value={day.category}
-                          onChange={(event) =>
-                            week.changeDayCategory(
-                              day.dayIndex,
-                              event.target.value as MealCategory,
-                            )
-                          }
+                          disabled={week.customizationBusy}
+                          onChange={(event) => {
+                            const category = event.target.value as MealCategory;
+                            if (day.category === "freeChoice" && day.recipe) setCategoryChange({ dayIndex: day.dayIndex, category });
+                            else week.changeDayCategory(day.dayIndex, category);
+                          }}
                         >
                           {MEAL_CATEGORIES.map((category) => (
                             <option key={category} value={category}>
@@ -402,7 +412,7 @@ export function WeekPreparationView() {
                         </select>
                       </label>
                       {day.freeChoice ? (
-                        <FreeChoiceControl dayIndex={day.dayIndex} />
+                        <Link className="text-action" href={`/vrije-keuze?day=${day.dayIndex}`}>Vrije keuze invullen</Link>
                       ) : day.recipe ? (
                         <div className="recipe-day-entry">
                           {dishNeedsReview ? (
@@ -435,31 +445,14 @@ export function WeekPreparationView() {
                               </span>
                             </summary>
                             <div className="recipe-detail-content">
-                                                        <DishImage
-                              asset={dishImage}
-                              className="recipe-detail-hero"
-                              sizes="(max-width: 560px) calc(100vw - 60px), 500px"
-                              title={dishTitle}
-                            />
-                            <p>
-                              {MEAL_CATEGORY_LABELS[day.category]} · {preparation.numberOfPeople} personen
-                            </p>
-
-
-                            <h3>{dishTitle}</h3>
-                            <DishBudgetSummary preparation={preparation} dayIndex={day.dayIndex} />
-                            <details className="ux-ingredients"><summary>Wat je nodig hebt · {dayIngredients.length} ingrediënten</summary>
-                            <DishIngredients ingredients={dayIngredients} dayIndex={day.dayIndex} renderAction={(ingredient) => ingredient.product && ingredient.price && ingredient.purchaseQuantity !== null ? (
-                              <ProductAlternativeControl dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
-                            ) : null} />
-                            </details>
-{day.category === "freeChoice" ? <FreeChoiceControl key={day.recipeId} dayIndex={day.dayIndex} initialDish={day.customDish} /> : !dishNeedsReview ? (
-                              <MealReplacementControl
-                                dayIndex={day.dayIndex}
-                                currentRecipeName={dishTitle}
-                                ingredients={ingredientOptions}
-                              />
-                            ) : null}
+                              <CompactRecipeDetail preparation={preparation} dayIndex={day.dayIndex} />
+                              {day.customDish ? <button type="button" className="text-action" onClick={() => setEditingDay(day.dayIndex)}>Bewerk recept</button> : null}
+                              <details className="compact-recipe-manage"><summary>Gerecht aanpassen</summary>
+                                <DishIngredients ingredients={dayIngredients} dayIndex={day.dayIndex} renderAction={(ingredient) => ingredient.product && ingredient.price && ingredient.purchaseQuantity !== null ? (
+                                  <ProductAlternativeControl dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
+                                ) : null} />
+                                {day.category === "freeChoice" ? <Link className="text-action" href={`/vrije-keuze?day=${day.dayIndex}`}>Vervang een vrije keuze</Link> : !dishNeedsReview ? <MealReplacementControl dayIndex={day.dayIndex} currentRecipeName={dishTitle} ingredients={ingredientOptions} /> : null}
+                              </details>
                             </div>
                           </details>
                         </div>
@@ -825,9 +818,19 @@ export function WeekPreparationView() {
         <ul>{MEAL_CATEGORIES.filter((category) => preparation.categoryDistribution[category] > 0).map((category) => <li key={category}>{preparation.categoryDistribution[category]} × {MEAL_CATEGORY_LABELS[category]}</li>)}</ul>
         <p>Je huidige boodschappen blijven behouden.</p>
       </section> : null}
+      {categoryChange ? <section className="customization-confirm" role="alert">
+        <p>Deze dag bevat een gekozen maaltijd. Wil je deze keuze vervangen door een andere categorie? Je bewaarde recepten blijven bestaan.</p>
+        <button type="button" onClick={() => setCategoryChange(null)}>Behouden</button>
+        <button type="button" onClick={() => { week.changeDayCategory(categoryChange.dayIndex, categoryChange.category); setCategoryChange(null); }}>Deze keuze vervangen</button>
+      </section> : null}
+      {freeProgress.needsRetention ? <fieldset className="customization-confirm">
+        <legend>Welke vrije keuzes wil je behouden?</legend>
+        <p>Je hebt {freeProgress.chosen} maaltijden gekozen en nu {freeProgress.total} plekken. Selecteer {freeProgress.total} maaltijden. Tot bevestigen blijft alles bewaard.</p>
+        {freeProgress.selected.map(day => <label key={day.dayIndex}><input type="checkbox" checked={keepDayIndexes.includes(day.dayIndex)} onChange={event => setKeepDayIndexes(previous => event.target.checked ? [...previous, day.dayIndex] : previous.filter(index => index !== day.dayIndex))} />Dag {day.dayIndex + 1} · {day.recipe?.name}</label>)}
+      </fieldset> : null}
       <div className="ux-step-actions">
         {currentStep > 0 ? <button type="button" onClick={() => goToStep(currentStep - 1)} disabled={preparation.status === "generating"}>Terug</button> : null}
-        {currentStep < 3 ? <button type="button" className="primary-action" onClick={nextStep} disabled={currentStep === 0 ? !preparation.numberOfPeople || !preparation.numberOfDays : currentStep === 1 ? progress.state !== "exact" : false}>Volgende</button> : preparation.status === "draft" || preparation.status === "generationError" ? <button className="primary-action" type="button" disabled={!ready} onClick={week.confirmPreparation}>Week voorbereiden</button> : preparation.status !== "generating" ? <button type="button" onClick={() => goToStep(0)}>Weekinstellingen aanpassen</button> : null}
+        {currentStep < 3 ? <button type="button" className="primary-action" onClick={nextStep} disabled={currentStep === 0 ? !preparation.numberOfPeople || !preparation.numberOfDays : currentStep === 1 ? progress.state !== "exact" : false}>Volgende</button> : preparation.status === "draft" || preparation.status === "generationError" ? <button className="primary-action" type="button" disabled={!ready || (freeProgress.needsRetention && keepDayIndexes.length !== freeProgress.total)} onClick={() => { week.confirmPreparation(freeProgress.needsRetention ? keepDayIndexes : undefined); setKeepDayIndexes([]); }}>Week voorbereiden</button> : preparation.status !== "generating" ? <button type="button" onClick={() => goToStep(0)}>Weekinstellingen aanpassen</button> : null}
       </div>
     </div>
   );
