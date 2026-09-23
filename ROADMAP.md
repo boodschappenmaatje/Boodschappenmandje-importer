@@ -32,27 +32,12 @@ Belangrijke productprincipes:
 | PWA 13 | Afgerond / Production | Vrije keuze en maaltijdmixen, waaronder Honig/Knorr |
 | Branding | Afgerond / Production | Metallic blauwe huisstijl en officieel app-icoon |
 | UX simplification | Afgerond / Production | Rustiger Home, begeleide flows en duidelijkere mobiele UX |
+| PWA 14 | Afgerond / Production | Eigen recepten, compact detail, dynamische Vrije keuze, actuele prijzen, budget en lijstsync |
 
-## Actief
+## Volgende stap
 
-### PWA 14 — Eigen recepten
-Doel: eigen recepten als volwaardig onderdeel van Vrije keuze, Menu en boodschappenlijst.
-
-Huidige scope:
-- eigen recept maken, bekijken en bewerken;
-- echte producten zoeken en koppelen;
-- actuele prijzen en verpakkingen;
-- personen schalen;
-- hoeveelheden en verpakkingen herberekenen;
-- maaltijd- en weekbudgetvalidatie;
-- weekcapaciteit respecteren;
-- expliciet vervangen als de week vol is;
-- lijstsync zonder handmatige gebruikerswijzigingen te verliezen;
-- compacte receptdetails;
-- aparte editor;
-- mobiele mockup-uitwerking.
-
-Zie `PROJECT_STATE.md` voor het actuele checkpoint en de eerstvolgende acceptatiestap.
+### Eigen recepten — vervolg: scope bepalen
+PWA 14 is op 23 september 2026 op iPhone geaccepteerd en via PR #27 in Production gezet. Bepaal op basis van gebruikerstesten welke verbeteringen aan lokaal bewaren, fout- en lege staten en foto/fallback het eerst nodig zijn. Leg de scope vast voordat de volgende feature wordt gebouwd. Er is nog geen nieuwe featurebranch of PWA-nummer toegekend.
 
 ---
 

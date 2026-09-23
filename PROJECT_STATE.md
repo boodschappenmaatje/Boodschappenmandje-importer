@@ -3,55 +3,34 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**PWA 14 — Eigen recepten / Vrije keuze**
+**PWA 14 — Eigen recepten / Vrije keuze: afgerond en in Production.**
 
-## Actieve ontwikkeling
+## Production
 - Repository: `boodschappenmaatje/Boodschappenmandje-importer`
-- Branch: `feature/pwa14-eigen-recepten`
-- Draft PR: **#27**
-- Base: `main`
-- Status: **klaar voor fysieke iPhone-test**
-- Laatst gecontroleerde remote head bij aanmaak van dit bestand: `547926b76f05153507903e260f739a9f8a054a64`
+- Branch: `main`
+- Gemergede PR: **#27**
+- Releasecommit: `b233b65910121fe998b4ac913d1999afbef3f20d`
+- Vercel Production-check op de releasecommit: **success** (23 september 2026).
+- Fysieke iPhone-test: **geslaagd**, met expliciete toestemming voor de release.
+- Production-smoke test: **geslaagd** in een schone browsersessie. Een week voor 2 personen en 2 dagen met afzonderlijk week- en maaltijdbudget werd aangemaakt; Vrije keuze toonde 2 plekken. Een eigen recept met een actueel geprijsd product werd bewaard, aan de eerste dag toegevoegd en compact binnen Menu geopend. De boodschappenlijst, het maaltijdtotaal en de budgetruimte toonden dezelfde € 0,48. Producten zonder actuele prijs waren niet selecteerbaar.
+- De rooktest gebruikte alleen lokale browsergegevens; geen database-migratie, productimport of destructieve databaseactie.
 
-Gebruik bij hervatten altijd de **actuele remote branch-head** als bron van waarheid; hardcode de SHA niet in vervolgopdrachten.
+## PWA 14 geleverd
+- eigen recepten maken, bewaren, bekijken en bewerken op dit apparaat;
+- echte producten zoeken, prijzen en verpakkingen tonen en hoeveelheden schalen;
+- compact receptdetail voor gegenereerde gerechten, mixen en eigen recepten;
+- aparte editor, 2×2 acties in Vrije keuze en dynamische weekcapaciteit;
+- maaltijd- en weekbudgetvalidatie, expliciete override waar toegestaan;
+- lijstsync met bescherming van handmatige gebruikerswijzigingen.
 
-## PWA 14 / Fix 1 — werkend
-- compacte receptdetails voor gegenereerde gerechten, maaltijdmixen en eigen recepten;
-- aparte editor voor nieuw/bewerk recept;
-- Menu blijft Menu; gerechten openen compact binnen de bestaande context;
-- dynamische Vrije keuze met weekcapaciteit en expliciete vervanging;
-- actuele productprijzen en verpakkingen;
-- personen herberekenen;
-- maaltijd- en weekbudgetvalidatie, inclusief expliciete override waar toegestaan;
-- lijstsync met bescherming van handmatige gebruikerswijzigingen;
-- eigen recepten lokaal opslaan en opnieuw openen;
-- mockup-uitwerking met 2×2 actiekaarten en compacte mobiele UI.
+## Laatste geverifieerde regressies
+Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerfixtures en lokale Production-build geslaagd. Na deze checks veranderde de code alleen in de weergave van het aantal personen bij een opgeslagen recept; verdere commits tot de merge betroffen documentatie. De actuele Preview-check en Production-check waren groen.
 
-## Laatste geverifieerde checks volgens PR #27
-- lint: geslaagd;
-- TypeScript: geslaagd;
-- webtests: **539/539**;
-- importer fixtures/regressies: **189/189**;
-- lokale Production-build: geslaagd;
-- Preview: Ready.
-
-## Volgende acceptatiestap
-**Fysieke iPhone-test van de actuele Preview.**
-
-Na succesvolle iPhone-test:
-1. bevindingen verwerken indien nodig;
-2. opnieuw regressietesten;
-3. pas na expliciete toestemming van de gebruiker PR gereedmaken/mergen;
-4. Production deployment controleren;
-5. smoke test uitvoeren;
-6. dit bestand en `ROADMAP.md` bijwerken.
+## Volgende stap
+**Eigen recepten — vervolg: scope bepalen aan de hand van gebruikerstesten.** Beoordeel eerst de robuustheid van lokaal bewaren, fout- en lege staten, en foto/fallback. Leg de concrete scope vast voordat nieuwe featureontwikkeling start. Zie `ROADMAP.md`.
 
 ## Release-regels
-- Geen merge naar `main` zonder expliciete toestemming.
-- Geen Production-deploy of Production-databasewijziging zonder expliciete scope/toestemming.
-- Geen productimport, migratie of destructieve databaseactie als die niet expliciet bij de opdracht hoort.
+- Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.
+- Geen merge of Production-actie zonder expliciete toestemming wanneer de opdracht bij Preview/iPhone-test hoort.
+- Geen productimport, migratie of destructieve databaseactie buiten een expliciet geautoriseerde opdracht.
 - Behoud werkende functionaliteit en gebruikersdata.
-- Werk vanaf de actuele remote staat; start niet opnieuw vanaf een oud checkpoint.
-
-## Bijwerken
-Werk dit bestand bij na een betekenisvolle milestone, geslaagde iPhone-acceptatie, merge/release of wijziging van actieve branch/PR.
