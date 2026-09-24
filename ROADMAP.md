@@ -43,7 +43,7 @@ PWA 14 is via PR #27 in Production. De vervolgverbetering blijft op `feature/ing
 
 De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) is met echte data onderzocht: cataloguszoek-time-outs en onverenigbare eenheden konden de planning afbreken. Beide oorzaken zijn hersteld; dezelfde gemengde week slaagt voor €41,52 zonder versoepelde budget/readinessregels.
 
-Status: implementatie en 592 webtests/189 importerfixtures groen; lint/TypeScript/build groen. Nieuwe Preview en live verificatie vormen het volgende checkpoint; mobiele Preview-gate staat nog open. Geen nieuw PWA-nummer, merge of Production-deployment binnen deze opdracht.
+Status: implementatie en 594 webtests/189 importerfixtures groen; lint/TypeScript/build groen. Preview Ready en live desktopcontrole van verpakkingen, hoeveelheden, prijzen, budget, handmatige lijstbescherming, Knorr en de planner-case geslaagd. Mobiele Preview-gate staat nog open wegens ontbrekende telefoonviewport in de beschikbare browser. Geen nieuw PWA-nummer, merge of Production-deployment binnen deze opdracht.
 
 Eerstvolgende stap: Preview (inclusief mobiel) afronden, fysieke iPhone-test, daarna afzonderlijke releasebeslissing. Vervolgens de overige eigen-receptverbeteringen hieronder prioriteren.
 

@@ -36,13 +36,16 @@ Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerf
 - Bestaande commit-, budgetoverride- en lijstsyncflow blijft leidend; losse handmatige lijstbijdragen blijven behouden. Geen nieuw opslagschema of databasewijziging.
 - Planner: live reproductie 4 personen / 5 dagen / €100 week / €70 maaltijden vond time-outs bij herhaald rangschikken van cataloguszoekpagina's en een exception bij verschillende eenheden voor hetzelfde ingrediënt. Kandidaten worden nu via één gedeelde, kort bewaarde catalogussnapshot gelezen; verschillende eenheden worden afzonderlijk berekend. Geen budget/readiness/matchingpoort versoepeld.
 - Dezelfde gemengde vijfdaagse case slaagt met actuele echte data voor **€41,52**; vijf Hollandse maaltijden **€40,49**, vijf snelle maaltijden **€38,20**. Dit was een technische fout, geen aangetoonde €70-budgetgrens. Zie `docs/ingredient-packages-planner-check.md`.
-- Geautomatiseerd: **592/592 webtests**, **189/189 importerfixtures**, seed/syntaxchecks, lint, TypeScript en lokale Production-build groen.
-- Preview: nieuwe implementatie wordt op dezelfde branch gepubliceerd; live verificatie volgt. Branch-URL: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
+- Geautomatiseerd: **594/594 webtests**, **189/189 importerfixtures**, seed/syntaxchecks, lint, TypeScript en lokale Production-build groen.
+- Implementatiecommits: `e07c15d8` (verpakkingen/planner) en `7d0a78aa` (mixinhoud en opgeslagen recepten).
+- Preview `e07c15d8` en `7d0a78aa`: **Ready / success**; live desktopflow geslaagd. Browserplanner-case kostte **€43,80**; zuurkool 3 → 2 → 1 gaf 1.500 → 1.000 → 500 g met correcte prijzen/budgetten; extra handmatige lijstverpakking bleef behouden. Knorr Siam: mix 3 × 300 g = 900 g, kip 2 × 400 g = 800 g en terug 400 g; bewaren/heropenen en Menu/Vrije keuze behouden keuzes.
+- Op laatste functionele Preview `7d0a78aa` na volledige refresh: kip 400 g en mix 900 g behouden; mix 3 → 2 geeft 600 g en gerecht €16,83.
+- Branch-URL: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
 - Mobiele Preview-gate blijft expliciet open totdat werkelijk op telefoonformaat gecontroleerd. De eerder beschikbare browser ondersteunt geen viewport-resize; een alternatieve mobiele testweergave werd door het browserbeleid geblokkeerd.
 - Geen merge, Production-deployment, database-migratie, destructieve databaseactie of productimport.
 
 ## Volgende stap
-Nieuwe Preview controleren, inclusief verpakking → recepthoeveelheid → prijs → budget → lijst en de planner-case. Pas na daadwerkelijke mobiele verificatie: **KLAAR VOOR FYSIEKE IPHONE-TEST**. Daarna fysieke iPhone-test en afzonderlijke releasetoestemming; geen merge binnen deze opdracht.
+De functionele desktopcontrole is geslaagd. Mobiele Preview-verificatie staat nog open; daarna: **KLAAR VOOR FYSIEKE IPHONE-TEST**. Daarna fysieke iPhone-test en afzonderlijke releasetoestemming; geen merge binnen deze opdracht.
 
 ## Release-regels
 - Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.
