@@ -41,9 +41,9 @@ PWA 14 is via PR #27 in Production. De concrete vervolgverbetering op `feature/i
 
 Acceptatie: gewenste hoeveelheden blijven behouden bij heropenen/lijstsync/planner; personen wijzigen schaalt de handmatig gekozen verhouding mee. Werkelijke verpakkingen, actuele prijzen, maaltijd- en weekbudget en handmatige lijstwijzigingen blijven leidend. Gerichte regressies en mobiele Preview-controle gaan vooraf aan de fysieke iPhone-test.
 
-Status: implementatie gereed; verificatie en Preview-checkpoint worden afgerond. Geen nieuw PWA-nummer toegekend. Geen merge of Production-deployment binnen deze opdracht.
+Status: implementatie gereed, 567 webtests en 189 importerfixtures groen, lint/TypeScript/build groen, Draft PR #28 en Preview Ready. Live desktopflow geslaagd; mobiele Preview-controle staat nog open doordat de beschikbare browser geen telefoonviewport ondersteunt. Geen nieuw PWA-nummer toegekend. Geen merge of Production-deployment binnen deze opdracht.
 
-Eerstvolgende stap: fysieke iPhone-test van deze bediening. Daarna afzonderlijke releasebeslissing en vervolgens de overige eigen-receptverbeteringen hieronder prioriteren.
+Eerstvolgende stap: mobiele Preview-controle afronden, daarna fysieke iPhone-test van deze bediening. Daarna afzonderlijke releasebeslissing en vervolgens de overige eigen-receptverbeteringen hieronder prioriteren.
 
 ---
 

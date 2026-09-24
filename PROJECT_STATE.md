@@ -33,10 +33,17 @@ Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerf
 - Handmatige hoeveelheden worden per dag/ingrediënt/recept met het bijbehorende personenaantal bewaard. Personen wijzigen schaalt die gekozen verhouding mee. Eigen recepten gebruiken hun bestaande hoeveelheden en portiebasis.
 - Een wijziging in het weekgerecht wijzigt alleen dat weekgerecht; in Mijn recepten wordt de opgeslagen receptversie aangepast.
 - Bestaande schema-6-opslag blijft leesbaar; geen databasewijziging.
-- Preview en mobiele controle: nog te verifiëren vóór het iPhone-checkpoint.
+- Draft PR: **#28**, implementatiecommit `90bf4e07d712099e60e7d937026575b3f5e5495f`.
+- Vercel Preview: **Ready / success**, branch-URL: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
+- Verificatie: **567/567 webtests**, **189/189 importerfixtures**, lint, TypeScript, seed/syntaxchecks en lokale Production-build geslaagd.
+- Live Preview-smoke (desktop): Knorr Thaise Kip Siam voor 4 personen; groente 866,667 → 916,667 g leidde tot 2 → 3 volledige verpakkingen van 450 g, gerecht €16,83 → €18,26, per persoon €4,21 → €4,57 en maaltijdbudgetruimte €33,17 → €31,74. Toevoegen synchroniseerde de lijst en weekbudgetruimte (€81,74).
+- Vervolgens één verpakking handmatig op de lijst toegevoegd en de recepthoeveelheid verlaagd: lijst hield de twee receptverpakkingen plus de handmatige verpakking (3 totaal, lijst €18,26). Kip 300 → 350 g bleef na volledige paginavernieuwing behouden. Knoppen gemeten op 44 × 44 px.
+- Honig-macaroni was live onvolledig en bleef geblokkeerd; geen prijs/match geforceerd. Honig en Knorr zijn daarnaast met de bestaande mixprofielen in fixtures getest.
+- **Open verificatiepunt: mobiele Preview-controle.** De beschikbare browser ondersteunt geen viewport-resize; een mobiele testweergave werd door het browserbeleid geblokkeerd. Alleen desktop is daadwerkelijk gecontroleerd. Daarom is de volledige status **KLAAR VOOR FYSIEKE IPHONE-TEST nog niet geclaimd**.
+- Geen merge, Production-deployment, database-migratie, destructieve databaseactie of productimport uitgevoerd.
 
 ## Volgende stap
-Deze vervolgscope afronden tot **KLAAR VOOR FYSIEKE IPHONE-TEST**. Pas na de fysieke test en afzonderlijke releasetoestemming mag deze branch naar main. Daarna resterende eigen-receptverbeteringen prioriteren op basis van gebruikerstesten; zie `ROADMAP.md`.
+Eerst de Preview op telefoonformaat controleren; daarna **KLAAR VOOR FYSIEKE IPHONE-TEST**. Pas na de fysieke test en afzonderlijke releasetoestemming mag deze branch naar main. Daarna resterende eigen-receptverbeteringen prioriteren op basis van gebruikerstesten; zie `ROADMAP.md`.
 
 ## Release-regels
 - Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.
