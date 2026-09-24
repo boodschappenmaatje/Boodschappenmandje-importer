@@ -49,6 +49,70 @@ Eerstvolgende stap: fysieke iPhone-hertest. Nieuwe Preview in beide richtingen e
 
 ---
 
+# Eerstvolgende funderingsmijlpalen na PR #28
+
+Deze onderdelen hebben hoge waarde en worden vóór verdere slimme/personaliserende functies ingepland. De exacte PWA-nummers worden pas toegekend wanneer PR #28 is afgerond.
+
+## Stabiliteit & kernflows
+Doel: de belangrijkste gebruikersflows automatisch van begin tot eind bewaken, zodat nieuwe wijzigingen bestaande kernfunctionaliteit niet stil breken.
+
+Minimaal bewaken:
+- week instellen en genereren;
+- maaltijd/recept kiezen;
+- ingrediëntverpakkingen aanpassen;
+- recept ⇄ boodschappenlijst tweerichtingssync;
+- prijs- en budgetherberekening;
+- handmatige lijstbijdragen beschermen;
+- opslaan, heropenen en navigeren;
+- representatieve personen-/dagencombinaties;
+- Honig/Knorr en eigen recepten;
+- vaste planner-scenario's.
+
+Deze mijlpaal levert vooral automatische E2E-/integratietests en betrouwbare release-gates op; geen onnodige nieuwe consumenten-UI.
+
+## E2E-kernflows + centrale recept ⇄ lijst-logica
+Doel: receptingrediënten en hun boodschappenlijstbijdragen gebruiken één consistente gekoppelde contribution/state-logica.
+
+Eisen:
+- receptwijziging werkt direct door naar de gekoppelde lijstbijdrage;
+- wijziging van een eenduidig gekoppelde lijstbijdrage werkt terug naar het juiste recept;
+- hetzelfde product in meerdere recepten blijft per bijdrage herleidbaar;
+- manual / mealPlan / suggestion / recurring blijven onderscheidbaar;
+- losse handmatige extra's worden niet stil door receptsync overschreven;
+- hoeveelheid, verpakkingen, prijs en budget blijven overal consistent;
+- kernflows worden automatisch end-to-end getest.
+
+PR #28 mag reeds noodzakelijke tweerichtingssync herstellen; deze funderingsstap consolideert en bewaakt het model daarna structureel.
+
+## Productdata & receptkwaliteit
+Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
+
+Omvat:
+- Honig/Knorr-dekking en overige receptprofielen;
+- juiste SKU's en betrouwbare productmatches;
+- hoeveelheden, eenheden en verpakkingsomrekeningen;
+- readiness-/match-cache en gerichte invalidatie;
+- automatische Data Health-bewaking;
+- cataloguskwaliteit en prijsbetrouwbaarheid;
+- duidelijke audit van echte datablokkades;
+- geen €0, fictieve hoeveelheden of geforceerde matches.
+
+Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
+
+## Betrouwbare opslag + geschiedenis
+Doel: gebruikersdata duurzaam bewaren en een betrouwbaar fundament leggen voor later leren/personaliseren.
+
+Omvat:
+- actieve week, lijst, eigen recepten en expliciete gebruikerskeuzes robuust bewaren;
+- herstel na heropenen/refresh binnen de ondersteunde opslagarchitectuur;
+- voorkomen dat browser-/cachegedrag stil belangrijke data verliest;
+- weekgeschiedenis als afzonderlijke snapshots bewaren;
+- eerdere weken kunnen terugzien zonder ze stil te muteren;
+- basis voor terugkerende producten, favorieten, budgetgeheugen en latere accounts/synchronisatie;
+- duidelijke migratiestrategie van lokale opslag naar accountopslag wanneer accounts worden toegevoegd.
+
+---
+
 # Na PWA 14 — functies eerst compleet maken
 
 De volgende productstappen worden vóór accounts/Plus en vóór publieke lancering uitgewerkt. Exacte PWA-nummers worden pas toegekend wanneer de vorige milestone is afgerond, zodat de roadmap niet onnodig vastloopt.
