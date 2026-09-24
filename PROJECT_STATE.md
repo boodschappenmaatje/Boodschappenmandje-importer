@@ -81,10 +81,15 @@ Deze functionele hertest is opgevolgd door onderstaande feedback over de compact
 - Rij toont checkbox, kleine foto, naam, inhoud/prijs, herkomstsamenvatting en −/+. Herkomstkeuze, losse verpakking, prijsdatum, volledige productinformatie en veilige verwijderactie staan in het detailpaneel.
 - Alles/Maaltijden/Overig filteren alleen de weergave; gemengde items kunnen in beide herkomstfilters voorkomen. Nog te halen/Afgevinkt blijft als compacte keuzelijst behouden. Categorieën houden hun echte catalogusnamen en krijgen een teller.
 - Menu gebruikt het bestaande maaltijdicoon; eigen recept de koksmuts, uitsluitend op basis van de gekoppelde customDish; losse bijdrage plus/groen. Suggestie en recurring houden hun bestaande herkomst. Geen afleiding uit naam of SKU.
-- Nulmeting beschikbare desktopbrowser: normale oude regels circa 228 px hoog. Definitieve Preview-meting en controles volgen na de codecommit; fysieke mobiele acceptatie blijft vereist.
-- Volledige regressies worden opnieuw uitgevoerd; geen databasewijziging, migratie of productimport.
+- Functionele code `794d250f2b5dce774f6bf7bb23b3add797092882` (eerste compacte commit `1fcc3086`), Vercel **success / Ready**. Aansluitende checkpointcommit bevat alleen documentatie; actuele remote head controleren bij hervatten.
+- Preview-meting: normale regels **100–101px** tegenover **227,9px** voorheen, circa **56% lager**. Vier volledige producten + een vijfde deels zichtbaar met categoriekoppen in de eerste desktopweergave. Vijf aaneengesloten regels circa 505px; bij lange namen meer. Ook smalle 500×856-weergave gecontroleerd: geen horizontale overflow, 44×44px bediening. Fysieke iPhone-layout/touch blijft te accepteren.
+- Echte Preview: lijst-min Honig 2→1 geeft 800→400g/€14,95→€13,06; recept-plus geeft lijst weer 2. Los toevoegen en gerichte receptwijziging behouden los 1. Meerdere spinaziebijdragen blijven per gerecht gescheiden.
+- Eigen recept via bestaande editor toegevoegd met Broccoli 400g à €2,29: koksmuts/Eigen recept in rij en detail. Lijst-plus geeft 800g/€4,58 in Menu; min vanuit Vrije keuze geeft lijst 1/400g/€2,29.
+- Herkomstfilters, afvinken, veilige verwijderuitleg, volledige refresh, sluiten/heropenen en Menu↔Lijst↔Vrije keuze geslaagd. Eindbudget: maaltijden €41,11 + losse bijdragen €2,68 = lijst €43,79.
+- **636/636 webtests, 189/189 importerfixtures, lint, TypeScript en Production-build groen.** Volledige bestaande PR #28-suite behouden, aangevuld met detail-/herkomst-/filter-/opslaginteracties. Bewijzen: `docs/pr28-compact-list.md`.
+- Geen databasewijziging, migratie of productimport.
 
-**Stoppunt: compacte implementatie in Preview-validatie; nog niet klaar voor fysieke iPhone-hertest.**
+**Stoppunt: KLAAR VOOR FYSIEKE IPHONE-HERTEST. Compacte Preview nog niet fysiek geaccepteerd; Draft PR #28 blijft open.**
 
 ## Release-regels
 - Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.
