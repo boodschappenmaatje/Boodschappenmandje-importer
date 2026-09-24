@@ -4554,7 +4554,7 @@ html {
 .recipe-screen-navigation h2 { text-align: center; }
 .compact-recipe-detail[data-presentation="screen"] .recipe-summary-image[data-has-image="false"] > svg { width: 44px; height: 44px; }
 
-/* Desired ingredient amounts: two 44px touch targets on each compact row. */
+/* Whole ingredient packages: two 44px touch targets on each compact row. */
 .compact-recipe-ingredients li[data-adjustable="true"] { grid-template-columns: 28px minmax(0, 1fr) auto; }
 .compact-recipe-ingredients li[data-adjustable="true"] > .compact-ingredient-cost { grid-column: 3; grid-row: 1; }
 .compact-recipe-ingredients li[data-adjustable="true"] > .ingredient-quantity-control { grid-column: 2 / -1; justify-self: end; }

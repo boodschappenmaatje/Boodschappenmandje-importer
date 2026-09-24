@@ -197,3 +197,14 @@ describe("PWA 14 current products, quantities, budget and list", () => {
     expect(products.getByIds).toHaveBeenCalledExactlyOnceWith([pasta.id]);
   });
 });
+
+it("keeps fixed package choices in saved recipes and derives ml/pieces after reopening",async()=>{
+  const store=storage();const chosen=dish();
+  chosen.ingredients=chosen.ingredients.map(row=>({...row,packageCount:2}));
+  saveMyRecipe(store,chosen,"packs",now);
+  const reopened=loadMyRecipes(store)[0].dish;
+  expect(reopened.ingredients.every(row=>row.packageCount===2)).toBe(true);
+  reopened.targetServings=6;
+  const preview=await previewFreeChoice(week(),0,{customDish:reopened},recipes,catalog(),createEmptyActiveShoppingList(now),now);
+  expect(preview!.preparation.ingredients.map(row=>[row.requiredQuantity,row.unit,row.purchaseQuantity])).toEqual([[1000,"g",2],[400,"ml",2],[4,"piece",2]]);
+});

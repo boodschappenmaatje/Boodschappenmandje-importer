@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyProductToRequirement } from "./product-matching";
-import { ingredientPackageContents, packageAmount, packageCountLabel, stepPackageCount } from "./ingredient-packages";
+import { ingredientPackageContents, ingredientRecipeAmount, packageAmount, packageCountLabel, stepPackageCount } from "./ingredient-packages";
 import { applyIngredientQuantityOverrides } from "./ingredient-quantity";
 import { createWeekPreparation } from "./week-preparation";
 import type { Product } from "@/types/catalog";
@@ -25,4 +25,11 @@ describe("reliable package contents", () => {
     const mix=applyProductToRequirement({...requirement,kind:"mealMix",unit:"piece"},{...product,packageText:null,weightGrams:null});
     expect(ingredientPackageContents(mix)).toBeNull();
   });
+});
+
+it("shows real mix contents before and after an explicit package choice",()=>{
+  const mix=applyProductToRequirement({...requirement,kind:"mealMix",unit:"piece",requiredQuantity:2,usedIn:[{...requirement.usedIn[0],requiredQuantity:2}]},{...product,packageText:"300 gram",weightGrams:300});
+  expect(ingredientRecipeAmount(mix,0)).toEqual({quantity:600,unit:"g"});
+  const loaf=applyProductToRequirement({...requirement,unit:"loaf"},{...product,packageText:null,weightGrams:null});
+  expect(ingredientPackageContents(loaf)).toBeNull();
 });

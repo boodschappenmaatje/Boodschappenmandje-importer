@@ -22,6 +22,9 @@ export function ingredientPackageContents(ingredient: WeekIngredientRequirement)
     }
     return null;
   }
+  // The existing loaf calculator assumes one loaf without parsing contents.
+  // Keep that planner fallback, but do not expose it as verified package data.
+  if (ingredient.unit === "loaf") return null;
   const capacity = ingredient.packageCapacity;
   return capacity !== null && Number.isFinite(capacity) && capacity > 0 ? { capacity, unit: ingredient.unit } : null;
 }
@@ -32,4 +35,13 @@ export function ingredientPackagesForDay(ingredient: WeekIngredientRequirement, 
 }
 export function packageAmount(count: number, capacity: number): number {
   return Math.round(count * capacity * 1e6) / 1e6;
+}
+
+/** A mix/manual product's original amount already counts packages. */
+export function ingredientRecipeAmount(ingredient: WeekIngredientRequirement, dayIndex: number): { quantity: number; unit: WeekIngredientUnit } {
+  const quantity = ingredient.usedIn.find(use => use.dayIndex === dayIndex)?.requiredQuantity ?? ingredient.requiredQuantity;
+  const contents = ingredientPackageContents(ingredient);
+  return contents && (ingredient.kind === "mealMix" || ingredient.quantityIsPackageCount)
+    ? { quantity: packageAmount(quantity, contents.capacity), unit: contents.unit }
+    : { quantity, unit: ingredient.unit };
 }
