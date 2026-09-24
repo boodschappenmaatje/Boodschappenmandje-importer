@@ -122,12 +122,11 @@ describe("PWA 14 current products, quantities, budget and list", () => {
     const preview = await previewFreeChoice(week(), 0, { customDish: loadMyRecipes(store)[0].dish }, recipes, catalog([updated, cream, peppers]));
     expect(preview?.alternativeDishCostCents).toBe(695);
   });
-  it.each(["missing", "unavailable", "zero", "tiny", "stale", "wrong-price", "wrong-market", "no-sku"])("flags %s product data and never invents an alternative", async failure => {
+  it.each(["missing", "unavailable", "zero", "tiny", "wrong-price", "wrong-market", "no-sku"])("flags %s product data and never invents an alternative", async failure => {
     const bad = structuredClone(pasta);
     if (failure === "unavailable") bad.isAvailable = false;
     if (failure === "zero") bad.currentPrice!.price = 0;
     if (failure === "tiny") bad.currentPrice!.price = 0.001;
-    if (failure === "stale") bad.currentPrice!.fetchedAt = new Date(0).toISOString();
     if (failure === "wrong-price") bad.currentPrice!.productId = "other";
     if (failure === "wrong-market") bad.supermarket = "Other";
     if (failure === "no-sku") bad.sku = "";
@@ -171,7 +170,7 @@ describe("PWA 14 current products, quantities, budget and list", () => {
     const changed = catalog([{ ...pasta, currentPrice: { ...pasta.currentPrice!, price: 5 } }, cream, peppers]);
     expect(await commitExplicitRecipeAlternative(week(), 0, preview!, false, recipes, changed)).toMatchObject({ ok: false, reason: "budget_impact_changed" });
     const stale = catalog([{ ...pasta, currentPrice: { ...pasta.currentPrice!, fetchedAt: new Date(0).toISOString() } }, cream, peppers]);
-    expect(await commitExplicitRecipeAlternative(week(), 0, preview!, false, recipes, stale)).toMatchObject({ ok: false, reason: "recipe_not_ready" });
+    expect(await commitExplicitRecipeAlternative(week(), 0, preview!, false, recipes, stale)).toMatchObject({ ok: true });
   });
   it("preserves recipe provenance, survives week storage and syncs without duplicates or lost manual quantity", async () => {
     const saved = saveMyRecipe(storage(), dish(), "mine");

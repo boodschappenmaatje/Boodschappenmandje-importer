@@ -1,3 +1,4 @@
+import { reliablePriceCents } from "@/services/catalog/price";
 import type { CustomDish, WeekIngredientRequirement, WeekIngredientUnit, WeekPreparation } from "@/types/week-preparation";
 import { ingredientPackageContents, packageAmount, validPackageCount } from "./ingredient-packages";
 
@@ -23,7 +24,7 @@ export function steppedIngredientQuantity(quantity: number, unit: WeekIngredient
 export function canAdjustIngredient(ingredient: WeekIngredientRequirement, dayIndex: number): boolean {
   const use = ingredient.usedIn.find(item => item.dayIndex === dayIndex);
   return Boolean(use && Number.isFinite(use.requiredQuantity) && use.requiredQuantity > 0 &&
-    ingredient.product && ingredient.price && ingredient.price.amountCents > 0 && ingredient.price.freshness === "fresh" &&
+    ingredient.product && reliablePriceCents(ingredient.price) &&
     ingredient.packageCapacity && !ingredient.productMatchMissing && !ingredient.packageCalculationMissing &&
     ingredient.sourceKey !== "manualProductAddition");
 }

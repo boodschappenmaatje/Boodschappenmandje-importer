@@ -1,4 +1,4 @@
-import { resolveCurrentPrice } from "@/services/catalog/price";
+import { priceTimestamp, resolveCurrentPrice } from "@/services/catalog/price";
 import type { Product } from "@/types/catalog";
 import type { WeekIngredientRequirement } from "@/types/week-preparation";
 import { combinedProductPurchaseQuantity } from "@/services/week-preparation/product-matching";
@@ -537,7 +537,8 @@ export function refreshShoppingListFromCatalog(
       return item;
     }
 
-    const refreshedPrice = priceReference(product);
+    const candidatePrice = priceReference(product);
+    const refreshedPrice = candidatePrice && priceTimestamp(candidatePrice.updatedAt) >= priceTimestamp(item.price?.updatedAt ?? null) ? candidatePrice : null;
     const next: ShoppingListItem = {
       ...item,
       sku: item.sku ?? product.sku,

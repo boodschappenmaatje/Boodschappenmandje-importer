@@ -203,3 +203,13 @@ describe("mapRankedCatalogRows", () => {
     expect(result.products[0]?.currentPrice).toBeNull();
   });
 });
+
+it("separate and joined reads select the same newest reliable positive price", () => {
+  const old = { product_id: product.id, price: 1.79, fetched_at: "2026-09-16T00:00:00Z" };
+  const latest = { ...old, price: 1.99, fetched_at: "2026-09-24T00:00:00Z" };
+  const invalid = { ...latest, price: 0, fetched_at: "2026-09-25T00:00:00Z" };
+  for (const prices of [[old, latest, invalid], [invalid, latest, old]]) {
+    expect(mapCatalogRows([product], prices).products[0].currentPrice?.price).toBe(1.99);
+    expect(mapJoinedCatalogRows([{ ...product, current_price: prices }]).products[0].currentPrice?.price).toBe(1.99);
+  }
+});

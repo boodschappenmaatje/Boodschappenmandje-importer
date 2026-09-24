@@ -1,3 +1,4 @@
+import { newestReliablePrice } from "./price";
 import type {
   CatalogProductsResult,
   Product,
@@ -58,12 +59,7 @@ function newestPriceForProduct(value: unknown, productId: string): ProductPrice 
         price !== null && price.productId === productId,
     );
 
-  return matching.sort((left, right) => {
-    const leftDate = Date.parse(left.fetchedAt ?? left.updatedAt ?? "");
-    const rightDate = Date.parse(right.fetchedAt ?? right.updatedAt ?? "");
-    return (Number.isFinite(rightDate) ? rightDate : 0) -
-      (Number.isFinite(leftDate) ? leftDate : 0);
-  })[0] ?? null;
+  return newestReliablePrice(matching, productId);
 }
 
 function mapProduct(value: unknown): Omit<Product, "currentPrice"> | null {
@@ -110,7 +106,7 @@ export function mapCatalogRows(
     for (const value of priceRows) {
       const price = mapPrice(value);
       if (price) {
-        prices.set(price.productId, price);
+        prices.set(price.productId, newestReliablePrice([prices.get(price.productId) ?? null, price], price.productId)!);
       }
     }
   }

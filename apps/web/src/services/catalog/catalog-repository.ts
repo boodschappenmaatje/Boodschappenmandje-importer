@@ -380,6 +380,7 @@ export class CatalogReadError extends Error {
 }
 
 export interface CatalogRepository {
+  invalidateProducts?(productIds: string[]): void;
   /** Full candidate set for quantity-aware planning; the UI search stays compact. */
   searchCandidates?(term: string): Promise<CatalogProductsResult>;
   getPage(request?: CatalogPageRequest): Promise<CatalogPageResult>;
@@ -405,6 +406,10 @@ function valuesFromFacetRows(
 export class SupabaseCatalogRepository implements CatalogRepository {
   private candidateCatalog: { expiresAt: number; result: Promise<CatalogProductsResult> } | null = null;
   constructor(private readonly client: SupabaseClient, private readonly now = Date.now) {}
+
+  invalidateProducts(productIds: string[]): void {
+    if (productIds.length) this.candidateCatalog = null;
+  }
 
   async searchCandidates(term: string): Promise<CatalogProductsResult> {
     if (!normalizeCatalogSearchRequest(term)) return { products: [], priceStatus: "complete" };

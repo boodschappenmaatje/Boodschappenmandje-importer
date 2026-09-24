@@ -1,3 +1,4 @@
+import { PLANNER_READINESS_EVALUATOR_VERSION } from "@/services/week-preparation/persistent-readiness-cache";
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseRecipeRepository } from "@/services/week-preparation/recipe-repository";
@@ -19,7 +20,7 @@ function currentRow(
   return {
     recipe_id: recipeId,
     people_count: peopleCount,
-    evaluator_version: 2,
+    evaluator_version: PLANNER_READINESS_EVALUATOR_VERSION,
     refresh_status: "current",
     invalidated_at: null,
     expires_at: "2026-09-20T12:00:00.000Z",

@@ -1,3 +1,4 @@
+import { reliablePriceCents } from "@/services/catalog/price";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeRepository } from "./recipe-repository";
 import type { ActiveShoppingList } from "@/types/shopping-list";
@@ -18,7 +19,7 @@ export async function previewIngredientQuantity(current: WeekPreparation, source
   };
   const next = (await revalidatePreparedWeek(candidate, recipes, products, now, baseline)).preparation;
   const cost = calculateDishCostSummary(dayIndex, next.ingredients);
-  if (!cost.complete || next.ingredients.some(item => item.usedIn.some(use => use.dayIndex === dayIndex) && !item.optional && (!item.price || item.price.amountCents <= 0 || item.price.freshness !== "fresh"))) return null;
+  if (!cost.complete || next.ingredients.some(item => item.usedIn.some(use => use.dayIndex === dayIndex) && !item.optional && !reliablePriceCents(item.price))) return null;
   const currentCost = calculateDishCostSummary(dayIndex, current.ingredients).knownCostCents;
   const impact = budgetImpact(current, next, baseline, now);
   return { recipe: day.recipe, category: day.category === "freeChoice" ? "comfort" : day.category,

@@ -26,39 +26,27 @@
 ## Laatste geverifieerde regressies
 Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerfixtures en lokale Production-build geslaagd. Na deze checks veranderde de code alleen in de weergave van het aantal personen bij een opgeslagen recept; verdere commits tot de merge betroffen documentatie. De actuele Preview-check en Production-check waren groen.
 
-## Actieve vervolgscope — verpakkingen −/+ en plannercontrole
-- Bestaande branch: `feature/ingredient-quantity-controls`, Draft PR **#28**. Hervat vanaf remote `4375b5b512191c50155125c48873822ca4a36e2b`; de voorbereidende lokale wijzigingen uit de vorige run zijn afgemaakt.
-- −/+ verandert exact één werkelijk te kopen verpakking, minimum 1, maximum 99. Nul zou een nieuwe verwijderfunctie introduceren en wordt niet ondersteund.
-- Na een expliciete keuze is het verpakkingsaantal leidend: aantal × betrouwbare huidige productinhoud bepaalt de recepthoeveelheid. Compact detail toont totaal voor recept, verpakkingen en volledige aankoopprijs.
-- Ondersteunt betrouwbare gram/ml/stuks-inhoud, bestaande recepten, Honig/Knorr-mixen en eigen recepten. Bij onbekende inhoud geen misleidende bediening; bij ontbrekende actuele prijs geen wijziging of fictieve €0-prijs.
-- Bewaart de keuze per dag/recept/ingrediënt met het gekozen product. Bij personen wijzigen blijft het expliciet gekozen verpakkingsaantal vast; niet-aangepaste ingrediënten blijven via de bestaande personenlogica schalen. Oude hoeveelheidsoverrides blijven leesbaar en behouden hun oude verhouding totdat de gebruiker opnieuw −/+ gebruikt.
-- Eigen recepten bewaren het aantal in de bestaande ingrediëntrij; afgeleide hoeveelheid volgt dezelfde productinhoud. In een weekgerecht verandert alleen die weekversie. Structurele hoeveelheid-/product-/eenheidwijziging in de eigen-recepteditor vervangt de eerdere pakketkeuze.
-- Bestaande commit-, budgetoverride- en lijstsyncflow blijft leidend; losse handmatige lijstbijdragen blijven behouden. Geen nieuw opslagschema of databasewijziging.
-- Planner: live reproductie 4 personen / 5 dagen / €100 week / €70 maaltijden vond time-outs bij herhaald rangschikken van cataloguszoekpagina's en een exception bij verschillende eenheden voor hetzelfde ingrediënt. Kandidaten worden nu via één gedeelde, kort bewaarde catalogussnapshot gelezen; verschillende eenheden worden afzonderlijk berekend. Geen budget/readiness/matchingpoort versoepeld.
-- Dezelfde gemengde vijfdaagse case slaagt met actuele echte data voor **€41,52**; vijf Hollandse maaltijden **€40,49**, vijf snelle maaltijden **€38,20**. Dit was een technische fout, geen aangetoonde €70-budgetgrens. Zie `docs/ingredient-packages-planner-check.md`.
-- Geautomatiseerd: **594/594 webtests**, **189/189 importerfixtures**, seed/syntaxchecks, lint, TypeScript en lokale Production-build groen.
-- Implementatiecommits: `e07c15d8` (verpakkingen/planner) en `7d0a78aa` (mixinhoud en opgeslagen recepten).
-- Preview `e07c15d8` en `7d0a78aa`: **Ready / success**; live desktopflow geslaagd. Browserplanner-case kostte **€43,80**; zuurkool 3 → 2 → 1 gaf 1.500 → 1.000 → 500 g met correcte prijzen/budgetten; extra handmatige lijstverpakking bleef behouden. Knorr Siam: mix 3 × 300 g = 900 g, kip 2 × 400 g = 800 g en terug 400 g; bewaren/heropenen en Menu/Vrije keuze behouden keuzes.
-- Op laatste functionele Preview `7d0a78aa` na volledige refresh: kip 400 g en mix 900 g behouden; mix 3 → 2 geeft 600 g en gerecht €16,83.
-- Branch-URL: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
-- Mobiele Preview-gate blijft expliciet open totdat werkelijk op telefoonformaat gecontroleerd. De eerder beschikbare browser ondersteunt geen viewport-resize; een alternatieve mobiele testweergave werd door het browserbeleid geblokkeerd.
-- Geen merge, Production-deployment, database-migratie, destructieve databaseactie of productimport.
+## Actieve vervolgscope — PR #28 functionele prijs-/verpakkingsfix
+- Branch `feature/ingredient-quantity-controls`, bestaande Draft PR **#28**. Deze run hervat vanaf gecontroleerde remote `2789063240adf3ed1b4cbbdb191253b1cdc95c97`; alle 35 PR-bestanden kwamen overeen.
+- Eerdere fysieke iPhone-Preview was afgekeurd. Nu functionele codefix: centrale positieve-prijsregel vervangt conflicterende freshness-gates in −/+, Vrije keuze, eigen recepten, matching en bevestiging.
+- **Vaste productregel:** NIEUWSTE betrouwbare positieve prijs gebruiken; laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar is, wordt die automatisch actief.
+- Oudere prijs blijft herkenbaar als laatst bekend. Geen €0, verzonnen prijzen, vervalste datums of geforceerde matches.
+- −/+ verandert 1 verpakking (1–99); recepthoeveelheid = verpakkingen × betrouwbare inhoud. Bestaande opslag, budgetpoort en lijstbescherming blijven leidend.
+- Automatische prijscontrole bij openen/hervatten/focus/netwerkherstel en iedere minuut zichtbaar gebruik; gerichte productafhankelijke cache-invalidatie. Prijsupdates wijzigen geen gekozen aantallen/producten/recepten of handmatige lijstbijdragen.
+- Nieuwe echte DOM-clicktests voor Menu, bestaande Vrije keuze en zoekresultaat → detail → toevoegen; 1→2→1, 400→800→400g, prijs/budget/lijst en heropenen getest. €1,79→€1,99 update behoudt 2 gekozen verpakkingen plus handmatige lijstverpakking.
+- Read-only audit van 5.184 producten: **Honig 19 aangeboden / 10 READY / 10 selecteerbaar / 9 resterend**; **Knorr 43 / 23 / 23 / 20**. Varianten, niet unieke SKU's. Resterende exacte datablokkades en softwareherstel: `docs/pr28-functional-fix-2026-09-24.md`.
+- Personen **1/2/4/6/10/12** × dagen **1/3/5/7**: volledige servicematrix geslaagd voor normaal recept, alle aangeboden Honig/Knorr-varianten en gekoppeld eigen recept. Weeklengte verandert geen individuele selecteerbaarheid.
+- Planner **4p / 5d / €100 / €70**: geldige gemengde week voor **€39,44**, met harde budgetpoort. €70 is dus niet principieel onvoldoende. Afzonderlijke onvoldoende-budgetfixture wordt veilig afgewezen.
+- Reguliere importerfixtures: **189/189** en seed/syntaxchecks groen. **608/608 webtests**, lint, TypeScript en lokale Production-build groen.
+- Preview-writebeveiliging: de publieke readiness-refreshroute schrijft niet naar de gedeelde database wanneer VERCEL_ENV=preview; lokale/cold readiness blijft werken. Geen Production-databaseactie, import of migratie uitgevoerd.
 
-## Volgende stap
-**Preview afgekeurd na fysieke iPhone-test; NIET klaar voor een nieuwe iPhone-test.**
+## Actueel stoppunt
+**Codefix in verificatie; nog geen nieuwe iPhone-gereedmelding.**
+Resterend: definitieve regressies, nieuwe Vercel Preview Ready en functionele browsercontrole. De beschikbare Work-browser heeft geen telefoonviewport; de gebruiker heeft voor deze run expliciet beschikbare browsercontrole toegestaan, met fysieke iPhone-test erna. Geen alternatieve mobiele viewport omzeilen.
 
-Nieuw onderzoek op 24 september 2026, vanaf remote `268066034c43e92de0028bdc1066aa6845297390`, op dezelfde branch en Draft PR #28:
-- De gebruiker meldt niet-werkende verpakkingsknoppen en veel geblokkeerde Honig/Knorr-varianten. Eerdere desktopresultaten zijn geen acceptatiebewijs voor deze feedback.
-- Read-only audit van de actuele catalogus: 19 aangeboden Honig-varianten, waarvan 10 technisch READY maar 0 selecteerbaar; 43 aangeboden Knorr-varianten, waarvan 23 technisch READY maar 5 selecteerbaar. De telling betreft aangeboden receptvarianten, niet unieke mix-SKU's.
-- Aangetoonde inconsistente poort: readiness accepteert een bekende positieve prijs, terwijl pakketwijzigingen en Vrije keuze alle verplichte ingrediënten met niet-verse prijzen afwijzen. Ook een wel verse cherrytomaat kan daardoor niet worden aangepast wanneer bijvoorbeeld de Italiaanse roerbakprijs ouder dan acht dagen is. Geen prijsdatum aangepast en geen versheidsregel versoepeld.
-- Personen 1/2/4/6/10/12 leveren in de read-only readiness-audit dezelfde aantallen op. Dit is nog geen volledige personen × dagen × UI-regressiematrix. Persistent-cache versus koude evaluatie gaf dezelfde aantallen; er waren geen geldige persistent-cachehits.
-- Zie `docs/iphone-feedback-audit-2026-09-24.md` voor bewijs, dataredenen en open werk.
-- Nog geen functionele fix, nieuwe volledige regressierun of nieuwe mobiele Preview-verificatie voor deze feedback. De beschikbare browser heeft geen ondersteunde telefoonviewport; een eerder geblokkeerde alternatieve testweergave wordt niet opnieuw geprobeerd.
-
-Eerst prijsbeleid/data-actie expliciet beslissen: laatst bekende positieve catalogusprijzen toelaten met zichtbare waarschuwing, of de verse-prijsregel behouden en benodigde prijsdata via een afzonderlijk geautoriseerde beheerflow actualiseren. Binnen deze opdracht blijft productimport/Production-databasewijziging verboden. Vervolgens softwarefixes, volledige audit/matrix en echte mobiele Preview-controle afronden; pas daarna een nieuwe fysieke iPhone-test.
+Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
 
 ## Release-regels
-- Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.
-- Geen merge of Production-actie zonder expliciete toestemming wanneer de opdracht bij Preview/iPhone-test hoort.
-- Geen productimport, migratie of destructieve databaseactie buiten een expliciet geautoriseerde opdracht.
+- Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.
+- Binnen deze opdracht: **geen merge, Production-deployment, Production-databasewijziging, migratie, destructieve actie of productimport**.
 - Behoud werkende functionaliteit en gebruikersdata.

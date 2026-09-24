@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
 import { createCatalogRepository } from "@/services/catalog/catalog-repository";
 import {
   createIndexedDbShoppingListStorage,
@@ -46,6 +47,7 @@ interface ActiveShoppingListContextValue {
   persistenceWarning: string | null;
   lastRemoved: RemovedShoppingListItem | null;
   addProduct: (product: Product) => Promise<void>;
+  refreshFromProducts: (products: Product[]) => Promise<void>;
   completeFromWeek: (
     requirements: WeekIngredientRequirement[],
     weekPreparationId: string,
@@ -176,15 +178,9 @@ export function ActiveShoppingListProvider({
     };
   }, [initialList, persist, refreshPrices, suppliedStorage]);
 
-  useEffect(() => {
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        void refreshPrices();
-      }
-    };
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
-  }, [refreshPrices]);
+  useEffect(() => subscribeCatalogRefresh(() => { void refreshPrices(); }), [refreshPrices]);
+
+  const refreshFromProducts = useCallback((products: Product[]) => commit(current => refreshShoppingListFromCatalog(current, products)), [commit]);
 
   const addProduct = useCallback(
     async (product: Product) => {
@@ -287,6 +283,7 @@ export function ActiveShoppingListProvider({
       persistenceWarning,
       lastRemoved,
       addProduct,
+      refreshFromProducts,
       completeFromWeek,
       removeMealPlanForWeek,
       toggleChecked,
@@ -299,6 +296,7 @@ export function ActiveShoppingListProvider({
     }),
     [
       addProduct,
+      refreshFromProducts,
       completeFromWeek,
       decrease,
       dismissUndo,

@@ -53,6 +53,7 @@ export function DishIngredients({ ingredients, dayIndex, renderAction, compact =
         <ProductThumbnail className="compact-ingredient-image" imageUrl={ingredient.product?.imageUrl ?? null} name={ingredient.product?.name ?? ingredient.name} />
         <div><strong>{ingredient.name}</strong>{ingredient.product?.name === ingredient.name ? null : <span>{ingredient.product?.name ?? "Kies opnieuw een product"}</span>}
           <small aria-label={`Benodigd ${ingredient.name}`}>Totaal voor recept: {ingredientQuantityLabel(recipeAmount.quantity, recipeAmount.unit)}</small>
+          {ingredient.price && ingredient.price.freshness !== "fresh" ? <small>Laatste bekende prijs</small> : null}
           <small>{packages === null ? "Verpakkingsinhoud nodig" : `${packages} × ${ingredient.product?.packageText ?? "verpakking"}`}</small></div>
         {onQuantityChange ? <IngredientQuantityControl ingredient={ingredient} dayIndex={dayIndex} busy={quantityBusy} onChange={onQuantityChange} /> : <span className="compact-ingredient-quantity">{quantityLabel(requiredQuantity, ingredient.unit)}</span>}
         <strong className="compact-ingredient-cost">{ingredient.price && packages !== null ? formatCents(ingredient.price.amountCents * packages) : "Prijs ontbreekt"}</strong>

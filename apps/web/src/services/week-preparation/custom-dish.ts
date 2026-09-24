@@ -1,3 +1,4 @@
+import { reliablePriceCents } from "@/services/catalog/price";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeCatalog, RecipeIngredientDefinition } from "@/services/week-preparation/recipe-repository";
 import { applyProductToRequirement, searchIngredientProduct } from "@/services/week-preparation/product-matching";
@@ -70,7 +71,7 @@ export function customIngredientQuantity(row: CustomDishIngredient, dish: Custom
 export function applyCustomProduct(requirement: WeekIngredientRequirement, row: CustomDishIngredient, product: import("@/types/catalog").Product | null): WeekIngredientRequirement {
   const available = product && product.isAvailable !== false && product.supermarket === "Hoogvliet" && product.sku.trim() ? product : null;
   const applied = applyProductToRequirement(requirement, available);
-  const matched = { ...applied, price: applied.price?.freshness === "fresh" && applied.price.amountCents > 0 ? applied.price : null };
+  const matched = { ...applied, price: reliablePriceCents(applied.price) ? applied.price : null };
   // An explicit content override is only valid for the exact selected product.
   // Prefer current catalog packaging when it can be read safely.
   if (!available || matched.packageCapacity !== null || !row.packageCapacityOverride || row.productId !== available.id) return applyCustomPackageCount(matched, row);

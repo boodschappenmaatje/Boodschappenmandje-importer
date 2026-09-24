@@ -102,3 +102,7 @@ Bij nieuwe UI:
 - − en + hebben elk minimaal 44 × 44 px raakvlak en een toegankelijke naam met het ingrediënt. Gebruik bestaande metallic-blauwe tokens, zichtbare focus en disabled-status.
 - Blokkeer dubbele acties tijdens herberekening. Vraag expliciete bevestiging bij budgetoverschrijding en behoud bij fouten de vorige keuze.
 - Expliciet gekozen verpakkingen blijven vast bij personen wijzigen, heropenen en normale synchronisatie. Andere ingrediënten blijven volgens de bestaande personenlogica schalen.
+
+## Laatst bekende prijzen
+- Oudere betrouwbare positieve catalogusprijzen blijven bruikbaar; toon compact “Laatste bekende prijs” bij de ingrediëntrij. Label ze niet als vers.
+- Een automatische prijsupdate verandert bedragen, geen expliciet gekozen verpakkingen of gerechten. Bestaande budgetbevestiging blijft gelden bij overschrijding.

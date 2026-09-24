@@ -1,5 +1,5 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
-import { PRICE_STALE_AFTER_DAYS } from "@/services/catalog/price";
+import { reliablePriceCents } from "@/services/catalog/price";
 import { removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { evaluateMealBudget, mealBudgetAllowsPlan } from "@/services/week-preparation/meal-budget";
@@ -502,28 +502,10 @@ function sameBudgetImpact(
   );
 }
 
-function snapshotPriceIsFresh(
-  ingredient: WeekIngredientRequirement,
-  now: Date,
-): boolean {
+function snapshotPriceIsReliable(ingredient: WeekIngredientRequirement): boolean {
   if (ingredient.optional && !ingredient.product) return true;
-  if (
-    !ingredient.product ||
-    !ingredient.price ||
-    ingredient.price.freshness !== "fresh" ||
-    ingredient.purchaseQuantity === null ||
-    ingredient.packageCapacity === null
-  ) {
-    return false;
-  }
-  const updatedAt = ingredient.price.updatedAt
-    ? new Date(ingredient.price.updatedAt).getTime()
-    : Number.NaN;
-  return (
-    Number.isFinite(updatedAt) &&
-    updatedAt <= now.getTime() &&
-    now.getTime() - updatedAt <= PRICE_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000
-  );
+  return Boolean(ingredient.product && reliablePriceCents(ingredient.price) &&
+    ingredient.purchaseQuantity !== null && ingredient.packageCapacity !== null);
 }
 
 function recipeSnapshotIsFresh(
@@ -536,7 +518,7 @@ function recipeSnapshotIsFresh(
     validatedAt <= now.getTime() &&
     now.getTime() - validatedAt <= PLANNING_CACHE_TTL_MS &&
     alternative.preparation.ingredients.every((ingredient) =>
-      snapshotPriceIsFresh(ingredient, now),
+      snapshotPriceIsReliable(ingredient),
     )
   );
 }

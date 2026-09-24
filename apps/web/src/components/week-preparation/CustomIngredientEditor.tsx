@@ -13,7 +13,7 @@ import type { Product } from "@/types/catalog";
 export function customProductPrice(product: Product): number | null {
   const price = product.currentPrice?.productId === product.id ? resolveCurrentPrice(product.currentPrice) : null;
   const cents = price ? euroAmountToCents(price.amount) : null;
-  return product.isAvailable !== false && product.supermarket === "Hoogvliet" && product.sku.trim() && price?.freshness === "fresh" ? (cents !== null && cents > 0 ? cents : null) : null;
+  return product.isAvailable !== false && product.supermarket === "Hoogvliet" && product.sku.trim() && price !== null ? (cents !== null && cents > 0 ? cents : null) : null;
 }
 
 export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove }: {
@@ -68,7 +68,7 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
         <div><strong>{product?.name ?? row.name}</strong><p>{product?.packageText ?? "Verpakking onbekend"}{price !== null ? ` · ${formatCents(price)}` : ""}</p></div>
       </div>
       {packages !== null && price !== null && available ? <strong className="custom-ingredient-cost">{formatCents(packages * price)}</strong> : null}</div>
-      {loading ? <p role="status">Actueel product ophalen…</p> : !available ? <p role="alert">Dit product is niet beschikbaar. Kies opnieuw een product.</p> : price === null ? <p role="alert">Voor dit ingrediënt ontbreekt een actuele geldige prijs. Kies een ander product of probeer later opnieuw.</p> : null}
+      {loading ? <p role="status">Actueel product ophalen…</p> : !available ? <p role="alert">Dit product is niet beschikbaar. Kies opnieuw een product.</p> : price === null ? <p role="alert">Voor dit ingrediënt ontbreekt een betrouwbare prijs. Kies een ander product of probeer later opnieuw.</p> : null}
       <div className="custom-ingredient-amount">
         <label><span className="visually-hidden">Benodigde hoeveelheid</span><input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={quantity || ""} onChange={event => onChange({ ...row, packageCount: undefined, quantity: Number(event.target.value) * dish.servings / (dish.targetServings ?? dish.servings) })} /></label>
         <label><span className="visually-hidden">Eenheid</span><select value={row.unit} onChange={event => onChange({ ...row, unit: event.target.value as WeekIngredientUnit, packageCapacityOverride: undefined, packageCount: undefined })}>
@@ -93,7 +93,7 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
         const usable = option.isAvailable !== false && option.supermarket === "Hoogvliet" && !!option.sku.trim();
         return <li key={option.id}><button type="button" disabled={!usable || cents === null} onClick={() => selectProduct(option)}>
           <ProductThumbnail className="manual-product-image" imageUrl={option.imageUrl} name={option.name} />
-          <span><strong>{option.name}</strong><span>{option.packageText ?? "Verpakking onbekend"}</span><span>{!usable ? "Niet beschikbaar" : cents !== null ? formatCents(cents) : "Actuele prijs ontbreekt"}</span></span>
+          <span><strong>{option.name}</strong><span>{option.packageText ?? "Verpakking onbekend"}</span><span>{!usable ? "Niet beschikbaar" : cents !== null ? formatCents(cents) : "Prijs ontbreekt"}</span></span>
         </button></li>;
       })}</ul>
       {row.productId ? <button type="button" onClick={() => setSearch(false)}>Vervangen annuleren</button> : null}

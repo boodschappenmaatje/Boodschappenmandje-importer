@@ -1,4 +1,4 @@
-import { isOfferActive } from "@/services/catalog/price";
+import { resolveCurrentPrice } from "@/services/catalog/price";
 import type { BudgetResult, BudgetStatus } from "@/types/budget";
 import type {
   ActiveShoppingList,
@@ -50,26 +50,13 @@ export function shoppingListPriceCents(
   now: Date,
 ): number | null {
   if (!price) return null;
-  if (
-    price.isOffer &&
-    !isOfferActive(
-      {
-        productId: price.productId,
-        price: price.amount,
-        oldPrice: null,
-        isOffer: true,
-        offerText: null,
-        validFrom: price.validFrom ?? null,
-        validUntil: price.validUntil ?? null,
-        fetchedAt: price.updatedAt,
-        updatedAt: price.updatedAt,
-      },
-      now,
-    )
-  ) {
-    return null;
-  }
-  return euroAmountToCents(price.amount);
+  const resolved = resolveCurrentPrice({
+    productId: price.productId, price: price.amount, oldPrice: null,
+    isOffer: price.isOffer, offerText: null,
+    validFrom: price.validFrom ?? null, validUntil: price.validUntil ?? null,
+    fetchedAt: price.updatedAt, updatedAt: price.updatedAt,
+  }, now);
+  return resolved ? euroAmountToCents(resolved.amount) : null;
 }
 
 function resolveStatus(

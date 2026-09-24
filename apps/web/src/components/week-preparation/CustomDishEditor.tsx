@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { CustomIngredientEditor } from "./CustomIngredientEditor";
 import { CompactRecipeDetail } from "./CompactRecipeDetail";
@@ -73,6 +74,10 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
     }, 450);
     return () => { active = false; clearTimeout(timer); };
   }, [dish, dayIndex, refresh, previewCustomDish]);
+  const refreshVisibleRecipe = useEffectEvent(() => {
+    if (!busy && dish) setRefresh(value => value + 1);
+  });
+  useEffect(() => subscribeCatalogRefresh(() => refreshVisibleRecipe()), []);
   function update(next: CustomDish, edited = true) {
     revision.current++; dirty.current = edited && customDraftHasChanges(next, recipes);
     setDish(next); setPreview(null); setBusy(false); setMessage("");

@@ -99,6 +99,11 @@ function categoryConflicts(
       /diepvries/i.test(product.category ?? "") && /spinazie/i.test(product.name)) {
     contextWithoutProductType = contextWithoutProductType.replace(/\b(?:fijn|grof) gehakt\b/g, "");
   }
+  // A raw vegetable kit lives under "Soeppakketten"; it is not prepared soup.
+  if (ingredient.category === "Groente" && normalize(ingredient.name) === "erwtensoepgroenten" &&
+      normalize(product.name) === "erwtensoepgroenten" && /^Aardappelen, groente, fruit\//i.test(product.category ?? "")) {
+    contextWithoutProductType = "erwtensoepgroenten groente";
+  }
   const productSpecificClassification = normalize(
     [
       product.name,
@@ -211,7 +216,7 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
   if (/\bdiepvries\b/.test(required) && !/\bdiepvries\b/.test(normalize(`${product.name} ${product.category}`))) return false;
   if (/drogisterij|lichaamsverzorging|haarverzorging|schoonmaak|huishoudelijk|dierenvoeding/.test(normalize(product.category))) return false;
   if (/\b(?:bad|douche|massage|shampoo|zeep|bodylotion)\b/.test(name)) return false;
-  if (ingredient.category === "Groente" && /puree|passata|sap|saus|poeder|kruiden|soep/.test(name) &&
+  if (ingredient.category === "Groente" && /puree|passata|concentraat|pulp|sap|saus|poeder|kruiden|soep/.test(name) &&
     !/puree|passata|sap|saus|poeder|kruiden|soep/.test(required)) return false;
   if (["Vlees", "Vis", "Groente", "Pasta, rijst & granen"].includes(ingredient.category) &&
     /kruidenmix|maaltijdmix|basis voor/.test(name) && !/kruidenmix|maaltijdmix|basis voor/.test(required)) return false;
@@ -407,7 +412,7 @@ export function selectIngredientProduct(
   const totalCost = (product: Product): number => {
     const capacity = requiredUnit ? productPackageCapacity(product, requiredUnit) : 1;
     const price = product.currentPrice?.productId === product.id ? resolveCurrentPrice(product.currentPrice) : null;
-    if (!capacity || !price || price.freshness !== "fresh") return Infinity;
+    if (!capacity || !price) return Infinity;
     const cents = euroAmountToCents(price.amount);
     return cents === null ? Infinity : Math.ceil(requiredQuantity / capacity) * cents;
   };

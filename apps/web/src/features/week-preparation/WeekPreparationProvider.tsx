@@ -5,12 +5,15 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 
+import { CATALOG_PRICE_REFRESH_MS, subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
+import { refreshPreparedWeekPrices } from "@/services/week-preparation/price-refresh";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { previewFreeChoice, searchFreeChoice, type FreeChoiceResult } from "@/services/week-preparation/free-choice";
 import { previewIngredientPackages as loadIngredientQuantityPreview } from "@/services/week-preparation/ingredient-quantity-preview";
@@ -222,6 +225,7 @@ export function WeekPreparationProvider({
   const generationInFlightRef = useRef(false);
   const refreshedWeekRef = useRef<string | null>(null);
   const customizationRunRef = useRef(false);
+  const priceRefreshInFlightRef = useRef(false);
   const recipeRepositoryCacheRef = useRef<{
     source: RecipeRepository | undefined;
     repository: RecipeRepository | null;
@@ -256,6 +260,7 @@ export function WeekPreparationProvider({
         cached.source = suppliedCatalogRepository;
         cached.repository = createCachedCatalogRepository(
           suppliedCatalogRepository ?? createCatalogRepository(),
+          { ttlMs: CATALOG_PRICE_REFRESH_MS },
         );
       }
       return cached.repository;
@@ -415,6 +420,37 @@ export function WeekPreparationProvider({
       active = false;
     };
   }, [catalogRepository, recipeRepository, replace, shoppingList.list, status]);
+
+  const refreshVisiblePrices = useEffectEvent(async () => {
+    const current = preparationRef.current;
+    const list = shoppingList.list;
+    if (status !== "ready" || !current || !list || !current.generation || priceRefreshInFlightRef.current || customizationRunRef.current || generationInFlightRef.current) return;
+    priceRefreshInFlightRef.current = true;
+    try {
+      // Bypass the planning request cache: a last-known price is never pinned.
+      const repository = suppliedCatalogRepository ?? createCatalogRepository();
+      const ids = [...new Set(current.ingredients.flatMap(item => item.product ? [item.product.productId] : []))];
+      const products: Product[] = [];
+      for (let start = 0; start < ids.length; start += 100) products.push(...(await repository.getByIds(ids.slice(start, start + 100))).products);
+      if (preparationRef.current !== current || customizationRunRef.current || generationInFlightRef.current) return;
+      const result = refreshPreparedWeekPrices(current, products, list);
+      if (!result.changedIds.length) return;
+      catalogRepository().invalidateProducts?.(result.changedIds);
+      planningSnapshotCacheRef.current.invalidateProducts(result.changedIds);
+      // Only price fields change in the list; manually edited counts/checks stay.
+      await shoppingList.refreshFromProducts(products);
+      if (preparationRef.current !== current || customizationRunRef.current || generationInFlightRef.current) return;
+      replace(result.preparation);
+      const reapproval = budgetOverrideReapprovalPreview(result.preparation);
+      if (reapproval) {
+        setPendingBudgetReapproval({ preparation: result.preparation, preview: reapproval });
+        setActionMessage("De prijzen zijn bijgewerkt. Controleer de budgetoverschrijding en bevestig opnieuw.");
+      }
+    } catch {
+      // Retain the last reliable values during a temporary network failure.
+    } finally { priceRefreshInFlightRef.current = false; }
+  });
+  useEffect(() => subscribeCatalogRefresh(() => { void refreshVisiblePrices(); }), []);
 
   useEffect(() => {
     const current = preparationRef.current;

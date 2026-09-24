@@ -1,3 +1,4 @@
+import { reliablePriceCents } from "@/services/catalog/price";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
@@ -212,7 +213,7 @@ function resultForRequirement(
       Boolean(product) ||
       (match.candidates.length > 0 && match.failureReason === "matcher_failed"),
     reliableProductMatch: Boolean(product),
-    priceKnown: Boolean(match.requirement.price),
+    priceKnown: reliablePriceCents(match.requirement.price),
     packageCalculable: match.requirement.purchaseQuantity !== null,
     productId: product?.id ?? null,
     sku: product?.sku ?? null,

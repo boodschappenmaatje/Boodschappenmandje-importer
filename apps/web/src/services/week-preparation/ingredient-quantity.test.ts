@@ -253,3 +253,22 @@ describe("explicit ingredient packages", () => {
     expect(refreshed.ingredients[0]).toMatchObject({requiredQuantity:800,purchaseQuantity:2});
   });
 });
+
+describe("last-known fallback and automatic repricing", () => {
+  it("applies +/- with an old positive price, then revalidates with the newest price without changing 2 packages", async () => {
+    const old = { ...product, currentPrice: { ...product.currentPrice!, price: 1.79, fetchedAt: "2026-09-01T00:00:00Z" } };
+    const base = (await revalidatePreparedWeek(await prepared(), recipes, products(old), NOW, list)).preparation;
+    expect(canAdjustIngredient(base.ingredients[0], 0)).toBe(true);
+    const more = await previewIngredientPackages(base, base, 0, "pasta", 2, recipes, products(old), list, NOW);
+    expect(more?.alternativeDishCostCents).toBe(358);
+    const committed = await commitExplicitRecipeAlternative(base, 0, more!, false, recipes, products(old), list, NOW);
+    if (!committed.ok) throw Error(committed.reason);
+    const newer = { ...old, currentPrice: { ...old.currentPrice, price: 1.99, fetchedAt: NOW.toISOString() } };
+    const refreshed = (await revalidatePreparedWeek(committed.preparation, recipes, products(newer), NOW, list)).preparation;
+    expect(refreshed.ingredients[0]).toMatchObject({ requiredQuantity: 800, purchaseQuantity: 2, price: { amountCents: 199 } });
+    expect(refreshed.generation).toMatchObject({ mealPlanKnownCostCents: 398, totalKnownWeekCostCents: 398 });
+    const reduced = await previewIngredientPackages(refreshed, refreshed, 0, "pasta", 1, recipes, products(newer), list, NOW);
+    expect(reduced?.preparation.ingredients[0].requiredQuantity).toBe(400);
+    expect(reduced?.alternativeDishCostCents).toBe(199);
+  });
+});

@@ -1,0 +1,2027 @@
+{
+  "snapshotAt": "2026-09-24T17:08:44.628Z",
+  "at": "2026-09-24T17:23:22.195Z",
+  "matrix": [
+    {
+      "people": 1,
+      "days": 1,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 1,
+      "days": 3,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 1,
+      "days": 5,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 1,
+      "days": 7,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 2,
+      "days": 1,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 2,
+      "days": 3,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 2,
+      "days": 5,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 2,
+      "days": 7,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 609,
+      "customCost": 98
+    },
+    {
+      "people": 4,
+      "days": 1,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1165,
+      "customCost": 196
+    },
+    {
+      "people": 4,
+      "days": 3,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1165,
+      "customCost": 196
+    },
+    {
+      "people": 4,
+      "days": 5,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1165,
+      "customCost": 196
+    },
+    {
+      "people": 4,
+      "days": 7,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1165,
+      "customCost": 196
+    },
+    {
+      "people": 6,
+      "days": 1,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1355,
+      "customCost": 294
+    },
+    {
+      "people": 6,
+      "days": 3,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1355,
+      "customCost": 294
+    },
+    {
+      "people": 6,
+      "days": 5,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1355,
+      "customCost": 294
+    },
+    {
+      "people": 6,
+      "days": 7,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 1355,
+      "customCost": 294
+    },
+    {
+      "people": 10,
+      "days": 1,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2071,
+      "customCost": 392
+    },
+    {
+      "people": 10,
+      "days": 3,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2071,
+      "customCost": 392
+    },
+    {
+      "people": 10,
+      "days": 5,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2071,
+      "customCost": 392
+    },
+    {
+      "people": 10,
+      "days": 7,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2071,
+      "customCost": 392
+    },
+    {
+      "people": 12,
+      "days": 1,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2571,
+      "customCost": 490
+    },
+    {
+      "people": 12,
+      "days": 3,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2571,
+      "customCost": 490
+    },
+    {
+      "people": 12,
+      "days": 5,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2571,
+      "customCost": 490
+    },
+    {
+      "people": 12,
+      "days": 7,
+      "selectable": {
+        "Honig": 10,
+        "Knorr": 23
+      },
+      "normalCost": 2571,
+      "customCost": 490
+    }
+  ],
+  "assortment": [
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "6c1b6fe3-d8a2-4599-804a-a918634c65e2",
+        "sourceKey": "catalog-mix-070520000",
+        "name": "Honig Basis voor lasagnesaus",
+        "normalizedName": "honig basis voor lasagnesaus",
+        "symbol": "fork.knife",
+        "preparationMinutes": 30,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "6c1b6fe3-d8a2-4599-804a-a918634c65e2",
+        "recipeSourceKey": "catalog-mix-070520000",
+        "recipeName": "Honig Basis voor lasagnesaus",
+        "ready": true,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 8,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "25273283-22e6-46f9-8072-4aa0aab46c12",
+        "sourceKey": "catalog-mix-070523000",
+        "name": "Honig Familiegerecht Oosterse wraps",
+        "normalizedName": "honig familiegerecht oosterse wraps",
+        "symbol": "fork.knife",
+        "preparationMinutes": 25,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "25273283-22e6-46f9-8072-4aa0aab46c12",
+        "recipeSourceKey": "catalog-mix-070523000",
+        "recipeName": "Honig Familiegerecht Oosterse wraps",
+        "ready": true,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 8,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "09b95521-947b-4816-bf9e-af1646ff5852",
+        "sourceKey": "catalog-mix-132802000",
+        "name": "Honig Basis voor roerbakmie",
+        "normalizedName": "honig basis voor roerbakmie",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "09b95521-947b-4816-bf9e-af1646ff5852",
+        "recipeSourceKey": "catalog-mix-132802000",
+        "recipeName": "Honig Basis voor roerbakmie",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "ac562f36-fa92-4540-9e2d-4e073ca6b989",
+        "sourceKey": "catalog-mix-181722000",
+        "name": "Honig Basis voor spaghettisaus bolognese",
+        "normalizedName": "honig basis voor spaghettisaus bolognese",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "ac562f36-fa92-4540-9e2d-4e073ca6b989",
+        "recipeSourceKey": "catalog-mix-181722000",
+        "recipeName": "Honig Basis voor spaghettisaus bolognese",
+        "ready": true,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "af9c3407-a24d-4142-b8b6-cc18bc63defd",
+        "sourceKey": "catalog-mix-186457000",
+        "name": "Honig Basis voor tagliatelle roomsaus",
+        "normalizedName": "honig basis voor tagliatelle roomsaus",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": true,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "af9c3407-a24d-4142-b8b6-cc18bc63defd",
+        "recipeSourceKey": "catalog-mix-186457000",
+        "recipeName": "Honig Basis voor tagliatelle roomsaus",
+        "ready": true,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 8,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "947d3bd3-bd31-4f9f-95ac-5e59880a4ac1",
+        "sourceKey": "catalog-mix-714983000",
+        "name": "Honig Mix voor kapucijners",
+        "normalizedName": "honig mix voor kapucijners",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "947d3bd3-bd31-4f9f-95ac-5e59880a4ac1",
+        "recipeSourceKey": "catalog-mix-714983000",
+        "recipeName": "Honig Mix voor kapucijners",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "d1405e16-349d-472f-a1a9-72fdd2b6cafc",
+        "sourceKey": "catalog-mix-718160000",
+        "name": "Honig Basis voor bami speciaal",
+        "normalizedName": "honig basis voor bami speciaal",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "d1405e16-349d-472f-a1a9-72fdd2b6cafc",
+        "recipeSourceKey": "catalog-mix-718160000",
+        "recipeName": "Honig Basis voor bami speciaal",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "26f7edb6-39d2-457b-b582-8a2f4c32afce",
+        "sourceKey": "catalog-mix-731727000",
+        "name": "Honig Bakplaat mix boontjes & gehaktballetjes",
+        "normalizedName": "honig bakplaat mix boontjes & gehaktballetjes",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "26f7edb6-39d2-457b-b582-8a2f4c32afce",
+        "recipeSourceKey": "catalog-mix-731727000",
+        "recipeName": "Honig Bakplaat mix boontjes & gehaktballetjes",
+        "ready": true,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "a19b74d9-0647-40a1-802a-3715d0b71882",
+        "sourceKey": "honig-macaroni",
+        "name": "Honig macaroni met gehakt en groente",
+        "normalizedName": "honig macaroni met gehakt en groente",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "a19b74d9-0647-40a1-802a-3715d0b71882",
+        "recipeSourceKey": "honig-macaroni",
+        "recipeName": "Honig macaroni met gehakt en groente",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "e90d0900-e3e8-4ac3-bbdc-7149670df030",
+        "sourceKey": "honig-nasi-speciaal",
+        "name": "Honig nasi speciaal met kip",
+        "normalizedName": "honig nasi speciaal met kip",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "e90d0900-e3e8-4ac3-bbdc-7149670df030",
+        "recipeSourceKey": "honig-nasi-speciaal",
+        "recipeName": "Honig nasi speciaal met kip",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "a9997fab-a2b3-4e87-ba64-56e5566572cb",
+        "sourceKey": "catalog-mix-083039000",
+        "name": "Honig Maaltijdsoep erwten",
+        "normalizedName": "honig maaltijdsoep erwten",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "a9997fab-a2b3-4e87-ba64-56e5566572cb",
+        "recipeSourceKey": "catalog-mix-083039000",
+        "recipeName": "Honig Maaltijdsoep erwten",
+        "ready": false,
+        "requiredIngredientCount": 4,
+        "readyRequiredIngredientCount": 3,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-rookworst",
+            "sourceKey": "mix-supplement-rookworst",
+            "name": "rookworst",
+            "required": true,
+            "requiredQuantity": 0.5,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "7c6a8424-782b-4aa0-b7cb-cc9babbf4de3",
+            "sku": "078633000",
+            "productName": "Slagershuis Gelderse rookworst",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-rookworst:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "5726609e-82a3-4fa7-b5b0-dab78b2b59f1",
+        "sourceKey": "catalog-mix-181595000",
+        "name": "Honig Basis voor hachee",
+        "normalizedName": "honig basis voor hachee",
+        "symbol": "fork.knife",
+        "preparationMinutes": 130,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "5726609e-82a3-4fa7-b5b0-dab78b2b59f1",
+        "recipeSourceKey": "catalog-mix-181595000",
+        "recipeName": "Honig Basis voor hachee",
+        "ready": false,
+        "requiredIngredientCount": 5,
+        "readyRequiredIngredientCount": 4,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-hacheevlees",
+            "sourceKey": "mix-supplement-hacheevlees",
+            "name": "hacheevlees",
+            "required": true,
+            "requiredQuantity": 500,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "meal-mix-ingredient:mix-supplement-hacheevlees:g:ingredient:generic",
+            "reason": "no_catalog_product",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "2b387dbc-13f5-44b7-acb9-f084900915bc",
+        "sourceKey": "catalog-mix-182737000",
+        "name": "Honig Basis voor macaronisaus stroganoff",
+        "normalizedName": "honig basis voor macaronisaus stroganoff",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "2b387dbc-13f5-44b7-acb9-f084900915bc",
+        "recipeSourceKey": "catalog-mix-182737000",
+        "recipeName": "Honig Basis voor macaronisaus stroganoff",
+        "ready": false,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-provencaalse-wokgroenten",
+            "sourceKey": "mix-supplement-provencaalse-wokgroenten",
+            "name": "Provençaalse wokgroenten",
+            "required": true,
+            "requiredQuantity": 400,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "meal-mix-ingredient:mix-supplement-provencaalse-wokgroenten:g:ingredient:generic",
+            "reason": "no_catalog_product",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "8f8c6883-2a58-4671-b5c4-13cd588d72ba",
+        "sourceKey": "catalog-mix-665854000",
+        "name": "Honig Mix voor boerenomelet",
+        "normalizedName": "honig mix voor boerenomelet",
+        "symbol": "fork.knife",
+        "preparationMinutes": 10,
+        "vegetarian": true,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "8f8c6883-2a58-4671-b5c4-13cd588d72ba",
+        "recipeSourceKey": "catalog-mix-665854000",
+        "recipeName": "Honig Mix voor boerenomelet",
+        "ready": false,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-sneetjes-volkoren-brood",
+            "sourceKey": "mix-supplement-sneetjes-volkoren-brood",
+            "name": "sneetjes volkoren brood",
+            "required": true,
+            "requiredQuantity": 4,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "meal-mix-ingredient:mix-supplement-sneetjes-volkoren-brood:piece:ingredient:generic",
+            "reason": "no_catalog_product",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "3bbe1561-d757-422e-aded-3d802310805c",
+        "sourceKey": "catalog-mix-718350000",
+        "name": "Honig Basis voor chili con carne",
+        "normalizedName": "honig basis voor chili con carne",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "3bbe1561-d757-422e-aded-3d802310805c",
+        "recipeSourceKey": "catalog-mix-718350000",
+        "recipeName": "Honig Basis voor chili con carne",
+        "ready": false,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-tomaten",
+            "sourceKey": "mix-supplement-tomaten",
+            "name": "tomaten",
+            "required": true,
+            "requiredQuantity": 4,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "f745d828-3744-4bbd-a3d4-4913d8bc9246",
+            "sku": "733141000",
+            "productName": "Mutti Gepelde tomaten",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "445bfefe-b0fa-45e4-8f4c-d78658d687df",
+        "sourceKey": "catalog-mix-718363000",
+        "name": "Honig Basis voor italiaanse kruidensaus",
+        "normalizedName": "honig basis voor italiaanse kruidensaus",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "445bfefe-b0fa-45e4-8f4c-d78658d687df",
+        "recipeSourceKey": "catalog-mix-718363000",
+        "recipeName": "Honig Basis voor italiaanse kruidensaus",
+        "ready": false,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 2,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-provencaalse-wokgroenten",
+            "sourceKey": "mix-supplement-provencaalse-wokgroenten",
+            "name": "Provençaalse wokgroenten",
+            "required": true,
+            "requiredQuantity": 400,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "meal-mix-ingredient:mix-supplement-provencaalse-wokgroenten:g:ingredient:generic",
+            "reason": "no_catalog_product",
+            "origin": "catalogCoverage"
+          },
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-verse-basilicum",
+            "sourceKey": "mix-supplement-verse-basilicum",
+            "name": "verse basilicum",
+            "required": true,
+            "requiredQuantity": 30,
+            "unit": "ml",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "meal-mix-ingredient:mix-supplement-verse-basilicum:ml:ingredient:generic",
+            "reason": "low_confidence_match",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "4e60b9b6-abd3-46e7-b6a1-b10f73ccbec3",
+        "sourceKey": "catalog-mix-731728000",
+        "name": "Honig Bakplaat mix broccoli & rundervink",
+        "normalizedName": "honig bakplaat mix broccoli & rundervink",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "4e60b9b6-abd3-46e7-b6a1-b10f73ccbec3",
+        "recipeSourceKey": "catalog-mix-731728000",
+        "recipeName": "Honig Bakplaat mix broccoli & rundervink",
+        "ready": false,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-tomaten",
+            "sourceKey": "mix-supplement-tomaten",
+            "name": "tomaten",
+            "required": true,
+            "requiredQuantity": 2,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "f745d828-3744-4bbd-a3d4-4913d8bc9246",
+            "sku": "733141000",
+            "productName": "Mutti Gepelde tomaten",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "baf31144-bb45-4c2b-aa2f-2f9be588b01c",
+        "sourceKey": "catalog-mix-731729000",
+        "name": "Honig Bakplaat mix courgette & kip",
+        "normalizedName": "honig bakplaat mix courgette & kip",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "baf31144-bb45-4c2b-aa2f-2f9be588b01c",
+        "recipeSourceKey": "catalog-mix-731729000",
+        "recipeName": "Honig Bakplaat mix courgette & kip",
+        "ready": false,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-tomaten",
+            "sourceKey": "mix-supplement-tomaten",
+            "name": "tomaten",
+            "required": true,
+            "requiredQuantity": 2,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "f745d828-3744-4bbd-a3d4-4913d8bc9246",
+            "sku": "733141000",
+            "productName": "Mutti Gepelde tomaten",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Honig",
+      "recipe": {
+        "id": "unavailable-6fe5b134-caa2-4681-bf0e-deddb2ae0891",
+        "sourceKey": "catalog-mix-051885000",
+        "name": "Honig Basis voor kip kerrie",
+        "brand": "Honig"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "df431c8f-4da2-4c81-b25d-b5370c784d65",
+        "sourceKey": "catalog-mix-703080000",
+        "name": "Knorr Spaghetteria carbonara",
+        "normalizedName": "knorr spaghetteria carbonara",
+        "symbol": "fork.knife",
+        "preparationMinutes": 15,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "df431c8f-4da2-4c81-b25d-b5370c784d65",
+        "recipeSourceKey": "catalog-mix-703080000",
+        "recipeName": "Knorr Spaghetteria carbonara",
+        "ready": true,
+        "requiredIngredientCount": 1,
+        "readyRequiredIngredientCount": 1,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "8bdce709-abab-4879-8720-b4a718b66efb",
+        "sourceKey": "catalog-mix-703081000",
+        "name": "Knorr Spaghetteria pesto",
+        "normalizedName": "knorr spaghetteria pesto",
+        "symbol": "fork.knife",
+        "preparationMinutes": 15,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "8bdce709-abab-4879-8720-b4a718b66efb",
+        "recipeSourceKey": "catalog-mix-703081000",
+        "recipeName": "Knorr Spaghetteria pesto",
+        "ready": true,
+        "requiredIngredientCount": 1,
+        "readyRequiredIngredientCount": 1,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "bd423b61-4eb8-458e-8d32-bb64a9b38bda",
+        "sourceKey": "catalog-mix-704890000",
+        "name": "Knorr Wereldgerecht maaltijdpakket italiaanse lasagnette napoletan",
+        "normalizedName": "knorr wereldgerecht maaltijdpakket italiaanse lasagnette napoletan",
+        "symbol": "fork.knife",
+        "preparationMinutes": 40,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "bd423b61-4eb8-458e-8d32-bb64a9b38bda",
+        "recipeSourceKey": "catalog-mix-704890000",
+        "recipeName": "Knorr Wereldgerecht maaltijdpakket italiaanse lasagnette napoletan",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "189d9b3c-073a-43c7-8930-8191b22421bb",
+        "sourceKey": "catalog-mix-704893000",
+        "name": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+        "normalizedName": "knorr wereldgerechten maaltijdpakketten italiaanse risotto",
+        "symbol": "fork.knife",
+        "preparationMinutes": 40,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "189d9b3c-073a-43c7-8930-8191b22421bb",
+        "recipeSourceKey": "catalog-mix-704893000",
+        "recipeName": "Knorr Wereldgerechten maaltijdpakketten italiaanse risotto",
+        "ready": true,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "39189d5d-21c6-4d57-a462-f95b63c0dda5",
+        "sourceKey": "catalog-mix-709601000",
+        "name": "Knorr Mix voor macaroni",
+        "normalizedName": "knorr mix voor macaroni",
+        "symbol": "fork.knife",
+        "preparationMinutes": 5,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "39189d5d-21c6-4d57-a462-f95b63c0dda5",
+        "recipeSourceKey": "catalog-mix-709601000",
+        "recipeName": "Knorr Mix voor macaroni",
+        "ready": true,
+        "requiredIngredientCount": 5,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "17966cab-93ca-4364-b99c-c6fe7aff36ac",
+        "sourceKey": "catalog-mix-709603000",
+        "name": "Knorr Mix voor nasi",
+        "normalizedName": "knorr mix voor nasi",
+        "symbol": "fork.knife",
+        "preparationMinutes": 3,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "17966cab-93ca-4364-b99c-c6fe7aff36ac",
+        "recipeSourceKey": "catalog-mix-709603000",
+        "recipeName": "Knorr Mix voor nasi",
+        "ready": true,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "e33fcd95-34c9-471d-befe-76095b9d96e9",
+        "sourceKey": "catalog-mix-709604000",
+        "name": "Knorr Mix voor bami",
+        "normalizedName": "knorr mix voor bami",
+        "symbol": "fork.knife",
+        "preparationMinutes": 1,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "e33fcd95-34c9-471d-befe-76095b9d96e9",
+        "recipeSourceKey": "catalog-mix-709604000",
+        "recipeName": "Knorr Mix voor bami",
+        "ready": true,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "7ba39ebe-a057-4044-a47b-f9e79e2ef52f",
+        "sourceKey": "catalog-mix-709635000",
+        "name": "Knorr Mix spaghetti bolognese",
+        "normalizedName": "knorr mix spaghetti bolognese",
+        "symbol": "fork.knife",
+        "preparationMinutes": 2,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "7ba39ebe-a057-4044-a47b-f9e79e2ef52f",
+        "recipeSourceKey": "catalog-mix-709635000",
+        "recipeName": "Knorr Mix spaghetti bolognese",
+        "ready": true,
+        "requiredIngredientCount": 5,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "c4ace2a9-237b-4884-93d4-12fdc066274b",
+        "sourceKey": "catalog-mix-709641000",
+        "name": "Knorr Mix macaroni carbonara",
+        "normalizedName": "knorr mix macaroni carbonara",
+        "symbol": "fork.knife",
+        "preparationMinutes": 20,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "c4ace2a9-237b-4884-93d4-12fdc066274b",
+        "recipeSourceKey": "catalog-mix-709641000",
+        "recipeName": "Knorr Mix macaroni carbonara",
+        "ready": true,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 7,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "672ea259-71bc-446f-881c-8e59cf675fe2",
+        "sourceKey": "catalog-mix-709741000",
+        "name": "Knorr Mix voor tagliatelle",
+        "normalizedName": "knorr mix voor tagliatelle",
+        "symbol": "fork.knife",
+        "preparationMinutes": 25,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "672ea259-71bc-446f-881c-8e59cf675fe2",
+        "recipeSourceKey": "catalog-mix-709741000",
+        "recipeName": "Knorr Mix voor tagliatelle",
+        "ready": true,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 8,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "097aa9ba-bbfb-4bf9-ab78-9e99fdc42a25",
+        "sourceKey": "catalog-mix-729332000",
+        "name": "Knorr Risotto bospaddenstoelen",
+        "normalizedName": "knorr risotto bospaddenstoelen",
+        "symbol": "fork.knife",
+        "preparationMinutes": 12,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "097aa9ba-bbfb-4bf9-ab78-9e99fdc42a25",
+        "recipeSourceKey": "catalog-mix-729332000",
+        "recipeName": "Knorr Risotto bospaddenstoelen",
+        "ready": true,
+        "requiredIngredientCount": 1,
+        "readyRequiredIngredientCount": 1,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "3bcdc92b-28a4-4e88-a481-30dc257b5982",
+        "sourceKey": "catalog-mix-729333000",
+        "name": "Knorr Risotto truffel",
+        "normalizedName": "knorr risotto truffel",
+        "symbol": "fork.knife",
+        "preparationMinutes": 12,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "3bcdc92b-28a4-4e88-a481-30dc257b5982",
+        "recipeSourceKey": "catalog-mix-729333000",
+        "recipeName": "Knorr Risotto truffel",
+        "ready": true,
+        "requiredIngredientCount": 1,
+        "readyRequiredIngredientCount": 1,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "0dd9fbc7-6fa9-4b50-ab47-b1fa1e4cca8d",
+        "sourceKey": "catalog-mix-730047000",
+        "name": "Knorr Maaltijdmix teriyaki",
+        "normalizedName": "knorr maaltijdmix teriyaki",
+        "symbol": "fork.knife",
+        "preparationMinutes": 2,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "0dd9fbc7-6fa9-4b50-ab47-b1fa1e4cca8d",
+        "recipeSourceKey": "catalog-mix-730047000",
+        "recipeName": "Knorr Maaltijdmix teriyaki",
+        "ready": true,
+        "requiredIngredientCount": 5,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "b44de481-3f63-4f8b-90ea-c499cb5ff3b2",
+        "sourceKey": "catalog-mix-730049000",
+        "name": "Knorr Maaltijdmix mac & cheese",
+        "normalizedName": "knorr maaltijdmix mac & cheese",
+        "symbol": "fork.knife",
+        "preparationMinutes": 30,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "b44de481-3f63-4f8b-90ea-c499cb5ff3b2",
+        "recipeSourceKey": "catalog-mix-730049000",
+        "recipeName": "Knorr Maaltijdmix mac & cheese",
+        "ready": true,
+        "requiredIngredientCount": 5,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "616aecb7-f17d-4e83-86ad-6abb914ac800",
+        "sourceKey": "catalog-mix-732786000",
+        "name": "Knorr Spaghetteria pomodoro mozzarella",
+        "normalizedName": "knorr spaghetteria pomodoro mozzarella",
+        "symbol": "fork.knife",
+        "preparationMinutes": 7,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "616aecb7-f17d-4e83-86ad-6abb914ac800",
+        "recipeSourceKey": "catalog-mix-732786000",
+        "recipeName": "Knorr Spaghetteria pomodoro mozzarella",
+        "ready": true,
+        "requiredIngredientCount": 1,
+        "readyRequiredIngredientCount": 1,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "de621d70-dab9-4ad0-9747-43605a34af2a",
+        "sourceKey": "catalog-mix-733174000",
+        "name": "Knorr Air fryer mix voor krokante kip knoflook",
+        "normalizedName": "knorr air fryer mix voor krokante kip knoflook",
+        "symbol": "fork.knife",
+        "preparationMinutes": 14,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "de621d70-dab9-4ad0-9747-43605a34af2a",
+        "recipeSourceKey": "catalog-mix-733174000",
+        "recipeName": "Knorr Air fryer mix voor krokante kip knoflook",
+        "ready": true,
+        "requiredIngredientCount": 3,
+        "readyRequiredIngredientCount": 3,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "5c655d2e-97f1-4d8c-8b97-10881e5589b0",
+        "sourceKey": "knorr-burritos",
+        "name": "Knorr Mexicaanse burrito’s met verse groente",
+        "normalizedName": "knorr mexicaanse burritos met verse groente",
+        "symbol": "flame.fill",
+        "preparationMinutes": 25,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "5c655d2e-97f1-4d8c-8b97-10881e5589b0",
+        "recipeSourceKey": "knorr-burritos",
+        "recipeName": "Knorr Mexicaanse burrito’s met verse groente",
+        "ready": true,
+        "requiredIngredientCount": 9,
+        "readyRequiredIngredientCount": 9,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "95cfbfc8-45a0-4de9-b015-a731cb015107",
+        "sourceKey": "knorr-griekse-kofta",
+        "name": "Knorr Griekse kofta met rundergehakt",
+        "normalizedName": "knorr griekse kofta met rundergehakt",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 30,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "95cfbfc8-45a0-4de9-b015-a731cb015107",
+        "recipeSourceKey": "knorr-griekse-kofta",
+        "recipeName": "Knorr Griekse kofta met rundergehakt",
+        "ready": true,
+        "requiredIngredientCount": 4,
+        "readyRequiredIngredientCount": 4,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "4718fbbd-5cd9-4a58-841c-e62bee4574db",
+        "sourceKey": "knorr-hokkien-mie",
+        "name": "Knorr Hokkien Mie met kip en groente",
+        "normalizedName": "knorr hokkien mie met kip en groente",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 25,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "4718fbbd-5cd9-4a58-841c-e62bee4574db",
+        "recipeSourceKey": "knorr-hokkien-mie",
+        "recipeName": "Knorr Hokkien Mie met kip en groente",
+        "ready": true,
+        "requiredIngredientCount": 5,
+        "readyRequiredIngredientCount": 5,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "f6460830-bd8e-4e85-9568-5336f5543bfb",
+        "sourceKey": "knorr-kip-madras",
+        "name": "Knorr Indiase Kip Madras",
+        "normalizedName": "knorr indiase kip madras",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 35,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "f6460830-bd8e-4e85-9568-5336f5543bfb",
+        "recipeSourceKey": "knorr-kip-madras",
+        "recipeName": "Knorr Indiase Kip Madras",
+        "ready": true,
+        "requiredIngredientCount": 8,
+        "readyRequiredIngredientCount": 8,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "6593543a-5c8d-409d-8c9e-145632c43f0b",
+        "sourceKey": "knorr-kip-siam",
+        "name": "Knorr Thaise Kip Siam met groente",
+        "normalizedName": "knorr thaise kip siam met groente",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 30,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "6593543a-5c8d-409d-8c9e-145632c43f0b",
+        "recipeSourceKey": "knorr-kip-siam",
+        "recipeName": "Knorr Thaise Kip Siam met groente",
+        "ready": true,
+        "requiredIngredientCount": 3,
+        "readyRequiredIngredientCount": 3,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "17b1cade-cd86-4c55-81b6-ceeef22ed196",
+        "sourceKey": "knorr-lasagne-bolognese",
+        "name": "Knorr Italiaanse lasagne bolognese",
+        "normalizedName": "knorr italiaanse lasagne bolognese",
+        "symbol": "fork.knife",
+        "preparationMinutes": 50,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "17b1cade-cd86-4c55-81b6-ceeef22ed196",
+        "recipeSourceKey": "knorr-lasagne-bolognese",
+        "recipeName": "Knorr Italiaanse lasagne bolognese",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "654b1b0c-6a25-412e-9119-b05a475e0d2e",
+        "sourceKey": "knorr-surinaamse-roti",
+        "name": "Knorr Surinaamse roti met kip",
+        "normalizedName": "knorr surinaamse roti met kip",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 35,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "standard"
+      },
+      "selectable": true,
+      "readiness": {
+        "recipeId": "654b1b0c-6a25-412e-9119-b05a475e0d2e",
+        "recipeSourceKey": "knorr-surinaamse-roti",
+        "recipeName": "Knorr Surinaamse roti met kip",
+        "ready": true,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 0,
+        "ingredients": []
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "6a85d19f-5654-440b-b296-325c8f9fbd30",
+        "sourceKey": "catalog-mix-704882000",
+        "name": "Knorr Wereldgerechten Mexicaanse taco`s",
+        "normalizedName": "knorr wereldgerechten mexicaanse taco`s",
+        "symbol": "fork.knife",
+        "preparationMinutes": 5,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "6a85d19f-5654-440b-b296-325c8f9fbd30",
+        "recipeSourceKey": "catalog-mix-704882000",
+        "recipeName": "Knorr Wereldgerechten Mexicaanse taco`s",
+        "ready": false,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-tomaten",
+            "sourceKey": "mix-supplement-tomaten",
+            "name": "tomaten",
+            "required": true,
+            "requiredQuantity": 2.667,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "f745d828-3744-4bbd-a3d4-4913d8bc9246",
+            "sku": "733141000",
+            "productName": "Mutti Gepelde tomaten",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+        "sourceKey": "catalog-mix-730044000",
+        "name": "Knorr Maaltijdmix kip madras",
+        "normalizedName": "knorr maaltijdmix kip madras",
+        "symbol": "fork.knife",
+        "preparationMinutes": 5,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+        "recipeSourceKey": "catalog-mix-730044000",
+        "recipeName": "Knorr Maaltijdmix kip madras",
+        "ready": false,
+        "requiredIngredientCount": 10,
+        "readyRequiredIngredientCount": 9,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-tomaten",
+            "sourceKey": "mix-supplement-tomaten",
+            "name": "tomaten",
+            "required": true,
+            "requiredQuantity": 2,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "f745d828-3744-4bbd-a3d4-4913d8bc9246",
+            "sku": "733141000",
+            "productName": "Mutti Gepelde tomaten",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "4f871e07-a684-4014-843a-f72a11b4c01d",
+        "sourceKey": "catalog-mix-730051000",
+        "name": "Knorr Maaltijdmix kebab",
+        "normalizedName": "knorr maaltijdmix kebab",
+        "symbol": "fork.knife",
+        "preparationMinutes": 25,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "4f871e07-a684-4014-843a-f72a11b4c01d",
+        "recipeSourceKey": "catalog-mix-730051000",
+        "recipeName": "Knorr Maaltijdmix kebab",
+        "ready": false,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-pitabroodjes",
+            "sourceKey": "mix-supplement-pitabroodjes",
+            "name": "pitabroodjes",
+            "required": true,
+            "requiredQuantity": 400,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "meal-mix-ingredient:mix-supplement-pitabroodjes:g:ingredient:generic",
+            "reason": "no_catalog_product",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "c6903433-cfd0-4c97-ae1f-350f1625636b",
+        "sourceKey": "catalog-mix-730052000",
+        "name": "Knorr Maaltijdmix tikka masala",
+        "normalizedName": "knorr maaltijdmix tikka masala",
+        "symbol": "fork.knife",
+        "preparationMinutes": 8,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "c6903433-cfd0-4c97-ae1f-350f1625636b",
+        "recipeSourceKey": "catalog-mix-730052000",
+        "recipeName": "Knorr Maaltijdmix tikka masala",
+        "ready": false,
+        "requiredIngredientCount": 9,
+        "readyRequiredIngredientCount": 8,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-magere-yoghurt",
+            "sourceKey": "mix-supplement-magere-yoghurt",
+            "name": "magere yoghurt",
+            "required": true,
+            "requiredQuantity": 260,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "1fc89706-9a1d-405d-9181-e3790286e561",
+            "sku": "064395000",
+            "productName": "Campina Magere yoghurt",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-magere-yoghurt:g:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "6bb5396c-ee59-46bd-bb75-12f68c142fc2",
+        "sourceKey": "catalog-mix-730054000",
+        "name": "Knorr Maaltijdmix lasagne bolognese",
+        "normalizedName": "knorr maaltijdmix lasagne bolognese",
+        "symbol": "fork.knife",
+        "preparationMinutes": 35,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": false,
+        "budgetTier": "standard"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "6bb5396c-ee59-46bd-bb75-12f68c142fc2",
+        "recipeSourceKey": "catalog-mix-730054000",
+        "recipeName": "Knorr Maaltijdmix lasagne bolognese",
+        "ready": false,
+        "requiredIngredientCount": 7,
+        "readyRequiredIngredientCount": 6,
+        "problemCount": 1,
+        "ingredients": [
+          {
+            "ingredientId": "meal-mix-ingredient:mix-supplement-lasagnebladen",
+            "sourceKey": "mix-supplement-lasagnebladen",
+            "name": "lasagnebladen",
+            "required": true,
+            "requiredQuantity": 12,
+            "unit": "piece",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": true,
+            "priceKnown": true,
+            "packageCalculable": false,
+            "productId": "af81ae8e-3399-4551-9702-86e70e121e76",
+            "sku": "703311000",
+            "productName": "Daily Chef Lasagnebladen",
+            "requirementKey": "meal-mix-ingredient:mix-supplement-lasagnebladen:piece:ingredient:generic",
+            "reason": "package_unknown",
+            "origin": "catalogCoverage"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "4404d963-73f3-4cc7-b8d0-b9a91cbca5da",
+        "sourceKey": "knorr-japanse-teriyaki",
+        "name": "Knorr Japanse teriyaki met runderreepjes",
+        "normalizedName": "knorr japanse teriyaki met runderreepjes",
+        "symbol": "takeoutbag.and.cup.and.straw",
+        "preparationMinutes": 30,
+        "vegetarian": false,
+        "containsPork": false,
+        "kidFriendly": false,
+        "healthy": true,
+        "budgetTier": "premium"
+      },
+      "selectable": false,
+      "readiness": {
+        "recipeId": "4404d963-73f3-4cc7-b8d0-b9a91cbca5da",
+        "recipeSourceKey": "knorr-japanse-teriyaki",
+        "recipeName": "Knorr Japanse teriyaki met runderreepjes",
+        "ready": false,
+        "requiredIngredientCount": 6,
+        "readyRequiredIngredientCount": 4,
+        "problemCount": 2,
+        "ingredients": [
+          {
+            "ingredientId": "5b9b1ffe-af58-4bd5-abd0-218b791e02ed",
+            "sourceKey": "peultjes",
+            "name": "peultjes",
+            "required": true,
+            "requiredQuantity": 266.667,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": false,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "5b9b1ffe-af58-4bd5-abd0-218b791e02ed:g:ingredient:generic",
+            "reason": "no_catalog_product",
+            "origin": "catalogCoverage"
+          },
+          {
+            "ingredientId": "9c81e773-1771-481e-aa52-52b3894999d7",
+            "sourceKey": "runderreepjes",
+            "name": "runderreepjes",
+            "required": true,
+            "requiredQuantity": 300,
+            "unit": "g",
+            "ready": false,
+            "catalogProductAvailable": true,
+            "reliableProductMatch": false,
+            "priceKnown": false,
+            "packageCalculable": false,
+            "productId": null,
+            "sku": null,
+            "productName": null,
+            "requirementKey": "9c81e773-1771-481e-aa52-52b3894999d7:g:ingredient:generic",
+            "reason": "matcher_failed",
+            "origin": "softwareOrMatching"
+          }
+        ]
+      }
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-79f27025-097a-4780-a186-147f860a4861",
+        "sourceKey": "catalog-mix-726496000",
+        "name": "Knorr Asia special korean bbq",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-e12d25bd-d0d6-4438-b47c-e2f9faac2141",
+        "sourceKey": "catalog-mix-686150000",
+        "name": "Knorr Wereldgerechten maaltijdpakket italiaanse lasagne bolognese",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-837af4a6-b7b6-4fd4-8eea-3437d4f138a7",
+        "sourceKey": "catalog-mix-231215000",
+        "name": "Knorr Wereldgerecht maaltijdpakket chinese beef shanghai",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-b663b427-00de-449a-846a-cd50267a2e41",
+        "sourceKey": "catalog-mix-733172000",
+        "name": "Knorr Air fryer mix voor koreaanse kip",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-04047132-64d3-4f0c-b94e-0364996a49b6",
+        "sourceKey": "catalog-mix-704897000",
+        "name": "Knorr Wereldgerechten maaltijdpakket hokkien mie",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-be25316f-e359-4e49-b0b4-502735628c6e",
+        "sourceKey": "catalog-mix-704884000",
+        "name": "Knorr Wereldgerechten maaltijdpakket surinaamse roti",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-84848e22-562f-4a41-871d-f8346cff53db",
+        "sourceKey": "catalog-mix-704894000",
+        "name": "Knorr Wereldgerecht maaltijdpakket portugese kip piri piri",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-3396a525-01c4-492b-937c-3f5805033731",
+        "sourceKey": "catalog-mix-704888000",
+        "name": "Knorr Wereldgerechten maaltijdpakket indiase kip madras",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-16bf1a5e-0013-4736-a1c1-e68653c78448",
+        "sourceKey": "catalog-mix-686149000",
+        "name": "Knorr Wereldgerecht maaltijdpakket zuid-afrikaanse bobotie",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-339d97f8-b509-41ef-b92a-c8f84ae9c536",
+        "sourceKey": "catalog-mix-704892000",
+        "name": "Knorr Wereldgerechten maaltijdpakket japanse teriyaki",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-4076c0fb-88d3-427b-9fd9-375238bf639f",
+        "sourceKey": "catalog-mix-686060000",
+        "name": "Knorr Wereldgerechten maaltijdpakket thaise kip siam",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-f7ebe67c-ba74-48da-8b81-f8722fd11edd",
+        "sourceKey": "catalog-mix-067439000",
+        "name": "Knorr Wereldgerechten trattoria kipfilet toscana",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-5660e2f5-a71a-46eb-b964-cfa703b4367a",
+        "sourceKey": "catalog-mix-704898000",
+        "name": "Knorr Wereldgerechten maaltijdpakket griekse kofta",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    },
+    {
+      "brand": "Knorr",
+      "recipe": {
+        "id": "unavailable-59733f76-c7ee-404d-8f53-d05f7582b856",
+        "sourceKey": "catalog-mix-704889000",
+        "name": "Knorr Wereldgerecht maaltijdpakket indiase kip tandoori",
+        "brand": "Knorr"
+      },
+      "selectable": false,
+      "readiness": null
+    }
+  ],
+  "planner": {
+    "cost": 3944,
+    "status": "generated",
+    "days": [
+      {
+        "name": "Boerenkoolstamppot met rookworst",
+        "cost": 533
+      },
+      {
+        "name": "Vegetarische pasta met courgette",
+        "cost": 651
+      },
+      {
+        "name": "Hutspot met rundergehaktbal",
+        "cost": 1227
+      },
+      {
+        "name": "Gebakken rijst met ei en groente",
+        "cost": 999
+      },
+      {
+        "name": "Couscous met kikkererwten en groente",
+        "cost": 673
+      }
+    ]
+  },
+  "insufficientBudget": "noValidMealPlanWithinBudget"
+}
