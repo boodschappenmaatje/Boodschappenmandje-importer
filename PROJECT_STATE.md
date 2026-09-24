@@ -62,11 +62,17 @@ Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverka
 - Eén gedeelde mutatie- en budgetroute voor beide UI's. Bij één receptbijdrage werkt lijst −/+ direct. Bij meerdere herkomsten kiest de gebruiker de receptbijdrage of het losse deel. “Losse verpakking toevoegen” maakt alleen een onafhankelijke bijdrage.
 - Minimum 1 voor receptbijdragen; verwijderen geeft uitleg en verwijzing naar Menu. Manual-only items blijven normaal bedienbaar en verwijderbaar. Gedeelde automatische verpakkingsberekening blijft intact.
 - Geplande receptingrediënten en hun boodschappenlijstbijdragen zijn tweerichtings gekoppeld. Een expliciete verpakkingswijziging vanuit recept of lijst synchroniseert naar de andere kant, terwijl onafhankelijke handmatige bijdragen beschermd blijven.
-- Tests: nieuwe echte lijstflow-interacties, 400→800→400g, normale/eigen/mixrecepten, twee recepten, manual-extra, minimum/verwijderen, heropenen, personenwijziging, budgetannulering en automatische €1,79→€1,99. **630/630 webtests, 189/189 importerfixtures, lint, TypeScript en Production-build groen.** De 24-cellenmatrix en plannerfixture (€39,44 binnen €70) zijn opnieuw geslaagd. Preview-verificatie volgt.
+- Tests: nieuwe echte lijstflow-interacties, 400→800→400g, normale/eigen/mixrecepten, twee recepten, manual-extra, minimum/verwijderen, heropenen, personenwijziging, budgetannulering en automatische €1,79→€1,99. **630/630 webtests, 189/189 importerfixtures, lint, TypeScript en Production-build groen.** De 24-cellenmatrix en plannerfixture (€39,44 binnen €70) zijn opnieuw geslaagd.
+- Functionele codecommit: `c4a0a2f50c959b23b589c94c027f15921b8e2e2a`; Vercel Preview **success / Ready**. De tussentijdse roadmapcommit `020b5d5d` is behouden. De aansluitende checkpointcommit wijzigt alleen documentatie; controleer remote voor de actuele PR-head.
+- Echte Preview A–C: recept→lijst 1→2; lijst→recept 2→1→2. Italiaanse roerbakmix 400→800→400g, gerecht €13,06↔€14,95, lijst €38,66↔€40,55 en maaltijdbudget bewegen mee.
+- Preview D: losse verpakking toegevoegd; lijst 3 = Honig 2 + los 1. Recept naar 1 geeft lijst 2; gericht terug naar 2 geeft lijst 3. Algemene lijstknoppen openen bij gemengde herkomst alleen de keuze. De losse extra blijft 1.
+- Gedeeld product in Preview: spinazie dag 2 naar 2 verpakkingen / 1.600g; dag 4 blijft 1 verpakking met zijn oorspronkelijke 300g. Geen ander recept aangepast. Bestaande gezamenlijke automatische aankoopberekening blijft behouden.
+- Preview E: volledige browserrefresh, navigatie Lijst→Menu→Vrije keuze en heropenen behouden Honig 2 / 800g, de losse extra 1 en afzonderlijke spinaziekeuzes. Prullenbak verwijdert geen gekoppeld ingrediënt; uitleg verschijnt en lijst blijft gelijk.
+- Work-browser biedt geen telefoonviewport; functionele desktopbrowsercontrole voltooid. Fysieke iPhone-touch/layout/PWA-hervatten zijn nog te accepteren.
 - Geen databasewijziging of migratie nodig: optionele adresmetadata in het bestaande lokale lijstformaat; oudere lijsten worden veilig vanuit hun bekende week gekoppeld.
 - Uitgebreid verslag: `docs/pr28-bidirectional-sync.md`.
 
-**Stoppunt: implementatie en regressies afgerond; nieuwe Preview moet nog functioneel worden gecontroleerd. Nog niet klaar voor iPhone-hertest.**
+**Stoppunt: KLAAR VOOR FYSIEKE IPHONE-HERTEST. Preview nog niet fysiek geaccepteerd; Draft PR behouden.**
 
 ## Release-regels
 - Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.

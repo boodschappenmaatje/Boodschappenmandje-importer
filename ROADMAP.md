@@ -45,7 +45,7 @@ De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) 
 
 Status: fysieke iPhone-test van PR #28 **afgekeurd wegens ontbrekende lijst→recept-koppeling**. Huidige scope is volledige tweerichtingssync via exacte bijdragen. Werkende verpakkingsbediening, prijsfallback, automatische prijsverversing, Honig/Knorr en planner blijven behouden en krijgen regressies. Geen nieuw PWA-nummer of release.
 
-Eerstvolgende stap: nieuwe Preview in beide richtingen controleren, daarna fysieke iPhone-hertest. De eerdere 24-cellenmatrix en 4p/5d/€100/€70-planner worden opnieuw als regressie uitgevoerd. Resterende echte assortimentsdatablokkades blijven afzonderlijk gedocumenteerd.
+Eerstvolgende stap: fysieke iPhone-hertest. Nieuwe Preview in beide richtingen en met afzonderlijke herkomsten gecontroleerd; 630 webtests, de 24-cellenmatrix en 4p/5d/€100/€70-planner opnieuw groen. Status: **KLAAR VOOR FYSIEKE IPHONE-HERTEST**, nog geen fysieke acceptatie of release. Resterende echte assortimentsdatablokkades blijven afzonderlijk gedocumenteerd.
 
 ---
 
