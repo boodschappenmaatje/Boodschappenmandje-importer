@@ -1,3 +1,4 @@
+import { applyIngredientQuantityOverrides } from "./ingredient-quantity";
 import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
@@ -1226,7 +1227,7 @@ export async function generatePreparedWeek(
     return preparation;
   }
 
-  const explicitDays = preparation.days.filter((day) => day.category === "freeChoice" && day.recipe);
+  const explicitDays = preparation.days.filter((day) => day.recipe && (day.category === "freeChoice" || preparation.customizations.some(item => item.dayIndex === day.dayIndex && item.quantityOverrides?.length)));
   if (explicitDays.length) {
     const automatic = await generatePreparedWeek({
       ...preparation,
@@ -1391,12 +1392,12 @@ export async function revalidatePreparedWeek(
     preparation.numberOfPeople,
     catalog,
   );
-  const ingredients = await applyStoredCustomizations(
+  const ingredients = applyIngredientQuantityOverrides(preparation, await applyStoredCustomizations(
     preparation,
     [...applyReadinessProducts(requirements, readiness), ...await matchCustomDishes(preparation, catalog, catalogRepository)],
     catalog,
     catalogRepository,
-  );
+  ));
   const generatedAt = now.toISOString();
   const refreshed = { ...preparation, ingredients };
   const mealBudget = evaluateMealBudget(

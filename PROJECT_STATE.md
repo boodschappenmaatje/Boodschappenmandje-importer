@@ -26,8 +26,17 @@
 ## Laatste geverifieerde regressies
 Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerfixtures en lokale Production-build geslaagd. Na deze checks veranderde de code alleen in de weergave van het aantal personen bij een opgeslagen recept; verdere commits tot de merge betroffen documentatie. De actuele Preview-check en Production-check waren groen.
 
+## Actieve vervolgscope — ingrediënthoeveelheid −/+
+- Branch: `feature/ingredient-quantity-controls`, vanaf remote `main` `5a085205`.
+- Compacte bediening bij geschikte ingrediënten in Menu, Vrije keuze en eigen receptdetail.
+- Gewenste hoeveelheid wordt apart van daadwerkelijk te kopen verpakkingen getoond; bestaande prijs-, budget-, override- en lijstsyncflow wordt hergebruikt.
+- Handmatige hoeveelheden worden per dag/ingrediënt/recept met het bijbehorende personenaantal bewaard. Personen wijzigen schaalt die gekozen verhouding mee. Eigen recepten gebruiken hun bestaande hoeveelheden en portiebasis.
+- Een wijziging in het weekgerecht wijzigt alleen dat weekgerecht; in Mijn recepten wordt de opgeslagen receptversie aangepast.
+- Bestaande schema-6-opslag blijft leesbaar; geen databasewijziging.
+- Preview en mobiele controle: nog te verifiëren vóór het iPhone-checkpoint.
+
 ## Volgende stap
-**Eigen recepten — vervolg: scope bepalen aan de hand van gebruikerstesten.** Beoordeel eerst de robuustheid van lokaal bewaren, fout- en lege staten, en foto/fallback. Leg de concrete scope vast voordat nieuwe featureontwikkeling start. Zie `ROADMAP.md`.
+Deze vervolgscope afronden tot **KLAAR VOOR FYSIEKE IPHONE-TEST**. Pas na de fysieke test en afzonderlijke releasetoestemming mag deze branch naar main. Daarna resterende eigen-receptverbeteringen prioriteren op basis van gebruikerstesten; zie `ROADMAP.md`.
 
 ## Release-regels
 - Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.

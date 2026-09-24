@@ -36,8 +36,14 @@ Belangrijke productprincipes:
 
 ## Volgende stap
 
-### Eigen recepten — vervolg: scope bepalen
-PWA 14 is op 23 september 2026 op iPhone geaccepteerd en via PR #27 in Production gezet. Bepaal op basis van gebruikerstesten welke verbeteringen aan lokaal bewaren, fout- en lege staten en foto/fallback het eerst nodig zijn. Leg de scope vast voordat de volgende feature wordt gebouwd. Er is nog geen nieuwe featurebranch of PWA-nummer toegekend.
+### Ingrediënthoeveelheid −/+ — actieve vervolgscope
+PWA 14 is via PR #27 in Production. De concrete vervolgverbetering op `feature/ingredient-quantity-controls` voegt per geschikt ingrediënt compacte −/+ bediening toe in het receptdetail, inclusief maaltijdmixen, bestaande recepten en eigen recepten.
+
+Acceptatie: gewenste hoeveelheden blijven behouden bij heropenen/lijstsync/planner; personen wijzigen schaalt de handmatig gekozen verhouding mee. Werkelijke verpakkingen, actuele prijzen, maaltijd- en weekbudget en handmatige lijstwijzigingen blijven leidend. Gerichte regressies en mobiele Preview-controle gaan vooraf aan de fysieke iPhone-test.
+
+Status: implementatie gereed; verificatie en Preview-checkpoint worden afgerond. Geen nieuw PWA-nummer toegekend. Geen merge of Production-deployment binnen deze opdracht.
+
+Eerstvolgende stap: fysieke iPhone-test van deze bediening. Daarna afzonderlijke releasebeslissing en vervolgens de overige eigen-receptverbeteringen hieronder prioriteren.
 
 ---
 

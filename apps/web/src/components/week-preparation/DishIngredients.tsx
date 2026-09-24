@@ -1,3 +1,4 @@
+import { IngredientQuantityControl } from "./IngredientQuantityControl";
 import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 
 import type { ReactNode } from "react";
@@ -27,10 +28,12 @@ function packagesForDay(
 
 
 /** Shared cards for the active planner dish and a proposed free-choice dish. */
-export function DishIngredients({ ingredients, dayIndex, renderAction, compact = false }: {
+export function DishIngredients({ ingredients, dayIndex, renderAction, compact = false, onQuantityChange, quantityBusy = false }: {
   ingredients: WeekIngredientRequirement[];
   dayIndex: number;
   compact?: boolean;
+  onQuantityChange?: (ingredientId: string, quantity: number) => void;
+  quantityBusy?: boolean;
   renderAction?: (ingredient: WeekIngredientRequirement) => ReactNode;
 }) {
   return (<ul className={compact ? "compact-recipe-ingredients" : "recipe-ingredients"}>
@@ -44,11 +47,11 @@ export function DishIngredients({ ingredients, dayIndex, renderAction, compact =
         ingredient,
         dayIndex,
       );
-      if (compact) return <li key={ingredient.ingredientId}>
+      if (compact) return <li key={ingredient.ingredientId} data-adjustable={Boolean(onQuantityChange)}>
         <ProductThumbnail className="compact-ingredient-image" imageUrl={ingredient.product?.imageUrl ?? null} name={ingredient.product?.name ?? ingredient.name} />
         <div><strong>{ingredient.name}</strong>{ingredient.product?.name === ingredient.name ? null : <span>{ingredient.product?.name ?? "Kies opnieuw een product"}</span>}
           <small>{packages === null ? "Verpakkingsinhoud nodig" : `${packages} × ${ingredient.product?.packageText ?? "verpakking"}`}</small></div>
-        <span className="compact-ingredient-quantity">{quantityLabel(requiredQuantity, ingredient.unit)}</span>
+        {onQuantityChange ? <IngredientQuantityControl ingredient={ingredient} dayIndex={dayIndex} busy={quantityBusy} onChange={onQuantityChange} /> : <span className="compact-ingredient-quantity">{quantityLabel(requiredQuantity, ingredient.unit)}</span>}
         <strong className="compact-ingredient-cost">{ingredient.price && packages !== null ? formatCents(ingredient.price.amountCents * packages) : "Prijs ontbreekt"}</strong>
       </li>;
       return (

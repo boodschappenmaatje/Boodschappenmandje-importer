@@ -98,6 +98,11 @@ function isCustomization(value: unknown): value is WeekMealCustomization {
     Number(value.dayIndex) <= 6 &&
     isRecipeReference(value.baseRecipe) &&
     (value.replacementRecipe === null || isRecipeReference(value.replacementRecipe)) &&
+    (value.quantityOverrides === undefined || (Array.isArray(value.quantityOverrides) && value.quantityOverrides.every(override =>
+      isRecord(override) && typeof override.ingredientId === "string" && typeof override.recipeId === "string" &&
+      Number.isFinite(override.quantity) && Number(override.quantity) > 0 && Number(override.quantity) <= 100000 &&
+      ["g", "kg", "ml", "l", "piece", "loaf"].includes(String(override.unit)) &&
+      Number.isInteger(override.people) && Number(override.people) >= 1 && Number(override.people) <= 12))) &&
     Array.isArray(value.productOverrides) &&
     value.productOverrides.every(
       (override) =>

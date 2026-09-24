@@ -51,7 +51,7 @@ Regels:
 2. **Rust boven volledigheid.** Toon eerst wat de gebruiker nodig heeft; details mogen uitklappen.
 3. **Mensentaal.** Vermijd technische database-, cache- of matchingtaal in de consumenten-UI.
 4. **Behoud context.** Menu blijft Menu; openen van een gerecht mag de gebruiker niet onnodig uit de flow trekken.
-5. **Kijken en bewerken zijn verschillend.** Receptdetail is compact; bewerken gebeurt via een expliciete editoractie.
+5. **Kijken en bewerken zijn verschillend.** Receptdetail is compact; structureel bewerken gebeurt via een expliciete editoractie. Een hoeveelheid mag direct bij het ingrediënt met −/+ worden aangepast.
 6. **Bescherm gebruikerskeuzes.** Handmatige lijstwijzigingen, gekozen gerechten en expliciete overrides mogen niet stilzwijgend verdwijnen.
 7. **Geen fictieve zekerheid.** Geen €0-prijzen of geforceerde productmatches als betrouwbare data ontbreekt.
 8. **Budget moet begrijpelijk zijn.** Maaltijdbudget en totaal weekbudget zijn afzonderlijke concepten en moeten zo worden gepresenteerd.
@@ -92,3 +92,12 @@ Bij nieuwe UI:
 4. behoud bestaande functionaliteit;
 5. valideer mobiel;
 6. pas dit document alleen aan wanneer een nieuwe ontwerpbeslissing echt een vaste projectregel wordt.
+
+
+## Hoeveelheid per ingrediënt
+- Hergebruik de compacte − [benodigde hoeveelheid + eenheid] + bediening in ingrediënteninterfaces waar betrouwbare product-, prijs- en verpakkingsinformatie beschikbaar is.
+- Plaats de bediening binnen dezelfde ingrediëntenrij; bij beperkte breedte direct onder de productinformatie, rechts uitgelijnd. Behoud de compacte kaart en voorkom horizontale overflow.
+- − en + hebben elk minimaal 44 × 44 px raakvlak en een toegankelijke naam met het ingrediënt. Gebruik bestaande metallic-blauwe tokens, zichtbare focus en disabled-status.
+- De middelste hoeveelheid is wat nodig is voor het gerecht. Aantal te kopen verpakkingen en volledige aankoopprijs blijven apart zichtbaar.
+- Blokkeer dubbele acties tijdens herberekening. Vraag expliciete bevestiging bij budgetoverschrijding en behoud bij fouten de vorige hoeveelheid.
+- Personen wijzigen schaalt de gekozen verhouding; heropenen en normale synchronisatie herstellen geen standaardhoeveelheid.

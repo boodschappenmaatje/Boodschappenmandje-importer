@@ -126,6 +126,8 @@ export interface WeekManualProductAddition {
 }
 
 export interface WeekMealCustomization {
+  /** Desired ingredient amounts at a known serving count; absent in older local data. */
+  quantityOverrides?: WeekIngredientQuantityOverride[];
   dayIndex: number;
   baseRecipe: SelectedRecipeReference;
   replacementRecipe: SelectedRecipeReference | null;
@@ -134,6 +136,14 @@ export interface WeekMealCustomization {
   ingredientOverrides: WeekIngredientOverride[];
   manualProductAdditions: WeekManualProductAddition[];
   updatedAt: string;
+}
+
+export interface WeekIngredientQuantityOverride {
+  ingredientId: UUID;
+  recipeId: UUID;
+  quantity: number;
+  unit: WeekIngredientUnit;
+  people: number;
 }
 
 export interface PreparedDay {

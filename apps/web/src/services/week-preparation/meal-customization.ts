@@ -234,7 +234,8 @@ function withCustomization(
     customization.replacementRecipe === null &&
     customization.productOverrides.length === 0 &&
     customization.ingredientOverrides.length === 0 &&
-    customization.manualProductAdditions.length === 0;
+    customization.manualProductAdditions.length === 0 &&
+    !customization.quantityOverrides?.length;
   return isOriginal ? retained : [...retained, customization];
 }
 
@@ -545,7 +546,8 @@ function hasIngredientLevelCustomizations(preparation: WeekPreparation): boolean
     (customization) =>
       customization.productOverrides.length > 0 ||
       customization.ingredientOverrides.length > 0 ||
-      customization.manualProductAdditions.length > 0,
+      customization.manualProductAdditions.length > 0 ||
+      Boolean(customization.quantityOverrides?.length),
   );
 }
 
@@ -1245,6 +1247,8 @@ export function previewManualProductChoice(
     );
     customization = {
       ...currentCustomization,
+      // A new explicit product/package choice supersedes the previous amount.
+      quantityOverrides: currentCustomization.quantityOverrides?.filter(item => item.ingredientId !== choice.ingredientId),
       productOverrides: [
         ...currentCustomization.productOverrides.filter(
           (item) => item.ingredientId !== choice.ingredientId,

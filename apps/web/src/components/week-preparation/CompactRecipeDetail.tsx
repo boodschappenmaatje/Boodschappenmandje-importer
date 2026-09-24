@@ -7,9 +7,10 @@ import { recipeImageFor } from "@/services/week-preparation/recipe-images";
 import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
 import type { WeekPreparation } from "@/types/week-preparation";
 
-/** One read-only detail for generated dishes, meal mixes and private recipes. */
-export function CompactRecipeDetail({ preparation, dayIndex, children, showBudget = true, presentation = "inline" }: {
+/** One compact detail for generated dishes, meal mixes and private recipes. */
+export function CompactRecipeDetail({ preparation, dayIndex, children, showBudget = true, presentation = "inline", onQuantityChange, quantityBusy = false }: {
   preparation: WeekPreparation; dayIndex: number; children?: ReactNode; showBudget?: boolean; presentation?: "inline" | "screen";
+  onQuantityChange?: (ingredientId: string, quantity: number) => void; quantityBusy?: boolean;
 }) {
   const day = preparation.days.find(item => item.dayIndex === dayIndex);
   if (!day?.recipe) return null;
@@ -29,8 +30,8 @@ export function CompactRecipeDetail({ preparation, dayIndex, children, showBudge
     {showBudget && remaining !== null && remaining !== undefined ? <p className="compact-budget-status" data-status={remaining < 0 ? "over" : "within"}>Maaltijdbudget: {formatCents(Math.abs(remaining))} {remaining < 0 ? "boven budget" : "over"}{!preparation.generation?.isMealBudgetComplete ? " · voorlopig" : ""}</p> : null}
     </div></header>
     <h4 className="compact-ingredients-title">Ingrediënten ({Math.min(5, ingredients.length)} van {ingredients.length})</h4>
-    <DishIngredients ingredients={ingredients.slice(0, 5)} dayIndex={dayIndex} compact />
-    {ingredients.length > 5 ? <details className="compact-more-ingredients"><summary>Toon alle ingrediënten ({ingredients.length})</summary><DishIngredients ingredients={ingredients.slice(5)} dayIndex={dayIndex} compact /></details> : null}
+    <DishIngredients ingredients={ingredients.slice(0, 5)} dayIndex={dayIndex} compact onQuantityChange={onQuantityChange} quantityBusy={quantityBusy} />
+    {ingredients.length > 5 ? <details className="compact-more-ingredients"><summary>Toon alle ingrediënten ({ingredients.length})</summary><DishIngredients ingredients={ingredients.slice(5)} dayIndex={dayIndex} compact onQuantityChange={onQuantityChange} quantityBusy={quantityBusy} /></details> : null}
     {children}
   </section>;
 }

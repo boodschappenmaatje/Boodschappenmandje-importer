@@ -4553,3 +4553,12 @@ html {
 .recipe-screen-navigation { grid-template-columns: 88px minmax(0, 1fr) 88px; }
 .recipe-screen-navigation h2 { text-align: center; }
 .compact-recipe-detail[data-presentation="screen"] .recipe-summary-image[data-has-image="false"] > svg { width: 44px; height: 44px; }
+
+/* Desired ingredient amounts: two 44px touch targets on each compact row. */
+.compact-recipe-ingredients li[data-adjustable="true"] { grid-template-columns: 28px minmax(0, 1fr) auto; }
+.compact-recipe-ingredients li[data-adjustable="true"] > .compact-ingredient-cost { grid-column: 3; grid-row: 1; }
+.compact-recipe-ingredients li[data-adjustable="true"] > .ingredient-quantity-control { grid-column: 2 / -1; justify-self: end; }
+.ingredient-quantity-control { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); max-width: 100%; }
+.ingredient-quantity-control button { width: 44px; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 9px; color: var(--color-primary-strong); background: transparent; font-size: 21px; }
+.ingredient-quantity-control button:disabled { opacity: .4; }
+.ingredient-quantity-control output { min-width: 62px; max-width: 100px; padding: 0 4px; text-align: center; font-size: .8rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 
 import { DishImage } from "@/components/ui/DishImage";
 import Link from "next/link";
-import { CompactRecipeDetail } from "./CompactRecipeDetail";
+import { PlannedRecipeDetail } from "./PlannedRecipeDetail";
 import { CustomDishEditor } from "./CustomDishEditor";
 import { MealRouteNavigation } from "./MealRouteNavigation";
 import {
@@ -445,7 +445,7 @@ export function WeekPreparationView() {
                               </span>
                             </summary>
                             <div className="recipe-detail-content">
-                              <CompactRecipeDetail preparation={preparation} dayIndex={day.dayIndex} />
+                              <PlannedRecipeDetail preparation={preparation} dayIndex={day.dayIndex} />
                               {day.customDish ? <button type="button" className="text-action" onClick={() => setEditingDay(day.dayIndex)}>Bewerk recept</button> : null}
                               <details className="compact-recipe-manage"><summary>Gerecht aanpassen</summary>
                                 <DishIngredients ingredients={dayIngredients} dayIndex={day.dayIndex} renderAction={(ingredient) => ingredient.product && ingredient.price && ingredient.purchaseQuantity !== null ? (
