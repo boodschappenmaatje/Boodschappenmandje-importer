@@ -45,7 +45,17 @@ Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerf
 - Geen merge, Production-deployment, database-migratie, destructieve databaseactie of productimport.
 
 ## Volgende stap
-De functionele desktopcontrole is geslaagd. Mobiele Preview-verificatie staat nog open; daarna: **KLAAR VOOR FYSIEKE IPHONE-TEST**. Daarna fysieke iPhone-test en afzonderlijke releasetoestemming; geen merge binnen deze opdracht.
+**Preview afgekeurd na fysieke iPhone-test; NIET klaar voor een nieuwe iPhone-test.**
+
+Nieuw onderzoek op 24 september 2026, vanaf remote `268066034c43e92de0028bdc1066aa6845297390`, op dezelfde branch en Draft PR #28:
+- De gebruiker meldt niet-werkende verpakkingsknoppen en veel geblokkeerde Honig/Knorr-varianten. Eerdere desktopresultaten zijn geen acceptatiebewijs voor deze feedback.
+- Read-only audit van de actuele catalogus: 19 aangeboden Honig-varianten, waarvan 10 technisch READY maar 0 selecteerbaar; 43 aangeboden Knorr-varianten, waarvan 23 technisch READY maar 5 selecteerbaar. De telling betreft aangeboden receptvarianten, niet unieke mix-SKU's.
+- Aangetoonde inconsistente poort: readiness accepteert een bekende positieve prijs, terwijl pakketwijzigingen en Vrije keuze alle verplichte ingrediënten met niet-verse prijzen afwijzen. Ook een wel verse cherrytomaat kan daardoor niet worden aangepast wanneer bijvoorbeeld de Italiaanse roerbakprijs ouder dan acht dagen is. Geen prijsdatum aangepast en geen versheidsregel versoepeld.
+- Personen 1/2/4/6/10/12 leveren in de read-only readiness-audit dezelfde aantallen op. Dit is nog geen volledige personen × dagen × UI-regressiematrix. Persistent-cache versus koude evaluatie gaf dezelfde aantallen; er waren geen geldige persistent-cachehits.
+- Zie `docs/iphone-feedback-audit-2026-09-24.md` voor bewijs, dataredenen en open werk.
+- Nog geen functionele fix, nieuwe volledige regressierun of nieuwe mobiele Preview-verificatie voor deze feedback. De beschikbare browser heeft geen ondersteunde telefoonviewport; een eerder geblokkeerde alternatieve testweergave wordt niet opnieuw geprobeerd.
+
+Eerst prijsbeleid/data-actie expliciet beslissen: laatst bekende positieve catalogusprijzen toelaten met zichtbare waarschuwing, of de verse-prijsregel behouden en benodigde prijsdata via een afzonderlijk geautoriseerde beheerflow actualiseren. Binnen deze opdracht blijft productimport/Production-databasewijziging verboden. Vervolgens softwarefixes, volledige audit/matrix en echte mobiele Preview-controle afronden; pas daarna een nieuwe fysieke iPhone-test.
 
 ## Release-regels
 - Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.
