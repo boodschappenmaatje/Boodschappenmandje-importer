@@ -115,3 +115,12 @@ Bij nieuwe UI:
 - Houd receptbijdragen op minimaal 1 verpakking. Een verwijderactie op een gekoppeld item legt uit dat aanpassen via Menu nodig is; verwijder nooit stil een vereist ingrediënt. Afvinken verandert geen hoeveelheid.
 - Waar recepten automatisch verpakkingen delen, leg dat bij de herkomstkeuze uit. Het lijsttotaal blijft gebaseerd op de gezamenlijk te kopen verpakkingen.
 - Beide richtingen gebruiken dezelfde berekening, budgetbevestiging en laadstatus. Bij gewijzigde week/lijst tijdens validatie moet opnieuw worden gecontroleerd.
+
+## Compacte boodschappenlijst — PR #28, fysieke acceptatie volgt
+- De boodschappenlijst toont standaard compacte productregels binnen categorieblokken. Richtdoel: 4–5 normale producten in een telefoonscherm waar namen en schermhoogte dit toelaten; geen kleinere touch targets of onleesbare tekst om dit af te dwingen.
+- Primair: checkbox, kleine productfoto, naam, verpakking/inhoud, gebruikte prijs, compact − aantal + en subtiele herkomst. Checkbox en −/+ behouden minimaal 44px raakvlak.
+- Tik op product/chevron opent een mobiel detailpaneel. Volledige naam, prijsdatum, totaal, herkomstverdeling, losse verpakking en verwijderen staan daar. Sluiten/Escape keert terug naar dezelfde lijstpositie en bediening; achtergrond scrollt niet mee.
+- Herkomst gebruikt bestaande lijniconen: maaltijdkom voor menu, koksmuts voor aantoonbaar eigen recept, plus met zacht groen voor los. Bij meerdere maaltijden een korte samenvatting; de details tonen de afzonderlijke gerechten/dagen/ingrediënten. Geen herkomst gokken uit naam/SKU.
+- Bij gemengde herkomst opent algemene −/+ het detailpaneel met de bestaande veilige bijdragekeuze. Eén eenduidige receptbijdrage blijft direct bedienbaar. Recept ⇄ lijst-sync en handmatige bescherming blijven leidend.
+- Alles/Maaltijden/Overig is een presentatiefilter. Een product met maaltijd én losse bijdrage hoort bij beide filters; het getoonde aantal blijft het volledige te kopen totaal. Nog te halen/Afgevinkt blijft beschikbaar.
+- Behoud categoriegroepering, metallic-blauwe tokens en bottom navigation. Maak geen permanente grote actieknoppen of geneste kaarten per product.

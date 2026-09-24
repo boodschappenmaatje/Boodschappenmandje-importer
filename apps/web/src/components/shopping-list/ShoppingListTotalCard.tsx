@@ -21,7 +21,7 @@ export function ShoppingListTotalCard({ total }: { total: ShoppingListTotal }) {
             prijs niet meegerekend
           </span>
         ) : (
-          <span>Gebaseerd op de beschikbare actuele of laatst bekende prijzen</span>
+          <span className="visually-hidden">Gebaseerd op de beschikbare actuele of laatst bekende prijzen</span>
         )}
       </div>
       {total.availableTotal === null ? null : (

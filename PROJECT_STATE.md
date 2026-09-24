@@ -72,7 +72,19 @@ Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverka
 - Geen databasewijziging of migratie nodig: optionele adresmetadata in het bestaande lokale lijstformaat; oudere lijsten worden veilig vanuit hun bekende week gekoppeld.
 - Uitgebreid verslag: `docs/pr28-bidirectional-sync.md`.
 
-**Stoppunt: KLAAR VOOR FYSIEKE IPHONE-HERTEST. Preview nog niet fysiek geaccepteerd; Draft PR behouden.**
+Deze functionele hertest is opgevolgd door onderstaande feedback over de compacte lijst. Nog geen fysieke acceptatie van PR #28.
+
+## Actieve vervolgscope — compacte boodschappenlijst
+- Hervat vanaf gecontroleerde remote `3609823c70bc010a4134483a81aed368e2b73467`; dezelfde branch en Draft PR #28. Bestaande bidirectionele implementatie en roadmap behouden.
+- Fysieke feedback: lijst te hoog/ruim. De goedgekeurde conceptafbeelding bepaalt de presentatie: compacte categorieblokken en productregels, details op aanvraag, subtiele menu/eigen-recept/los-iconen.
+- Bestaande ShoppingListItemCard en LinkedShoppingListItem aangepast; gedeelde ShoppingListQuantity-presentatie, ShoppingListDetails en ShoppingListOrigins toegevoegd. Geen nieuwe hoeveelheid- of contribution-state; beide UI's blijven dezelfde bestaande usePackageMutation-route gebruiken.
+- Rij toont checkbox, kleine foto, naam, inhoud/prijs, herkomstsamenvatting en −/+. Herkomstkeuze, losse verpakking, prijsdatum, volledige productinformatie en veilige verwijderactie staan in het detailpaneel.
+- Alles/Maaltijden/Overig filteren alleen de weergave; gemengde items kunnen in beide herkomstfilters voorkomen. Nog te halen/Afgevinkt blijft als compacte keuzelijst behouden. Categorieën houden hun echte catalogusnamen en krijgen een teller.
+- Menu gebruikt het bestaande maaltijdicoon; eigen recept de koksmuts, uitsluitend op basis van de gekoppelde customDish; losse bijdrage plus/groen. Suggestie en recurring houden hun bestaande herkomst. Geen afleiding uit naam of SKU.
+- Nulmeting beschikbare desktopbrowser: normale oude regels circa 228 px hoog. Definitieve Preview-meting en controles volgen na de codecommit; fysieke mobiele acceptatie blijft vereist.
+- Volledige regressies worden opnieuw uitgevoerd; geen databasewijziging, migratie of productimport.
+
+**Stoppunt: compacte implementatie in Preview-validatie; nog niet klaar voor fysieke iPhone-hertest.**
 
 ## Release-regels
 - Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.

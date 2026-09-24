@@ -8,6 +8,7 @@ import { Icon } from "@/components/Icon";
 import { ListBudgetSummary } from "@/components/budget/ListBudgetSummary";
 import { LinkedShoppingListItem } from "@/components/shopping-list/LinkedShoppingListItem";
 import { ShoppingListProductSearch } from "@/components/shopping-list/ShoppingListProductSearch";
+import { matchesListOrigin, type ListOriginFilter } from "./ShoppingListOrigins";
 import { ShoppingListTotalCard } from "@/components/shopping-list/ShoppingListTotalCard";
 import { groupShoppingListItems, type ShoppingListFilter } from "@/services/shopping-list/shopping-list";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -15,6 +16,7 @@ import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingLi
 export function ActiveShoppingListView() {
   const [filter, setFilter] = useState<ShoppingListFilter>("all");
   const [searchOpen, setSearchOpen] = useState(false);
+  const [originFilter, setOriginFilter] = useState<ListOriginFilter>("all");
   const {
     status,
     list,
@@ -55,16 +57,20 @@ export function ActiveShoppingListView() {
     );
   }
 
+  const groups = groupShoppingListItems(list.items.filter(item => matchesListOrigin(item, originFilter)), filter);
+
   return (
     <>
       {persistenceWarning ? (
         <p className="catalog-notice" role="status">{persistenceWarning}</p>
       ) : null}
 
-      <ShoppingListTotalCard total={total} />
-      <ListBudgetSummary />
-      <div className="ux-list-filters" role="group" aria-label="Boodschappen filteren">
-        {([["all", "Alles"], ["remaining", "Nog te halen"], ["checked", "Afgevinkt"]] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{label} ({value === "all" ? list.items.length : list.items.filter((item) => value === "checked" ? item.checked : !item.checked).length})</button>)}
+      <div className="shopping-list-budget"><ShoppingListTotalCard total={total} /><ListBudgetSummary /></div>
+      <div className="shopping-list-toolbar">
+        <div className="ux-list-filters" role="group" aria-label="Herkomst filteren">
+          {([["all", "Alles"], ["meals", "Maaltijden"], ["other", "Overig"]] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={originFilter === value} onClick={() => setOriginFilter(value)}>{label}</button>)}
+        </div>
+        <label className="shopping-check-filter"><span className="visually-hidden">Boodschappen filteren</span><select aria-label="Boodschappen filteren" value={filter} onChange={event => setFilter(event.target.value as ShoppingListFilter)}><option value="all">Alles</option><option value="remaining">Nog te halen</option><option value="checked">Afgevinkt</option></select></label>
       </div>
 
       {list.items.length === 0 ? (
@@ -92,19 +98,20 @@ export function ActiveShoppingListView() {
             </h2>
             <button
               className="shopping-list-search-action"
+              aria-label="Zoek en voeg product toe"
               type="button"
               onClick={() => setSearchOpen(true)}
             >
               <Icon name="plus" size={17} />
-              Zoek en voeg product toe
+              <span>Product toevoegen</span>
             </button>
           </div>
 
-          {groupShoppingListItems(list.items, filter).map(([category, items]) => <section className="ux-shopping-category" key={category} aria-label={category}>
-            <h3>{category}</h3>
+          {groups.map(([category, items]) => <section className="ux-shopping-category" key={category} aria-label={category}>
+            <h3><Icon name="products" size={17} /><span>{category}</span><small aria-label={`${items.length} producten`}>{items.length}</small></h3>
             <ul className="shopping-items">{items.map((item) => <LinkedShoppingListItem key={item.productId} item={item} />)}</ul>
           </section>)}
-          {groupShoppingListItems(list.items, filter).length === 0 ? <p role="status">{filter === "checked" ? "Nog niets afgevinkt." : "Alles is afgevinkt. Klaar voor deze ronde!"}</p> : null}
+          {groups.length === 0 ? <p role="status">{originFilter !== "all" ? "Geen producten met deze herkomst binnen je filter." : filter === "checked" ? "Nog niets afgevinkt." : "Alles is afgevinkt. Klaar voor deze ronde!"}</p> : null}
           <Link className="secondary-text-link" href="/producten">Producten zoeken</Link>
 
         </section>

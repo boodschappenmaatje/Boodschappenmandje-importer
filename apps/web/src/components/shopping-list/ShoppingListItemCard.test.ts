@@ -2,6 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { independentOriginLabel, matchesListOrigin, ShoppingListOrigins } from "./ShoppingListOrigins";
+import { ShoppingListQuantity } from "./ShoppingListQuantity";
 import type { ShoppingListItem } from "@/types/shopping-list";
 
 import {
@@ -38,9 +40,10 @@ function renderItem(item: ShoppingListItem): string {
   return renderToStaticMarkup(
     createElement(ShoppingListItemCard, {
       item,
-      onIncrease: () => undefined,
-      onDecrease: () => undefined,
-      onRemove: () => undefined,
+      onToggleChecked: () => undefined,
+      onOpenDetails: () => undefined,
+      originSummary: "Los",
+      quantityControls: createElement(ShoppingListQuantity, { quantity: item.quantity, label: "Aantal", decreaseLabel: `Verlaag aantal ${item.name}`, increaseLabel: `Verhoog aantal ${item.name}`, onDecrease: () => undefined, onIncrease: () => undefined }),
     }),
   );
 }
@@ -52,7 +55,9 @@ describe("compact boodschappenlijstitem", () => {
     expect(html).toContain('aria-label="Verlaag aantal');
     expect(html).toContain('aria-label="10 stuks"');
     expect(html).toContain('aria-label="Verhoog aantal');
-    expect(html).toContain('aria-label="Verwijder');
+    expect(html).not.toContain('aria-label="Verwijder');
+    expect(html).toContain('aria-label="Productdetails');
+    expect(html).toContain('type="checkbox"');
   });
 
   it("toont hoofdprijs en echte actie compact", () => {
@@ -64,7 +69,7 @@ describe("compact boodschappenlijstitem", () => {
 
   it("verzint geen prijs of afbeelding wanneer die ontbreken", () => {
     const html = renderItem({ ...baseItem, imageUrl: null, price: null });
-    expect(html).toContain("Prijs tijdelijk niet beschikbaar");
+    expect(html).toContain("Prijs onbekend");
     expect(html).toContain("Geen productafbeelding");
     expect(html).not.toContain("0,00");
   });
@@ -88,5 +93,27 @@ describe("compact boodschappenlijstitem", () => {
     expect(
       shoppingListUsedInLabel(["Maandag – Macaroni", "Vrijdag – Lasagne"]),
     ).toBe("Voor 2 maaltijden");
+  });
+});
+
+
+describe("herkomstsamenvatting zonder nieuwe hoeveelheidsbron", () => {
+  it("gemengde bijdragen horen bij beide filters; oude source-tags maken geen losse bijdrage", () => {
+    const item = { ...baseItem, sources: ["manual" as const, "recipe" as const], quantityContributions: { persistentQuantity: 1, mealPlans: [{ weekPreparationId: "week", quantity: 1, usedIn: ["Hutspot"] }] } };
+    expect(matchesListOrigin(item, "meals")).toBe(true);
+    expect(matchesListOrigin(item, "other")).toBe(true);
+    expect(matchesListOrigin({ ...item, quantityContributions: { ...item.quantityContributions, persistentQuantity: 0 } }, "other")).toBe(false);
+    expect(item.quantityContributions.persistentQuantity).toBe(1);
+  });
+  it("suggesties en recurring behouden hun eigen zichtbare herkomst", () => {
+    expect(independentOriginLabel({ ...baseItem, sources: ["suggestion"] })).toBe("Suggestie");
+    expect(independentOriginLabel({ ...baseItem, sources: ["recurring"] })).toBe("Terugkerend");
+    const html = renderToStaticMarkup(createElement(ShoppingListOrigins, { item: { ...baseItem, sources: ["recurring"] }, targets: [], week: null, unresolved: false }));
+    expect(html).toContain("Terugkerend"); expect(html).not.toContain("Eigen recept");
+  });
+  it("onopgeloste receptadressen krijgen geen verzonnen eigen-receptlabel", () => {
+    const item = { ...baseItem, name: "Eigen recept hutspot", quantityContributions: { persistentQuantity: 0, mealPlans: [{ weekPreparationId: "old-week", quantity: 1, usedIn: ["Hutspot"] }] } };
+    const html = renderToStaticMarkup(createElement(ShoppingListOrigins, { item, targets: [], week: null, unresolved: true }));
+    expect(html).toContain(">Maaltijden<"); expect(html).not.toContain(">Eigen recept<");
   });
 });

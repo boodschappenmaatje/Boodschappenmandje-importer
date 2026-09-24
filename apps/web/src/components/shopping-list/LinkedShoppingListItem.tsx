@@ -1,12 +1,16 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
+import { Icon } from "@/components/Icon";
 import { ShoppingListItemCard } from "./ShoppingListItemCard";
+import { ShoppingListDetails } from "./ShoppingListDetails";
+import { ShoppingListQuantity } from "./ShoppingListQuantity";
+import { independentOriginLabel, isOwnRecipe, ShoppingListOrigins } from "./ShoppingListOrigins";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { PackageMutationFeedback, usePackageMutation } from "@/features/week-preparation/usePackageMutation";
 import { recipeContributionTargets, type RecipeContributionTarget } from "@/services/shopping-list/recipe-contributions";
-import { MAX_INGREDIENT_PACKAGES, packageCountLabel } from "@/services/week-preparation/ingredient-packages";
+import { MAX_INGREDIENT_PACKAGES, ingredientRecipeAmount, packageCountLabel } from "@/services/week-preparation/ingredient-packages";
 import type { ShoppingListItem } from "@/types/shopping-list";
 
 export function LinkedShoppingListItem({ item }: { item: ShoppingListItem }) {
@@ -20,6 +24,7 @@ export function LinkedShoppingListItem({ item }: { item: ShoppingListItem }) {
   const independent = item.quantityContributions.persistentQuantity;
   const direct = targets.length === 1 && independent === 0 && !unresolved ? targets[0] : null;
   const blocked = mutation.blocked || week.status !== "ready" || week.preparation?.status === "generating";
+  const open = expanded || Boolean(mutation.pending);
   function change(target: RecipeContributionTarget, direction: -1 | 1) {
     void mutation.change(target.link.dayIndex, target.link.ingredientId, target.packages + direction, target.link);
   }
@@ -28,38 +33,57 @@ export function LinkedShoppingListItem({ item }: { item: ShoppingListItem }) {
     if (direct) change(direct, direction);
     else setExpanded(true);
   }
+  function close() { setExpanded(false); setRemoveNotice(false); if (mutation.pending) mutation.cancel(); }
+  function remove() {
+    if (hasMeals) setRemoveNotice(true);
+    else void list.remove(item.productId);
+  }
+  const totalControls = (details = false) => <ShoppingListQuantity quantity={item.quantity}
+    label={`Aantal ${item.name}${details ? " in details" : ""}`}
+    decreaseLabel={`Verlaag aantal ${item.name}${details ? " in details" : ""}`}
+    increaseLabel={`Verhoog aantal ${item.name}${details ? " in details" : ""}`}
+    decreaseDisabled={hasMeals ? blocked || Boolean(direct && (!direct.adjustable || direct.packages <= 1)) : item.quantity <= 1}
+    increaseDisabled={hasMeals && (blocked || Boolean(direct && (!direct.adjustable || direct.packages >= MAX_INGREDIENT_PACKAGES)))}
+    onDecrease={() => step(-1)} onIncrease={() => step(1)} />;
   return <ShoppingListItemCard item={item}
-    onToggleChecked={() => void list.toggleChecked(item.productId)}
-    onIncrease={() => step(1)} onDecrease={() => step(-1)}
-    onRemove={() => { if (hasMeals) { setRemoveNotice(true); setExpanded(true); } else void list.remove(item.productId); }}
-    quantityControls={hasMeals ? <div className="linked-list-quantities">
-      <div className="quantity-control" aria-label={`Aantal ${item.name}`}>
-        <button type="button" aria-label={`Verlaag aantal ${item.name}`} disabled={blocked || Boolean(direct && (!direct.adjustable || direct.packages <= 1))} onClick={() => step(-1)}>−</button>
-        <output aria-live="polite" aria-label={`${item.quantity} stuks`}>{item.quantity}</output>
-        <button type="button" aria-label={`Verhoog aantal ${item.name}`} disabled={blocked || Boolean(direct && (!direct.adjustable || direct.packages >= MAX_INGREDIENT_PACKAGES))} onClick={() => step(1)}>+</button>
-      </div>
-      {direct ? <small>Voor {direct.recipeName}</small> : <button className="secondary-text-link" type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}>Kies recept of losse hoeveelheid</button>}
-      {direct && !direct.adjustable ? <small>Hoeveelheid niet betrouwbaar aanpasbaar. Bekijk het gerecht in Menu.</small> : null}
-      {expanded ? <div className="linked-list-origins" role="group" aria-label={`Herkomst ${item.name}`}>
-        {targets.map(target => <div className="linked-list-origin" key={`${target.link.dayIndex}:${target.link.recipeId}:${target.link.ingredientId}`}>
-          <span>{target.recipeName} · dag {target.link.dayIndex + 1}<small>{target.ingredient.name}</small></span>
-          <div className="quantity-control">
-            <button type="button" aria-label={`Minder ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`} disabled={blocked || !target.adjustable || target.packages <= 1} onClick={() => change(target, -1)}>−</button>
-            <output aria-live="polite">{packageCountLabel(target.packages)}</output>
-            <button type="button" aria-label={`Meer ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`} disabled={blocked || !target.adjustable || target.packages >= MAX_INGREDIENT_PACKAGES} onClick={() => change(target, 1)}>+</button>
-          </div>
-          {!target.adjustable ? <small>Hoeveelheid niet betrouwbaar aanpasbaar. Bekijk het gerecht in Menu.</small> : null}
-        </div>)}
-        {targets.length > 1 && targets.reduce((sum, target) => sum + target.packages, 0) > item.quantity - independent ? <small>Deze recepten delen verpakkingen. Het lijsttotaal telt wat je samen moet kopen.</small> : null}
-        {independent > 0 ? <div className="linked-list-origin"><span>Los van recepten</span><div className="quantity-control">
-          <button type="button" aria-label={`Minder losse ${item.name}`} disabled={blocked} onClick={() => void list.adjustIndependent(item.productId, -1)}>−</button>
-          <output aria-live="polite">{packageCountLabel(independent)}</output>
-          <button type="button" aria-label={`Meer losse ${item.name}`} disabled={blocked} onClick={() => void list.adjustIndependent(item.productId, 1)}>+</button>
-        </div></div> : null}
-        {unresolved ? <p>Een receptkoppeling is nog niet beschikbaar. <Link href="/week-voorbereiden">Open Menu om die te controleren.</Link></p> : null}
-      </div> : null}
-      <button className="secondary-text-link" type="button" disabled={blocked} onClick={() => { setExpanded(true); void list.adjustIndependent(item.productId, 1); }}>Losse verpakking toevoegen</button>
-      {removeNotice ? <p role="status">Dit product hoort bij je menu. Houd minimaal één verpakking per ingrediënt. Je kunt losse verpakkingen hierboven weghalen, of het gerecht in <Link href="/week-voorbereiden">Menu</Link> aanpassen.</p> : null}
-      <PackageMutationFeedback mutation={mutation} />
-    </div> : undefined} />;
+    onToggleChecked={() => void list.toggleChecked(item.productId)} onOpenDetails={() => setExpanded(true)}
+    originSummary={<ShoppingListOrigins item={item} targets={targets} week={week.preparation} unresolved={unresolved} />}
+    quantityControls={totalControls()}>
+    {!open && hasMeals ? <div className={mutation.busy || (mutation.message && !mutation.message.startsWith("Hoeveelheid, verpakkingen")) ? "shopping-row-feedback" : "visually-hidden"}><PackageMutationFeedback mutation={mutation} /></div> : null}
+    {open ? <ShoppingListDetails item={item} onClose={close}>
+      <section className="linked-list-quantities" aria-label={`Herkomstverdeling ${item.name}`}>
+        <h3>{hasMeals ? "Herkomst" : "Hoeveelheid"}</h3>
+        {!hasMeals ? <><p className="shopping-independent-label"><Icon name="plus" size={16} />{independentOriginLabel(item)}</p>{totalControls(true)}</> : <div className="linked-list-origins" role="group" aria-label={`Herkomst ${item.name}`}>
+          {targets.map(target => {
+            const amount = ingredientRecipeAmount(target.ingredient, target.link.dayIndex);
+            const own = isOwnRecipe(target, week.preparation);
+            return <div className="linked-list-origin" key={`${target.link.dayIndex}:${target.link.recipeId}:${target.link.ingredientId}`}>
+              <span className="linked-list-origin-title"><Icon name={own ? "chef" : "bowl"} size={18} /><span>{target.recipeName}<small>{own ? "Eigen recept" : "Menu"} · dag {target.link.dayIndex + 1}</small></span></span>
+              <small>{target.ingredient.name} · {amount.quantity.toLocaleString("nl-NL")} {amount.unit === "piece" ? "stuks" : amount.unit}</small>
+              <ShoppingListQuantity quantity={target.packages} output={packageCountLabel(target.packages)} label={`${target.recipeName} dag ${target.link.dayIndex + 1}`}
+                decreaseLabel={`Minder ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`}
+                increaseLabel={`Meer ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`}
+                decreaseDisabled={blocked || !target.adjustable || target.packages <= 1}
+                increaseDisabled={blocked || !target.adjustable || target.packages >= MAX_INGREDIENT_PACKAGES}
+                onDecrease={() => change(target, -1)} onIncrease={() => change(target, 1)} />
+              {!target.adjustable ? <small>Hoeveelheid niet betrouwbaar aanpasbaar. Bekijk het gerecht in Menu.</small> : null}
+            </div>;
+          })}
+          {targets.length > 1 && targets.reduce((sum, target) => sum + target.packages, 0) > item.quantity - independent ? <small>Deze recepten delen verpakkingen. Het lijsttotaal telt wat je samen moet kopen.</small> : null}
+          {independent > 0 ? <div className="linked-list-origin"><span className="linked-list-origin-title"><Icon name="plus" size={18} /><span>Los van recepten<small>{independentOriginLabel(item)}</small></span></span>
+            <ShoppingListQuantity quantity={independent} output={packageCountLabel(independent)} label={`Losse ${item.name}`}
+              decreaseLabel={`Minder losse ${item.name}`} increaseLabel={`Meer losse ${item.name}`} decreaseDisabled={blocked} increaseDisabled={blocked}
+              onDecrease={() => void list.adjustIndependent(item.productId, -1)} onIncrease={() => void list.adjustIndependent(item.productId, 1)} />
+          </div> : null}
+          {unresolved ? <div><p>Een receptkoppeling is nog niet beschikbaar. <Link href="/week-voorbereiden">Open Menu om die te controleren.</Link></p>
+            {item.quantityContributions.mealPlans.map((contribution, index) => <p key={index}>{contribution.usedIn.join(" · ") || "Gepland menu"}: {packageCountLabel(contribution.quantity)} gezamenlijk</p>)}
+          </div> : null}
+        </div>}
+        <button className="shopping-add-loose" type="button" disabled={hasMeals && blocked} onClick={() => void list.adjustIndependent(item.productId, 1)}><Icon name="plus" size={18} />Losse verpakking toevoegen</button>
+        {hasMeals ? <PackageMutationFeedback mutation={mutation} /> : null}
+        {removeNotice ? <p role="status">Dit product hoort bij je menu. Houd minimaal één verpakking per ingrediënt. Je kunt losse verpakkingen hierboven weghalen, of het gerecht in <Link href="/week-voorbereiden">Menu</Link> aanpassen.</p> : null}
+        <button className="shopping-detail-remove" type="button" aria-label={`Verwijder ${item.name}`} onClick={remove}><Icon name="trash" size={18} />Verwijderen</button>
+      </section>
+    </ShoppingListDetails> : null}
+  </ShoppingListItemCard>;
 }
