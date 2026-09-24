@@ -85,6 +85,26 @@ Blijvende eisen:
 - zichtbaar kunnen maken hoeveel producten zijn toegevoegd/bijgewerkt;
 - geen fictieve prijs of match gebruiken om een planner toch te laten slagen.
 
+## Budgetbewuste productselectie voor recepten
+Later toevoegen als aparte optimalisatiestap; niet meenemen in de huidige PR #28.
+
+Doel: bij automatisch gegenereerde recepten kiest BoodschappenMaatje standaard de goedkoopste **geschikte en betrouwbare** productcombinatie voor de benodigde ingrediënten, gerekend op wat daadwerkelijk gekocht moet worden.
+
+Uitgangspunten:
+- eerst semantisch bepalen welke productvarianten culinair/functioneel geschikt zijn; prijs mag nooit een verkeerde match rechtvaardigen;
+- vergelijk de werkelijke kosten van benodigde hele verpakkingen, niet alleen prijs per kilo/liter;
+- huismerk mag automatisch winnen van A-merk als beide geschikt zijn;
+- alternatieve vormen mogen alleen als het recept dit toestaat, bijvoorbeeld diepvries-spinazie in plaats van verse spinazie;
+- generieke ingrediënten mogen goedkopere geschikte varianten toelaten, bijvoorbeeld half-om-half gehakt wanneer het recept niet specifiek rundergehakt vereist;
+- specifieke recepteisen blijven hard: bijvoorbeeld kip blijft kip en verse basilicum wordt niet automatisch gedroogde basilicum;
+- gebruik de bestaande prijsregel: nieuwste betrouwbare positieve prijs, anders laatst bekende betrouwbare positieve prijs als fallback;
+- geen €0-prijzen, fictieve hoeveelheden of geforceerde matches;
+- optimaliseer op totale boodschappen-/verpakkingskosten voor het recept;
+- een expliciete productkeuze van de gebruiker heeft altijd voorrang op automatische prijsoptimalisatie;
+- gekozen SKU, verpakking, receptprijs, budget en boodschappenlijst moeten daarna consistent dezelfde selectie gebruiken.
+
+Voorbeeld: als 500 g nodig is, kan 1 verpakking van 600 g à €2,40 goedkoper zijn dan 2 verpakkingen van 400 g à €1,50. Kies dan €2,40, ook als de andere variant per gram goedkoper lijkt.
+
 ## Gerechtfoto's
 - rechtenvrije of eigen/AI-beelden kunnen gebruiken;
 - afbeelding moet inhoudelijk bij het gerecht en de ingrediënten passen;
