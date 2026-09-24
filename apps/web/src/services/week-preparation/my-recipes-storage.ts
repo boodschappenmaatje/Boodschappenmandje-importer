@@ -32,6 +32,7 @@ function cleanDish(dish: CustomDish): CustomDish {
     ...(dish.savedRecipeId ? { savedRecipeId: dish.savedRecipeId } : {}),
     ...(dish.targetServings !== undefined ? { targetServings: dish.targetServings } : {}),
     ingredients: dish.ingredients.map(row => ({ id: row.id, name: row.name, quantity: row.quantity, unit: row.unit, productId: row.productId,
+      ...(row.packageCount !== undefined ? { packageCount: row.packageCount } : {}),
       ...(row.packageCapacityOverride !== undefined ? { packageCapacityOverride: row.packageCapacityOverride } : {}) })),
   };
 }

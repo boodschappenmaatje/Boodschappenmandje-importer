@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { previewFreeChoice } from "./free-choice";
 import { MEAL_MIX_PROFILES, enrichIngredientsForMealMixes } from "./meal-mix-profiles";
-import { canAdjustIngredient, customDishWithIngredientQuantity, quantityStep, steppedIngredientQuantity, withIngredientQuantity } from "./ingredient-quantity";
-import { previewIngredientQuantity } from "./ingredient-quantity-preview";
+import { canAdjustIngredient, customDishWithIngredientQuantity, quantityStep, steppedIngredientQuantity, withIngredientQuantity, withIngredientPackages, applyIngredientQuantityOverrides } from "./ingredient-quantity";
+import { previewIngredientQuantity, previewIngredientPackages } from "./ingredient-quantity-preview";
 import { commitExplicitRecipeAlternative, previewManualProductChoice } from "./meal-customization";
 import { calculateDishCostSummary, generatePreparedWeek, revalidatePreparedWeek } from "./week-generation";
 import { createWeekPreparation, updateWeekSettings } from "./week-preparation";
@@ -56,6 +56,15 @@ describe("free choice quantities", () => {
     if (!chosen.ok) throw Error(chosen.reason);
     for (const ingredient of chosen.preparation.ingredients) {
       expect(canAdjustIngredient(ingredient, 0)).toBe(true);
+      const packChoice = await previewIngredientPackages(chosen.preparation, chosen.preparation, 0, ingredient.ingredientId, 2, mixRecipes, mixProducts, list, NOW);
+      expect(packChoice).not.toBeNull();
+      const packCommit = await commitExplicitRecipeAlternative(chosen.preparation, 0, packChoice!, false, mixRecipes, mixProducts, list, NOW);
+      if (!packCommit.ok) throw Error(packCommit.reason);
+      const packReopened = decodeStoredWeekPreparation(encodeStoredWeekPreparation(packCommit.preparation))!;
+      const packRefreshed = (await revalidatePreparedWeek(packReopened, mixRecipes, mixProducts, NOW, list)).preparation;
+      const packIngredient = packRefreshed.ingredients.find(item => item.ingredientId === ingredient.ingredientId)!;
+      expect(packIngredient.purchaseQuantity).toBe(2);
+      expect(packIngredient.requiredQuantity).toBe(2 * packIngredient.packageCapacity!);
       const amount = steppedIngredientQuantity(ingredient.requiredQuantity, ingredient.unit, 1);
       const adjusted = await previewIngredientQuantity(chosen.preparation, chosen.preparation, 0, ingredient.ingredientId, amount, mixRecipes, mixProducts, list, NOW);
       expect(adjusted).not.toBeNull();
@@ -173,5 +182,74 @@ describe("quantity persistence, packages and the existing recipe commit", () => 
     expect(customIngredientQuantity(next.ingredients[0],next)).toBe(.25);
     expect(customIngredientQuantity(next.ingredients[0],{...next,targetServings:4})).toBe(.5);
     expect(dish.ingredients[0].quantity).toBe(.4);
+  });
+});
+
+describe("explicit ingredient packages", () => {
+  async function packages(base: WeekPreparation, count: number, shopping = list) {
+    const preview = await previewIngredientPackages(base, base, 0, "pasta", count, recipes, products(), shopping, NOW);
+    expect(preview).not.toBeNull();
+    const result = await commitExplicitRecipeAlternative(base, 0, preview!, false, recipes, products(), shopping, NOW);
+    if (!result.ok) throw Error(result.reason);
+    return result.preparation;
+  }
+  it("1 → 2 → 3 → 2 → 1 updates recipe, full prices, per-person and both budgets", async () => {
+    let current = await prepared();
+    for (const count of [2,3,2,1]) {
+      current = await packages(current, count);
+      expect(current.ingredients[0]).toMatchObject({requiredQuantity:400*count,purchaseQuantity:count});
+      expect(calculateDishCostSummary(0,current.ingredients).knownCostCents / 4).toBe(50*count);
+      expect(current.generation).toMatchObject({mealPlanKnownCostCents:200*count,totalKnownWeekCostCents:200*count,mealBudgetRemainingCents:5000-200*count});
+      expect(completeShoppingListFromWeek(list,current.ingredients,current.id,NOW).items[0].quantity).toBe(count);
+    }
+  });
+  it("reopens, revalidates and refreshes planner with fixed packs when people change", async () => {
+    const changed = await packages(await prepared(),2);
+    const reopened = decodeStoredWeekPreparation(encodeStoredWeekPreparation(changed))!;
+    expect(reopened.customizations[0].quantityOverrides?.[0]).toMatchObject({packageCount:2,productId:product.id});
+    for (const people of [6,2,4]) {
+      const settings = updateWeekSettings(reopened,{people,days:1,budgetCents:10000},NOW);
+      const next = (await revalidatePreparedWeek(settings,recipes,products(),NOW,list)).preparation;
+      expect(next.ingredients[0]).toMatchObject({requiredQuantity:800,purchaseQuantity:2});
+    }
+    const regenerated = await generatePreparedWeek({...reopened,status:"readyForGeneration"},recipes,products(),NOW,list);
+    expect(regenerated.ingredients[0]).toMatchObject({requiredQuantity:800,purchaseQuantity:2});
+  });
+  it("preserves manual list contributions while raising and lowering recipe packs", async () => {
+    const base = await prepared();
+    const manual = increaseQuantity(completeShoppingListFromWeek(list,base.ingredients,base.id,NOW),product.id,NOW);
+    const more = await packages(base,3,manual);
+    const synced = completeShoppingListFromWeek(manual,more.ingredients,more.id,NOW);
+    expect(synced.items[0].quantity).toBe(4);
+    const less = await packages(more,1,synced);
+    const reduced = completeShoppingListFromWeek(synced,less.ingredients,less.id,NOW);
+    expect(reduced.items[0].quantity).toBe(2);
+    expect(reduced.items[0].quantityContributions.persistentQuantity).toBe(1);
+  });
+  it("rejects zero, negative, fractions, missing contents or missing prices", async () => {
+    const base = await prepared();
+    for (const count of [0,-1,1.5,100,NaN,Infinity]) expect(withIngredientPackages(base,0,"pasta",count)).toBeNull();
+    expect(withIngredientPackages({...base,ingredients:base.ingredients.map(i=>({...i,packageCapacity:null}))},0,"pasta",2)).toBeNull();
+    expect(await previewIngredientPackages(base,base,0,"pasta",2,recipes,products({...product,currentPrice:null}),list,NOW)).toBeNull();
+  });
+  it("applies legacy proportional and fixed package choices on separate days", async () => {
+    const base = await commit(await prepared(2),450);
+    const second = withIngredientPackages(base,1,"pasta",2)!;
+    const ingredients = applyIngredientQuantityOverrides(second,base.ingredients);
+    expect(ingredients[0].usedIn.map(use=>use.requiredQuantity)).toEqual([450,800]);
+    expect(ingredients[0].purchaseQuantity).toBe(4);
+  });
+  it("keeps native custom recipe packs through free choice, reopening and persons", async () => {
+    const generated = await prepared();
+    const base: WeekPreparation = {...generated,days:generated.days.map(day=>({...day,category:"freeChoice",freeChoice:true,recipe:null,recipeId:null,status:"freeChoice"}))};
+    const choice = await previewFreeChoice(base,0,{customDish:{name:"Eigen pasta",servings:4,ingredients:[{id:"row",name:"Spaghetti",quantity:.4,unit:"kg",productId:product.id}]}},recipes,products(),list,NOW);
+    const more = await previewIngredientPackages(base,choice!.preparation,0,"custom:0:row",2,recipes,products(),list,NOW);
+    const committed = await commitExplicitRecipeAlternative(base,0,more!,false,recipes,products(),list,NOW);
+    if (!committed.ok) throw Error(committed.reason);
+    const reopened = decodeStoredWeekPreparation(encodeStoredWeekPreparation(committed.preparation))!;
+    expect(reopened.days[0].customDish?.ingredients[0]).toMatchObject({quantity:.8,packageCount:2});
+    reopened.days[0].customDish!.targetServings=6;
+    const refreshed=(await revalidatePreparedWeek(reopened,recipes,products(),NOW,list)).preparation;
+    expect(refreshed.ingredients[0]).toMatchObject({requiredQuantity:800,purchaseQuantity:2});
   });
 });

@@ -119,7 +119,8 @@ describe("compact ingredient quantity controls", () => {
     const html = renderToStaticMarkup(createElement(CompactRecipeDetail, { preparation: fixture(), dayIndex: 0, onQuantityChange: vi.fn() }));
     expect(html).toContain('aria-label="Meer Ingrediënt 0"');
     expect(html).toContain('aria-label="Minder Ingrediënt 0"');
-    expect(html).toContain('600 g</output>');
+    expect(html).toContain('2 verpakkingen</output>');
+    expect(html).toContain('Totaal voor recept: 600 g');
     expect(html).toContain('2 × 500 g');
   });
   it("disables minus at minimum and both buttons without reliable pricing or while busy", () => {

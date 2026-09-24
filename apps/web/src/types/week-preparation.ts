@@ -139,6 +139,9 @@ export interface WeekMealCustomization {
 }
 
 export interface WeekIngredientQuantityOverride {
+  /** New explicit choices lock whole packages; older quantity choices still scale. */
+  packageCount?: number;
+  productId?: UUID;
   ingredientId: UUID;
   recipeId: UUID;
   quantity: number;
@@ -157,6 +160,8 @@ export interface PreparedDay {
 }
 
 export interface CustomDishIngredient {
+  /** Explicit whole packages, independent of the number of people. */
+  packageCount?: number;
   id: string;
   name: string;
   quantity: number;
@@ -186,6 +191,7 @@ export interface WeekIngredientUse {
 }
 
 export interface WeekProductReference {
+  weightGrams?: number | null;
   category?: string | null;
   productId: UUID;
   sku: string;
@@ -205,6 +211,8 @@ export interface WeekPriceSnapshot {
 }
 
 export interface WeekIngredientRequirement {
+  /** Manual product selection uses packages, not edible pieces, as its source amount. */
+  quantityIsPackageCount?: boolean;
   ingredientId: UUID;
   sourceKey: string;
   name: string;

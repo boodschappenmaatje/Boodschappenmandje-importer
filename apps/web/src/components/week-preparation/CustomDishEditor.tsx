@@ -5,7 +5,7 @@ import { CustomIngredientEditor } from "./CustomIngredientEditor";
 import { CompactRecipeDetail } from "./CompactRecipeDetail";
 import { DishImage } from "@/components/ui/DishImage";
 import { formatCents } from "@/services/budget/budget-engine";
-import { customDishWithIngredientQuantity } from "@/services/week-preparation/ingredient-quantity";
+import { customDishWithIngredientPackages } from "@/services/week-preparation/ingredient-quantity";
 import { validCustomDish } from "@/services/week-preparation/custom-dish";
 import { customDraftHasChanges, customDraftKey, loadCustomDraft, loadMyRecipes, saveCustomDraft, saveMyRecipe, type SavedCustomRecipe } from "@/services/week-preparation/my-recipes-storage";
 import type { RecipeAlternative } from "@/services/week-preparation/meal-customization";
@@ -103,7 +103,8 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
     if (!dish || !preview || busy || week.customizationBusy) return;
     const ingredient = preview.preparation.ingredients.find(row => row.ingredientId === ingredientId);
     if (!ingredient) return;
-    const next = customDishWithIngredientQuantity(dish, dayIndex, ingredientId, quantity, ingredient.unit, people);
+    const next = customDishWithIngredientPackages(dish, dayIndex, ingredient, quantity);
+    if (!next) return;
     try {
       if (next.savedRecipeId) {
         const saved = saveMyRecipe(window.localStorage, next, next.savedRecipeId);

@@ -1,0 +1,822 @@
+{
+  "at": "2026-09-24T08:14:09.637Z",
+  "catalog": {
+    "recipes": [
+      {
+        "id": "8c910e39-cd78-4bec-b6b4-890a228bb014",
+        "sourceKey": "couscous-kikkererwten",
+        "name": "Couscous met kikkererwten en groente",
+        "normalizedName": "couscous met kikkererwten en groente",
+        "symbol": "leaf.fill",
+        "preparationMinutes": 20,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "economical"
+      },
+      {
+        "id": "abf5ebe9-b0c9-4805-a0e4-e0b327d61dc4",
+        "sourceKey": "gebakken-rijst-ei",
+        "name": "Gebakken rijst met ei en groente",
+        "normalizedName": "gebakken rijst met ei en groente",
+        "symbol": "leaf.fill",
+        "preparationMinutes": 20,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "economical"
+      },
+      {
+        "id": "747aff30-bc90-40a9-9482-351f3d45d055",
+        "sourceKey": "vegetarische-aardappelschotel",
+        "name": "Vegetarische aardappelschotel met courgette",
+        "normalizedName": "vegetarische aardappelschotel met courgette",
+        "symbol": "leaf.fill",
+        "preparationMinutes": 45,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "economical"
+      },
+      {
+        "id": "09919a36-df8e-4a72-9a66-c7f05ac518e1",
+        "sourceKey": "vegetarische-courgettepasta",
+        "name": "Vegetarische pasta met courgette",
+        "normalizedName": "vegetarische pasta met courgette",
+        "symbol": "leaf.fill",
+        "preparationMinutes": 25,
+        "vegetarian": true,
+        "containsPork": false,
+        "kidFriendly": true,
+        "healthy": true,
+        "budgetTier": "economical"
+      },
+      {
+        "id": "ffc4abf2-6aa4-46f5-b23f-f947e571d2f1",
+        "sourceKey": "zuurkool-rookworst",
+        "name": "Zuurkoolstamppot met rookworst",
+        "normalizedName": "zuurkoolstamppot met rookworst",
+        "symbol": "fork.knife.circle",
+        "preparationMinutes": 35,
+        "vegetarian": false,
+        "containsPork": true,
+        "kidFriendly": true,
+        "healthy": false,
+        "budgetTier": "economical"
+      }
+    ],
+    "ingredients": [
+      {
+        "id": "531d6585-63b0-4af4-a85a-e9c9fc35d583",
+        "sourceKey": "chickpeas",
+        "name": "kikkererwten",
+        "normalizedName": "kikkererwten",
+        "defaultUnit": "grams",
+        "category": "Vegetarische proteïne",
+        "aliases": [
+          "kikkererwten"
+        ]
+      },
+      {
+        "id": "8fafe952-945f-41d2-bd5b-fde8a857f37f",
+        "sourceKey": "courgette",
+        "name": "courgette",
+        "normalizedName": "courgette",
+        "defaultUnit": "pieces",
+        "category": "Groente",
+        "aliases": [
+          "courgette"
+        ]
+      },
+      {
+        "id": "1e5aae5f-75bf-4175-a3bf-059a404a8f1e",
+        "sourceKey": "couscous",
+        "name": "couscous",
+        "normalizedName": "couscous",
+        "defaultUnit": "grams",
+        "category": "Pasta, rijst & granen",
+        "aliases": [
+          "couscous"
+        ]
+      },
+      {
+        "id": "98e8124d-b208-4d84-b641-c31d77b6c1d1",
+        "sourceKey": "eggs",
+        "name": "eieren",
+        "normalizedName": "eieren",
+        "defaultUnit": "pieces",
+        "category": "Zuivel & eieren",
+        "aliases": [
+          "eieren",
+          "ei",
+          "vrije uitloop eieren"
+        ]
+      },
+      {
+        "id": "67e4f54a-b83b-4c95-8223-2255c4dccfe2",
+        "sourceKey": "gratedCheese",
+        "name": "geraspte kaas",
+        "normalizedName": "geraspte kaas",
+        "defaultUnit": "grams",
+        "category": "Zuivel & eieren",
+        "aliases": [
+          "geraspte kaas"
+        ]
+      },
+      {
+        "id": "a7919107-0930-467f-81dc-f829938e0e4c",
+        "sourceKey": "paprika",
+        "name": "paprika",
+        "normalizedName": "paprika",
+        "defaultUnit": "pieces",
+        "category": "Groente",
+        "aliases": [
+          "paprika",
+          "rode paprika"
+        ]
+      },
+      {
+        "id": "341787ce-e60e-4029-9ae9-4d9196047293",
+        "sourceKey": "passata",
+        "name": "tomatenpassata",
+        "normalizedName": "tomatenpassata",
+        "defaultUnit": "grams",
+        "category": "Sauzen & smaakmakers",
+        "aliases": [
+          "tomatenpassata",
+          "gezeefde tomaten",
+          "passata"
+        ]
+      },
+      {
+        "id": "8d242dcc-ccfc-4538-835c-4ce86bf089cb",
+        "sourceKey": "penne",
+        "name": "penne",
+        "normalizedName": "penne",
+        "defaultUnit": "grams",
+        "category": "Pasta, rijst & granen",
+        "aliases": [
+          "penne"
+        ]
+      },
+      {
+        "id": "ba3edbe6-681d-41d9-ba0c-ee5c4d2540e1",
+        "sourceKey": "potatoes",
+        "name": "vastkokende aardappelen",
+        "normalizedName": "vastkokende aardappelen",
+        "defaultUnit": "grams",
+        "category": "Aardappel & zetmeel",
+        "aliases": [
+          "vastkokende aardappelen",
+          "aardappel",
+          "aardappelen"
+        ]
+      },
+      {
+        "id": "a11446a1-37c6-4570-987f-9c8f6ec06cd0",
+        "sourceKey": "rice",
+        "name": "basmatirijst",
+        "normalizedName": "basmatirijst",
+        "defaultUnit": "grams",
+        "category": "Pasta, rijst & granen",
+        "aliases": [
+          "basmatirijst",
+          "rijst"
+        ]
+      },
+      {
+        "id": "2113c60b-d2c6-4b6d-bb65-586e0baa6403",
+        "sourceKey": "smokedSausage",
+        "name": "rookworst",
+        "normalizedName": "rookworst",
+        "defaultUnit": "grams",
+        "category": "Vlees",
+        "aliases": [
+          "rookworst",
+          "Gelderse rookworst"
+        ]
+      },
+      {
+        "id": "f1dd46cb-f3a8-4905-ae5b-53b0ac14a14c",
+        "sourceKey": "soySauce",
+        "name": "sojasaus",
+        "normalizedName": "sojasaus",
+        "defaultUnit": "millilitres",
+        "category": "Sauzen & smaakmakers",
+        "aliases": [
+          "sojasaus"
+        ]
+      },
+      {
+        "id": "04513dcc-5929-46fa-a2d0-d6b2ccc67693",
+        "sourceKey": "stirFryVegetables",
+        "name": "roerbakgroenten",
+        "normalizedName": "roerbakgroenten",
+        "defaultUnit": "grams",
+        "category": "Groente",
+        "aliases": [
+          "roerbakgroenten",
+          "Hollandse roerbakgroenten",
+          "oosterse wokgroenten",
+          "wokgroenten",
+          "Oosterse wok",
+          "nasi-/bamigroenten",
+          "nasigroenten",
+          "bamigroenten"
+        ]
+      },
+      {
+        "id": "99d4075d-10e5-4089-8c31-f88742581268",
+        "sourceKey": "vegetarischGehakt",
+        "name": "vegetarisch gehakt",
+        "normalizedName": "vegetarisch gehakt",
+        "defaultUnit": "grams",
+        "category": "Vegetarische proteïne",
+        "aliases": [
+          "vegetarisch gehakt",
+          "plantaardig gehakt",
+          "Vivera plantaardig kruimgehakt"
+        ]
+      },
+      {
+        "id": "307853bb-db19-43ea-b7f1-b72b5641a0ec",
+        "sourceKey": "zuurkool",
+        "name": "zuurkool",
+        "normalizedName": "zuurkool",
+        "defaultUnit": "grams",
+        "category": "Groente",
+        "aliases": [
+          "zuurkool"
+        ]
+      }
+    ],
+    "relations": [
+      {
+        "id": "4ba69a3f-cb6b-47c9-aa07-30d471f3b184",
+        "recipeId": "09919a36-df8e-4a72-9a66-c7f05ac518e1",
+        "ingredientId": "8d242dcc-ccfc-4538-835c-4ce86bf089cb",
+        "amountPerPerson": 100,
+        "unit": "g",
+        "position": 0,
+        "optional": false
+      },
+      {
+        "id": "13b726c5-f884-489b-a989-798bef779fe7",
+        "recipeId": "09919a36-df8e-4a72-9a66-c7f05ac518e1",
+        "ingredientId": "8fafe952-945f-41d2-bd5b-fde8a857f37f",
+        "amountPerPerson": 0.25,
+        "unit": "piece",
+        "position": 1,
+        "optional": false
+      },
+      {
+        "id": "53f7d763-04f3-4d4c-995c-5a0c6acea5c5",
+        "recipeId": "09919a36-df8e-4a72-9a66-c7f05ac518e1",
+        "ingredientId": "341787ce-e60e-4029-9ae9-4d9196047293",
+        "amountPerPerson": 125,
+        "unit": "g",
+        "position": 2,
+        "optional": false
+      },
+      {
+        "id": "a3921bd5-f85f-41f1-bc82-44b24a739133",
+        "recipeId": "09919a36-df8e-4a72-9a66-c7f05ac518e1",
+        "ingredientId": "67e4f54a-b83b-4c95-8223-2255c4dccfe2",
+        "amountPerPerson": 30,
+        "unit": "g",
+        "position": 3,
+        "optional": false
+      },
+      {
+        "id": "e2d4afad-c27c-492d-9de4-51605bd9ce71",
+        "recipeId": "747aff30-bc90-40a9-9482-351f3d45d055",
+        "ingredientId": "ba3edbe6-681d-41d9-ba0c-ee5c4d2540e1",
+        "amountPerPerson": 250,
+        "unit": "g",
+        "position": 0,
+        "optional": false
+      },
+      {
+        "id": "7a23cc9b-ee35-4695-81ca-63090d829cc9",
+        "recipeId": "747aff30-bc90-40a9-9482-351f3d45d055",
+        "ingredientId": "8fafe952-945f-41d2-bd5b-fde8a857f37f",
+        "amountPerPerson": 0.25,
+        "unit": "piece",
+        "position": 1,
+        "optional": false
+      },
+      {
+        "id": "f90518dd-41e3-440d-b638-e654551ba593",
+        "recipeId": "747aff30-bc90-40a9-9482-351f3d45d055",
+        "ingredientId": "99d4075d-10e5-4089-8c31-f88742581268",
+        "amountPerPerson": 100,
+        "unit": "g",
+        "position": 2,
+        "optional": false
+      },
+      {
+        "id": "c161bd52-bc33-4811-a05a-66376975d2da",
+        "recipeId": "747aff30-bc90-40a9-9482-351f3d45d055",
+        "ingredientId": "67e4f54a-b83b-4c95-8223-2255c4dccfe2",
+        "amountPerPerson": 35,
+        "unit": "g",
+        "position": 3,
+        "optional": false
+      },
+      {
+        "id": "0408de41-f5db-4c48-9601-18f0f06f9027",
+        "recipeId": "8c910e39-cd78-4bec-b6b4-890a228bb014",
+        "ingredientId": "1e5aae5f-75bf-4175-a3bf-059a404a8f1e",
+        "amountPerPerson": 80,
+        "unit": "g",
+        "position": 0,
+        "optional": false
+      },
+      {
+        "id": "da5d2a3d-64ca-4656-86a7-fec8bc3553bc",
+        "recipeId": "8c910e39-cd78-4bec-b6b4-890a228bb014",
+        "ingredientId": "531d6585-63b0-4af4-a85a-e9c9fc35d583",
+        "amountPerPerson": 125,
+        "unit": "g",
+        "position": 1,
+        "optional": false
+      },
+      {
+        "id": "48337256-b8da-41a2-98f8-0f3012b888fd",
+        "recipeId": "8c910e39-cd78-4bec-b6b4-890a228bb014",
+        "ingredientId": "a7919107-0930-467f-81dc-f829938e0e4c",
+        "amountPerPerson": 0.4,
+        "unit": "piece",
+        "position": 2,
+        "optional": false
+      },
+      {
+        "id": "702366c3-1e15-4752-a99a-281398370f58",
+        "recipeId": "8c910e39-cd78-4bec-b6b4-890a228bb014",
+        "ingredientId": "8fafe952-945f-41d2-bd5b-fde8a857f37f",
+        "amountPerPerson": 0.2,
+        "unit": "piece",
+        "position": 3,
+        "optional": false
+      },
+      {
+        "id": "12da2031-8293-4202-9dab-8ac336a70af7",
+        "recipeId": "abf5ebe9-b0c9-4805-a0e4-e0b327d61dc4",
+        "ingredientId": "a11446a1-37c6-4570-987f-9c8f6ec06cd0",
+        "amountPerPerson": 80,
+        "unit": "g",
+        "position": 0,
+        "optional": false
+      },
+      {
+        "id": "131b1df6-51b5-4118-9ffe-665ba1cd34d8",
+        "recipeId": "abf5ebe9-b0c9-4805-a0e4-e0b327d61dc4",
+        "ingredientId": "98e8124d-b208-4d84-b641-c31d77b6c1d1",
+        "amountPerPerson": 1,
+        "unit": "piece",
+        "position": 1,
+        "optional": false
+      },
+      {
+        "id": "47ba454a-2f6d-4712-9381-02548736b376",
+        "recipeId": "abf5ebe9-b0c9-4805-a0e4-e0b327d61dc4",
+        "ingredientId": "04513dcc-5929-46fa-a2d0-d6b2ccc67693",
+        "amountPerPerson": 150,
+        "unit": "g",
+        "position": 2,
+        "optional": false
+      },
+      {
+        "id": "e4faf586-b2a0-475c-a04d-1b1c6b1c1600",
+        "recipeId": "abf5ebe9-b0c9-4805-a0e4-e0b327d61dc4",
+        "ingredientId": "f1dd46cb-f3a8-4905-ae5b-53b0ac14a14c",
+        "amountPerPerson": 15,
+        "unit": "ml",
+        "position": 3,
+        "optional": false
+      },
+      {
+        "id": "de798907-c23c-44ec-bcb2-276f10485720",
+        "recipeId": "ffc4abf2-6aa4-46f5-b23f-f947e571d2f1",
+        "ingredientId": "ba3edbe6-681d-41d9-ba0c-ee5c4d2540e1",
+        "amountPerPerson": 250,
+        "unit": "g",
+        "position": 0,
+        "optional": false
+      },
+      {
+        "id": "0cb0e489-4a3c-4f5d-883d-2b109531f5fa",
+        "recipeId": "ffc4abf2-6aa4-46f5-b23f-f947e571d2f1",
+        "ingredientId": "307853bb-db19-43ea-b7f1-b72b5641a0ec",
+        "amountPerPerson": 150,
+        "unit": "g",
+        "position": 1,
+        "optional": false
+      },
+      {
+        "id": "174da3e4-408c-48c4-a43c-46fa8c3ca88c",
+        "recipeId": "ffc4abf2-6aa4-46f5-b23f-f947e571d2f1",
+        "ingredientId": "2113c60b-d2c6-4b6d-bb65-586e0baa6403",
+        "amountPerPerson": 100,
+        "unit": "g",
+        "position": 2,
+        "optional": false
+      }
+    ]
+  },
+  "products": [
+    {
+      "id": "7edf7b4f-8fb3-40d9-9271-38c63cbd15ce",
+      "supermarket": "Hoogvliet",
+      "sku": "204870000",
+      "name": "Bio+ Biologische zuurkool",
+      "brand": "Bio+",
+      "category": "Aardappelen, groente, fruit/Groente/Koolgroenten",
+      "productType": "Aardappelen",
+      "packageText": "500 gram",
+      "weightGrams": 500,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/204870000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/bio-biologische-zuurkool",
+      "isAvailable": true,
+      "updatedAt": "2026-09-17T10:04:32.446+00:00",
+      "currentPrice": {
+        "productId": "7edf7b4f-8fb3-40d9-9271-38c63cbd15ce",
+        "price": 0.94,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-17T10:04:32.446+00:00",
+        "updatedAt": "2026-09-17T10:04:32.446+00:00"
+      }
+    },
+    {
+      "id": "0a53a44d-1f27-46e0-a0b7-0b9e1a1f1533",
+      "supermarket": "Hoogvliet",
+      "sku": "002499000",
+      "name": "Courgette",
+      "brand": null,
+      "category": "Alles voor de barbecue/Groente, fruit en aardappel/Groente en fruit",
+      "productType": "Aardappelen",
+      "packageText": "1 stuk",
+      "weightGrams": null,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/002499000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/courgette1",
+      "isAvailable": true,
+      "updatedAt": "2026-09-16T04:13:41.63095+00:00",
+      "currentPrice": {
+        "productId": "0a53a44d-1f27-46e0-a0b7-0b9e1a1f1533",
+        "price": 0.79,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-16T04:13:16.99+00:00",
+        "updatedAt": "2026-09-16T04:13:41.764418+00:00"
+      }
+    },
+    {
+      "id": "2dc0fbd9-7866-4f1b-9a91-d3b493297da6",
+      "supermarket": "Hoogvliet",
+      "sku": "682763000",
+      "name": "G'woon Extra magere rookworst",
+      "brand": "G'woon",
+      "category": "Internationale keuken, pasta, rijst/Hollandse keuken/Rookworsten",
+      "productType": "Worst",
+      "packageText": "275 gram",
+      "weightGrams": 275,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/682763000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/g-apos-woon-extra-magere-rookworst1",
+      "isAvailable": true,
+      "updatedAt": "2026-09-17T02:25:24.551776+00:00",
+      "currentPrice": {
+        "productId": "2dc0fbd9-7866-4f1b-9a91-d3b493297da6",
+        "price": 1.89,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-17T02:25:12.292+00:00",
+        "updatedAt": "2026-09-17T02:25:25.060168+00:00"
+      }
+    },
+    {
+      "id": "eb9e3932-6b5f-489e-9412-de1e327633aa",
+      "supermarket": "Hoogvliet",
+      "sku": "690293000",
+      "name": "G'woon Hollandse roerbakgroenten",
+      "brand": "G'woon",
+      "category": "Diepvries/Groente/Groentemix",
+      "productType": "Groente",
+      "packageText": "450 gram",
+      "weightGrams": 450,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/690293000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/g-apos-woon-hollandse-roerbakgroenten",
+      "isAvailable": true,
+      "updatedAt": "2026-09-19T02:28:02.977243+00:00",
+      "currentPrice": {
+        "productId": "eb9e3932-6b5f-489e-9412-de1e327633aa",
+        "price": 1.43,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-19T02:27:59.289+00:00",
+        "updatedAt": "2026-09-19T02:28:03.163944+00:00"
+      }
+    },
+    {
+      "id": "72622805-c43e-44cf-8661-254267f6715d",
+      "supermarket": "Hoogvliet",
+      "sku": "691196000",
+      "name": "G'woon Kikkererwten",
+      "brand": "G'woon",
+      "category": "Soepen, conserven, sauzen, kruiden/Conserven/Groenteconserven",
+      "productType": "Groente",
+      "packageText": "410 gram",
+      "weightGrams": 410,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/691196000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/g-apos-woon-kikkererwten",
+      "isAvailable": true,
+      "updatedAt": "2026-09-21T04:14:11.51+00:00",
+      "currentPrice": {
+        "productId": "72622805-c43e-44cf-8661-254267f6715d",
+        "price": 0.9,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-21T04:14:11.51+00:00",
+        "updatedAt": "2026-09-21T04:14:11.51+00:00"
+      }
+    },
+    {
+      "id": "103cbba2-9d76-4977-a171-33ed8627afcf",
+      "supermarket": "Hoogvliet",
+      "sku": "690412000",
+      "name": "G'woon Penne rigate",
+      "brand": "G'woon",
+      "category": "Internationale keuken, pasta, rijst/Italiaanse keuken/Pasta",
+      "productType": "Pasta",
+      "packageText": "500 gram",
+      "weightGrams": 500,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/690412000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/g-apos-woon-penne-rigate",
+      "isAvailable": true,
+      "updatedAt": "2026-09-19T02:28:38.496301+00:00",
+      "currentPrice": {
+        "productId": "103cbba2-9d76-4977-a171-33ed8627afcf",
+        "price": 0.72,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-19T02:28:06.707+00:00",
+        "updatedAt": "2026-09-19T02:28:38.684672+00:00"
+      }
+    },
+    {
+      "id": "4d4ce9c7-c209-4d89-9bcb-063d9de32e4c",
+      "supermarket": "Hoogvliet",
+      "sku": "690408000",
+      "name": "G'woon Witte rijst",
+      "brand": "G'woon",
+      "category": "Internationale keuken, pasta, rijst/Oosterse keuken/Mie, rijst",
+      "productType": "Pasta",
+      "packageText": "400 gram",
+      "weightGrams": 400,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/690408000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/g-apos-woon-witte-rijst",
+      "isAvailable": true,
+      "updatedAt": "2026-09-18T15:18:24.226+00:00",
+      "currentPrice": {
+        "productId": "4d4ce9c7-c209-4d89-9bcb-063d9de32e4c",
+        "price": 0.45,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-18T15:18:24.226+00:00",
+        "updatedAt": "2026-09-18T15:18:24.226+00:00"
+      }
+    },
+    {
+      "id": "c94cdaa3-7c1a-4037-89b1-c39a10165156",
+      "supermarket": "Hoogvliet",
+      "sku": "044499000",
+      "name": "Gele paprika",
+      "brand": null,
+      "category": "Aardappelen, groente, fruit/Groente/Tomaat, paprika",
+      "productType": "Aardappelen",
+      "packageText": "1 stuk",
+      "weightGrams": null,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/044499000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/gele-paprika",
+      "isAvailable": true,
+      "updatedAt": "2026-09-08T09:37:34.130549+00:00",
+      "currentPrice": {
+        "productId": "c94cdaa3-7c1a-4037-89b1-c39a10165156",
+        "price": 1.15,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-20T21:53:14.215571+00:00",
+        "updatedAt": "2026-09-20T21:53:14.215571+00:00"
+      }
+    },
+    {
+      "id": "f6395788-5361-4b3e-bc5c-77d80cc49cab",
+      "supermarket": "Hoogvliet",
+      "sku": "079928000",
+      "name": "Kikkoman Sojasaus",
+      "brand": "Kikkoman",
+      "category": "Internationale keuken, pasta, rijst/Oosterse keuken/Indonesische keuken",
+      "productType": "Pasta",
+      "packageText": "150 milliliter",
+      "weightGrams": null,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/079928000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/kikkoman-sojasaus",
+      "isAvailable": true,
+      "updatedAt": "2026-09-16T04:23:58.189045+00:00",
+      "currentPrice": {
+        "productId": "f6395788-5361-4b3e-bc5c-77d80cc49cab",
+        "price": 4.09,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-16T04:23:31.167+00:00",
+        "updatedAt": "2026-09-16T04:23:58.412864+00:00"
+      }
+    },
+    {
+      "id": "4aec27ae-0d01-45e1-accc-bf2d59007e3c",
+      "supermarket": "Hoogvliet",
+      "sku": "720789000",
+      "name": "Lassie Bio volkoren couscous",
+      "brand": "Lassie",
+      "category": "Internationale keuken, pasta, rijst/Oosterse keuken/Mie, rijst",
+      "productType": "Pasta",
+      "packageText": "275 gram",
+      "weightGrams": 275,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/720789000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/lassie-bio-volkoren-couscous",
+      "isAvailable": true,
+      "updatedAt": "2026-09-18T04:10:08.339+00:00",
+      "currentPrice": {
+        "productId": "4aec27ae-0d01-45e1-accc-bf2d59007e3c",
+        "price": 1.99,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-18T04:10:08.339+00:00",
+        "updatedAt": "2026-09-18T04:10:08.339+00:00"
+      }
+    },
+    {
+      "id": "808f4a9f-ec34-46ab-9652-f5d52b25bad8",
+      "supermarket": "Hoogvliet",
+      "sku": "695719000",
+      "name": "Melkan Geraspte kaas jong belegen 30+",
+      "brand": "Melkan",
+      "category": "Kaas, vleeswaren, tapas/Kaas/Buitenlandse kaas/Specialiteiten",
+      "productType": "Vleeswaren",
+      "packageText": "175 gram",
+      "weightGrams": 175,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/695719000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/melkan-geraspte-kaas-jong-belegen-30-",
+      "isAvailable": true,
+      "updatedAt": "2026-09-18T02:27:45.203146+00:00",
+      "currentPrice": {
+        "productId": "808f4a9f-ec34-46ab-9652-f5d52b25bad8",
+        "price": 1.91,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-18T02:27:40.987+00:00",
+        "updatedAt": "2026-09-18T02:27:45.333126+00:00"
+      }
+    },
+    {
+      "id": "7c663c04-cd5b-40a6-a16a-f592e645bdae",
+      "supermarket": "Hoogvliet",
+      "sku": "733086000",
+      "name": "Mutti Passata gezeefde tomaten",
+      "brand": "Mutti",
+      "category": "Internationale keuken, pasta, rijst/Italiaanse keuken/Tomatenbasis",
+      "productType": "Pasta",
+      "packageText": "700 gram",
+      "weightGrams": 700,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/733086000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/mutti-passata-gezeefde-tomaten",
+      "isAvailable": true,
+      "updatedAt": "2026-09-23T04:23:07.64+00:00",
+      "currentPrice": {
+        "productId": "7c663c04-cd5b-40a6-a16a-f592e645bdae",
+        "price": 3.09,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-23T04:23:07.64+00:00",
+        "updatedAt": "2026-09-23T04:23:07.64+00:00"
+      }
+    },
+    {
+      "id": "cb805ca4-aa8b-4877-a0af-5bff541c1b09",
+      "supermarket": "Hoogvliet",
+      "sku": "730703000",
+      "name": "Vivera Plantaardig kruimgehakt",
+      "brand": "Vivera",
+      "category": "Vlees, vis, vegetarisch/Vegetarisch/Gehakt",
+      "productType": "Gehakt",
+      "packageText": "200 gram",
+      "weightGrams": 200,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/730703000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/vivera-plantaardig-kruimgehakt",
+      "isAvailable": true,
+      "updatedAt": "2026-09-16T04:03:09.218739+00:00",
+      "currentPrice": {
+        "productId": "cb805ca4-aa8b-4877-a0af-5bff541c1b09",
+        "price": 2.49,
+        "oldPrice": 3.25,
+        "isOffer": true,
+        "offerText": "per stuk 2.49 · Aanbieding is geldig van 16 september t/m 22 september",
+        "validFrom": "2026-09-16T00:00:00+00:00",
+        "validUntil": "2026-09-22T00:00:00+00:00",
+        "fetchedAt": "2026-09-16T04:02:39.909+00:00",
+        "updatedAt": "2026-09-16T04:03:09.486629+00:00"
+      }
+    },
+    {
+      "id": "004139d3-f7a6-4a20-88f5-5af1176db1f6",
+      "supermarket": "Hoogvliet",
+      "sku": "718787000",
+      "name": "Voordeelzak aardappelen",
+      "brand": null,
+      "category": "Aardappelen, groente, fruit/Aardappelen/Kookaardappelen",
+      "productType": "Aardappelen",
+      "packageText": "4 kilo",
+      "weightGrams": null,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/718787000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/voordeelzak-aardappelen",
+      "isAvailable": true,
+      "updatedAt": "2026-09-23T07:27:29.884+00:00",
+      "currentPrice": {
+        "productId": "004139d3-f7a6-4a20-88f5-5af1176db1f6",
+        "price": 1.39,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-23T07:27:29.884+00:00",
+        "updatedAt": "2026-09-23T07:27:29.884+00:00"
+      }
+    },
+    {
+      "id": "604157ce-c10b-4c1c-8e9a-4128674938bb",
+      "supermarket": "Hoogvliet",
+      "sku": "729981000",
+      "name": "Vrije uitloop eieren",
+      "brand": null,
+      "category": "Zuivel, plantaardig, eieren/Eieren/Bio, vrije uitloop",
+      "productType": "Onbekend",
+      "packageText": "10 stuk",
+      "weightGrams": null,
+      "imageUrl": "https://cdn.hoogvliet.com/Images/Product/XL/729981000.jpg",
+      "sourceUrl": "https://www.hoogvliet.com/product/vrije-uitloop-eieren",
+      "isAvailable": true,
+      "updatedAt": "2026-09-16T06:25:33.132+00:00",
+      "currentPrice": {
+        "productId": "604157ce-c10b-4c1c-8e9a-4128674938bb",
+        "price": 4.01,
+        "oldPrice": null,
+        "isOffer": false,
+        "offerText": null,
+        "validFrom": null,
+        "validUntil": null,
+        "fetchedAt": "2026-09-16T06:25:33.132+00:00",
+        "updatedAt": "2026-09-16T06:25:33.132+00:00"
+      }
+    }
+  ]
+}

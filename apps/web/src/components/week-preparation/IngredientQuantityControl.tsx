@@ -1,5 +1,7 @@
 import type { WeekIngredientRequirement } from "@/types/week-preparation";
-import { canAdjustIngredient, MAX_INGREDIENT_QUANTITY, quantityMinimum, steppedIngredientQuantity } from "@/services/week-preparation/ingredient-quantity";
+import { canAdjustIngredientPackages } from "@/services/week-preparation/ingredient-quantity";
+
+import { ingredientPackageContents, ingredientPackagesForDay, MAX_INGREDIENT_PACKAGES, packageCountLabel, stepPackageCount } from "@/services/week-preparation/ingredient-packages";
 
 export function ingredientQuantityLabel(quantity: number, unit: WeekIngredientRequirement["unit"]): string {
   const amount = quantity.toLocaleString("nl-NL", { maximumFractionDigits: 3 });
@@ -11,11 +13,12 @@ export function ingredientQuantityLabel(quantity: number, unit: WeekIngredientRe
 export function IngredientQuantityControl({ ingredient, dayIndex, busy, onChange }: {
   ingredient: WeekIngredientRequirement; dayIndex: number; busy: boolean; onChange: (ingredientId: string, quantity: number) => void;
 }) {
-  const quantity = ingredient.usedIn.find(use => use.dayIndex === dayIndex)?.requiredQuantity ?? ingredient.requiredQuantity;
-  const eligible = canAdjustIngredient(ingredient, dayIndex);
-  return <div className="ingredient-quantity-control" role="group" aria-label={`Hoeveelheid ${ingredient.name}`}>
-    <button type="button" aria-label={`Minder ${ingredient.name}`} disabled={busy || !eligible || quantity <= quantityMinimum(ingredient.unit)} onClick={() => onChange(ingredient.ingredientId, steppedIngredientQuantity(quantity, ingredient.unit, -1))}>−</button>
-    <output aria-label={`Benodigd ${ingredient.name}`}>{ingredientQuantityLabel(quantity, ingredient.unit)}</output>
-    <button type="button" aria-label={`Meer ${ingredient.name}`} disabled={busy || !eligible || quantity >= MAX_INGREDIENT_QUANTITY} onClick={() => onChange(ingredient.ingredientId, steppedIngredientQuantity(quantity, ingredient.unit, 1))}>+</button>
+  const count = ingredientPackagesForDay(ingredient, dayIndex);
+  if (count === null || !ingredientPackageContents(ingredient)) return <span className="compact-ingredient-quantity">Verpakkingsinhoud onbekend</span>;
+  const eligible = canAdjustIngredientPackages(ingredient, dayIndex);
+  return <div className="ingredient-quantity-control" role="group" aria-label={`Verpakkingen ${ingredient.name}`}>
+    <button type="button" aria-label={`Minder ${ingredient.name}`} disabled={busy || !eligible || count <= 1} onClick={() => onChange(ingredient.ingredientId, stepPackageCount(count, -1))}>−</button>
+    <output aria-label={`Verpakkingen ${ingredient.name}`}>{packageCountLabel(count)}</output>
+    <button type="button" aria-label={`Meer ${ingredient.name}`} disabled={busy || !eligible || count >= MAX_INGREDIENT_PACKAGES} onClick={() => onChange(ingredient.ingredientId, stepPackageCount(count, 1))}>+</button>
   </div>;
 }

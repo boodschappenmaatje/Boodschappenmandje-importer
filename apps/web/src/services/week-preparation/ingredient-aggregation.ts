@@ -73,7 +73,10 @@ export function aggregateWeekIngredients(
     optional = false,
   ) {
     const scaledQuantity = roundedQuantity(quantity);
-    const current = aggregated.get(ingredientId);
+    // Different recipe units cannot be added (e.g. grams and pieces). Match
+    // each independently; the purchase/list layer combines actual product packs.
+    const key = JSON.stringify([ingredientId, unit, kind, brandConstraint]);
+    const current = aggregated.get(key);
     const recipeName =
       mealMixProfileForRecipe(day.recipe?.sourceKey ?? "")?.dishName ??
       day.recipe?.name ??
@@ -86,9 +89,6 @@ export function aggregateWeekIngredients(
     };
 
     if (current) {
-      if (current.unit !== unit || current.kind !== kind) {
-        throw new Error("incompatible-ingredient-units");
-      }
       current.requiredQuantity = roundedQuantity(
         current.requiredQuantity + scaledQuantity,
       );
@@ -108,7 +108,7 @@ export function aggregateWeekIngredients(
       return;
     }
 
-    aggregated.set(ingredientId, {
+    aggregated.set(key, {
       ingredientId,
       sourceKey,
       name,

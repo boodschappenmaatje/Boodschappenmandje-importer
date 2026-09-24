@@ -26,24 +26,23 @@
 ## Laatste geverifieerde regressies
 Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerfixtures en lokale Production-build geslaagd. Na deze checks veranderde de code alleen in de weergave van het aantal personen bij een opgeslagen recept; verdere commits tot de merge betroffen documentatie. De actuele Preview-check en Production-check waren groen.
 
-## Actieve vervolgscope — ingrediënthoeveelheid −/+
-- Branch: `feature/ingredient-quantity-controls`, vanaf remote `main` `5a085205`.
-- Compacte bediening bij geschikte ingrediënten in Menu, Vrije keuze en eigen receptdetail.
-- Gewenste hoeveelheid wordt apart van daadwerkelijk te kopen verpakkingen getoond; bestaande prijs-, budget-, override- en lijstsyncflow wordt hergebruikt.
-- Handmatige hoeveelheden worden per dag/ingrediënt/recept met het bijbehorende personenaantal bewaard. Personen wijzigen schaalt die gekozen verhouding mee. Eigen recepten gebruiken hun bestaande hoeveelheden en portiebasis.
-- Een wijziging in het weekgerecht wijzigt alleen dat weekgerecht; in Mijn recepten wordt de opgeslagen receptversie aangepast.
-- Bestaande schema-6-opslag blijft leesbaar; geen databasewijziging.
-- Draft PR: **#28**, implementatiecommit `90bf4e07d712099e60e7d937026575b3f5e5495f`.
-- Vercel Preview: **Ready / success**, branch-URL: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
-- Verificatie: **567/567 webtests**, **189/189 importerfixtures**, lint, TypeScript, seed/syntaxchecks en lokale Production-build geslaagd.
-- Live Preview-smoke (desktop): Knorr Thaise Kip Siam voor 4 personen; groente 866,667 → 916,667 g leidde tot 2 → 3 volledige verpakkingen van 450 g, gerecht €16,83 → €18,26, per persoon €4,21 → €4,57 en maaltijdbudgetruimte €33,17 → €31,74. Toevoegen synchroniseerde de lijst en weekbudgetruimte (€81,74).
-- Vervolgens één verpakking handmatig op de lijst toegevoegd en de recepthoeveelheid verlaagd: lijst hield de twee receptverpakkingen plus de handmatige verpakking (3 totaal, lijst €18,26). Kip 300 → 350 g bleef na volledige paginavernieuwing behouden. Knoppen gemeten op 44 × 44 px.
-- Honig-macaroni was live onvolledig en bleef geblokkeerd; geen prijs/match geforceerd. Honig en Knorr zijn daarnaast met de bestaande mixprofielen in fixtures getest.
-- **Open verificatiepunt: mobiele Preview-controle.** De beschikbare browser ondersteunt geen viewport-resize; een mobiele testweergave werd door het browserbeleid geblokkeerd. Alleen desktop is daadwerkelijk gecontroleerd. Daarom is de volledige status **KLAAR VOOR FYSIEKE IPHONE-TEST nog niet geclaimd**.
-- Geen merge, Production-deployment, database-migratie, destructieve databaseactie of productimport uitgevoerd.
+## Actieve vervolgscope — verpakkingen −/+ en plannercontrole
+- Bestaande branch: `feature/ingredient-quantity-controls`, Draft PR **#28**. Hervat vanaf remote `4375b5b512191c50155125c48873822ca4a36e2b`; de voorbereidende lokale wijzigingen uit de vorige run zijn afgemaakt.
+- −/+ verandert exact één werkelijk te kopen verpakking, minimum 1, maximum 99. Nul zou een nieuwe verwijderfunctie introduceren en wordt niet ondersteund.
+- Na een expliciete keuze is het verpakkingsaantal leidend: aantal × betrouwbare huidige productinhoud bepaalt de recepthoeveelheid. Compact detail toont totaal voor recept, verpakkingen en volledige aankoopprijs.
+- Ondersteunt betrouwbare gram/ml/stuks-inhoud, bestaande recepten, Honig/Knorr-mixen en eigen recepten. Bij onbekende inhoud geen misleidende bediening; bij ontbrekende actuele prijs geen wijziging of fictieve €0-prijs.
+- Bewaart de keuze per dag/recept/ingrediënt met het gekozen product. Bij personen wijzigen blijft het expliciet gekozen verpakkingsaantal vast; niet-aangepaste ingrediënten blijven via de bestaande personenlogica schalen. Oude hoeveelheidsoverrides blijven leesbaar en behouden hun oude verhouding totdat de gebruiker opnieuw −/+ gebruikt.
+- Eigen recepten bewaren het aantal in de bestaande ingrediëntrij; afgeleide hoeveelheid volgt dezelfde productinhoud. In een weekgerecht verandert alleen die weekversie. Structurele hoeveelheid-/product-/eenheidwijziging in de eigen-recepteditor vervangt de eerdere pakketkeuze.
+- Bestaande commit-, budgetoverride- en lijstsyncflow blijft leidend; losse handmatige lijstbijdragen blijven behouden. Geen nieuw opslagschema of databasewijziging.
+- Planner: live reproductie 4 personen / 5 dagen / €100 week / €70 maaltijden vond time-outs bij herhaald rangschikken van cataloguszoekpagina's en een exception bij verschillende eenheden voor hetzelfde ingrediënt. Kandidaten worden nu via één gedeelde, kort bewaarde catalogussnapshot gelezen; verschillende eenheden worden afzonderlijk berekend. Geen budget/readiness/matchingpoort versoepeld.
+- Dezelfde gemengde vijfdaagse case slaagt met actuele echte data voor **€41,52**; vijf Hollandse maaltijden **€40,49**, vijf snelle maaltijden **€38,20**. Dit was een technische fout, geen aangetoonde €70-budgetgrens. Zie `docs/ingredient-packages-planner-check.md`.
+- Geautomatiseerd: **592/592 webtests**, **189/189 importerfixtures**, seed/syntaxchecks, lint, TypeScript en lokale Production-build groen.
+- Preview: nieuwe implementatie wordt op dezelfde branch gepubliceerd; live verificatie volgt. Branch-URL: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
+- Mobiele Preview-gate blijft expliciet open totdat werkelijk op telefoonformaat gecontroleerd. De eerder beschikbare browser ondersteunt geen viewport-resize; een alternatieve mobiele testweergave werd door het browserbeleid geblokkeerd.
+- Geen merge, Production-deployment, database-migratie, destructieve databaseactie of productimport.
 
 ## Volgende stap
-Eerst de Preview op telefoonformaat controleren; daarna **KLAAR VOOR FYSIEKE IPHONE-TEST**. Pas na de fysieke test en afzonderlijke releasetoestemming mag deze branch naar main. Daarna resterende eigen-receptverbeteringen prioriteren op basis van gebruikerstesten; zie `ROADMAP.md`.
+Nieuwe Preview controleren, inclusief verpakking → recepthoeveelheid → prijs → budget → lijst en de planner-case. Pas na daadwerkelijke mobiele verificatie: **KLAAR VOOR FYSIEKE IPHONE-TEST**. Daarna fysieke iPhone-test en afzonderlijke releasetoestemming; geen merge binnen deze opdracht.
 
 ## Release-regels
 - Nieuwe ontwikkeling volgt de bestaande featurebranch → tests → Preview → iPhone-test → toestemming → merge → Production-flow.

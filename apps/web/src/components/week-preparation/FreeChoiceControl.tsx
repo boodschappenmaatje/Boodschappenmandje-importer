@@ -49,7 +49,7 @@ export function FreeChoiceControl({ dayIndex, initialDish, initialMode = null, o
     quantityInFlight.current = true; setBusy(true); setMessage("");
     const version = revision.current;
     try {
-      const next = await week.previewIngredientQuantity(dayIndex, ingredientId, quantity, preview.preparation);
+      const next = await week.previewIngredientPackages(dayIndex, ingredientId, quantity, preview.preparation);
       if (version !== revision.current) return;
       if (next) setPreview(next);
       else setMessage("Deze hoeveelheid kon niet worden berekend. Je vorige keuze blijft staan.");

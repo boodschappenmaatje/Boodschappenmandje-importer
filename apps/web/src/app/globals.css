@@ -4561,4 +4561,4 @@ html {
 .ingredient-quantity-control { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background); max-width: 100%; }
 .ingredient-quantity-control button { width: 44px; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 9px; color: var(--color-primary-strong); background: transparent; font-size: 21px; }
 .ingredient-quantity-control button:disabled { opacity: .4; }
-.ingredient-quantity-control output { min-width: 62px; max-width: 100px; padding: 0 4px; text-align: center; font-size: .8rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ingredient-quantity-control output { min-width: 102px; max-width: 116px; padding: 0 4px; text-align: center; font-size: .8rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

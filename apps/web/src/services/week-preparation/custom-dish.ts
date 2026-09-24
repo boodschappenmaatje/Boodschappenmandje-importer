@@ -2,6 +2,7 @@ import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeCatalog, RecipeIngredientDefinition } from "@/services/week-preparation/recipe-repository";
 import { applyProductToRequirement, searchIngredientProduct } from "@/services/week-preparation/product-matching";
 import type { CustomDish, WeekPreparation, WeekIngredientRequirement, CustomDishIngredient } from "@/types/week-preparation";
+import { validPackageCount, packageAmount } from "./ingredient-packages";
 
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("nl-NL").trim();
 
@@ -17,6 +18,7 @@ export function validCustomDish(value: unknown): value is CustomDish {
     dish.ingredients.every((row) => row && typeof row.id === "string" && row.id.length > 0 &&
       typeof row.name === "string" && row.name.trim().length > 0 && row.name.length <= 100 &&
       Number.isFinite(row.quantity) && row.quantity > 0 && row.quantity <= 100000 &&
+      (row.packageCount === undefined || (validPackageCount(row.packageCount) && typeof row.productId === "string" && row.productId.length > 0)) &&
       ["g", "kg", "ml", "l", "piece", "loaf"].includes(row.unit) &&
       (row.productId === null || (typeof row.productId === "string" && row.productId.length > 0)) &&
       (row.packageCapacityOverride === undefined || (Number.isFinite(row.packageCapacityOverride) && row.packageCapacityOverride > 0 && row.packageCapacityOverride <= 100000)));
@@ -61,6 +63,7 @@ export async function matchCustomDishes(preparation: WeekPreparation, catalog: R
 
 /** Round conversion noise only, never round the number of required pieces. */
 export function customIngredientQuantity(row: CustomDishIngredient, dish: CustomDish, householdPeople = dish.servings): number {
+  if (row.packageCount !== undefined) return row.quantity;
   return Math.round(row.quantity * (dish.targetServings ?? householdPeople) / dish.servings * 1e9) / 1e9;
 }
 
@@ -70,8 +73,26 @@ export function applyCustomProduct(requirement: WeekIngredientRequirement, row: 
   const matched = { ...applied, price: applied.price?.freshness === "fresh" && applied.price.amountCents > 0 ? applied.price : null };
   // An explicit content override is only valid for the exact selected product.
   // Prefer current catalog packaging when it can be read safely.
-  if (!available || matched.packageCapacity !== null || !row.packageCapacityOverride || row.productId !== available.id) return matched;
+  if (!available || matched.packageCapacity !== null || !row.packageCapacityOverride || row.productId !== available.id) return applyCustomPackageCount(matched, row);
   const factor = row.unit === "kg" || row.unit === "l" ? 1000 : 1;
   const capacity = row.packageCapacityOverride * factor;
-  return { ...matched, packageCapacity: capacity, purchaseQuantity: Math.max(1, Math.ceil(requirement.requiredQuantity / capacity)), packageCalculationMissing: false };
+  return applyCustomPackageCount({ ...matched, packageCapacity: capacity, purchaseQuantity: Math.max(1, Math.ceil(requirement.requiredQuantity / capacity)), packageCalculationMissing: false }, row);
+}
+
+function applyCustomPackageCount(requirement: WeekIngredientRequirement, row: CustomDishIngredient): WeekIngredientRequirement {
+  if (!row.packageCount) return requirement;
+  if (!requirement.packageCapacity || requirement.product?.productId !== row.productId) return { ...requirement, purchaseQuantity: null, packageCalculationMissing: true };
+  const requiredQuantity = packageAmount(row.packageCount, requirement.packageCapacity);
+  return { ...requirement, requiredQuantity, purchaseQuantity: row.packageCount, usedIn: requirement.usedIn.map(use => ({ ...use, requiredQuantity })) };
+}
+
+/** Keep the stored custom row's derived amount aligned with current product contents. */
+export function refreshCustomPackageAmounts(preparation: WeekPreparation, ingredients: WeekIngredientRequirement[]): WeekPreparation {
+  return { ...preparation, days: preparation.days.map(day => !day.customDish ? day : { ...day, customDish: { ...day.customDish, ingredients: day.customDish.ingredients.map(row => {
+    if (!row.packageCount) return row;
+    const requirement = ingredients.find(item => item.ingredientId === `custom:${day.dayIndex}:${row.id}` && !item.packageCalculationMissing);
+    const use = requirement?.usedIn.find(item => item.dayIndex === day.dayIndex);
+    if (!use) return row;
+    return { ...row, quantity: use.requiredQuantity / (row.unit === "kg" || row.unit === "l" ? 1000 : 1) };
+  }) } }) };
 }

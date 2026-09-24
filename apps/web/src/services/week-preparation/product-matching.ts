@@ -335,7 +335,7 @@ function capacityFromText(
 }
 
 export function productPackageCapacity(
-  product: Product,
+  product: Pick<Product, "name" | "packageText" | "weightGrams">,
   unit: WeekIngredientUnit,
 ): number | null {
   // A catalog's "1 stuk" can describe one net, while its name declares the
@@ -469,6 +469,7 @@ export function applyProductToRequirement(
       supermarket: product.supermarket,
       sourceUrl: product.sourceUrl,
       category: product.category,
+      weightGrams: product.weightGrams,
     },
     price:
       resolvedPrice && amountCents !== null
@@ -506,6 +507,7 @@ export function applyManualProductToRequirement(
   return {
     ...requirement,
     unit: "piece",
+    quantityIsPackageCount: true,
     kind: "ingredient",
     brandConstraint: null,
     requiredQuantity: safeQuantity,
@@ -525,6 +527,7 @@ export function applyManualProductToRequirement(
       supermarket: product.supermarket,
       sourceUrl: product.sourceUrl,
       category: product.category,
+      weightGrams: product.weightGrams,
     },
     price:
       resolvedPrice && amountCents !== null

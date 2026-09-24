@@ -36,14 +36,16 @@ Belangrijke productprincipes:
 
 ## Volgende stap
 
-### Ingrediënthoeveelheid −/+ — actieve vervolgscope
-PWA 14 is via PR #27 in Production. De concrete vervolgverbetering op `feature/ingredient-quantity-controls` voegt per geschikt ingrediënt compacte −/+ bediening toe in het receptdetail, inclusief maaltijdmixen, bestaande recepten en eigen recepten.
+### Verpakkingen −/+ en plannercontrole — actieve vervolgscope
+PWA 14 is via PR #27 in Production. De vervolgverbetering blijft op `feature/ingredient-quantity-controls`, Draft PR #28.
 
-Acceptatie: gewenste hoeveelheden blijven behouden bij heropenen/lijstsync/planner; personen wijzigen schaalt de handmatig gekozen verhouding mee. Werkelijke verpakkingen, actuele prijzen, maaltijd- en weekbudget en handmatige lijstwijzigingen blijven leidend. Gerichte regressies en mobiele Preview-controle gaan vooraf aan de fysieke iPhone-test.
+−/+ bedient hele verpakkingen (minimum 1); recepthoeveelheid volgt automatisch uit aantal × betrouwbare productinhoud. Expliciete verpakkingskeuzes blijven vast bij personen wijzigen, heropenen, navigeren, plannerrefresh en lijstsync. Bestaande prijs-, budget-, override- en lijstbescherming blijven leidend.
 
-Status: implementatie gereed, 567 webtests en 189 importerfixtures groen, lint/TypeScript/build groen, Draft PR #28 en Preview Ready. Live desktopflow geslaagd; mobiele Preview-controle staat nog open doordat de beschikbare browser geen telefoonviewport ondersteunt. Geen nieuw PWA-nummer toegekend. Geen merge of Production-deployment binnen deze opdracht.
+De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) is met echte data onderzocht: cataloguszoek-time-outs en onverenigbare eenheden konden de planning afbreken. Beide oorzaken zijn hersteld; dezelfde gemengde week slaagt voor €41,52 zonder versoepelde budget/readinessregels.
 
-Eerstvolgende stap: mobiele Preview-controle afronden, daarna fysieke iPhone-test van deze bediening. Daarna afzonderlijke releasebeslissing en vervolgens de overige eigen-receptverbeteringen hieronder prioriteren.
+Status: implementatie en 592 webtests/189 importerfixtures groen; lint/TypeScript/build groen. Nieuwe Preview en live verificatie vormen het volgende checkpoint; mobiele Preview-gate staat nog open. Geen nieuw PWA-nummer, merge of Production-deployment binnen deze opdracht.
+
+Eerstvolgende stap: Preview (inclusief mobiel) afronden, fysieke iPhone-test, daarna afzonderlijke releasebeslissing. Vervolgens de overige eigen-receptverbeteringen hieronder prioriteren.
 
 ---
 

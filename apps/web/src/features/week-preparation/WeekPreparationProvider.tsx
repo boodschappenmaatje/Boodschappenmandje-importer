@@ -13,7 +13,7 @@ import {
 
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { previewFreeChoice, searchFreeChoice, type FreeChoiceResult } from "@/services/week-preparation/free-choice";
-import { previewIngredientQuantity as loadIngredientQuantityPreview } from "@/services/week-preparation/ingredient-quantity-preview";
+import { previewIngredientPackages as loadIngredientQuantityPreview } from "@/services/week-preparation/ingredient-quantity-preview";
 import { customIngredientDefinition } from "@/services/week-preparation/custom-dish";
 import { searchIngredientProduct } from "@/services/week-preparation/product-matching";
 import type { CustomDish, WeekIngredientUnit } from "@/types/week-preparation";
@@ -86,7 +86,7 @@ import type {
 type WeekPreparationProviderStatus = "loading" | "ready" | "error";
 
 interface WeekPreparationContextValue {
-  previewIngredientQuantity: (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => Promise<RecipeAlternative | null>;
+  previewIngredientPackages: (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => Promise<RecipeAlternative | null>;
   searchDishes: (dayIndex: number, query: string, route?: "recipe" | "mix") => Promise<FreeChoiceResult[]>;
   previewCustomDish: (dayIndex: number, dish: CustomDish) => Promise<RecipeAlternative | null>;
   matchCustomIngredient: (name: string, unit: WeekIngredientUnit, productId?: string | null) => Promise<Product | null>;
@@ -1145,7 +1145,7 @@ export function WeekPreparationProvider({
     ],
   );
 
-  const previewIngredientQuantity = useCallback(async (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => {
+  const previewIngredientPackages = useCallback(async (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => {
     const current = preparationRef.current;
     const list = shoppingList.list;
     if (!current || !list || customizationRunRef.current || generationInFlightRef.current) return null;
@@ -1157,7 +1157,7 @@ export function WeekPreparationProvider({
     () => ({
       searchDishes,
       previewCustomDish,
-      previewIngredientQuantity,
+      previewIngredientPackages,
       matchCustomIngredient,
       status,
       preparation,
@@ -1192,7 +1192,7 @@ export function WeekPreparationProvider({
       actionMessage,
       searchDishes,
       previewCustomDish,
-      previewIngredientQuantity,
+      previewIngredientPackages,
       matchCustomIngredient,
       adjustCategory,
       changeDayCategory,

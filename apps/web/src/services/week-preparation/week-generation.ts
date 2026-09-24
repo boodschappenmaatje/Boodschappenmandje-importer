@@ -2,7 +2,7 @@ import { applyIngredientQuantityOverrides } from "./ingredient-quantity";
 import { calculateBudget } from "@/services/budget/budget-engine";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
-import { matchCustomDishes } from "@/services/week-preparation/custom-dish";
+import { matchCustomDishes, refreshCustomPackageAmounts } from "@/services/week-preparation/custom-dish";
 import {
   applyManualProductToRequirement,
   applyProductToRequirement,
@@ -1399,7 +1399,7 @@ export async function revalidatePreparedWeek(
     catalogRepository,
   ));
   const generatedAt = now.toISOString();
-  const refreshed = { ...preparation, ingredients };
+  const refreshed = { ...refreshCustomPackageAmounts(preparation, ingredients), ingredients };
   const mealBudget = evaluateMealBudget(
     preparation.budgetCents,
     preparation.mealBudgetCents,

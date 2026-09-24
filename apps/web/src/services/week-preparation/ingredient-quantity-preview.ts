@@ -2,13 +2,13 @@ import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeRepository } from "./recipe-repository";
 import type { ActiveShoppingList } from "@/types/shopping-list";
 import type { WeekPreparation } from "@/types/week-preparation";
-import { withIngredientQuantity } from "./ingredient-quantity";
+import { withIngredientQuantity, withIngredientPackages } from "./ingredient-quantity";
 import { budgetImpact, listWithoutCurrentWeekMealPlan, type RecipeAlternative } from "./meal-customization";
 import { calculateDishCostSummary, revalidatePreparedWeek } from "./week-generation";
 
-export async function previewIngredientQuantity(current: WeekPreparation, source: WeekPreparation, dayIndex: number, ingredientId: string, quantity: number, recipes: RecipeRepository, products: CatalogRepository, list: ActiveShoppingList, now = new Date()): Promise<RecipeAlternative | null> {
+export async function previewIngredientQuantity(current: WeekPreparation, source: WeekPreparation, dayIndex: number, ingredientId: string, quantity: number, recipes: RecipeRepository, products: CatalogRepository, list: ActiveShoppingList, now = new Date(), packages = false): Promise<RecipeAlternative | null> {
   if (current.id !== source.id || current.status === "draft") return null;
-  const changed = withIngredientQuantity(source, dayIndex, ingredientId, quantity);
+  const changed = packages ? withIngredientPackages(source, dayIndex, ingredientId, quantity) : withIngredientQuantity(source, dayIndex, ingredientId, quantity);
   const day = changed?.days.find(item => item.dayIndex === dayIndex);
   if (!changed || !day?.recipe) return null;
   const baseline = listWithoutCurrentWeekMealPlan(list, current.id, now)!;
@@ -26,4 +26,9 @@ export async function previewIngredientQuantity(current: WeekPreparation, source
     nextMealPlanCostCents: impact.nextMealPlanCostCents, mealBudgetCents: impact.mealBudgetCents, withinMealBudget: !impact.requiresBudgetOverride,
     alreadyUsedInWeek: current.days.some(item => item.dayIndex !== dayIndex && item.recipeId === day.recipeId),
     impact, preparation: next, basePreparationUpdatedAt: current.updatedAt, validatedAt: now.toISOString() };
+}
+
+/** Package UI uses the same validation, budget gate and commit as recipe changes. */
+export function previewIngredientPackages(...args: Parameters<typeof previewIngredientQuantity>) {
+  return previewIngredientQuantity(args[0], args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], true);
 }

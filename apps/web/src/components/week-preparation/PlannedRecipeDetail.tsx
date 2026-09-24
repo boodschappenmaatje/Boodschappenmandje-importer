@@ -22,7 +22,7 @@ export function PlannedRecipeDetail({ preparation, dayIndex }: { preparation: We
     if (inFlight.current || week.customizationBusy) return;
     inFlight.current = true; setBusy(true); setMessage("");
     try {
-      const next = await week.previewIngredientQuantity(dayIndex, ingredientId, quantity);
+      const next = await week.previewIngredientPackages(dayIndex, ingredientId, quantity);
       if (!next) { setMessage("Deze hoeveelheid kon niet worden berekend. Controleer het product en probeer opnieuw."); return; }
       if (next.impact.requiresBudgetOverride) setPending(next);
       else await commit(next, false);

@@ -53,12 +53,12 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
   const price = product ? customProductPrice(product) : null;
   const catalogCapacity = product ? productPackageCapacity(product, row.unit) : null;
   const capacity = catalogCapacity ?? row.packageCapacityOverride ?? null;
-  const quantity = customIngredientQuantity(row, dish);
+  const quantity = row.packageCount && capacity ? row.packageCount * capacity : customIngredientQuantity(row, dish);
   const packages = capacity && quantity > 0 ? Math.max(1, Math.ceil(quantity / capacity)) : null;
   const products = results?.query === query ? results.products : [];
   function selectProduct(next: Product) {
     const unit = row.productId ? row.unit : (["g", "ml", "piece", "loaf"] as const).find(unit => productPackageCapacity(next, unit) !== null) ?? row.unit;
-    onChange({ ...row, name: next.name.slice(0, 100), productId: next.id, unit, packageCapacityOverride: undefined });
+    onChange({ ...row, name: next.name.slice(0, 100), productId: next.id, unit, packageCapacityOverride: undefined, packageCount: undefined });
     setLoaded({ id: next.id, product: next, refresh }); setSearch(false); setMessage("");
   }
   return <fieldset className="custom-ingredient-editor">
@@ -70,8 +70,8 @@ export function CustomIngredientEditor({ row, dish, refresh, onChange, onRemove 
       {packages !== null && price !== null && available ? <strong className="custom-ingredient-cost">{formatCents(packages * price)}</strong> : null}</div>
       {loading ? <p role="status">Actueel product ophalen…</p> : !available ? <p role="alert">Dit product is niet beschikbaar. Kies opnieuw een product.</p> : price === null ? <p role="alert">Voor dit ingrediënt ontbreekt een actuele geldige prijs. Kies een ander product of probeer later opnieuw.</p> : null}
       <div className="custom-ingredient-amount">
-        <label><span className="visually-hidden">Benodigde hoeveelheid</span><input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={quantity || ""} onChange={event => onChange({ ...row, quantity: Number(event.target.value) * dish.servings / (dish.targetServings ?? dish.servings) })} /></label>
-        <label><span className="visually-hidden">Eenheid</span><select value={row.unit} onChange={event => onChange({ ...row, unit: event.target.value as WeekIngredientUnit, packageCapacityOverride: undefined })}>
+        <label><span className="visually-hidden">Benodigde hoeveelheid</span><input type="number" inputMode="decimal" min="0.001" max="100000" step="any" value={quantity || ""} onChange={event => onChange({ ...row, packageCount: undefined, quantity: Number(event.target.value) * dish.servings / (dish.targetServings ?? dish.servings) })} /></label>
+        <label><span className="visually-hidden">Eenheid</span><select value={row.unit} onChange={event => onChange({ ...row, unit: event.target.value as WeekIngredientUnit, packageCapacityOverride: undefined, packageCount: undefined })}>
           {[["g", "gram"], ["kg", "kilo"], ["ml", "milliliter"], ["l", "liter"], ["piece", "stuks"], ["loaf", "broden"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
       </div>
