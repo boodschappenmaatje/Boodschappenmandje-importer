@@ -91,6 +91,15 @@ Deze functionele hertest is opgevolgd door onderstaande feedback over de compact
 
 **Stoppunt: KLAAR VOOR FYSIEKE IPHONE-HERTEST. Compacte Preview nog niet fysiek geaccepteerd; Draft PR #28 blijft open.**
 
+## Volgende stap — iPhone-feedbackronde bewaren voor 25 september 2026
+De compacte Preview van PR #28 is nog niet fysiek geaccepteerd. Volgende ontwikkelronde verwerkt vier expliciete punten uit de iPhone-test:
+1. **Meer alternatieven / Zelf zoeken:** duidelijk herkenbare compacte knoppen met goede touch states.
+2. **Generieke ingrediëntvervanging:** bij inhoudelijk andere productvervanging moet de actuele ingrediëntnaam overal logisch mee veranderen (voorbeeld kipfilet → boomstammetjes), inclusief recept, lijst, prijs/budget en persistence.
+3. **Alle lijstcategorieën inklapbaar:** onafhankelijk in-/uitklappen met teller en chevron; puur presentatie, zonder data/state-mutatie.
+4. **Hard maaltijdbudget voor automatische planner:** automatisch geplande maaltijden blijven altijd binnen het ingestelde maaltijdbudget. De planner zoekt actief naar goedkopere geldige combinaties; een onhaalbaar budget mag geen dood “geen resultaten”-scherm opleveren maar toont het goedkoopste haalbare resultaat en bruikbare vervolgstappen. Alleen expliciete handmatige keuze mag via bestaande bevestigde override boven budget.
+
+Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual contributions, nieuwste-prijs/fallbackregel, personen/dagen, Honig/Knorr-readiness en bestaande harde betrouwbaarheidseisen. Volgende run hervat dezelfde branch/Draft PR, voert regressies + Preview uit en stopt opnieuw bij **KLAAR VOOR FYSIEKE IPHONE-HERTEST**. Geen merge/Production/import/migratie zonder aparte toestemming.
+
 ## Release-regels
 - Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.
 - Binnen deze opdracht: **geen merge, Production-deployment, Production-databasewijziging, migratie, destructieve actie of productimport**.
