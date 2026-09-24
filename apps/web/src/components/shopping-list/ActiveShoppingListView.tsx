@@ -108,7 +108,7 @@ export function ActiveShoppingListView() {
           </div>
 
           {groups.map(([category, items]) => <section className="ux-shopping-category" key={category} aria-label={category}>
-            <h3><Icon name="products" size={17} /><span>{category}</span><small aria-label={`${items.length} producten`}>{items.length}</small></h3>
+            <h3><Icon name="products" size={17} /><span>{category}</span><small aria-label={`${items.length} ${items.length === 1 ? "product" : "producten"}`}>{items.length}</small></h3>
             <ul className="shopping-items">{items.map((item) => <LinkedShoppingListItem key={item.productId} item={item} />)}</ul>
           </section>)}
           {groups.length === 0 ? <p role="status">{originFilter !== "all" ? "Geen producten met deze herkomst binnen je filter." : filter === "checked" ? "Nog niets afgevinkt." : "Alles is afgevinkt. Klaar voor deze ronde!"}</p> : null}
