@@ -1,4 +1,5 @@
 
+import type { ReactNode } from "react";
 import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 
 import { Icon } from "@/components/Icon";
@@ -34,12 +35,14 @@ export function ShoppingListItemCard({
   onDecrease,
   onRemove,
   onToggleChecked,
+  quantityControls,
 }: {
   item: ShoppingListItem;
   onIncrease: () => void;
   onDecrease: () => void;
   onRemove: () => void;
   onToggleChecked?: () => void;
+  quantityControls?: ReactNode;
 }) {
   const description = shoppingListItemDescription(item);
   const usedInLabel = shoppingListUsedInLabel(item.usedIn);
@@ -79,7 +82,7 @@ export function ShoppingListItemCard({
         <Icon name="trash" size={20} />
       </button>
 
-      <div className="quantity-control" aria-label={`Aantal ${item.name}`}>
+      {quantityControls ?? <div className="quantity-control" aria-label={`Aantal ${item.name}`}>
         <button
           type="button"
           aria-label={`Verlaag aantal ${item.name}`}
@@ -98,7 +101,7 @@ export function ShoppingListItemCard({
         >
           <Icon name="plus" size={18} />
         </button>
-      </div>
+      </div>}
     </li>
   );
 }

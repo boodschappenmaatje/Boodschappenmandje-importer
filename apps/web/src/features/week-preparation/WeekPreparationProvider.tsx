@@ -14,6 +14,8 @@ import {
 
 import { CATALOG_PRICE_REFRESH_MS, subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
 import { refreshPreparedWeekPrices } from "@/services/week-preparation/price-refresh";
+import type { PlannedIngredientLink } from "@/types/shopping-list";
+import { recipeContributionTargets, sameIngredientLink } from "@/services/shopping-list/recipe-contributions";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { previewFreeChoice, searchFreeChoice, type FreeChoiceResult } from "@/services/week-preparation/free-choice";
 import { previewIngredientPackages as loadIngredientQuantityPreview } from "@/services/week-preparation/ingredient-quantity-preview";
@@ -89,6 +91,7 @@ import type {
 type WeekPreparationProviderStatus = "loading" | "ready" | "error";
 
 interface WeekPreparationContextValue {
+  previewLinkedIngredientPackages: (link: PlannedIngredientLink, quantity: number) => Promise<RecipeAlternative | null>;
   previewIngredientPackages: (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => Promise<RecipeAlternative | null>;
   searchDishes: (dayIndex: number, query: string, route?: "recipe" | "mix") => Promise<FreeChoiceResult[]>;
   previewCustomDish: (dayIndex: number, dish: CustomDish) => Promise<RecipeAlternative | null>;
@@ -207,6 +210,7 @@ export function WeekPreparationProvider({
     setBudgetCents: updateBudgetCents,
   } = useBudget();
   const shoppingList = useActiveShoppingList();
+  const { getCurrentList } = shoppingList;
   const [status, setStatus] = useState<WeekPreparationProviderStatus>(
     initialPreparation !== undefined ? "ready" : "loading",
   );
@@ -292,7 +296,7 @@ export function WeekPreparationProvider({
     (next: WeekPreparation) => {
       preparationRef.current = next;
       setPreparation(next);
-      void persist(next);
+      return persist(next);
     },
     [persist],
   );
@@ -397,7 +401,7 @@ export function WeekPreparationProvider({
       shoppingList.list ?? undefined,
     )
       .then((refreshed) => {
-        if (active && preparationRef.current?.id === refreshed.id) {
+        if (active && preparationRef.current === current) {
           const reapproval = budgetOverrideReapprovalPreview(refreshed);
           if (reapproval) {
             setPendingBudgetReapproval({
@@ -420,6 +424,16 @@ export function WeekPreparationProvider({
       active = false;
     };
   }, [catalogRepository, recipeRepository, replace, shoppingList.list, status]);
+
+  const projectLinkedIngredients = useEffectEvent(() => {
+    const current = preparationRef.current;
+    if (!current || !["generated", "generationPartial"].includes(current.status) || !shoppingList.list) return;
+    if (!current.generation?.isMealBudgetComplete || !(["withinMealBudget", "exactlyMealBudget", "noMealBudget"].includes(current.generation.mealBudgetStatus) || hasValidUserApprovedBudgetOverride(current))) return;
+    if (shoppingList.list.items.some(item => item.quantityContributions.mealPlans.some(part => part.weekPreparationId === current.id))) {
+      void shoppingList.completeFromWeek(current.ingredients, current.id);
+    }
+  });
+  useEffect(() => { projectLinkedIngredients(); }, [preparation?.ingredients, shoppingList.status]);
 
   const refreshVisiblePrices = useEffectEvent(async () => {
     const current = preparationRef.current;
@@ -776,13 +790,13 @@ export function WeekPreparationProvider({
   ]);
 
   const currentList = useCallback(
-    () => shoppingList.list ?? undefined,
-    [shoppingList.list],
+    () => getCurrentList() ?? undefined,
+    [getCurrentList],
   );
 
   const syncValidatedCustomization = useCallback(
     async (next: WeekPreparation): Promise<boolean> => {
-      const list = shoppingList.list;
+      const list = currentList();
       const alreadyCompleted = Boolean(
         list?.items.some((item) =>
           item.quantityContributions.mealPlans.some(
@@ -791,13 +805,13 @@ export function WeekPreparationProvider({
         ),
       );
       try {
-        // Synchroniseer eerst de lijst. Bij een opslagfout blijft de zichtbare
-        // week daardoor volledig ongewijzigd in plaats van half aangepast.
+        // Persist the list projection and canonical choice before reporting success.
+        // On reopening, the projection is rebuilt from the stored week.
         if (alreadyCompleted || next.days.some((day) => day.category === "freeChoice" && day.recipe)) {
           await shoppingList.completeFromWeek(next.ingredients, next.id);
         }
         setPendingBudgetReapproval(null);
-        replace(next);
+        await replace(next);
         setActionMessage(
           alreadyCompleted
             ? "Gerecht en boodschappenlijst zijn bijgewerkt."
@@ -815,7 +829,7 @@ export function WeekPreparationProvider({
         return false;
       }
     },
-    [replace, shoppingList],
+    [replace, shoppingList, currentList],
   );
 
   const changeDayCategory = useCallback(
@@ -932,8 +946,9 @@ export function WeekPreparationProvider({
       setActionMessage("Gerecht, actuele prijzen en budget worden opnieuw gecontroleerd…");
       try {
         const validationNow = new Date();
+        const activeList = currentList();
         const validationList = listWithoutCurrentWeekMealPlan(
-          currentList(),
+          activeList,
           current.id,
           validationNow,
         );
@@ -959,8 +974,8 @@ export function WeekPreparationProvider({
             ? { applied: false, revalidatedPreview: committed.preview }
             : { applied: false };
         }
-        if (preparationRef.current !== current) {
-          setActionMessage("Je week is ondertussen gewijzigd. Controleer je gerecht opnieuw voordat je opslaat.");
+        if (preparationRef.current !== current || currentList() !== activeList) {
+          setActionMessage("Je week of lijst is ondertussen gewijzigd. Controleer je gerecht opnieuw voordat je opslaat.");
           return { applied: false };
         }
         return await syncValidatedCustomization(committed.preparation)
@@ -1183,17 +1198,25 @@ export function WeekPreparationProvider({
 
   const previewIngredientPackages = useCallback(async (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => {
     const current = preparationRef.current;
-    const list = shoppingList.list;
+    const list = getCurrentList();
     if (!current || !list || customizationRunRef.current || generationInFlightRef.current) return null;
     const preview = await loadIngredientQuantityPreview(current, source ?? current, dayIndex, ingredientId, quantity, recipeRepository(), catalogRepository(), list);
     return preparationRef.current === current ? preview : null;
-  }, [catalogRepository, recipeRepository, shoppingList.list]);
+  }, [catalogRepository, recipeRepository, getCurrentList]);
+
+  const previewLinkedIngredientPackages = useCallback(async (link: PlannedIngredientLink, quantity: number) => {
+    const current = preparationRef.current;
+    const item = getCurrentList()?.items.find(item => item.productId === link.productId);
+    if (!current || !item || !recipeContributionTargets(item, current).targets.some(target => target.adjustable && sameIngredientLink(target.link, link))) return null;
+    return previewIngredientPackages(link.dayIndex, link.ingredientId, quantity);
+  }, [previewIngredientPackages, getCurrentList]);
 
   const value = useMemo<WeekPreparationContextValue>(
     () => ({
       searchDishes,
       previewCustomDish,
       previewIngredientPackages,
+      previewLinkedIngredientPackages,
       matchCustomIngredient,
       status,
       preparation,
@@ -1229,6 +1252,7 @@ export function WeekPreparationProvider({
       searchDishes,
       previewCustomDish,
       previewIngredientPackages,
+      previewLinkedIngredientPackages,
       matchCustomIngredient,
       adjustCategory,
       changeDayCategory,

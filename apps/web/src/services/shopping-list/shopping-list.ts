@@ -8,6 +8,7 @@ import {
   type RemovedShoppingListItem,
   type ShoppingListItem,
   type ShoppingListMealPlanContribution,
+  type PlannedIngredientLink,
   type ShoppingListQuantityContributions,
   type ShoppingListItemSource,
   type ShoppingListPriceReference,
@@ -105,6 +106,7 @@ function mergeMealPlanContributions(
           ...existing,
           quantity: existing.quantity + contribution.quantity,
           usedIn: uniqueStrings(existing.usedIn, contribution.usedIn),
+          ingredientLinks: [...new Map([...(existing.ingredientLinks ?? []), ...(contribution.ingredientLinks ?? [])].map(link => [JSON.stringify(link), link])).values()],
         }
       : contribution);
   }
@@ -217,6 +219,14 @@ export function addCatalogProduct(
   };
 }
 
+export function ingredientLinksForWeek(requirements: WeekIngredientRequirement[], weekPreparationId: string): PlannedIngredientLink[] {
+  const links = requirements.flatMap(ingredient => ingredient.product ? ingredient.usedIn.map(use => ({
+    weekPreparationId, dayIndex: use.dayIndex, recipeId: use.recipeId,
+    ingredientId: ingredient.ingredientId, productId: ingredient.product!.productId, sku: ingredient.product!.sku,
+  })) : []);
+  return [...new Map(links.map(link => [JSON.stringify(link), link])).values()];
+}
+
 export function completeShoppingListFromWeek(
   list: ActiveShoppingList,
   requirements: WeekIngredientRequirement[],
@@ -292,7 +302,7 @@ export function completeShoppingListFromWeek(
         ...contributions,
         mealPlans: [
           ...retainedMealPlans,
-          { weekPreparationId, quantity, usedIn },
+          { weekPreparationId, quantity, usedIn, ingredientLinks: ingredientLinksForWeek(groupedRequirements, weekPreparationId) },
         ],
       };
       productUpdate = {
@@ -346,7 +356,7 @@ export function completeShoppingListFromWeek(
       quantity,
       quantityContributions: {
         persistentQuantity: 0,
-        mealPlans: [{ weekPreparationId, quantity, usedIn }],
+        mealPlans: [{ weekPreparationId, quantity, usedIn, ingredientLinks: ingredientLinksForWeek(groupedRequirements, weekPreparationId) }],
       },
       price,
       sources: ["weekPreparation", "recipe"],
@@ -414,6 +424,7 @@ function updateQuantity(
   }
 
   const current = list.items[index];
+  if (current.quantityContributions.mealPlans.length > 0) return list;
   if (delta < 0 && current.quantity <= 1) {
     return list;
   }
@@ -429,18 +440,6 @@ function updateQuantity(
       0,
       contributions.persistentQuantity + delta,
     );
-  } else {
-    const adjustable = contributions.mealPlans.findIndex(
-      (contribution) => contribution.quantity > 0,
-    );
-    if (adjustable < 0) return list;
-    contributions.mealPlans[adjustable] = {
-      ...contributions.mealPlans[adjustable],
-      quantity: contributions.mealPlans[adjustable].quantity + delta,
-    };
-    contributions.mealPlans = contributions.mealPlans.filter(
-      (contribution) => contribution.quantity > 0,
-    );
   }
 
   const timestamp = nowIso(now);
@@ -451,13 +450,24 @@ function updateQuantity(
   return { ...list, items, updatedAt: timestamp };
 }
 
+/** Explicitly changes only the independent part, including removing its final package. */
+export function adjustPersistentQuantity(list: ActiveShoppingList, productId: string, delta: -1 | 1, now: Date | string = new Date()): ActiveShoppingList {
+  const item = list.items.find(row => row.productId === productId);
+  if (!item || (delta < 0 && item.quantityContributions.persistentQuantity === 0)) return list;
+  const timestamp = nowIso(now);
+  const next = rebuildContributedItem({ ...item, sources: uniqueSources(item.sources, "manual") }, {
+    ...item.quantityContributions, persistentQuantity: item.quantityContributions.persistentQuantity + delta,
+  });
+  return { ...list, updatedAt: timestamp, items: list.items.flatMap(row => row !== item ? [row] : next ? [{ ...next, updatedAt: timestamp }] : []) };
+}
+
 export function removeShoppingListItem(
   list: ActiveShoppingList,
   productId: string,
   now: Date | string = new Date(),
 ): { list: ActiveShoppingList; removed: RemovedShoppingListItem | null } {
   const index = list.items.findIndex((item) => item.productId === productId);
-  if (index < 0) {
+  if (index < 0 || list.items[index].quantityContributions.mealPlans.length > 0) {
     return { list, removed: null };
   }
 

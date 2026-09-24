@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
 import { ListBudgetSummary } from "@/components/budget/ListBudgetSummary";
-import { ShoppingListItemCard } from "@/components/shopping-list/ShoppingListItemCard";
+import { LinkedShoppingListItem } from "@/components/shopping-list/LinkedShoppingListItem";
 import { ShoppingListProductSearch } from "@/components/shopping-list/ShoppingListProductSearch";
 import { ShoppingListTotalCard } from "@/components/shopping-list/ShoppingListTotalCard";
 import { groupShoppingListItems, type ShoppingListFilter } from "@/services/shopping-list/shopping-list";
@@ -21,10 +21,6 @@ export function ActiveShoppingListView() {
     total,
     persistenceWarning,
     lastRemoved,
-    toggleChecked,
-    increase,
-    decrease,
-    remove,
     undoRemove,
     dismissUndo,
   } = useActiveShoppingList();
@@ -106,9 +102,7 @@ export function ActiveShoppingListView() {
 
           {groupShoppingListItems(list.items, filter).map(([category, items]) => <section className="ux-shopping-category" key={category} aria-label={category}>
             <h3>{category}</h3>
-            <ul className="shopping-items">{items.map((item) => <ShoppingListItemCard key={item.productId} item={item}
-              onToggleChecked={() => void toggleChecked(item.productId)}
-              onIncrease={() => void increase(item.productId)} onDecrease={() => void decrease(item.productId)} onRemove={() => void remove(item.productId)} />)}</ul>
+            <ul className="shopping-items">{items.map((item) => <LinkedShoppingListItem key={item.productId} item={item} />)}</ul>
           </section>)}
           {groupShoppingListItems(list.items, filter).length === 0 ? <p role="status">{filter === "checked" ? "Nog niets afgevinkt." : "Alles is afgevinkt. Klaar voor deze ronde!"}</p> : null}
           <Link className="secondary-text-link" href="/producten">Producten zoeken</Link>

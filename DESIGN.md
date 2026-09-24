@@ -106,3 +106,12 @@ Bij nieuwe UI:
 ## Laatst bekende prijzen
 - Oudere betrouwbare positieve catalogusprijzen blijven bruikbaar; toon compact “Laatste bekende prijs” bij de ingrediëntrij. Label ze niet als vers.
 - Een automatische prijsupdate verandert bedragen, geen expliciet gekozen verpakkingen of gerechten. Bestaande budgetbevestiging blijft gelden bij overschrijding.
+
+## Recept ⇄ lijst
+- Geplande receptingrediënten en hun boodschappenlijstbijdragen zijn tweerichtings gekoppeld. Een expliciete verpakkingswijziging vanuit recept of lijst synchroniseert naar de andere kant, terwijl onafhankelijke handmatige bijdragen beschermd blijven.
+- Bij precies één geplande ingrediëntbijdrage zonder los deel bedient lijst −/+ direct dat ingrediënt; toon het betreffende gerecht.
+- Bij meerdere ingrediënten/recepten of een los deel opent de totale lijstbediening een herkomstkeuze. Geef per gerecht de dag en het ingrediënt aan; wijzig alleen de gekozen bijdrage.
+- “Losse verpakking toevoegen” maakt expliciet een onafhankelijke lijstbijdrage. Toon deze als “Los van recepten”, met eigen bediening tot 0.
+- Houd receptbijdragen op minimaal 1 verpakking. Een verwijderactie op een gekoppeld item legt uit dat aanpassen via Menu nodig is; verwijder nooit stil een vereist ingrediënt. Afvinken verandert geen hoeveelheid.
+- Waar recepten automatisch verpakkingen delen, leg dat bij de herkomstkeuze uit. Het lijsttotaal blijft gebaseerd op de gezamenlijk te kopen verpakkingen.
+- Beide richtingen gebruiken dezelfde berekening, budgetbevestiging en laadstatus. Bij gewijzigde week/lijst tijdens validatie moet opnieuw worden gecontroleerd.

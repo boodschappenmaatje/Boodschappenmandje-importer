@@ -74,7 +74,12 @@ function isQuantityContributions(
         Number.isInteger(contribution.quantity) &&
         Number(contribution.quantity) > 0 &&
         Array.isArray(contribution.usedIn) &&
-        contribution.usedIn.every((item) => typeof item === "string"),
+        contribution.usedIn.every((item) => typeof item === "string") &&
+        (contribution.ingredientLinks === undefined || (Array.isArray(contribution.ingredientLinks) && contribution.ingredientLinks.every(link =>
+          isRecord(link) && link.weekPreparationId === contribution.weekPreparationId &&
+          Number.isInteger(link.dayIndex) && Number(link.dayIndex) >= 0 && Number(link.dayIndex) < 7 &&
+          [link.recipeId, link.ingredientId, link.productId, link.sku].every(value => typeof value === "string" && value.length > 0)
+        ))),
     )
   );
 }

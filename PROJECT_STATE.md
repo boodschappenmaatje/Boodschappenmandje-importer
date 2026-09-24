@@ -40,8 +40,8 @@ Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerf
 - Reguliere importerfixtures: **189/189** en seed/syntaxchecks groen. **608/608 webtests**, lint, TypeScript en lokale Production-build groen.
 - Preview-writebeveiliging: de publieke readiness-refreshroute schrijft niet naar de gedeelde database wanneer VERCEL_ENV=preview; lokale/cold readiness blijft werken. Geen Production-databaseactie, import of migratie uitgevoerd.
 
-## Actueel stoppunt
-**KLAAR VOOR FYSIEKE IPHONE-TEST.**
+## Vorig checkpoint — fysieke iPhone-test inmiddels afgekeurd
+De eerder geteste recept→lijst-flow werkte, maar lijst→recept ontbrak. Onderstaande eerdere resultaten blijven historische regressiebewijzen; zij vormen geen acceptatie van de huidige opdracht.
 - Functionele codecommit: `4f8d4d9edc872d82e099ee71e555c168b8189d2a`, remote opnieuw gecontroleerd na Work-time-out. Bestaande branch en Draft PR #28 behouden. De aansluitende checkpointcommit bevat alleen documentatie; de actuele remote PR-head is de exacte referentie voor hervatten.
 - Vercel Preview-check op de codecommit: **success**. Echte browserclicks in Menu én Vrije keuze geslaagd: 1→2→1, 400→800→400g, ingrediënt-/gerecht-/persoonprijs, budget en lijst.
 - Reload en navigeren behouden keuzes. Handmatige extra courgette blijft behouden bij receptvermindering en plannerrefresh. Oudere positieve ingrediëntprijs is daadwerkelijk bedienbaar.
@@ -54,6 +54,19 @@ Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerf
 - Volledige bewijzen en resterende datablokkades: `docs/pr28-functional-fix-2026-09-24.md` en `docs/pr28-validation-2026-09-24.json`.
 
 Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
+
+## Actieve herstelscope — recept ⇄ lijst
+- Nieuwe fysieke iPhone-feedback: Preview **niet geaccepteerd**. Hervat vanaf remote `34666ad7d6b92e684fd4772b3a6f1cc36aa93ce9`, dezelfde branch/Draft PR #28.
+- Oorzaak: lijst-plus verhoogde altijd de losse bijdrage; lijst-min kon de geaggregeerde weekbijdrage verlagen zonder receptmutatie. Exacte ingrediëntadressen ontbraken.
+- Canonieke verpakkingskeuze blijft in het geplande ingrediënt. Lijstbijdragen bewaren week/dag/recept/ingrediënt/product/SKU-adressen en worden uit diezelfde keuze afgeleid. Geen tweede zelfstandig bewerkbare recepthoeveelheid in de lijst.
+- Eén gedeelde mutatie- en budgetroute voor beide UI's. Bij één receptbijdrage werkt lijst −/+ direct. Bij meerdere herkomsten kiest de gebruiker de receptbijdrage of het losse deel. “Losse verpakking toevoegen” maakt alleen een onafhankelijke bijdrage.
+- Minimum 1 voor receptbijdragen; verwijderen geeft uitleg en verwijzing naar Menu. Manual-only items blijven normaal bedienbaar en verwijderbaar. Gedeelde automatische verpakkingsberekening blijft intact.
+- Geplande receptingrediënten en hun boodschappenlijstbijdragen zijn tweerichtings gekoppeld. Een expliciete verpakkingswijziging vanuit recept of lijst synchroniseert naar de andere kant, terwijl onafhankelijke handmatige bijdragen beschermd blijven.
+- Tests: nieuwe echte lijstflow-interacties, 400→800→400g, normale/eigen/mixrecepten, twee recepten, manual-extra, minimum/verwijderen, heropenen, personenwijziging, budgetannulering en automatische €1,79→€1,99. **630/630 webtests, 189/189 importerfixtures, lint, TypeScript en Production-build groen.** De 24-cellenmatrix en plannerfixture (€39,44 binnen €70) zijn opnieuw geslaagd. Preview-verificatie volgt.
+- Geen databasewijziging of migratie nodig: optionele adresmetadata in het bestaande lokale lijstformaat; oudere lijsten worden veilig vanuit hun bekende week gekoppeld.
+- Uitgebreid verslag: `docs/pr28-bidirectional-sync.md`.
+
+**Stoppunt: implementatie en regressies afgerond; nieuwe Preview moet nog functioneel worden gecontroleerd. Nog niet klaar voor iPhone-hertest.**
 
 ## Release-regels
 - Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.

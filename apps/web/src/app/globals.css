@@ -4562,3 +4562,16 @@ html {
 .ingredient-quantity-control button { width: 44px; min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 9px; color: var(--color-primary-strong); background: transparent; font-size: 21px; }
 .ingredient-quantity-control button:disabled { opacity: .4; }
 .ingredient-quantity-control output { min-width: 102px; max-width: 116px; padding: 0 4px; text-align: center; font-size: .8rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+/* One package command, with explicit ownership when a product has several origins. */
+.linked-list-quantities { grid-column: 2 / -1; min-width: 0; display: grid; gap: .5rem; justify-items: end; }
+.linked-list-quantities > small { max-width: 100%; text-align: right; }
+.linked-list-origins { width: 100%; min-width: 0; display: grid; gap: .75rem; padding-block: .5rem; }
+.linked-list-origin { display: grid; gap: .35rem; min-width: 0; }
+.linked-list-origin > span { overflow-wrap: anywhere; }
+.linked-list-origin small { display: block; }
+.linked-list-origin .quantity-control { justify-self: end; max-width: 100%; }
+.linked-list-quantities .quantity-control button { min-width: 44px; min-height: 44px; }
+.linked-list-quantities .quantity-control output { min-width: 2rem; white-space: normal; text-align: center; }
+.linked-list-quantities .secondary-text-link { min-height: 44px; text-align: right; }
+.linked-list-quantities p { margin: 0; }

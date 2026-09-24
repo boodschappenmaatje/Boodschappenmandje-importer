@@ -8,7 +8,7 @@ import { calculateDishCostSummary, generatePreparedWeek, revalidatePreparedWeek 
 import { createWeekPreparation, updateWeekSettings } from "./week-preparation";
 import { decodeStoredWeekPreparation, encodeStoredWeekPreparation } from "./indexeddb-storage";
 import { customIngredientQuantity } from "./custom-dish";
-import { addCatalogProduct, completeShoppingListFromWeek, createEmptyActiveShoppingList, increaseQuantity } from "@/services/shopping-list/shopping-list";
+import { addCatalogProduct, completeShoppingListFromWeek, createEmptyActiveShoppingList, adjustPersistentQuantity } from "@/services/shopping-list/shopping-list";
 import type { Product, Recipe } from "@/types/catalog";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeCatalog, RecipeRepository } from "./recipe-repository";
@@ -125,7 +125,7 @@ describe("quantity persistence, packages and the existing recipe commit", () => 
   it("synchronizes changed package counts while protecting a manual extra package", async () => {
     const base=await prepared();
     const planned=completeShoppingListFromWeek(list,base.ingredients,base.id,NOW);
-    const manual=increaseQuantity(planned,product.id,NOW);
+    const manual=adjustPersistentQuantity(planned,product.id,1,NOW);
     const more=await commit(base,850,manual);
     const synced=completeShoppingListFromWeek(manual,more.ingredients,more.id,NOW);
     expect(synced.items[0].quantity).toBe(4);
@@ -217,7 +217,7 @@ describe("explicit ingredient packages", () => {
   });
   it("preserves manual list contributions while raising and lowering recipe packs", async () => {
     const base = await prepared();
-    const manual = increaseQuantity(completeShoppingListFromWeek(list,base.ingredients,base.id,NOW),product.id,NOW);
+    const manual = adjustPersistentQuantity(completeShoppingListFromWeek(list,base.ingredients,base.id,NOW),product.id,1,NOW);
     const more = await packages(base,3,manual);
     const synced = completeShoppingListFromWeek(manual,more.ingredients,more.id,NOW);
     expect(synced.items[0].quantity).toBe(4);

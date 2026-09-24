@@ -19,6 +19,7 @@ import {
 } from "@/services/shopping-list/indexeddb-storage";
 import {
   addCatalogProduct,
+  adjustPersistentQuantity,
   calculateShoppingListTotal,
   completeShoppingListFromWeek,
   createEmptyActiveShoppingList,
@@ -56,11 +57,13 @@ interface ActiveShoppingListContextValue {
     weekPreparationId: string,
   ) => Promise<ActiveShoppingList | null>;
   toggleChecked: (productId: string) => Promise<void>;
+  adjustIndependent: (productId: string, delta: -1 | 1) => Promise<void>;
   increase: (productId: string) => Promise<void>;
   decrease: (productId: string) => Promise<void>;
   remove: (productId: string) => Promise<void>;
   undoRemove: () => Promise<void>;
   dismissUndo: () => void;
+  getCurrentList: () => ActiveShoppingList | null;
   quantityFor: (productId: string) => number;
 }
 
@@ -225,6 +228,8 @@ export function ActiveShoppingListProvider({
     await commit((current) => toggleShoppingListItem(current, productId));
   }, [commit]);
 
+  const adjustIndependent = useCallback((productId: string, delta: -1 | 1) => commit(current => adjustPersistentQuantity(current, productId, delta)), [commit]);
+
   const increase = useCallback(
     async (productId: string) => {
       setLastRemoved(null);
@@ -264,6 +269,8 @@ export function ActiveShoppingListProvider({
 
   const dismissUndo = useCallback(() => setLastRemoved(null), []);
 
+  const getCurrentList = useCallback(() => listRef.current, []);
+
   const quantityFor = useCallback(
     (productId: string) =>
       list?.items.find((item) => item.productId === productId)?.quantity ?? 0,
@@ -288,11 +295,13 @@ export function ActiveShoppingListProvider({
       removeMealPlanForWeek,
       toggleChecked,
       increase,
+      adjustIndependent,
       decrease,
       remove,
       undoRemove,
       dismissUndo,
       quantityFor,
+      getCurrentList,
     }),
     [
       addProduct,
@@ -302,10 +311,12 @@ export function ActiveShoppingListProvider({
       dismissUndo,
       toggleChecked,
       increase,
+      adjustIndependent,
       lastRemoved,
       list,
       persistenceWarning,
       quantityFor,
+      getCurrentList,
       removeMealPlanForWeek,
       remove,
       status,

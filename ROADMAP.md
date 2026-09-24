@@ -43,9 +43,9 @@ PWA 14 is via PR #27 in Production. De vervolgverbetering blijft op `feature/ing
 
 De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) is met echte data onderzocht: cataloguszoek-time-outs en onverenigbare eenheden konden de planning afbreken. Beide oorzaken zijn hersteld; dezelfde gemengde week slaagt voor €41,52 zonder versoepelde budget/readinessregels.
 
-Status: **KLAAR VOOR FYSIEKE IPHONE-TEST** op Draft PR #28. Prijsleeftijd blokkeert een betrouwbare positieve catalogusprijs niet meer. De actieve prijs ververst automatisch zonder verpakkingskeuzes te veranderen. Echte DOM-clicktests van Menu/Vrije keuze en de volledige personen-/dagenmatrix zijn toegevoegd. Read-only audit: Honig 10/19 en Knorr 23/43 selecteerbaar; resterende betrouwbare-data-eisen blijven hard. Planner 4p/5d/€100/€70 slaagt voor €39,44. Preview is Ready en echte Menu/Vrije-keuze-clicks, Honig/Knorr, opslag, lijstbescherming en 2p/7d zijn gecontroleerd; de live 4p/5d-planner slaagt voor €37,01. Fysieke iPhone-acceptatie staat nog open. Geen nieuw PWA-nummer of release binnen deze opdracht.
+Status: fysieke iPhone-test van PR #28 **afgekeurd wegens ontbrekende lijst→recept-koppeling**. Huidige scope is volledige tweerichtingssync via exacte bijdragen. Werkende verpakkingsbediening, prijsfallback, automatische prijsverversing, Honig/Knorr en planner blijven behouden en krijgen regressies. Geen nieuw PWA-nummer of release.
 
-Eerstvolgende stap: fysieke iPhone-test; daarna afzonderlijke releasebeslissing. Ontbrekende receptprofielen/stuksomrekeningen blijven onder datakwaliteit en assortiment staan.
+Eerstvolgende stap: nieuwe Preview in beide richtingen controleren, daarna fysieke iPhone-hertest. De eerdere 24-cellenmatrix en 4p/5d/€100/€70-planner worden opnieuw als regressie uitgevoerd. Resterende echte assortimentsdatablokkades blijven afzonderlijk gedocumenteerd.
 
 ---
 
@@ -269,6 +269,7 @@ Hoogvliet blijft voorlopig de ondersteunde supermarkt en huidige prijsbron.
 - Cache/performance mag correctheid niet veranderen.
 
 ## Gebruikersdata
+- Geplande receptingrediënten en hun boodschappenlijstbijdragen zijn tweerichtings gekoppeld. Een expliciete verpakkingswijziging vanuit recept of lijst synchroniseert naar de andere kant, terwijl onafhankelijke handmatige bijdragen beschermd blijven.
 - Manual wijzigingen beschermen.
 - Herkomst van lijstitems behouden.
 - Nieuwe week heeft een expliciete lifecycle.
