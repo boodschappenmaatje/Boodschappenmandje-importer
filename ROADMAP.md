@@ -43,9 +43,9 @@ PWA 14 is via PR #27 in Production. De vervolgverbetering blijft op `feature/ing
 
 De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) is met echte data onderzocht: cataloguszoek-time-outs en onverenigbare eenheden konden de planning afbreken. Beide oorzaken zijn hersteld; dezelfde gemengde week slaagt voor €41,52 zonder versoepelde budget/readinessregels.
 
-Status: functionele fix in verificatie op PR #28. Prijsleeftijd blokkeert een betrouwbare positieve catalogusprijs niet meer. De actieve prijs ververst automatisch zonder verpakkingskeuzes te veranderen. Echte DOM-clicktests van Menu/Vrije keuze en de volledige personen-/dagenmatrix zijn toegevoegd. Read-only audit: Honig 10/19 en Knorr 23/43 selecteerbaar; resterende betrouwbare-data-eisen blijven hard. Planner 4p/5d/€100/€70 slaagt voor €39,44. Definitieve Preview en fysieke iPhone-acceptatie staan nog open. Geen nieuw PWA-nummer of release binnen deze opdracht.
+Status: **KLAAR VOOR FYSIEKE IPHONE-TEST** op Draft PR #28. Prijsleeftijd blokkeert een betrouwbare positieve catalogusprijs niet meer. De actieve prijs ververst automatisch zonder verpakkingskeuzes te veranderen. Echte DOM-clicktests van Menu/Vrije keuze en de volledige personen-/dagenmatrix zijn toegevoegd. Read-only audit: Honig 10/19 en Knorr 23/43 selecteerbaar; resterende betrouwbare-data-eisen blijven hard. Planner 4p/5d/€100/€70 slaagt voor €39,44. Preview is Ready en echte Menu/Vrije-keuze-clicks, Honig/Knorr, opslag, lijstbescherming en 2p/7d zijn gecontroleerd; de live 4p/5d-planner slaagt voor €37,01. Fysieke iPhone-acceptatie staat nog open. Geen nieuw PWA-nummer of release binnen deze opdracht.
 
-Eerstvolgende stap: nieuwe functionele Preview controleren en fysieke iPhone-test; daarna afzonderlijke releasebeslissing. Ontbrekende receptprofielen/stuksomrekeningen blijven onder datakwaliteit en assortiment staan.
+Eerstvolgende stap: fysieke iPhone-test; daarna afzonderlijke releasebeslissing. Ontbrekende receptprofielen/stuksomrekeningen blijven onder datakwaliteit en assortiment staan.
 
 ---
 
@@ -234,7 +234,7 @@ Hoogvliet blijft voorlopig de ondersteunde supermarkt en huidige prijsbron.
 # Technische en productregels
 
 ## Budget & prijzen
-- NIEUWSTE betrouwbare positieve prijs gebruiken; laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar is, wordt die automatisch actief.
+- Gebruik de nieuwste betrouwbare positieve prijs. Als die niet beschikbaar is, gebruik de laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar komt, wordt die automatisch actief.
 - Prijsleeftijd alleen is geen reden om een verder geldig recept, mix of verpakkingsbediening te blokkeren. Oudere prijzen blijven herkenbaar; expliciete gebruikerskeuzes blijven behouden bij prijsverversing.
 - Budget rekent met daadwerkelijk te kopen verpakkingen.
 - Geen fictieve deelprijzen als eindtotaal.

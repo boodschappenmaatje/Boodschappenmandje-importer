@@ -27,9 +27,9 @@
 Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerfixtures en lokale Production-build geslaagd. Na deze checks veranderde de code alleen in de weergave van het aantal personen bij een opgeslagen recept; verdere commits tot de merge betroffen documentatie. De actuele Preview-check en Production-check waren groen.
 
 ## Actieve vervolgscope — PR #28 functionele prijs-/verpakkingsfix
-- Branch `feature/ingredient-quantity-controls`, bestaande Draft PR **#28**. Deze run hervat vanaf gecontroleerde remote `2789063240adf3ed1b4cbbdb191253b1cdc95c97`; alle 35 PR-bestanden kwamen overeen.
+- Branch `feature/ingredient-quantity-controls`, bestaande Draft PR **#28**. De functionele fix hervatte vanaf gecontroleerde remote `2789063240adf3ed1b4cbbdb191253b1cdc95c97`; alle 35 PR-bestanden kwamen overeen.
 - Eerdere fysieke iPhone-Preview was afgekeurd. Nu functionele codefix: centrale positieve-prijsregel vervangt conflicterende freshness-gates in −/+, Vrije keuze, eigen recepten, matching en bevestiging.
-- **Vaste productregel:** NIEUWSTE betrouwbare positieve prijs gebruiken; laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar is, wordt die automatisch actief.
+- **Vaste productregel:** Gebruik de nieuwste betrouwbare positieve prijs. Als die niet beschikbaar is, gebruik de laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar komt, wordt die automatisch actief.
 - Oudere prijs blijft herkenbaar als laatst bekend. Geen €0, verzonnen prijzen, vervalste datums of geforceerde matches.
 - −/+ verandert 1 verpakking (1–99); recepthoeveelheid = verpakkingen × betrouwbare inhoud. Bestaande opslag, budgetpoort en lijstbescherming blijven leidend.
 - Automatische prijscontrole bij openen/hervatten/focus/netwerkherstel en iedere minuut zichtbaar gebruik; gerichte productafhankelijke cache-invalidatie. Prijsupdates wijzigen geen gekozen aantallen/producten/recepten of handmatige lijstbijdragen.
@@ -41,8 +41,17 @@ Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerf
 - Preview-writebeveiliging: de publieke readiness-refreshroute schrijft niet naar de gedeelde database wanneer VERCEL_ENV=preview; lokale/cold readiness blijft werken. Geen Production-databaseactie, import of migratie uitgevoerd.
 
 ## Actueel stoppunt
-**Codefix in verificatie; nog geen nieuwe iPhone-gereedmelding.**
-Resterend: definitieve regressies, nieuwe Vercel Preview Ready en functionele browsercontrole. De beschikbare Work-browser heeft geen telefoonviewport; de gebruiker heeft voor deze run expliciet beschikbare browsercontrole toegestaan, met fysieke iPhone-test erna. Geen alternatieve mobiele viewport omzeilen.
+**KLAAR VOOR FYSIEKE IPHONE-TEST.**
+- Functionele codecommit: `4f8d4d9edc872d82e099ee71e555c168b8189d2a`, remote opnieuw gecontroleerd na Work-time-out. Bestaande branch en Draft PR #28 behouden. De aansluitende checkpointcommit bevat alleen documentatie; de actuele remote PR-head is de exacte referentie voor hervatten.
+- Vercel Preview-check op de codecommit: **success**. Echte browserclicks in Menu én Vrije keuze geslaagd: 1→2→1, 400→800→400g, ingrediënt-/gerecht-/persoonprijs, budget en lijst.
+- Reload en navigeren behouden keuzes. Handmatige extra courgette blijft behouden bij receptvermindering en plannerrefresh. Oudere positieve ingrediëntprijs is daadwerkelijk bedienbaar.
+- Honig 19/10 selecteerbaar en Knorr 43/23 selecteerbaar ook in de Preview-zoeklijsten bevestigd; beide merken toegevoegd en aangepast.
+- Live planner **4p/5d/€100/€70: €37,01** voor vijf geldige maaltijden. De auditfixture €39,44 blijft een afzonderlijke geldige combinatie. Uitkomst **B**; harde budgetpoort blijft intact.
+- Aanvullend in Preview **2p/7d**: 4 vrije plekken, 2 gekozen mixen behouden; Honig houdt 2 expliciete verpakkingen / 800g. Maaltijden €39,76, lijst €40,55 met handmatige extra courgette. Volledige servicematrix: 1/2/4/6/10/12 × 1/3/5/7 groen.
+- **608/608 webtests, 189/189 importerfixtures, lint, TypeScript en lokale Production-build groen.** Na deze codecommit zijn alleen documentatieresultaten toegevoegd, geen ongeteste codewijziging.
+- Nieuwe prijs €1,79→€1,99 en behoud van aantallen zijn met fixtures getest; geen live prijs gewijzigd. Automatisch bij openen/hervatten/focus/netwerkherstel en iedere minuut zichtbaar gebruik.
+- Work-browser ondersteunt geen telefoonviewport; beschikbare functionele desktopbrowsercontrole uitgevoerd. Fysieke iPhone-touch/layout/PWA-hervatten volgen nu, nog niet als geslaagd beschouwd.
+- Volledige bewijzen en resterende datablokkades: `docs/pr28-functional-fix-2026-09-24.md` en `docs/pr28-validation-2026-09-24.json`.
 
 Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
 

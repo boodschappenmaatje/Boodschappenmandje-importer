@@ -89,4 +89,26 @@ De configuratie bevat alleen `{ "url": "...", "key": "publishable/anon" }`. De a
 
 ## Preview en acceptatie
 
-Functionele Preview-verificatie volgt op de codecommit. Nog geen nieuwe iPhone-gereedmelding in dit checkpoint. Geen merge of Production-deployment.
+Codecommit `4f8d4d9edc872d82e099ee71e555c168b8189d2a` is remote gecontroleerd en Vercel Preview is success. De hervatting na Work-time-out hergebruikte deze bestaande code en de groene regressies; geen tweede implementatie of nieuwe branch.
+
+Functionele controles via echte browserclicks op de branch-Preview:
+- Planner 4 personen / 5 dagen / €100 / €70: vijf geldige maaltijden voor **€37,01**. De live planner kan andere geldige recepten kiezen dan de vastgelegde auditfixture (€39,44); beide tonen uitkomst B zonder verhoogd budget.
+- Menu, penne (500g-verpakking): 1→2→1; recept wordt 1.000→500g bij terugzetten, gerecht €6,51→€7,23→€6,51 en week/lijst €37,01→€37,73→€37,01.
+- Menu, courgette met laatst bekende prijs: 1→2 stuks werkt; reload behoudt 2 verpakkingen. Na 1 extra handmatig lijstitem en terugzetten van het recept naar 1 blijft de lijst op 2 staan. Maaltijden €37,01 en lijst €37,80 tonen correct de extra handmatige €0,79.
+- Honig-zoeklijst: alle 19 varianten zichtbaar, 10 selecteerbaar. Honig spaghetti: Italiaanse roerbak (oudere positieve prijs) 1→2→1 verpakking, **400→800→400g**, gerecht €13,06→€14,95→€13,06 en per persoon €3,27→€3,74→€3,27. Toevoegen geslaagd. Vanuit bestaand Vrije keuze-detail opnieuw naar 2 gezet: Menu en lijst behouden 800g / 2 verpakkingen; lijst toont €1,89 per verpakking.
+- Knorr-zoeklijst: alle 43 varianten zichtbaar, 23 selecteerbaar. Thaise Kip Siam: kipfilet 1→2→1 verpakking, 800→400g bij terugzetten, gerecht €16,83→€22,82→€16,83; toevoegen geslaagd. Beide merken staan samen in de week.
+- Aanvullende live matrix: **2 personen / 7 dagen**, 4 Vrije-keuzeplekken, 2 gekozen. Beide mixen blijven behouden. Honig houdt de expliciete 2 verpakkingen / 800g; Knorr schaalt overige ingrediënten en totaal naar €11,41. Maaltijden €39,76, lijst €40,55 inclusief de extra handmatige courgette.
+- Automatische nieuwe prijs is met gecontroleerde fixtures end-to-end getest; er is geen echte catalogusprijs gewijzigd om dit in de Preview te demonstreren.
+
+De browser ondersteunt geen telefoonviewport. Dit is een echte functionele desktopbrowsercontrole; fysieke iPhone-touch, mobiele layout en hervatten als geïnstalleerde PWA volgen als acceptatiestap. Koude planning/zoeken kan een laadfase hebben; tussentijdse browserautomation-time-outs zijn opnieuw gecontroleerd, zonder dubbele mutatie. De afgeronde acties en bedragen zijn in de UI bevestigd.
+
+Geen merge, Production-deployment, databasewijziging, migratie of productimport.
+
+
+## Definitief stoppunt
+
+**KLAAR VOOR FYSIEKE IPHONE-TEST.** Code, audit, 24-cellenmatrix, harde budgetpoort, regressies en echte Preview-flows zijn gecontroleerd. Alleen documentatie is na de functioneel geteste codecommit gewijzigd. PR blijft Draft.
+
+Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
+
+Fysieke iPhone-check: 4p/5d/€100/€70 plannen; Menu −/+ 1→2→1; Honig spaghetti/Italiaanse roerbak 400→800→400g; Knorr Siam/kipfilet 800→400g; bedragen en lijst vergelijken; 2 verpakkingen bewaren en heropenen; handmatige extra lijstverpakking beschermen; personen/dagen aanpassen en navigeren; PWA afsluiten/hervatten. Geen echte prijswijziging of import nodig: automatische prijsvervanging is al met fixtures aangetoond.
