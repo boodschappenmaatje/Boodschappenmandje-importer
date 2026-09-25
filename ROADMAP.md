@@ -33,31 +33,13 @@ Belangrijke productprincipes:
 | Branding | Afgerond / Production | Metallic blauwe huisstijl en officieel app-icoon |
 | UX simplification | Afgerond / Production | Rustiger Home, begeleide flows en duidelijkere mobiele UX |
 | PWA 14 | Afgerond / Production | Eigen recepten, compact detail, dynamische Vrije keuze, actuele prijzen, budget en lijstsync |
+| PR #28 — verpakkingen/lijst/budget | Afgerond / Production | Compacte lijst, recept ⇄ lijst, veilige trash, prijsfallback, handmatige override en harde automatische maaltijdgrens |
 
-## Volgende stap
+## Afgeronde release — PR #28
+PR #28 is na geslaagde fysieke iPhone-hertest gemerged naar `main` (`d7a234df5ac24ab6fec558413ff2c73649071584`) en in Production uitgerold. Gerichte Production-smoke geslaagd. De verpakkingen-, lijst- en budgetronde is afgerond: compacte inklapbare lijst, oorsprong, directe veilige prullenmand, recept ⇄ lijst-sync, productvervanging, prijsfallback en handmatige bevestiging boven het maaltijdbudget. De automatische planner behoudt de harde grens. Volledige regressie: 687 webtests, 189 importerfixtures, lint, TypeScript en build groen. Echte assortimentsdatablokkades blijven als datawerk apart gedocumenteerd.
 
-### Verpakkingen −/+ en plannercontrole — actieve vervolgscope
-PWA 14 is via PR #27 in Production. De vervolgverbetering blijft op `feature/ingredient-quantity-controls`, Draft PR #28.
-
-−/+ bedient hele verpakkingen (minimum 1); recepthoeveelheid volgt automatisch uit aantal × betrouwbare productinhoud. Expliciete verpakkingskeuzes blijven vast bij personen wijzigen, heropenen, navigeren, plannerrefresh en lijstsync. Bestaande prijs-, budget-, override- en lijstbescherming blijven leidend.
-
-De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) is met echte data onderzocht: cataloguszoek-time-outs en onverenigbare eenheden konden de planning afbreken. Beide oorzaken zijn hersteld; dezelfde gemengde week slaagt voor €41,52 zonder versoepelde budget/readinessregels.
-
-Status: fysieke iPhone-test van PR #28 **afgekeurd wegens ontbrekende lijst→recept-koppeling**. Huidige scope is volledige tweerichtingssync via exacte bijdragen. Werkende verpakkingsbediening, prijsfallback, automatische prijsverversing, Honig/Knorr en planner blijven behouden en krijgen regressies. Geen nieuw PWA-nummer of release.
-
-Aanvullende fysieke feedback: compacte boodschappenlijst volgens goedgekeurd concept binnen dezelfde PR. Productregels worden compacter, met details op aanvraag en subtiele menu/eigen-recept/los-iconen. De eerdere bidirectionele sync, prijsregel en handmatige bescherming blijven leidend. Compacte Preview functioneel gecontroleerd; 636 webtests, 189 importerfixtures, lint, TypeScript en build groen. Normale regels circa 56% lager; herkomst, details en beide syncrichtingen gecontroleerd. **KLAAR VOOR FYSIEKE IPHONE-HERTEST.** De eerdere 24-cellenmatrix en planner blijven als regressiebewijs behouden. Nog geen fysieke acceptatie of release; echte assortimentsdatablokkades blijven afzonderlijk gedocumenteerd.
-
----
-
-Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknoppen, generieke ingrediëntnaam bij vervanging, alle categorieën inklapbaar en harde automatische maaltijdbudgetgrens met actieve goedkopere selectie en bruikbare herstelroute. Bestaande compacte lijst en recept ⇄ lijst blijven leidend. Implementatie en 676 webtests/189 importerfixtures, lint, TypeScript en build zijn groen. Live vervangingen, inklappen, beide syncrichtingen en goedkopere/onhaalbare budgetscenario’s zijn gecontroleerd; **Preview Ready; KLAAR VOOR FYSIEKE IPHONE-HERTEST.** Fysieke iPhone-acceptatie blijft open. Goedkopere live week €25,97 binnen €30; onhaalbaar budget behoudt week/lijst met bruikbare acties.
-
-# Eerstvolgende funderingsmijlpalen na PR #28
-
-Laatste aanvullende iPhone-feedback binnen PR #28 geïmplementeerd en functioneel getest: veilige prullenmand bij lijstquantity 1, zichtbare bevestiging “Toch verhogen”, en nooit budgetblokkade bij kostenverlagende handmatige mutaties. 683 webtests/189 importerfixtures en volledige check groen; functionele Preview success. Klaar voor fysieke iPhone-hertest na Ready van documentatiehead; acceptatie nog open. Eerdere vierpuntsronde blijft behouden.
-
-Nieuwe fysieke correctie binnen dezelfde PR voltooid: prullenmand verwijdert direct de eenduidige contribution en opent nooit eerst Productdetails. Expliciete ingrediëntuitsluiting houdt recept/lijst/budget synchroon, zonder quantity 0. 687 webtests/189 importerfixtures en volledige check groen; functionele Preview Ready en live gecontroleerd, inclusief gemengde/gedeelde bijdragen en refresh. Fysieke iPhone-hertest/acceptatie blijft open.
-
-Deze onderdelen hebben hoge waarde en worden vóór verdere slimme/personaliserende functies ingepland. De exacte PWA-nummers worden pas toegekend wanneer PR #28 is afgerond.
+## Volgende stap — actief: STABILITEIT & KERNFLOWS
+De onderstaande drie funderingswerkstromen zijn nu eerst aan de beurt. De presentatie van vervangingshoeveelheden in de bewerkingslijst (na broccoliwissel “1 stuk nodig” naast 800 g in receptdetail) wordt in de E2E-/integratieronde gericht onderzocht. Geen nieuwe functie uit een latere mijlpaal is binnen PR #28 gestart.
 
 ## Stabiliteit & kernflows
 Doel: de belangrijkste gebruikersflows automatisch van begin tot eind bewaken, zodat nieuwe wijzigingen bestaande kernfunctionaliteit niet stil breken.
@@ -88,7 +70,7 @@ Eisen:
 - hoeveelheid, verpakkingen, prijs en budget blijven overal consistent;
 - kernflows worden automatisch end-to-end getest.
 
-PR #28 mag reeds noodzakelijke tweerichtingssync herstellen; deze funderingsstap consolideert en bewaakt het model daarna structureel.
+PR #28 leverde de noodzakelijke tweerichtingssync; deze funderingsstap consolideert en bewaakt het model daarna structureel.
 
 ## Productdata & receptkwaliteit
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.

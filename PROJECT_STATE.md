@@ -3,17 +3,21 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**PWA 14 — Eigen recepten / Vrije keuze: afgerond en in Production.**
+**PR #28 afgerond en in Production. Volgende mijlpaal: STABILITEIT & KERNFLOWS.**
 
-## Production
-- Repository: `boodschappenmaatje/Boodschappenmandje-importer`
-- Branch: `main`
-- Gemergede PR: **#27**
-- Releasecommit: `b233b65910121fe998b4ac913d1999afbef3f20d`
-- Vercel Production-check op de releasecommit: **success** (23 september 2026).
-- Fysieke iPhone-test: **geslaagd**, met expliciete toestemming voor de release.
-- Production-smoke test: **geslaagd** in een schone browsersessie. Een week voor 2 personen en 2 dagen met afzonderlijk week- en maaltijdbudget werd aangemaakt; Vrije keuze toonde 2 plekken. Een eigen recept met een actueel geprijsd product werd bewaard, aan de eerste dag toegevoegd en compact binnen Menu geopend. De boodschappenlijst, het maaltijdtotaal en de budgetruimte toonden dezelfde € 0,48. Producten zonder actuele prijs waren niet selecteerbaar.
-- De rooktest gebruikte alleen lokale browsergegevens; geen database-migratie, productimport of destructieve databaseactie.
+## Production — PR #28
+- Repository: `boodschappenmaatje/Boodschappenmandje-importer`; branch `main`.
+- Fysieke iPhone-hertest: **geslaagd**, door de gebruiker op 25 september 2026 expliciet geaccepteerd.
+- PR **#28** via de bestaande squash-mergeflow gemerged; mergecommit/main-head `d7a234df5ac24ab6fec558413ff2c73649071584`. Voor de merge was de gecontroleerde PR-head `a886dd00f4756e6898d3c580cc6b0c0e088ff3f6`; sinds de geteste functionele code `2589161a9dcf4f47449ff97bb1ade4f7206445eb` volgden uitsluitend documentatiecommits.
+- Vercel Production-check voor precies de mergecommit: **success**. Productie: https://boodschappenmaatje-pwa.vercel.app/
+- Gerichte Production-smoke test: **geslaagd in een schone browsersessie**. Home, Menu, Lijst, Budget en Vrije keuze openen. Een 2p/2d-week met €100 week-/€70 maaltijdbudget plande twee geldige maaltijden voor €8,50. Zeven productbijdragen synchroniseerden naar de compacte lijst.
+- Categorie onafhankelijk inklappen, Alles/Maaltijden en Afgevinkt, checkbox en normale Productdetails gecontroleerd. Lijstplus spinazie 1→2 gaf in Menu 800→1.600 g, gerecht €4,43→€5,38 en lijst/maaltijden €8,50→€9,45; receptmin bracht alles terug. Een losse extra bleef apart (€0,95 lijstbovenop maaltijd). Trash op gekoppelde courgette verwijderde direct zonder dialoog, categorie-/productteller 7→6, ook na browserrefresh; manual-only spinazie is later eveneens direct verwijderd.
+- Expliciete productwissel spinazie→G'woon Broccoli maakte ingrediëntnaam, foto, verpakkingsinhoud, receptprijs (€5,45), lijst en budget actueel en bleef na heropenen bestaan. Bij maaltijdgrens €9 waarschuwde een handmatige plus vooraf voor €10,70; Annuleren wijzigde niets, Toch verhogen rekende maaltijdoverschrijding €1,70 en lijst €11,65 correct uit, en min herstelde direct de lagere waarde.
+- Deze rooktest gebruikte uitsluitend lokale browserstate. Geen migratie, productimport of destructieve databaseactie. In de uitgeklapte bewerkingslijst staat na de broccoliwissel “1 stuk nodig”, terwijl het compacte recept de gekochte 800 g vermeldt; dit verschil in tekstpresentatie hoort als gericht onderzoek bij Stabiliteit & kernflows. De verpakkingskeuze, prijs en lijst zijn in de smoke consistent.
+- Deze releasedocumentatie volgt in een afzonderlijke documentatiecommit op `main`; de bijbehorende Production-status wordt op die commit gecontroleerd.
+
+## Historische Production — PWA 14
+- PR #27, releasecommit `b233b65910121fe998b4ac913d1999afbef3f20d`; fysieke iPhone-test en Production-smoke destijds geslaagd.
 
 ## PWA 14 geleverd
 - eigen recepten maken, bewaren, bekijken en bewerken op dit apparaat;
@@ -24,9 +28,12 @@
 - lijstsync met bescherming van handmatige gebruikerswijzigingen.
 
 ## Laatste geverifieerde regressies
-Volgens PR #27: lint en TypeScript geslaagd, 539/539 webtests, 189/189 importerfixtures en lokale Production-build geslaagd. Na deze checks veranderde de code alleen in de weergave van het aantal personen bij een opgeslagen recept; verdere commits tot de merge betroffen documentatie. De actuele Preview-check en Production-check waren groen.
+PR #28: **687/687 webtests (57 bestanden), 189/189 importerfixtures, lint, TypeScript en lokale Production-build groen** op de laatste functionele code. De aansluitende PR-heads veranderden alleen documentatie. GitHub/Vercel-checks op de geaccepteerde PR-head en mergecommit zijn success. Geen zware testrun herhaald na documentatie-only wijzigingen.
 
-## Actieve vervolgscope — PR #28 functionele prijs-/verpakkingsfix
+## Historische PR #28-checkpoints
+Onderstaande secties bewaren de eerdere test- en feedbackresultaten. Hun oude “nog niet geaccepteerd”-stoppunten beschrijven de toestand van destijds; het actuele releasecheckpoint staat bovenaan.
+
+## Historische vervolgscope — PR #28 functionele prijs-/verpakkingsfix
 - Branch `feature/ingredient-quantity-controls`, bestaande Draft PR **#28**. De functionele fix hervatte vanaf gecontroleerde remote `2789063240adf3ed1b4cbbdb191253b1cdc95c97`; alle 35 PR-bestanden kwamen overeen.
 - Eerdere fysieke iPhone-Preview was afgekeurd. Nu functionele codefix: centrale positieve-prijsregel vervangt conflicterende freshness-gates in −/+, Vrije keuze, eigen recepten, matching en bevestiging.
 - **Vaste productregel:** Gebruik de nieuwste betrouwbare positieve prijs. Als die niet beschikbaar is, gebruik de laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar komt, wordt die automatisch actief.
@@ -55,7 +62,7 @@ De eerder geteste recept→lijst-flow werkte, maar lijst→recept ontbrak. Onder
 
 Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverkaik-4661.vercel.app
 
-## Actieve herstelscope — recept ⇄ lijst
+## Historische herstelscope — recept ⇄ lijst
 - Nieuwe fysieke iPhone-feedback: Preview **niet geaccepteerd**. Hervat vanaf remote `34666ad7d6b92e684fd4772b3a6f1cc36aa93ce9`, dezelfde branch/Draft PR #28.
 - Oorzaak: lijst-plus verhoogde altijd de losse bijdrage; lijst-min kon de geaggregeerde weekbijdrage verlagen zonder receptmutatie. Exacte ingrediëntadressen ontbraken.
 - Canonieke verpakkingskeuze blijft in het geplande ingrediënt. Lijstbijdragen bewaren week/dag/recept/ingrediënt/product/SKU-adressen en worden uit diezelfde keuze afgeleid. Geen tweede zelfstandig bewerkbare recepthoeveelheid in de lijst.
@@ -74,7 +81,7 @@ Branch-Preview: https://boodschappenmaatje-pwa-git-feature-in-b0c398-dennisverka
 
 Deze functionele hertest is opgevolgd door onderstaande feedback over de compacte lijst. Nog geen fysieke acceptatie van PR #28.
 
-## Actieve vervolgscope — compacte boodschappenlijst
+## Historische vervolgscope — compacte boodschappenlijst
 - Hervat vanaf gecontroleerde remote `3609823c70bc010a4134483a81aed368e2b73467`; dezelfde branch en Draft PR #28. Bestaande bidirectionele implementatie en roadmap behouden.
 - Fysieke feedback: lijst te hoog/ruim. De goedgekeurde conceptafbeelding bepaalt de presentatie: compacte categorieblokken en productregels, details op aanvraag, subtiele menu/eigen-recept/los-iconen.
 - Bestaande ShoppingListItemCard en LinkedShoppingListItem aangepast; gedeelde ShoppingListQuantity-presentatie, ShoppingListDetails en ShoppingListOrigins toegevoegd. Geen nieuwe hoeveelheid- of contribution-state; beide UI's blijven dezelfde bestaande usePackageMutation-route gebruiken.
@@ -102,10 +109,10 @@ Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual co
 
 ## Release-regels
 - Bestaande featurebranch → tests → Preview → fysieke iPhone-test → expliciete toestemming → merge → Production → smoke test.
-- Binnen deze opdracht: **geen merge, Production-deployment, Production-databasewijziging, migratie, destructieve actie of productimport**.
+- PR #28 is na expliciete fysieke acceptatie en toestemming gemerged en automatisch uitgerold. Database-migratie, destructieve actie en productimport zijn niet uitgevoerd.
 - Behoud werkende functionaliteit en gebruikersdata.
 
-## Actieve iPhone-feedbackronde — 25 september 2026
+## Historische iPhone-feedbackronde — 25 september 2026
 - Hervat vanaf gecontroleerde remote `7faf0ffdfc28c136360b94a8fe75b0b5e2313cf3`; dezelfde featurebranch en Draft PR #28. Remote documentatiecommit met de vier feedbackpunten behouden; lokale uitgangsboom exact `9576a229eba845793b9f982f55d679556b6e75ce`.
 - Meer alternatieven/Zelf zoeken zijn nu herkenbare compacte 44px-knoppen met bestaande huisstijltokens en touch/focus/disabled-states.
 - Vervangingsfout hersteld in de centrale producttoepassing: actuele ingrediëntnaam volgt expliciet gekozen product; oorspronkelijke receptdefinitie/ingrediënt-ID blijft behouden. Heropenen past dezelfde route toe, ook voor expliciet bevestigde alternatieven. Verschillende dagbijdragen worden niet samengevoegd op alleen hetzelfde vervangende product.
@@ -139,7 +146,7 @@ Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual co
 - Slotcontrole: Toch gebruiken past de handmatige wijziging pas na bevestiging toe: boomstammetjes 2 verpakkingen/400g, maaltijdentotaal €28,46 en lijst €30,75 inclusief los €2,29. Testbudget daarna terug naar €70 bij 4 personen/5 dagen/€100.
 - Periodieke cataloguscontrole zonder gewijzigde product-/prijsgegevens behoudt nu lijst- en itemidentiteit. Geen vals conflict tijdens een lopende bevestiging door uitsluitend een nieuw controletijdstip. Echte prijswijziging behoudt de veilige herbevestigingscontrole. Code `d4b29d15`, regressie expliciet getest; volledige check 676 tests groen.
 
-## Actieve laatste iPhone-feedback — prullenmand en handmatig budget
+## Historische laatste iPhone-feedback — prullenmand en handmatig budget
 - Hervat vanaf opnieuw gecontroleerde remote `209c716dca3d067f40eb307372641349f488abc8`, dezelfde branch/Draft PR #28. De voorgaande vierpuntsronde blijft behouden; fysieke acceptatie is nog open.
 - Lijstbediening bij 1 toont trash op dezelfde 44px-positie; bij >1 min. Manual-only verwijdert via bestaande herstelbare lijstactie. Gekoppeld ingrediënt blijft minimaal 1; trash opent bestaande herkomst/uitleg. Meerdere/gemengde bijdragen blijven exact gescheiden.
 - Bestaande verhogingsbevestiging heet nu “Toch verhogen”, meldt beide budgetten afzonderlijk en krijgt focus/scroll zodat zij op mobiel niet buiten beeld blijft.
@@ -149,7 +156,7 @@ Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual co
 - Live Preview: exact budget direct; bevestigde recept- en lijstverhogingen; annuleren zonder hoeveelheidsmutatie; verlagen terwijl nog boven budget; trash bij manual-only/gekoppeld; gemengde en gedeelde bijdragen; afvinken, filters, categorieteller en heropenen. Uitgebreid bewijs en hertestchecklist: `docs/pr28-trash-budget-2026-09-25.md`.
 - **KLAAR VOOR FYSIEKE IPHONE-HERTEST** zodra de bijbehorende documentatiehead eveneens Vercel success heeft. Desktopfunctionele controle uitgevoerd; fysieke iPhone-acceptatie blijft open. DESIGN.md niet als geaccepteerd aangepast. Geen merge/Production/databaseactie/import.
 
-## Actieve correctie — trash verwijdert direct
+## Historische correctie — trash verwijdert direct
 - Fysieke iPhone-test afgekeurd: trash bij gekoppeld ingrediënt opende bewust Productdetails. Hervat vanaf remote `6c90f3a0946e750ac7060fb82ef756618fe73ed7`; dezelfde Draft PR #28/branch. Nieuwe Home-mascotte-roadmapnotitie behouden, niet geïmplementeerd.
 - Directe centrale verwijderroute: exacte week/dag/recept/ingrediënt/product-koppeling gecontroleerd, expliciete `excludedIngredients`-keuze in de bestaande lokale customization, geen quantity 0 of databasewijziging. De afgeleide recept- en lijstbijdragen worden samen herberekend.
 - Manual-only blijft direct verwijderen met bestaande undo. Ambigue/gedeelde totale bijdrage toont geen trash; gerichte bijdrage wel. Trash-event stopt propagation; product/chevron blijft details openen.
@@ -161,4 +168,4 @@ Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual co
 ## Release-acceptatie PR #28 — 25 september 2026
 - De fysieke iPhone-hertest van de Preview op PR-head `1dbf62538a9cf7717d555726f434ed8e827ed821` is door de gebruiker **geslaagd** verklaard.
 - Sinds de geteste functionele commit `2589161a9dcf4f47449ff97bb1ade4f7206445eb` volgde op die head alleen documentatie (`PROJECT_STATE.md`, `ROADMAP.md`, `docs/pr28-direct-trash-2026-09-25.md`).
-- De gebruiker heeft expliciet toestemming gegeven voor merge van PR #28 naar `main`, automatische Production-deployment, gerichte Production-smoke test en noodzakelijke releasedocumentatie. De merge- en deploymentstatus worden na uitvoering hieronder bijgewerkt.
+- De gebruiker heeft expliciet toestemming gegeven voor merge van PR #28 naar `main`, automatische Production-deployment, gerichte Production-smoke test en noodzakelijke releasedocumentatie. Merge en Production-smoke zijn afgerond; het actuele checkpoint staat bovenaan.
