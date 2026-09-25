@@ -19,7 +19,8 @@ export function PlannerBudgetRecovery({ attempt, preserved = false, onSettings, 
     <div className="planner-recovery-actions">
       <button type="button" className="compact-choice-button" onClick={onSettings}>Maaltijdbudget of dagen aanpassen</button>
       <button type="button" className="compact-choice-button" onClick={onDistribution}>Maaltijdverdeling aanpassen</button>
-      <Link className="compact-choice-button" href="/vrije-keuze" onClick={onManual}>Zelf maaltijden kiezen</Link>
+      <Link className="compact-choice-button" href={preserved ? "#prepared-week-title" : "/vrije-keuze"} onClick={onManual}>{preserved ? "Zelf gerechten aanpassen" : "Zelf maaltijden kiezen"}</Link>
     </div>
+    {preserved ? <p>Open hieronder het gerecht dat je wilt aanpassen. Je kunt het gerecht of een ingrediënt vervangen.</p> : null}
   </div>;
 }

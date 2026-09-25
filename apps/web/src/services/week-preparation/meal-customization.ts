@@ -1,6 +1,6 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { reliablePriceCents } from "@/services/catalog/price";
-import { removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
+import { completeShoppingListFromWeek, removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { evaluateMealBudget, mealBudgetAllowsPlan } from "@/services/week-preparation/meal-budget";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
@@ -1136,14 +1136,14 @@ export function budgetImpact(
     preparation.budgetCents,
     preparation.mealBudgetCents,
     preparation.ingredients,
-    baselineList,
+    completeShoppingListFromWeek(baselineList, preparation.ingredients, preparation.id, now),
     now,
   );
   const updated = evaluateMealBudget(
     next.budgetCents,
     next.mealBudgetCents,
     next.ingredients,
-    baselineList,
+    completeShoppingListFromWeek(baselineList, next.ingredients, next.id, now),
     now,
   );
   const mealBudgetOverageCents = next.mealBudgetCents === null

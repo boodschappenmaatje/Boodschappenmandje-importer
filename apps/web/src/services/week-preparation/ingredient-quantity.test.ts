@@ -134,6 +134,19 @@ describe("quantity persistence, packages and the existing recipe commit", () => 
     expect(reduced.items[0].quantity).toBe(2);
     expect(reduced.items[0].quantityContributions.persistentQuantity).toBe(1);
   });
+
+  it("counts a same-product loose extra in the preview and hard week-budget confirmation", async () => {
+    const base = { ...await prepared(), budgetCents: 500, mealBudgetCents: 500 };
+    const planned = completeShoppingListFromWeek(list, base.ingredients, base.id, NOW);
+    const manual = adjustPersistentQuantity(planned, product.id, 1, NOW);
+    const choice = await preview(base, 800, manual);
+    expect(choice.impact).toMatchObject({ currentMealPlanCostCents: 200,
+      currentTotalWeekCostCents: 400, nextMealPlanCostCents: 400,
+      nextTotalWeekCostCents: 600, mealBudgetOverageCents: 0,
+      weekBudgetOverageCents: 100, requiresBudgetOverride: true });
+    const denied = await commitExplicitRecipeAlternative(base, 0, choice, false, recipes, products(), manual, NOW);
+    expect(denied).toMatchObject({ ok: false, reason: "budget_override_required" });
+  });
   it("persists, reopens and scales the chosen ratio when persons change", async () => {
     const changed=await commit(await prepared(),450);
     const reopened=decodeStoredWeekPreparation(encodeStoredWeekPreparation(changed));

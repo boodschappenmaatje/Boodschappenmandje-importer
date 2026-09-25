@@ -404,6 +404,8 @@ it('onhaalbaar automatisch budget bewaart bestaande week/lijst en biedt werkende
   expect(currentWeek.mealBudgetCents).toBe(1);
   expect(container.textContent).toContain('De goedkoopste geldige combinatie');
   expect(container.textContent).toContain('Je bestaande gerechten en boodschappenlijst zijn behouden');
+  expect(container.querySelector('a[href="#prepared-week-title"]')!.textContent).toBe('Zelf gerechten aanpassen');
+  expect(container.textContent).toContain('Open hieronder het gerecht dat je wilt aanpassen');
   expect(container.querySelector('a[href="/vrije-keuze"]')).not.toBeNull();
   expect(container.textContent).toContain('Testpasta');
   await clickText('Maaltijdbudget of dagen aanpassen');
