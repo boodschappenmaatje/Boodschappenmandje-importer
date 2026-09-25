@@ -189,4 +189,17 @@ describe("actieve boodschappenlijstmotor", () => {
     expect(conflictingSku).toBe(refreshed);
     expect(conflictingSku.items[0].price?.amount).toBe(2.75);
   });
+
+  it("laat een lopende bevestiging intact als periodieke cataloguscontrole niets heeft veranderd", () => {
+    const selected = product("a", "sku-a", "Melk", 2.5);
+    const original = addCatalogProduct(createEmptyActiveShoppingList(NOW), selected);
+    const refreshed = refreshShoppingListFromCatalog(original, [selected], "2026-09-15T11:00:00Z");
+    expect(refreshed).toBe(original);
+    expect(refreshed.items[0]).toBe(original.items[0]);
+    const newer = { ...selected, currentPrice: { ...selected.currentPrice!, price: 2.75, updatedAt: "2026-09-15T12:00:00Z" } };
+    const changed = refreshShoppingListFromCatalog(refreshed, [newer], "2026-09-15T12:00:00Z");
+    expect(changed).not.toBe(original);
+    expect(changed.items[0].price?.amount).toBe(2.75);
+    expect(changed.items[0].quantity).toBe(original.items[0].quantity);
+  });
 });

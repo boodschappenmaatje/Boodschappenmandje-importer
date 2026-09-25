@@ -444,8 +444,8 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
   it("toont budgetfalen niet als ontbrekende READY recepten per categorie", () => {
     const html = render(createElement(PrepareWeekPage), budgetFailed());
 
-    expect(html).toContain("Voor deze week is minimaal ongeveer € 57,34 nodig.");
-    expect(html).toContain("Verhoog je maaltijd-budget met € 7,34");
+    expect(html).toContain("De goedkoopste geldige combinatie voor deze verdeling kost € 57,34.");
+    expect(html).toContain("Maaltijdbudget of dagen aanpassen");
     expect(html).toContain(
       "Er zijn complete gerechten beschikbaar, maar deze week past nog niet binnen je maaltijd-budget.",
     );

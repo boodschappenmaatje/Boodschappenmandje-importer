@@ -65,7 +65,7 @@ function isBudgetDecision(value: unknown): boolean {
     return true;
   }
   return (
-    value.mode === "userApprovedBudgetOverride" &&
+    (value.mode === "userApprovedBudgetOverride" || value.mode === "userReducedCosts") &&
     typeof value.approvedAt === "string" &&
     Number.isSafeInteger(value.approvedMealPlanCostCents) &&
     Number(value.approvedMealPlanCostCents) >= 0 &&
@@ -98,6 +98,15 @@ function isCustomization(value: unknown): value is WeekMealCustomization {
     Number(value.dayIndex) <= 6 &&
     isRecipeReference(value.baseRecipe) &&
     (value.replacementRecipe === null || isRecipeReference(value.replacementRecipe)) &&
+    (value.excludedIngredients === undefined || (Array.isArray(value.excludedIngredients) && value.excludedIngredients.every(item =>
+      isRecord(item) && typeof item.ingredientId === "string" && item.ingredientId.length > 0 &&
+      typeof item.recipeId === "string" && item.recipeId.length > 0 && typeof item.name === "string"))) &&
+    (value.quantityOverrides === undefined || (Array.isArray(value.quantityOverrides) && value.quantityOverrides.every(override =>
+      isRecord(override) && typeof override.ingredientId === "string" && typeof override.recipeId === "string" &&
+      Number.isFinite(override.quantity) && Number(override.quantity) > 0 && Number(override.quantity) <= 100000 &&
+      ["g", "kg", "ml", "l", "piece", "loaf"].includes(String(override.unit)) &&
+      (override.packageCount === undefined || (Number.isInteger(override.packageCount) && Number(override.packageCount) >= 1 && Number(override.packageCount) <= 99 && typeof override.productId === "string" && override.productId.length > 0)) &&
+      Number.isInteger(override.people) && Number(override.people) >= 1 && Number(override.people) <= 12))) &&
     Array.isArray(value.productOverrides) &&
     value.productOverrides.every(
       (override) =>

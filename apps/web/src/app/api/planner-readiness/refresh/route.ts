@@ -8,6 +8,7 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<Response> {
+  if (process.env.VERCEL_ENV === "preview") return Response.json({ error: "preview-read-only" }, { status: 503 });
   if (!isSameOriginPlannerRequest(request)) {
     return Response.json({ error: "forbidden" }, { status: 403 });
   }

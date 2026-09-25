@@ -25,11 +25,11 @@ describe("PWA 14 ingredient and photo presentation", () => {
     const html = renderToStaticMarkup(createElement(DishImage, { asset: null, title: "Eigen pasta", className: "recipe-summary-image", sizes: "58px" }));
     expect(html).toContain('data-image-source="placeholder"'); expect(html).not.toContain("<img");
   });
-  it("only shows positive fresh prices belonging to available exact products", () => {
+  it("only shows reliable positive prices including last-known fallback belonging to available exact products", () => {
     expect(customProductPrice(product)).toBe(199);
     expect(customProductPrice({ ...product, currentPrice: null })).toBeNull();
     expect(customProductPrice({ ...product, isAvailable: false })).toBeNull();
     expect(customProductPrice({ ...product, currentPrice: { ...product.currentPrice!, productId: "other" } })).toBeNull();
-    expect(customProductPrice({ ...product, currentPrice: { ...product.currentPrice!, fetchedAt: new Date(0).toISOString() } })).toBeNull();
+    expect(customProductPrice({ ...product, currentPrice: { ...product.currentPrice!, fetchedAt: new Date(0).toISOString() } })).toBe(199);
   });
 });

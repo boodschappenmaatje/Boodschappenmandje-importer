@@ -24,9 +24,10 @@ export function FreeChoiceControl({ dayIndex, initialDish, initialMode = null, o
   const [preview, setPreview] = useState<RecipeAlternative | null>(null);
   const revision = useRef(0);
   const confirmation = useRef<HTMLDivElement>(null);
+  const previewRecipeId = preview?.recipe.id;
   useEffect(() => {
-    if (preview) { confirmation.current?.focus({ preventScroll: true }); confirmation.current?.scrollIntoView({ block: "start" }); }
-  }, [preview]);
+    if (previewRecipeId) { confirmation.current?.focus({ preventScroll: true }); confirmation.current?.scrollIntoView({ block: "start" }); }
+  }, [previewRecipeId]);
   const { searchDishes } = week;
   useEffect(() => {
     if ((mode !== "recipe" && mode !== "mix") || query.trim().length < 2) return;
@@ -42,8 +43,22 @@ export function FreeChoiceControl({ dayIndex, initialDish, initialMode = null, o
     return () => { active = false; clearTimeout(timer); };
   }, [dayIndex, mode, query, searchDishes]);
 
+  const quantityInFlight = useRef(false);
+  async function changeQuantity(ingredientId: string, quantity: number) {
+    if (!preview || quantityInFlight.current || busy || week.customizationBusy) return;
+    quantityInFlight.current = true; setBusy(true); setMessage("");
+    const version = revision.current;
+    try {
+      const next = await week.previewIngredientPackages(dayIndex, ingredientId, quantity, preview.preparation);
+      if (version !== revision.current) return;
+      if (next) setPreview(next);
+      else setMessage("Deze hoeveelheid kon niet worden berekend. Je vorige keuze blijft staan.");
+    } catch { if (version === revision.current) setMessage("Berekenen lukt nu niet. Probeer opnieuw."); }
+    finally { quantityInFlight.current = false; if (version === revision.current) setBusy(false); }
+  }
+
   async function apply() {
-    if (!preview) return;
+    if (!preview || busy || quantityInFlight.current) return;
     const result = await week.applyExplicitRecipe(dayIndex, preview, preview.impact.requiresBudgetOverride);
     if (result.applied) { setPreview(null); setMode(null); setMessage("Gerecht opgeslagen en boodschappenlijst bijgewerkt."); onClose?.(); }
     else if (result.revalidatedPreview) setPreview(result.revalidatedPreview.alternative);
@@ -57,7 +72,7 @@ export function FreeChoiceControl({ dayIndex, initialDish, initialMode = null, o
       <button type="button" onClick={() => setMode("library")}>Mijn recepten</button>
     </div> : <button type="button" className="text-action" disabled={week.customizationBusy} onClick={() => { revision.current++; if (preview) setPreview(null); else { setMode(null); onClose?.(); } setMessage(""); setBusy(false); }}>{preview ? "Terug naar je keuze" : "Andere route kiezen"}</button>}
     {preview ? <div className="customization-confirm" ref={confirmation} tabIndex={-1}>
-      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} presentation="screen" />
+      <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} presentation="screen" onQuantityChange={changeQuantity} quantityBusy={busy || week.customizationBusy} />
       {selectedResult?.brand ? <small>{selectedResult.brand}</small> : null}
       <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
       <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>

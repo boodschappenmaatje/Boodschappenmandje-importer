@@ -206,7 +206,7 @@ describe("centrale budgetmotor", () => {
     expect(result.unpricedItemCount).toBe(0);
   });
 
-  it("gebruikt een verlopen actieprijs niet als betrouwbare prijs", () => {
+  it("gebruikt de laatst bekende positieve prijs ook nadat het actielabel vervalt", () => {
     const result = calculateBudget(
       1_000,
       list(
@@ -218,9 +218,9 @@ describe("centrale budgetmotor", () => {
       ),
       NOW,
     );
-    expect(result.knownSubtotalCents).toBe(0);
-    expect(result.unpricedItemCount).toBe(1);
-    expect(result.status).toBe("incompletePrices");
+    expect(result.knownSubtotalCents).toBe(350);
+    expect(result.unpricedItemCount).toBe(0);
+    expect(result.status).toBe("underBudget");
   });
 
   it("berekent percentage ook boven honderd", () => {

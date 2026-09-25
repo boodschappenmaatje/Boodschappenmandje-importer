@@ -243,6 +243,17 @@ describe("weekplanning request-cache", () => {
     expect(peopleChanged).toMatchObject({ hitCount: 0, missCount: 2 });
     expect(searches).toBe(searchesBeforePeopleChange);
 
+    products[0] = { ...products[0], currentPrice: { productId: products[0].id,
+      price: 1.99, oldPrice: null, isOffer: false, offerText: null, validFrom: null,
+      validUntil: null, fetchedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString() } };
+    cachedCatalog.invalidateProducts?.([products[0].id]);
+    snapshots.invalidateProducts([products[0].id]);
+    await Promise.resolve();
+    const repriced = await snapshots.evaluateReadiness(sourceCatalog, recipes, 4, preparedCatalog, cachedCatalog);
+    expect(repriced).toMatchObject({ hitCount: 1, missCount: 1 });
+    expect(repriced.gate.recipes.find(item => item.recipeId === recipes[0].id)?.ready).toBe(true);
+    expect([...repriced.gate.matchedProductsByRequirement.values()].find(item => item.id === products[0].id)?.currentPrice?.price).toBe(1.99);
+
     now += 501;
     const expired = await snapshots.evaluateReadiness(
       sourceCatalog,

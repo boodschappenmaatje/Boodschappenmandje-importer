@@ -307,7 +307,7 @@ export function MealReplacementControl({ dayIndex, currentRecipeName, ingredient
                   );
                 })}
               </ul>
-              {!showAll && alternatives.length > INITIAL_ALTERNATIVE_COUNT ? <button type="button" className="text-action" onClick={() => setShowAll(true)}>Meer alternatieven</button> : null}
+              {!showAll && alternatives.length > INITIAL_ALTERNATIVE_COUNT ? <button type="button" className="compact-choice-button" disabled={week.customizationBusy} onClick={() => setShowAll(true)}>Meer alternatieven</button> : null}
             </>
           )}
           {pending ? (
@@ -401,12 +401,12 @@ export function ProductAlternativeControl({ dayIndex, ingredientId, currentProdu
                 ))}
               </ul>
               <div className="compact-alternative-actions">
-                {!showAll && alternatives.length > INITIAL_ALTERNATIVE_COUNT ? <button type="button" className="text-action" onClick={() => setShowAll(true)}>Meer alternatieven</button> : null}
-                <button type="button" className="text-action" onClick={() => setManualOpen(true)}>Zelf zoeken</button>
+                {!showAll && alternatives.length > INITIAL_ALTERNATIVE_COUNT ? <button type="button" className="compact-choice-button" disabled={week.customizationBusy} onClick={() => setShowAll(true)}>Meer alternatieven</button> : null}
+                <button type="button" className="compact-choice-button" disabled={week.customizationBusy} onClick={() => setManualOpen(true)}>Zelf zoeken</button>
               </div>
             </>
           )}
-          {alternatives.length === 0 && !loading ? <button type="button" className="text-action" onClick={() => setManualOpen(true)}>Zelf zoeken</button> : null}
+          {alternatives.length === 0 && !loading ? <button type="button" className="compact-choice-button" disabled={week.customizationBusy} onClick={() => setManualOpen(true)}>Zelf zoeken</button> : null}
           {pending && pendingPreview ? (
             <div className="customization-confirm" role={pendingPreview.impact.requiresBudgetOverride ? "alert" : "status"}>
               <strong>{currentProductName} → {pending.product.name}</strong>

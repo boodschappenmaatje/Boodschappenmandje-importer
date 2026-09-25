@@ -1,6 +1,8 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
-import { PRICE_STALE_AFTER_DAYS } from "@/services/catalog/price";
-import { removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
+import { reliablePriceCents } from "@/services/catalog/price";
+import { recipeContributionTargets, sameIngredientLink } from "@/services/shopping-list/recipe-contributions";
+import { withIngredientExcluded, applyIngredientQuantityOverrides } from "./ingredient-quantity";
+import { completeShoppingListFromWeek, removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { evaluateMealBudget, mealBudgetAllowsPlan } from "@/services/week-preparation/meal-budget";
 import { enrichIngredientsForMealMixes } from "@/services/week-preparation/meal-mix-profiles";
@@ -36,7 +38,7 @@ import {
   revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
 import type { Product, Recipe } from "@/types/catalog";
-import type { ActiveShoppingList } from "@/types/shopping-list";
+import type { ActiveShoppingList, PlannedIngredientLink } from "@/types/shopping-list";
 import type {
   PreparedDay,
   RecipeMealCategory,
@@ -55,6 +57,22 @@ const EMPTY_LIST: ActiveShoppingList = {
   updatedAt: "1970-01-01T00:00:00.000Z",
   items: [],
 };
+
+/** Removing a known contribution needs no rematch/network roundtrip and cannot authorize spending. */
+export function removeLinkedIngredientContribution(current: WeekPreparation, link: PlannedIngredientLink, list: ActiveShoppingList, now = new Date()): WeekPreparation | null {
+  const item = list.items.find(row => row.productId === link.productId);
+  if (!item || !recipeContributionTargets(item, current).targets.some(target => sameIngredientLink(target.link, link))) return null;
+  const changed = withIngredientExcluded(current, link.dayIndex, link.ingredientId);
+  if (!changed) return null;
+  const ingredients = applyIngredientQuantityOverrides(changed, current.ingredients);
+  const baseline = listWithoutCurrentWeekMealPlan(list, current.id, now)!;
+  const projected = rebuildPreparedWeekSelection(changed, changed.days, ingredients, baseline, now);
+  const impact = budgetImpact(current, projected, baseline, now);
+  // Guard against an inconsistent source snapshot; never turn deletion into a cost increase.
+  if (impact.nextMealPlanCostCents > impact.currentMealPlanCostCents || impact.nextTotalWeekCostCents > impact.currentTotalWeekCostCents) return null;
+  return recalculateMealBudgetSummary(withRecipeBudgetDecision(projected, link.dayIndex,
+    recipeBudgetDecision(current, link.dayIndex, link.recipeId, impact, now)), baseline, now);
+}
 
 export function listWithoutCurrentWeekMealPlan(
   list: ActiveShoppingList | undefined,
@@ -234,7 +252,8 @@ function withCustomization(
     customization.replacementRecipe === null &&
     customization.productOverrides.length === 0 &&
     customization.ingredientOverrides.length === 0 &&
-    customization.manualProductAdditions.length === 0;
+    customization.manualProductAdditions.length === 0 &&
+    !customization.quantityOverrides?.length && !customization.excludedIngredients?.length;
   return isOriginal ? retained : [...retained, customization];
 }
 
@@ -459,9 +478,9 @@ function recipeBudgetDecision(
   impact: ManualProductBudgetImpact,
   now: Date,
 ): WeekBudgetDecision {
-  return impact.requiresBudgetOverride
+  return impact.mealBudgetOverageCents > 0 || impact.weekBudgetOverageCents > 0
     ? {
-        mode: "userApprovedBudgetOverride",
+        mode: impact.requiresBudgetOverride ? "userApprovedBudgetOverride" : "userReducedCosts",
         approvedAt: now.toISOString(),
         approvedMealPlanCostCents: impact.nextMealPlanCostCents,
         approvedTotalWeekCostCents: impact.nextTotalWeekCostCents,
@@ -501,28 +520,10 @@ function sameBudgetImpact(
   );
 }
 
-function snapshotPriceIsFresh(
-  ingredient: WeekIngredientRequirement,
-  now: Date,
-): boolean {
+function snapshotPriceIsReliable(ingredient: WeekIngredientRequirement): boolean {
   if (ingredient.optional && !ingredient.product) return true;
-  if (
-    !ingredient.product ||
-    !ingredient.price ||
-    ingredient.price.freshness !== "fresh" ||
-    ingredient.purchaseQuantity === null ||
-    ingredient.packageCapacity === null
-  ) {
-    return false;
-  }
-  const updatedAt = ingredient.price.updatedAt
-    ? new Date(ingredient.price.updatedAt).getTime()
-    : Number.NaN;
-  return (
-    Number.isFinite(updatedAt) &&
-    updatedAt <= now.getTime() &&
-    now.getTime() - updatedAt <= PRICE_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000
-  );
+  return Boolean(ingredient.product && reliablePriceCents(ingredient.price) &&
+    ingredient.purchaseQuantity !== null && ingredient.packageCapacity !== null);
 }
 
 function recipeSnapshotIsFresh(
@@ -535,7 +536,7 @@ function recipeSnapshotIsFresh(
     validatedAt <= now.getTime() &&
     now.getTime() - validatedAt <= PLANNING_CACHE_TTL_MS &&
     alternative.preparation.ingredients.every((ingredient) =>
-      snapshotPriceIsFresh(ingredient, now),
+      snapshotPriceIsReliable(ingredient),
     )
   );
 }
@@ -545,7 +546,8 @@ function hasIngredientLevelCustomizations(preparation: WeekPreparation): boolean
     (customization) =>
       customization.productOverrides.length > 0 ||
       customization.ingredientOverrides.length > 0 ||
-      customization.manualProductAdditions.length > 0,
+      customization.manualProductAdditions.length > 0 ||
+      Boolean(customization.quantityOverrides?.length) || Boolean(customization.excludedIngredients?.length),
   );
 }
 
@@ -1152,14 +1154,14 @@ export function budgetImpact(
     preparation.budgetCents,
     preparation.mealBudgetCents,
     preparation.ingredients,
-    baselineList,
+    completeShoppingListFromWeek(baselineList, preparation.ingredients, preparation.id, now),
     now,
   );
   const updated = evaluateMealBudget(
     next.budgetCents,
     next.mealBudgetCents,
     next.ingredients,
-    baselineList,
+    completeShoppingListFromWeek(baselineList, next.ingredients, next.id, now),
     now,
   );
   const mealBudgetOverageCents = next.mealBudgetCents === null
@@ -1185,7 +1187,9 @@ export function budgetImpact(
       ? null
       : Math.max(0, next.budgetCents - updated.totalKnownWeekCostCents),
     requiresBudgetOverride:
-      mealBudgetOverageCents > 0 || weekBudgetOverageCents > 0,
+      (mealBudgetOverageCents > 0 || weekBudgetOverageCents > 0) &&
+      (updated.mealPlanKnownCostCents > current.mealPlanKnownCostCents ||
+        updated.totalKnownWeekCostCents > current.totalKnownWeekCostCents),
   };
 }
 
@@ -1245,6 +1249,8 @@ export function previewManualProductChoice(
     );
     customization = {
       ...currentCustomization,
+      // A new explicit product/package choice supersedes the previous amount.
+      quantityOverrides: currentCustomization.quantityOverrides?.filter(item => item.ingredientId !== choice.ingredientId),
       productOverrides: [
         ...currentCustomization.productOverrides.filter(
           (item) => item.ingredientId !== choice.ingredientId,
@@ -1425,9 +1431,9 @@ export function commitManualProductChoice(
       preview: result.preview,
     };
   }
-  const decision: WeekBudgetDecision = result.preview.impact.requiresBudgetOverride
+  const decision: WeekBudgetDecision = result.preview.impact.mealBudgetOverageCents > 0 || result.preview.impact.weekBudgetOverageCents > 0
     ? {
-        mode: "userApprovedBudgetOverride",
+        mode: result.preview.impact.requiresBudgetOverride ? "userApprovedBudgetOverride" : "userReducedCosts",
         approvedAt: now.toISOString(),
         approvedMealPlanCostCents:
           result.preview.impact.nextMealPlanCostCents,

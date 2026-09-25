@@ -11,7 +11,7 @@ import { formatCents } from "@/services/budget/budget-engine";
 import type { CustomDish } from "@/types/week-preparation";
 import { FreeChoiceControl, type FreeChoiceRoute } from "./FreeChoiceControl";
 import { CustomDishEditor } from "./CustomDishEditor";
-import { CompactRecipeDetail } from "./CompactRecipeDetail";
+import { PlannedRecipeDetail } from "./PlannedRecipeDetail";
 import { MealRouteNavigation } from "./MealRouteNavigation";
 
 const routes = [
@@ -79,7 +79,7 @@ export function FreeChoiceWeekView({ initialDay = null }: { initialDay?: number 
             <span><strong>{item.recipe!.name}</strong><small>Dag {item.dayIndex + 1} · {item.customDish?.targetServings ?? preparation.numberOfPeople} personen</small></span>
             <strong>{cost.complete ? formatCents(cost.knownCostCents) : "Prijs onvolledig"}</strong><span className="meal-chevron" aria-hidden="true">›</span>
           </summary>
-          <CompactRecipeDetail preparation={preparation} dayIndex={item.dayIndex} />
+          <PlannedRecipeDetail preparation={preparation} dayIndex={item.dayIndex} />
           <button type="button" className="text-action" disabled={!ready || week.customizationBusy} onClick={() => { setSelectedDay(item.dayIndex); setChoosingSlot(false); actionGrid.current?.querySelector("button")?.focus(); }}>Deze vrije keuze vervangen</button>
         </details>;
       }) : <p>Je hebt nog geen vrije maaltijden gekozen.</p>}

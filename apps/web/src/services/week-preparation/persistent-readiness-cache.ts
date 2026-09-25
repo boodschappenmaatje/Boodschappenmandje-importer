@@ -16,8 +16,8 @@ import type { RecipeCatalog } from "@/services/week-preparation/recipe-repositor
 import type { Product, Recipe } from "@/types/catalog";
 import type { PreparedDay } from "@/types/week-preparation";
 
-export const PLANNER_MATCHER_VERSION = 2;
-export const PLANNER_READINESS_EVALUATOR_VERSION = 2;
+export const PLANNER_MATCHER_VERSION = 4;
+export const PLANNER_READINESS_EVALUATOR_VERSION = 4;
 export const PLANNER_READINESS_TTL_MS = 24 * 60 * 60 * 1000;
 
 type RefreshStatus = "current" | "pending" | "failed";

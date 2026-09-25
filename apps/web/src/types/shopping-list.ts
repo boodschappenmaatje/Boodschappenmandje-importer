@@ -10,10 +10,21 @@ export type ShoppingListItemSource =
   | "suggestion"
   | "recurring";
 
+/** Address only: quantities live in the planned ingredient, the list is a projection. */
+export interface PlannedIngredientLink {
+  weekPreparationId: string;
+  dayIndex: number;
+  recipeId: string;
+  ingredientId: string;
+  productId: string;
+  sku: string;
+}
+
 export interface ShoppingListMealPlanContribution {
   weekPreparationId: string | null;
   quantity: number;
   usedIn: string[];
+  ingredientLinks?: PlannedIngredientLink[];
 }
 
 export interface ShoppingListQuantityContributions {

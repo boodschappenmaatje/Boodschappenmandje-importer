@@ -1,6 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { IngredientQuantityControl } from "./IngredientQuantityControl";
 import { CompactRecipeDetail } from "./CompactRecipeDetail";
 import { CustomDishEditor, customDishForOpening } from "./CustomDishEditor";
 import { FreeChoiceWeekView } from "./FreeChoiceWeekView";
@@ -110,4 +111,27 @@ describe("PWA 14 Fix 1 compact view and separate editor", () => {
     expect(olderDraft.targetServings).toBe(6);
   });
 
+});
+
+
+describe("compact ingredient quantity controls", () => {
+  it("labels each ingredient and shows the desired amount separately from packs", () => {
+    const html = renderToStaticMarkup(createElement(CompactRecipeDetail, { preparation: fixture(), dayIndex: 0, onQuantityChange: vi.fn() }));
+    expect(html).toContain('aria-label="Meer Ingrediënt 0"');
+    expect(html).toContain('aria-label="Minder Ingrediënt 0"');
+    expect(html).toContain('2 verpakkingen</output>');
+    expect(html).toContain('Totaal voor recept: 600 g');
+    expect(html).toContain('2 × 500 g');
+  });
+  it("disables minus at minimum and both buttons without reliable pricing or while busy", () => {
+    const ingredient = fixture().ingredients[0];
+    for (const input of [{...ingredient,price:null},ingredient]) {
+      const html = renderToStaticMarkup(createElement(IngredientQuantityControl,{ingredient:input,dayIndex:0,busy:input===ingredient,onChange:vi.fn()}));
+      expect(html.match(/disabled=""/g)).toHaveLength(2);
+    }
+    const minimum = {...ingredient,usedIn:ingredient.usedIn.map(use=>({...use,requiredQuantity:1}))};
+    const html=renderToStaticMarkup(createElement(IngredientQuantityControl,{ingredient:minimum,dayIndex:0,busy:false,onChange:vi.fn()}));
+    expect(html).toContain('aria-label="Minder Ingrediënt 0" disabled=""');
+    expect(html).not.toContain('aria-label="Meer Ingrediënt 0" disabled=""');
+  });
 });

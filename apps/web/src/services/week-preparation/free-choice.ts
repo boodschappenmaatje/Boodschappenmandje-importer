@@ -1,3 +1,4 @@
+import { reliablePriceCents } from "@/services/catalog/price";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { RecipeRepository } from "@/services/week-preparation/recipe-repository";
 import { budgetImpact, listWithoutCurrentWeekMealPlan, type RecipeAlternative } from "@/services/week-preparation/meal-customization";
@@ -53,7 +54,7 @@ export async function previewFreeChoice(preparation: WeekPreparation, dayIndex: 
   const validated = (await revalidatePreparedWeek(next, recipes, products, now, baseline, planningCache)).preparation;
   const dish = calculateDishCostSummary(dayIndex, validated.ingredients);
   if (!dish.complete || !validated.ingredients.some((item) => item.usedIn.some((use) => use.dayIndex === dayIndex)) ||
-    validated.ingredients.some((item) => item.usedIn.some((use) => use.dayIndex === dayIndex) && !item.optional && item.price?.freshness !== "fresh")) return null;
+    validated.ingredients.some((item) => item.usedIn.some((use) => use.dayIndex === dayIndex) && !item.optional && !reliablePriceCents(item.price))) return null;
   const impact = budgetImpact(preparation, validated, baseline ?? { schemaVersion: 2, startedAt: now.toISOString(), updatedAt: now.toISOString(), items: [] }, now);
   return {
     recipe: reference, category: "comfort", currentDishCostCents: calculateDishCostSummary(dayIndex, preparation.ingredients).knownCostCents,

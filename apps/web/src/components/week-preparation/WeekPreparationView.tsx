@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 
 import { DishImage } from "@/components/ui/DishImage";
 import Link from "next/link";
-import { CompactRecipeDetail } from "./CompactRecipeDetail";
+import { PlannerBudgetRecovery } from "./PlannerBudgetRecovery";
+import { FreeChoiceControl } from "./FreeChoiceControl";
+import { PlannedRecipeDetail } from "./PlannedRecipeDetail";
 import { CustomDishEditor } from "./CustomDishEditor";
 import { MealRouteNavigation } from "./MealRouteNavigation";
 import {
@@ -38,7 +40,7 @@ import {
   calculateDishCostSummary,
   calculateWeekBudgetSummary,
   dayReadinessIssueCount,
-  hasValidUserApprovedBudgetOverride,
+  hasValidManualBudgetDecision,
 } from "@/services/week-preparation/week-generation";
 import {
   MEAL_CATEGORIES,
@@ -62,6 +64,7 @@ function listCountLabel(count: number): string {
 }
 
 export function WeekPreparationView() {
+  const [choosingDay, setChoosingDay] = useState<number | null>(null);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [keepDayIndexes, setKeepDayIndexes] = useState<number[]>([]);
   const [categoryChange, setCategoryChange] = useState<{ dayIndex: number; category: MealCategory } | null>(null);
@@ -168,7 +171,7 @@ export function WeekPreparationView() {
       .map((day) => day.dayIndex),
   );
   const incompleteDishCount = incompleteDayIndexes.size;
-  const approvedBudgetOverride = hasValidUserApprovedBudgetOverride(preparation);
+  const approvedBudgetOverride = hasValidManualBudgetDecision(preparation);
   const mealBudgetCompletionAllowed =
     ["withinMealBudget", "exactlyMealBudget"].includes(
       preparation.generation?.mealBudgetStatus ?? "noMealBudget",
@@ -203,10 +206,12 @@ export function WeekPreparationView() {
           ? `${Math.abs(progress.difference)} ${Math.abs(progress.difference) === 1 ? "dag" : "dagen"} te veel gekozen`
           : "Alle dagen zijn verdeeld";
 
+  if (choosingDay !== null) return <FreeChoiceControl dayIndex={choosingDay} initialMode="recipe" onClose={() => setChoosingDay(null)} />;
   if (editingDay !== null) return <CustomDishEditor dayIndex={editingDay} initialDish={preparation.days.find(day => day.dayIndex === editingDay)?.customDish} onClose={() => setEditingDay(null)} />;
   return (
     <div className="week-preparation-flow" ref={flowTop} tabIndex={-1}>
       <MealRouteNavigation current="menu" />
+      {week.planningFailure ? <PlannerBudgetRecovery attempt={week.planningFailure} preserved onSettings={() => goToStep(0)} onDistribution={() => goToStep(1)} onManual={week.chooseUnfilledManually} /> : null}
       <nav className="ux-step-progress" aria-label="Weekvoorbereiding stappen">
         <p>Stap {currentStep + 1} van 4</p>
         <ol>{["Basis", "Maaltijden", "Voorkeuren", "Overzicht"].map((label, index) => <li key={label} aria-current={index === currentStep ? "step" : undefined}><span>{index + 1}</span>{label}</li>)}</ol>
@@ -264,38 +269,7 @@ export function WeekPreparationView() {
             <>
               {preparation.generation?.mealBudgetStatus ===
               "noValidMealPlanWithinBudget" ? (
-                <div className="week-generation-warning" role="status">
-                  <p>
-                    Met {formatCents(preparation.mealBudgetCents ?? 0)} is er op dit
-                    moment geen complete maaltijdweek beschikbaar voor deze verdeling.
-                  </p>
-                  {preparation.generation.lowestCompleteMealPlanCostCents !== null &&
-                  preparation.generation.lowestCompleteMealPlanCostCents !== undefined ? (
-                    preparation.generation.lowestCompleteMealPlanCostReliable ? (
-                      <>
-                        <p>
-                          Voor deze week is minimaal ongeveer {formatCents(preparation.generation.lowestCompleteMealPlanCostCents)} nodig.
-                        </p>
-                        <p>
-                          Verhoog je maaltijd-budget met {formatCents(Math.max(0, preparation.generation.lowestCompleteMealPlanCostCents - (preparation.mealBudgetCents ?? 0)))} of pas je weekverdeling aan.
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p>
-                          De goedkoopste complete combinatie die we hebben doorgerekend kost {formatCents(preparation.generation.lowestCompleteMealPlanCostCents)}.
-                        </p>
-                        <p>
-                          Met {formatCents(Math.max(0, preparation.generation.lowestCompleteMealPlanCostCents - (preparation.mealBudgetCents ?? 0)))} meer kan deze combinatie wel worden gepland. Mogelijk is een andere combinatie nog voordeliger.
-                        </p>
-                      </>
-                    )
-                  ) : (
-                    <p>
-                      Verhoog het maaltijd-budget, pas je weekverdeling aan of kies minder dagen.
-                    </p>
-                  )}
-                </div>
+                <PlannerBudgetRecovery attempt={preparation} onSettings={() => goToStep(0)} onDistribution={() => goToStep(1)} onManual={week.chooseUnfilledManually} />
               ) : preparation.generation?.mealBudgetStatus === "overMealBudget" ? (
                 <div className="week-generation-warning" role="status">
                   <p>
@@ -307,7 +281,8 @@ export function WeekPreparationView() {
                       ),
                     )} boven je maaltijd-budget.
                   </p>
-                  <p>{approvedBudgetOverride ? "Door jou goedgekeurde keuze." : "Bevestig de gewijzigde keuze opnieuw; je opgeslagen gerechten zijn niet automatisch vervangen."}</p>
+                  <p>{approvedBudgetOverride ? "Je handmatige keuze is behouden." : "Je opgeslagen gerechten zijn behouden. Zoek een andere week binnen je budget of pas zelf je keuzes aan."}</p>
+                  <button type="button" className="compact-choice-button" onClick={() => week.confirmPreparation()}>Zoek een week binnen budget</button>
                 </div>
               ) : null}
               {preparation.generation &&
@@ -445,11 +420,11 @@ export function WeekPreparationView() {
                               </span>
                             </summary>
                             <div className="recipe-detail-content">
-                              <CompactRecipeDetail preparation={preparation} dayIndex={day.dayIndex} />
+                              <PlannedRecipeDetail preparation={preparation} dayIndex={day.dayIndex} />
                               {day.customDish ? <button type="button" className="text-action" onClick={() => setEditingDay(day.dayIndex)}>Bewerk recept</button> : null}
                               <details className="compact-recipe-manage"><summary>Gerecht aanpassen</summary>
                                 <DishIngredients ingredients={dayIngredients} dayIndex={day.dayIndex} renderAction={(ingredient) => ingredient.product && ingredient.price && ingredient.purchaseQuantity !== null ? (
-                                  <ProductAlternativeControl dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
+                                  <ProductAlternativeControl key={ingredient.product.productId} dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
                                 ) : null} />
                                 {day.category === "freeChoice" ? <Link className="text-action" href={`/vrije-keuze?day=${day.dayIndex}`}>Vervang een vrije keuze</Link> : !dishNeedsReview ? <MealReplacementControl dayIndex={day.dayIndex} currentRecipeName={dishTitle} ingredients={ingredientOptions} /> : null}
                               </details>
@@ -457,13 +432,13 @@ export function WeekPreparationView() {
                           </details>
                         </div>
                       ) : (
-                        <p className="shopping-item-price-missing">
+                        <div>                        <p className="shopping-item-price-missing">
                           {budgetSelectionFailed && (readiness?.readyCount ?? 1) > 0
                             ? "Er zijn complete gerechten beschikbaar, maar deze week past nog niet binnen je maaltijd-budget."
                             : readiness && readiness.readyCount > 0
                               ? "Voor deze categorie zijn complete gerechten beschikbaar. De week is nog niet volledig samengesteld."
                             : "Op dit moment is er geen compleet gerecht beschikbaar voor deze categorie."}
-                        </p>
+                        </p><button type="button" className="compact-choice-button" onClick={() => { week.chooseUnfilledManually(); setChoosingDay(day.dayIndex); }}>Bekijk gerechten voor deze dag</button></div>
                       )}
                     </li>
                   );

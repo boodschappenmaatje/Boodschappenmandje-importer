@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
 import { createCatalogRepository } from "@/services/catalog/catalog-repository";
 import {
   createIndexedDbShoppingListStorage,
@@ -18,6 +19,7 @@ import {
 } from "@/services/shopping-list/indexeddb-storage";
 import {
   addCatalogProduct,
+  adjustPersistentQuantity,
   calculateShoppingListTotal,
   completeShoppingListFromWeek,
   createEmptyActiveShoppingList,
@@ -46,6 +48,7 @@ interface ActiveShoppingListContextValue {
   persistenceWarning: string | null;
   lastRemoved: RemovedShoppingListItem | null;
   addProduct: (product: Product) => Promise<void>;
+  refreshFromProducts: (products: Product[]) => Promise<void>;
   completeFromWeek: (
     requirements: WeekIngredientRequirement[],
     weekPreparationId: string,
@@ -54,11 +57,13 @@ interface ActiveShoppingListContextValue {
     weekPreparationId: string,
   ) => Promise<ActiveShoppingList | null>;
   toggleChecked: (productId: string) => Promise<void>;
+  adjustIndependent: (productId: string, delta: -1 | 1) => Promise<void>;
   increase: (productId: string) => Promise<void>;
   decrease: (productId: string) => Promise<void>;
   remove: (productId: string) => Promise<void>;
   undoRemove: () => Promise<void>;
   dismissUndo: () => void;
+  getCurrentList: () => ActiveShoppingList | null;
   quantityFor: (productId: string) => number;
 }
 
@@ -176,15 +181,9 @@ export function ActiveShoppingListProvider({
     };
   }, [initialList, persist, refreshPrices, suppliedStorage]);
 
-  useEffect(() => {
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        void refreshPrices();
-      }
-    };
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-    return () => document.removeEventListener("visibilitychange", refreshWhenVisible);
-  }, [refreshPrices]);
+  useEffect(() => subscribeCatalogRefresh(() => { void refreshPrices(); }), [refreshPrices]);
+
+  const refreshFromProducts = useCallback((products: Product[]) => commit(current => refreshShoppingListFromCatalog(current, products)), [commit]);
 
   const addProduct = useCallback(
     async (product: Product) => {
@@ -229,6 +228,8 @@ export function ActiveShoppingListProvider({
     await commit((current) => toggleShoppingListItem(current, productId));
   }, [commit]);
 
+  const adjustIndependent = useCallback((productId: string, delta: -1 | 1) => commit(current => adjustPersistentQuantity(current, productId, delta)), [commit]);
+
   const increase = useCallback(
     async (productId: string) => {
       setLastRemoved(null);
@@ -268,6 +269,8 @@ export function ActiveShoppingListProvider({
 
   const dismissUndo = useCallback(() => setLastRemoved(null), []);
 
+  const getCurrentList = useCallback(() => listRef.current, []);
+
   const quantityFor = useCallback(
     (productId: string) =>
       list?.items.find((item) => item.productId === productId)?.quantity ?? 0,
@@ -287,27 +290,33 @@ export function ActiveShoppingListProvider({
       persistenceWarning,
       lastRemoved,
       addProduct,
+      refreshFromProducts,
       completeFromWeek,
       removeMealPlanForWeek,
       toggleChecked,
       increase,
+      adjustIndependent,
       decrease,
       remove,
       undoRemove,
       dismissUndo,
       quantityFor,
+      getCurrentList,
     }),
     [
       addProduct,
+      refreshFromProducts,
       completeFromWeek,
       decrease,
       dismissUndo,
       toggleChecked,
       increase,
+      adjustIndependent,
       lastRemoved,
       list,
       persistenceWarning,
       quantityFor,
+      getCurrentList,
       removeMealPlanForWeek,
       remove,
       status,

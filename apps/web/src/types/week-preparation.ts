@@ -86,7 +86,8 @@ export type WeekBudgetDecision =
   | { mode: "automaticPlanValidation" }
   | { mode: "userConfirmedManualChoice" }
   | {
-      mode: "userApprovedBudgetOverride";
+      // A reduction records only a non-increasing cost ceiling, not consent to spend more.
+      mode: "userApprovedBudgetOverride" | "userReducedCosts";
       approvedAt: string;
       approvedMealPlanCostCents: number;
       approvedTotalWeekCostCents: number;
@@ -126,6 +127,10 @@ export interface WeekManualProductAddition {
 }
 
 export interface WeekMealCustomization {
+  /** Explicit removal from this planned recipe, never a quantity of zero. */
+  excludedIngredients?: { ingredientId: UUID; recipeId: UUID; name: string }[];
+  /** Desired ingredient amounts at a known serving count; absent in older local data. */
+  quantityOverrides?: WeekIngredientQuantityOverride[];
   dayIndex: number;
   baseRecipe: SelectedRecipeReference;
   replacementRecipe: SelectedRecipeReference | null;
@@ -134,6 +139,17 @@ export interface WeekMealCustomization {
   ingredientOverrides: WeekIngredientOverride[];
   manualProductAdditions: WeekManualProductAddition[];
   updatedAt: string;
+}
+
+export interface WeekIngredientQuantityOverride {
+  /** New explicit choices lock whole packages; older quantity choices still scale. */
+  packageCount?: number;
+  productId?: UUID;
+  ingredientId: UUID;
+  recipeId: UUID;
+  quantity: number;
+  unit: WeekIngredientUnit;
+  people: number;
 }
 
 export interface PreparedDay {
@@ -147,6 +163,8 @@ export interface PreparedDay {
 }
 
 export interface CustomDishIngredient {
+  /** Explicit whole packages, independent of the number of people. */
+  packageCount?: number;
   id: string;
   name: string;
   quantity: number;
@@ -176,6 +194,7 @@ export interface WeekIngredientUse {
 }
 
 export interface WeekProductReference {
+  weightGrams?: number | null;
   category?: string | null;
   productId: UUID;
   sku: string;
@@ -195,6 +214,8 @@ export interface WeekPriceSnapshot {
 }
 
 export interface WeekIngredientRequirement {
+  /** Manual product selection uses packages, not edible pieces, as its source amount. */
+  quantityIsPackageCount?: boolean;
   ingredientId: UUID;
   sourceKey: string;
   name: string;

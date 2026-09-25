@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository";
-import type { PersistentProductMatchRow } from "@/services/week-preparation/persistent-readiness-cache";
+import { PLANNER_MATCHER_VERSION, type PersistentProductMatchRow } from "@/services/week-preparation/persistent-readiness-cache";
 import { evaluateRecipeReadiness } from "@/services/week-preparation/recipe-readiness";
 import type { RecipeCatalog, RecipeIngredientDefinition } from "@/services/week-preparation/recipe-repository";
 import type { Product, Recipe } from "@/types/catalog";
@@ -38,7 +38,7 @@ function missing(ingredient = FALAFEL): PersistentProductMatchRow {
   return { match_key: `${ingredient.id}:g:ingredient:generic`, ingredient_id: null,
     ingredient_source_key: ingredient.sourceKey, requirement_unit: "g", requirement_kind: "ingredient",
     brand_constraint: "", product_id: null, match_status: "invalid", failure_reason: "no_catalog_product",
-    matcher_version: 2, refresh_status: "current", invalidated_at: null,
+    matcher_version: PLANNER_MATCHER_VERSION, refresh_status: "current", invalidated_at: null,
     product_updated_at: null, price_updated_at: null, checked_at: BEFORE };
 }
 type Row = Record<string, unknown>;

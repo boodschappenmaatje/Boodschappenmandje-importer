@@ -298,6 +298,18 @@ export function prepareWeek(
     days[slot.dayIndex] = { ...old, dayIndex: slot.dayIndex };
     available.splice(available.indexOf(slot), 1);
   }
+  // A budget retry must retain explicit ingredient/package choices too, not only
+  // free-choice dishes. Reassign within the same category if distribution moves it.
+  const automaticSlots = days.filter(day => day.category !== "freeChoice");
+  for (const old of preparation.days.filter(day => day.recipe && day.category !== "freeChoice" &&
+    preparation.customizations.some(item => item.dayIndex === day.dayIndex))) {
+    const slot = automaticSlots.find(day => day.dayIndex === old.dayIndex && day.category === old.category) ??
+      automaticSlots.find(day => day.category === old.category);
+    if (!slot) continue; // The user explicitly removed that category from the new week.
+    remap.set(old.dayIndex, slot.dayIndex);
+    days[slot.dayIndex] = { ...old, dayIndex: slot.dayIndex };
+    automaticSlots.splice(automaticSlots.indexOf(slot), 1);
+  }
   return withUpdatedAt(preparation, now, {
     existingListKnownSubtotalCents: listContext.knownSubtotalCents,
     existingListUnpricedCount: listContext.unpricedItemCount,

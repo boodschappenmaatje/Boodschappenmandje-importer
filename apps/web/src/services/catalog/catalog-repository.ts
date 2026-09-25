@@ -380,6 +380,7 @@ export class CatalogReadError extends Error {
 }
 
 export interface CatalogRepository {
+  invalidateProducts?(productIds: string[]): void;
   /** Full candidate set for quantity-aware planning; the UI search stays compact. */
   searchCandidates?(term: string): Promise<CatalogProductsResult>;
   getPage(request?: CatalogPageRequest): Promise<CatalogPageResult>;
@@ -403,16 +404,46 @@ function valuesFromFacetRows(
 }
 
 export class SupabaseCatalogRepository implements CatalogRepository {
-  constructor(private readonly client: SupabaseClient) {}
+  private candidateCatalog: { expiresAt: number; result: Promise<CatalogProductsResult> } | null = null;
+  constructor(private readonly client: SupabaseClient, private readonly now = Date.now) {}
+
+  invalidateProducts(productIds: string[]): void {
+    if (productIds.length) this.candidateCatalog = null;
+  }
 
   async searchCandidates(term: string): Promise<CatalogProductsResult> {
+    if (!normalizeCatalogSearchRequest(term)) return { products: [], priceStatus: "complete" };
+    // The planner needs every candidate, not interactive relevance pages. Ranking
+    // the entire catalog again for each 20-row page caused database timeouts.
+    // Read one shared, short-lived catalog snapshot; use the existing token and
+    // ingredient matchers. Producten/manual search retain their ranked RPC.
+    const timestamp = this.now();
+    if (!this.candidateCatalog || this.candidateCatalog.expiresAt <= timestamp) {
+      const result = this.loadCandidateCatalog().catch((error: unknown) => {
+        if (this.candidateCatalog?.result === result) this.candidateCatalog = null;
+        throw error;
+      });
+      this.candidateCatalog = { expiresAt: timestamp + 60_000, result };
+    }
+    const snapshot = await this.candidateCatalog.result;
+    return { ...snapshot, products: snapshot.products.filter(product => productMatchesSearchTokens(product, term)) };
+  }
+
+  private async loadCandidateCatalog(): Promise<CatalogProductsResult> {
     const products = new Map<string, Product>();
     let priceStatus: CatalogProductsResult["priceStatus"] = "complete";
-    for (let page = 1; ; page++) {
-      const result = await this.query({ term, page, pageSize: MAX_CATALOG_PAGE_SIZE, sort: "relevance" });
-      for (const product of result.products) products.set(product.id, product);
-      if (result.priceStatus !== "complete") priceStatus = result.priceStatus;
-      if (!result.hasMore) break;
+    const batchSize = 250;
+    for (let start = 0; ; start += batchSize) {
+      const { data, error } = await this.client.from("products")
+        .select(`${PRODUCT_FIELDS},current_price:product_prices(${PRICE_FIELDS})`)
+        .eq("supermarket", "Hoogvliet").order("id", { ascending: true })
+        .range(start, start + batchSize - 1);
+      if (error) throw new CatalogReadError("products-unavailable");
+      if (!Array.isArray(data)) throw new CatalogReadError("invalid-response");
+      const mapped = mapJoinedCatalogRows(data);
+      for (const product of mapped.products) products.set(product.id, product);
+      if (mapped.priceStatus !== "complete") priceStatus = mapped.priceStatus;
+      if (data.length < batchSize) break;
     }
     return { products: [...products.values()], priceStatus };
   }

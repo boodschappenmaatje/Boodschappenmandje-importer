@@ -99,6 +99,11 @@ function categoryConflicts(
       /diepvries/i.test(product.category ?? "") && /spinazie/i.test(product.name)) {
     contextWithoutProductType = contextWithoutProductType.replace(/\b(?:fijn|grof) gehakt\b/g, "");
   }
+  // A raw vegetable kit lives under "Soeppakketten"; it is not prepared soup.
+  if (ingredient.category === "Groente" && normalize(ingredient.name) === "erwtensoepgroenten" &&
+      normalize(product.name) === "erwtensoepgroenten" && /^Aardappelen, groente, fruit\//i.test(product.category ?? "")) {
+    contextWithoutProductType = "erwtensoepgroenten groente";
+  }
   const productSpecificClassification = normalize(
     [
       product.name,
@@ -199,6 +204,9 @@ function reliableBrandedMealMixMatch(
 function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinition, product: Product): boolean {
   const required = normalize(ingredient.name);
   const name = normalize(product.name);
+  // A baby meal is not a raw ingredient, even if its title contains that food.
+  // Use the catalog category, so fresh baby spinach/carrot names remain valid.
+  if (/\bbaby\b|babyvoeding|peutervoeding/.test(normalize(product.category))) return false;
   // Discovery aliases must not erase explicit recipe properties.
   if (ingredient.sourceKey.startsWith("mix-supplement-")) {
     const context = normalize(`${product.name} ${product.category}`);
@@ -211,7 +219,7 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
   if (/\bdiepvries\b/.test(required) && !/\bdiepvries\b/.test(normalize(`${product.name} ${product.category}`))) return false;
   if (/drogisterij|lichaamsverzorging|haarverzorging|schoonmaak|huishoudelijk|dierenvoeding/.test(normalize(product.category))) return false;
   if (/\b(?:bad|douche|massage|shampoo|zeep|bodylotion)\b/.test(name)) return false;
-  if (ingredient.category === "Groente" && /puree|passata|sap|saus|poeder|kruiden|soep/.test(name) &&
+  if (ingredient.category === "Groente" && /puree|passata|concentraat|pulp|sap|saus|poeder|kruiden|soep/.test(name) &&
     !/puree|passata|sap|saus|poeder|kruiden|soep/.test(required)) return false;
   if (["Vlees", "Vis", "Groente", "Pasta, rijst & granen"].includes(ingredient.category) &&
     /kruidenmix|maaltijdmix|basis voor/.test(name) && !/kruidenmix|maaltijdmix|basis voor/.test(required)) return false;
@@ -335,7 +343,7 @@ function capacityFromText(
 }
 
 export function productPackageCapacity(
-  product: Product,
+  product: Pick<Product, "name" | "packageText" | "weightGrams">,
   unit: WeekIngredientUnit,
 ): number | null {
   // A catalog's "1 stuk" can describe one net, while its name declares the
@@ -407,7 +415,7 @@ export function selectIngredientProduct(
   const totalCost = (product: Product): number => {
     const capacity = requiredUnit ? productPackageCapacity(product, requiredUnit) : 1;
     const price = product.currentPrice?.productId === product.id ? resolveCurrentPrice(product.currentPrice) : null;
-    if (!capacity || !price || price.freshness !== "fresh") return Infinity;
+    if (!capacity || !price) return Infinity;
     const cents = euroAmountToCents(price.amount);
     return cents === null ? Infinity : Math.ceil(requiredQuantity / capacity) * cents;
   };
@@ -469,6 +477,7 @@ export function applyProductToRequirement(
       supermarket: product.supermarket,
       sourceUrl: product.sourceUrl,
       category: product.category,
+      weightGrams: product.weightGrams,
     },
     price:
       resolvedPrice && amountCents !== null
@@ -489,6 +498,16 @@ export function applyProductToRequirement(
  * automatic matcher this deliberately does not infer semantic compatibility
  * or a gram/ml requirement: the user chose both the product and quantity.
  */
+/** Strip only an explicit catalog brand prefix; never infer a food from a SKU. */
+export function selectedIngredientName(product: Pick<Product, "name" | "brand">): string {
+  const name = product.name.trim();
+  const brand = product.brand?.trim();
+  if (brand && name.toLocaleLowerCase("nl-NL").startsWith(`${brand.toLocaleLowerCase("nl-NL")} `)) {
+    return name.slice(brand.length).trim() || name;
+  }
+  return name;
+}
+
 export function applyManualProductToRequirement(
   requirement: WeekIngredientRequirement,
   product: Product,
@@ -505,7 +524,9 @@ export function applyManualProductToRequirement(
 
   return {
     ...requirement,
+    name: selectedIngredientName(product),
     unit: "piece",
+    quantityIsPackageCount: true,
     kind: "ingredient",
     brandConstraint: null,
     requiredQuantity: safeQuantity,
@@ -525,6 +546,7 @@ export function applyManualProductToRequirement(
       supermarket: product.supermarket,
       sourceUrl: product.sourceUrl,
       category: product.category,
+      weightGrams: product.weightGrams,
     },
     price:
       resolvedPrice && amountCents !== null

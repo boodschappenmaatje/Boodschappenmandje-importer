@@ -98,3 +98,23 @@ describe("actuele prijs", () => {
     ).toBeNull();
   });
 });
+
+import { newestReliablePrice, reliablePriceCents } from "./price";
+describe("newest reliable positive price policy", () => {
+  const old = { ...regularPrice, price: 1.79, fetchedAt: "2026-09-16T08:00:00Z" };
+  const next = { ...old, price: 1.99, fetchedAt: "2026-09-24T08:00:00Z" };
+  it("keeps last-known data usable without relabelling its age", () => {
+    expect(resolveCurrentPrice(old, new Date("2026-09-25T10:00:00Z"))).toMatchObject({ amount: 1.79, freshness: "stale" });
+    expect(reliablePriceCents({ amountCents: 179 })).toBe(true);
+  });
+  it("automatically chooses the newest valid observation in either row order", () => {
+    for (const candidates of [[old, next], [next, old]]) expect(newestReliablePrice(candidates, old.productId)?.price).toBe(1.99);
+  });
+  it.each([0, -1, NaN, Infinity, 0.001])("rejects invalid latest amount %s, preserving only a real older fallback", price => {
+    expect(newestReliablePrice([{ ...next, price }, old], old.productId)?.price).toBe(1.79);
+    expect(newestReliablePrice([{ ...next, price }], old.productId)).toBeNull();
+  });
+  it("never borrows a price from another product", () => {
+    expect(newestReliablePrice([{ ...next, productId: "other" }, old], old.productId)?.price).toBe(1.79);
+  });
+});

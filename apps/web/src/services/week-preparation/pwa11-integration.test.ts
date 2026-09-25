@@ -622,7 +622,7 @@ describe("PWA 11 recepten, ingrediënten, producten en budget", () => {
       NOW,
     );
     expect(completed.items[0].quantity).toBe(5);
-    expect(completed.items[0].quantityContributions).toEqual({
+    expect(completed.items[0].quantityContributions).toMatchObject({
       persistentQuantity: 3,
       mealPlans: [{
         weekPreparationId: "week-mixed",

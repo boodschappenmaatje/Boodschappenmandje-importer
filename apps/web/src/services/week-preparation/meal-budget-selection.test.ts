@@ -807,3 +807,61 @@ describe("budgetbewuste READY-receptselectie", () => {
     expect(ids.length - new Set(ids).size).toBe(1);
   });
 });
+
+
+describe("PR28 harde automatische grens inclusief behouden keuzes", () => {
+  it.each([70, 70.01])("€%s bij €100 week / €70 maaltijd", async price => {
+    const repos = fixture([{ id: "boundary", name: "Pasta grens", price }]);
+    const result = await generatePreparedWeek(preparedDays(7000, ["pasta"]), repos.recipeRepository, repos.catalogRepository, NOW);
+    expect(result.status === "generated").toBe(price === 70);
+    expect(result.generation?.mealBudgetStatus).toBe(price === 70 ? "exactlyMealBudget" : "noValidMealPlanWithinBudget");
+    expect(result.generation?.lowestCompleteMealPlanCostCents).toBe(Math.round(price * 100));
+    if (price > 70) expect(result.days[0].recipe).toBeNull();
+  });
+
+  it("telt een behouden gerecht bij iedere kandidaat mee en vindt €60 + €10 in plaats van €120", async () => {
+    const repos = fixture([{ id: "fixed", name: "Pasta luxe", price: 60 }, { id: "cheap", name: "Pasta voordelig", price: 10 }]);
+    const catalog = await repos.recipeRepository.loadCatalog();
+    const base = preparedDays(7000, ["freeChoice", "pasta"]);
+    base.days = base.days.map(day => day.category === "freeChoice" ? { ...day, freeChoice: false, recipe: catalog.recipes[0], recipeId: "fixed", status: "recipeSelected" } : day);
+    const snapshot = structuredClone(base);
+    const result = await generatePreparedWeek(base, repos.recipeRepository, repos.catalogRepository, NOW);
+    expect(base).toEqual(snapshot);
+    expect(result.days.map(day => day.recipeId)).toEqual(["cheap", "fixed"]);
+    expect(result.generation).toMatchObject({ mealPlanKnownCostCents: 7000, mealBudgetStatus: "exactlyMealBudget" });
+  });
+
+  it("weigert een objectief onhaalbare volledige week zonder de behouden keuze te wijzigen", async () => {
+    const repos = fixture([{ id: "fixed", name: "Pasta luxe", price: 60 }, { id: "cheap", name: "Pasta voordelig", price: 10.01 }]);
+    const catalog = await repos.recipeRepository.loadCatalog();
+    const base = preparedDays(7000, ["freeChoice", "pasta"]);
+    base.days = base.days.map(day => day.category === "freeChoice" ? { ...day, freeChoice: false, recipe: catalog.recipes[0], recipeId: "fixed", status: "recipeSelected" } : day);
+    const result = await generatePreparedWeek(base, repos.recipeRepository, repos.catalogRepository, NOW);
+    expect(result.status).toBe("generationPartial");
+    expect(result.days.map(day => day.recipeId)).toEqual([null, "fixed"]);
+    expect(result.generation).toMatchObject({ mealBudgetStatus: "noValidMealPlanWithinBudget", lowestCompleteMealPlanCostCents: 7001, lowestCompleteMealPlanCostReliable: true });
+  });
+
+  it.each([1, 2, 4, 6, 10, 12].flatMap(people => [1, 3, 5, 7].map(days => ({ people, days }))))("$people personen / $days dagen: echte verpakkingen en harde grens", async ({ people, days }) => {
+    const base = { ...preparedDays(7000, Array.from({ length: days }, () => "pasta")), numberOfPeople: people };
+    const result = await generatePreparedWeek(base, recipeRepository, catalogRepository, NOW);
+    expect(result.status).toBe("generated");
+    expect(result.days.every(day => day.recipe)).toBe(true);
+    expect(result.generation!.mealPlanKnownCostCents).toBeLessThanOrEqual(7000);
+    for (const item of result.ingredients) {
+      expect(item.requiredQuantity).toBe(item.usedIn.length * people * 125);
+      expect(item.purchaseQuantity).toBe(Math.ceil(item.requiredQuantity / 500));
+      expect(item.price!.amountCents).toBeGreaterThan(0);
+    }
+  });
+});
+
+
+it("een onvolledig behouden gerecht is geen vrijbrief voor automatische planning", async () => {
+  const base = preparedDays(7000, ["freeChoice", "pasta"]);
+  base.days = base.days.map(day => day.category === "freeChoice" ? { ...day, freeChoice: false, recipeId: "missing-recipe", recipe: { id: "missing-recipe", sourceKey: "missing", name: "Ontbrekend gerecht" }, status: "recipeSelected" } : day);
+  const result = await generatePreparedWeek(base, recipeRepository, catalogRepository, NOW);
+  expect(result.status).toBe("generationPartial");
+  expect(result.generation?.mealBudgetStatus).toBe("incompleteValidation");
+  expect(result.days.find(day => day.category === "pasta")!.recipe).toBeNull();
+});

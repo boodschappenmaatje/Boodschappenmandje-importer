@@ -10,6 +10,23 @@ import type {
 export const PRICE_STALE_AFTER_DAYS = 8;
 const PRICE_STALE_AFTER_MS = PRICE_STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
 
+/** Freshness labels age; it never disqualifies a reliable positive catalog price. */
+export function reliablePriceCents(price: { amountCents: number } | null | undefined): boolean {
+  return Boolean(price && Number.isSafeInteger(price.amountCents) && price.amountCents > 0);
+}
+
+/** Exact product identity and newest valid observation win, independent of row order. */
+export function newestReliablePrice(prices: (ProductPrice | null)[], productId: string): ProductPrice | null {
+  return prices.filter((price): price is ProductPrice => Boolean(
+    price && price.productId === productId && resolveCurrentPrice(price),
+  )).sort((a, b) => priceTimestamp(getPriceUpdatedAt(b)) - priceTimestamp(getPriceUpdatedAt(a)))[0] ?? null;
+}
+
+export function priceTimestamp(value: string | null): number {
+  const time = Date.parse(value ?? "");
+  return Number.isFinite(time) ? time : 0;
+}
+
 function validDate(value: string | null): Date | null {
   if (!value) {
     return null;
@@ -86,7 +103,7 @@ export function resolveCurrentPrice(
   price: ProductPrice | null,
   now: Date = new Date(),
 ): ResolvedProductPrice | null {
-  if (!price || !Number.isFinite(price.price) || price.price <= 0) {
+  if (!price || !Number.isFinite(price.price) || !Number.isSafeInteger(Math.round(price.price * 100)) || Math.round(price.price * 100) <= 0) {
     return null;
   }
 

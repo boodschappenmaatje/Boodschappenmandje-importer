@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { CustomIngredientEditor } from "./CustomIngredientEditor";
 import { CompactRecipeDetail } from "./CompactRecipeDetail";
 import { DishImage } from "@/components/ui/DishImage";
 import { formatCents } from "@/services/budget/budget-engine";
+import { customDishWithIngredientPackages } from "@/services/week-preparation/ingredient-quantity";
 import { validCustomDish } from "@/services/week-preparation/custom-dish";
 import { customDraftHasChanges, customDraftKey, loadCustomDraft, loadMyRecipes, saveCustomDraft, saveMyRecipe, type SavedCustomRecipe } from "@/services/week-preparation/my-recipes-storage";
 import type { RecipeAlternative } from "@/services/week-preparation/meal-customization";
@@ -72,6 +74,10 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
     }, 450);
     return () => { active = false; clearTimeout(timer); };
   }, [dish, dayIndex, refresh, previewCustomDish]);
+  const refreshVisibleRecipe = useEffectEvent(() => {
+    if (!busy && dish) setRefresh(value => value + 1);
+  });
+  useEffect(() => subscribeCatalogRefresh(() => refreshVisibleRecipe()), []);
   function update(next: CustomDish, edited = true) {
     revision.current++; dirty.current = edited && customDraftHasChanges(next, recipes);
     setDish(next); setPreview(null); setBusy(false); setMessage("");
@@ -98,6 +104,21 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
       setMessage("Je recept staat in Mijn recepten op dit apparaat.");
     } catch { setStorageError("Bewaren is niet gelukt. Controleer of alle ingrediënten een product hebben en opslag beschikbaar is. Je invoer blijft op dit scherm staan."); }
   }
+  function changeQuantity(ingredientId: string, quantity: number) {
+    if (!dish || !preview || busy || week.customizationBusy) return;
+    const ingredient = preview.preparation.ingredients.find(row => row.ingredientId === ingredientId);
+    if (!ingredient) return;
+    const next = customDishWithIngredientPackages(dish, dayIndex, ingredient, quantity);
+    if (!next) return;
+    try {
+      if (next.savedRecipeId) {
+        const saved = saveMyRecipe(window.localStorage, next, next.savedRecipeId);
+        update(saved.dish, false); setRecipes(loadMyRecipes(window.localStorage));
+      } else update(next);
+      setBusy(true);
+    } catch { setStorageError("Je hoeveelheid kon niet worden bewaard. Je vorige recept blijft staan."); }
+  }
+
   async function apply() {
     if (dayIndex < 0 || !preview || busy || week.customizationBusy) return;
     const version = revision.current; setBusy(true);
@@ -151,7 +172,7 @@ export function CustomDishEditor({ dayIndex, initialDish, initialView = "editor"
     </fieldset> : null}
     {busy ? <p role="status">Actuele producten, verpakkingen en budget controleren…</p> : null}
     {view === "detail" ? <>
-      {preview ? <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} showBudget={dayIndex >= 0} presentation="screen" /> : <p>{dish.name} · {dish.targetServings ?? dish.servings} personen · {dish.ingredients.length} ingrediënten. Actuele producten worden gecontroleerd. Gebruik Bewerk recept als een ingrediënt aandacht nodig heeft.</p>}
+      {preview ? <CompactRecipeDetail preparation={preview.preparation} dayIndex={dayIndex} showBudget={dayIndex >= 0} presentation="screen" onQuantityChange={changeQuantity} quantityBusy={busy || week.customizationBusy} /> : <p>{dish.name} · {dish.targetServings ?? dish.servings} personen · {dish.ingredients.length} ingrediënten. Actuele producten worden gecontroleerd. Gebruik Bewerk recept als een ingrediënt aandacht nodig heeft.</p>}
       {preview && dayIndex >= 0 ? <details className="ux-budget-breakdown"><summary>Budget na toevoegen</summary>
         <p>Maaltijden deze week: {formatCents(preview.impact.nextMealPlanCostCents)}</p>
         <p>Totaal deze week: {formatCents(preview.impact.nextTotalWeekCostCents)}</p>

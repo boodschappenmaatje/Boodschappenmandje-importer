@@ -36,8 +36,86 @@ Belangrijke productprincipes:
 
 ## Volgende stap
 
-### Eigen recepten — vervolg: scope bepalen
-PWA 14 is op 23 september 2026 op iPhone geaccepteerd en via PR #27 in Production gezet. Bepaal op basis van gebruikerstesten welke verbeteringen aan lokaal bewaren, fout- en lege staten en foto/fallback het eerst nodig zijn. Leg de scope vast voordat de volgende feature wordt gebouwd. Er is nog geen nieuwe featurebranch of PWA-nummer toegekend.
+### Verpakkingen −/+ en plannercontrole — actieve vervolgscope
+PWA 14 is via PR #27 in Production. De vervolgverbetering blijft op `feature/ingredient-quantity-controls`, Draft PR #28.
+
+−/+ bedient hele verpakkingen (minimum 1); recepthoeveelheid volgt automatisch uit aantal × betrouwbare productinhoud. Expliciete verpakkingskeuzes blijven vast bij personen wijzigen, heropenen, navigeren, plannerrefresh en lijstsync. Bestaande prijs-, budget-, override- en lijstbescherming blijven leidend.
+
+De gekoppelde planner-case (4 personen, 5 dagen, €100 week, €70 maaltijden) is met echte data onderzocht: cataloguszoek-time-outs en onverenigbare eenheden konden de planning afbreken. Beide oorzaken zijn hersteld; dezelfde gemengde week slaagt voor €41,52 zonder versoepelde budget/readinessregels.
+
+Status: fysieke iPhone-test van PR #28 **afgekeurd wegens ontbrekende lijst→recept-koppeling**. Huidige scope is volledige tweerichtingssync via exacte bijdragen. Werkende verpakkingsbediening, prijsfallback, automatische prijsverversing, Honig/Knorr en planner blijven behouden en krijgen regressies. Geen nieuw PWA-nummer of release.
+
+Aanvullende fysieke feedback: compacte boodschappenlijst volgens goedgekeurd concept binnen dezelfde PR. Productregels worden compacter, met details op aanvraag en subtiele menu/eigen-recept/los-iconen. De eerdere bidirectionele sync, prijsregel en handmatige bescherming blijven leidend. Compacte Preview functioneel gecontroleerd; 636 webtests, 189 importerfixtures, lint, TypeScript en build groen. Normale regels circa 56% lager; herkomst, details en beide syncrichtingen gecontroleerd. **KLAAR VOOR FYSIEKE IPHONE-HERTEST.** De eerdere 24-cellenmatrix en planner blijven als regressiebewijs behouden. Nog geen fysieke acceptatie of release; echte assortimentsdatablokkades blijven afzonderlijk gedocumenteerd.
+
+---
+
+Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknoppen, generieke ingrediëntnaam bij vervanging, alle categorieën inklapbaar en harde automatische maaltijdbudgetgrens met actieve goedkopere selectie en bruikbare herstelroute. Bestaande compacte lijst en recept ⇄ lijst blijven leidend. Implementatie en 676 webtests/189 importerfixtures, lint, TypeScript en build zijn groen. Live vervangingen, inklappen, beide syncrichtingen en goedkopere/onhaalbare budgetscenario’s zijn gecontroleerd; **Preview Ready; KLAAR VOOR FYSIEKE IPHONE-HERTEST.** Fysieke iPhone-acceptatie blijft open. Goedkopere live week €25,97 binnen €30; onhaalbaar budget behoudt week/lijst met bruikbare acties.
+
+# Eerstvolgende funderingsmijlpalen na PR #28
+
+Laatste aanvullende iPhone-feedback binnen PR #28 geïmplementeerd en functioneel getest: veilige prullenmand bij lijstquantity 1, zichtbare bevestiging “Toch verhogen”, en nooit budgetblokkade bij kostenverlagende handmatige mutaties. 683 webtests/189 importerfixtures en volledige check groen; functionele Preview success. Klaar voor fysieke iPhone-hertest na Ready van documentatiehead; acceptatie nog open. Eerdere vierpuntsronde blijft behouden.
+
+Nieuwe fysieke correctie binnen dezelfde PR voltooid: prullenmand verwijdert direct de eenduidige contribution en opent nooit eerst Productdetails. Expliciete ingrediëntuitsluiting houdt recept/lijst/budget synchroon, zonder quantity 0. 687 webtests/189 importerfixtures en volledige check groen; functionele Preview Ready en live gecontroleerd, inclusief gemengde/gedeelde bijdragen en refresh. Fysieke iPhone-hertest/acceptatie blijft open.
+
+Deze onderdelen hebben hoge waarde en worden vóór verdere slimme/personaliserende functies ingepland. De exacte PWA-nummers worden pas toegekend wanneer PR #28 is afgerond.
+
+## Stabiliteit & kernflows
+Doel: de belangrijkste gebruikersflows automatisch van begin tot eind bewaken, zodat nieuwe wijzigingen bestaande kernfunctionaliteit niet stil breken.
+
+Minimaal bewaken:
+- week instellen en genereren;
+- maaltijd/recept kiezen;
+- ingrediëntverpakkingen aanpassen;
+- recept ⇄ boodschappenlijst tweerichtingssync;
+- prijs- en budgetherberekening;
+- handmatige lijstbijdragen beschermen;
+- opslaan, heropenen en navigeren;
+- representatieve personen-/dagencombinaties;
+- Honig/Knorr en eigen recepten;
+- vaste planner-scenario's.
+
+Deze mijlpaal levert vooral automatische E2E-/integratietests en betrouwbare release-gates op; geen onnodige nieuwe consumenten-UI.
+
+## E2E-kernflows + centrale recept ⇄ lijst-logica
+Doel: receptingrediënten en hun boodschappenlijstbijdragen gebruiken één consistente gekoppelde contribution/state-logica.
+
+Eisen:
+- receptwijziging werkt direct door naar de gekoppelde lijstbijdrage;
+- wijziging van een eenduidig gekoppelde lijstbijdrage werkt terug naar het juiste recept;
+- hetzelfde product in meerdere recepten blijft per bijdrage herleidbaar;
+- manual / mealPlan / suggestion / recurring blijven onderscheidbaar;
+- losse handmatige extra's worden niet stil door receptsync overschreven;
+- hoeveelheid, verpakkingen, prijs en budget blijven overal consistent;
+- kernflows worden automatisch end-to-end getest.
+
+PR #28 mag reeds noodzakelijke tweerichtingssync herstellen; deze funderingsstap consolideert en bewaakt het model daarna structureel.
+
+## Productdata & receptkwaliteit
+Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
+
+Omvat:
+- Honig/Knorr-dekking en overige receptprofielen;
+- juiste SKU's en betrouwbare productmatches;
+- hoeveelheden, eenheden en verpakkingsomrekeningen;
+- readiness-/match-cache en gerichte invalidatie;
+- automatische Data Health-bewaking;
+- cataloguskwaliteit en prijsbetrouwbaarheid;
+- duidelijke audit van echte datablokkades;
+- geen €0, fictieve hoeveelheden of geforceerde matches.
+
+Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
+
+## Betrouwbare opslag + geschiedenis
+Doel: gebruikersdata duurzaam bewaren en een betrouwbaar fundament leggen voor later leren/personaliseren.
+
+Omvat:
+- actieve week, lijst, eigen recepten en expliciete gebruikerskeuzes robuust bewaren;
+- herstel na heropenen/refresh binnen de ondersteunde opslagarchitectuur;
+- voorkomen dat browser-/cachegedrag stil belangrijke data verliest;
+- weekgeschiedenis als afzonderlijke snapshots bewaren;
+- eerdere weken kunnen terugzien zonder ze stil te muteren;
+- basis voor terugkerende producten, favorieten, budgetgeheugen en latere accounts/synchronisatie;
+- duidelijke migratiestrategie van lokale opslag naar accountopslag wanneer accounts worden toegevoegd.
 
 ---
 
@@ -76,6 +154,43 @@ Blijvende eisen:
 - doorgroeien naar **5000+ producten**;
 - zichtbaar kunnen maken hoeveel producten zijn toegevoegd/bijgewerkt;
 - geen fictieve prijs of match gebruiken om een planner toch te laten slagen.
+
+## Budgetbewuste productselectie voor recepten
+Later toevoegen als aparte optimalisatiestap; niet meenemen in de huidige PR #28.
+
+Doel: bij automatisch gegenereerde recepten kiest BoodschappenMaatje standaard de goedkoopste **geschikte en betrouwbare** productcombinatie voor de benodigde ingrediënten, gerekend op wat daadwerkelijk gekocht moet worden.
+
+Uitgangspunten:
+- eerst semantisch bepalen welke productvarianten culinair/functioneel geschikt zijn; prijs mag nooit een verkeerde match rechtvaardigen;
+- vergelijk de werkelijke kosten van benodigde hele verpakkingen, niet alleen prijs per kilo/liter;
+- huismerk mag automatisch winnen van A-merk als beide geschikt zijn;
+- alternatieve vormen mogen alleen als het recept dit toestaat, bijvoorbeeld diepvries-spinazie in plaats van verse spinazie;
+- generieke ingrediënten mogen goedkopere geschikte varianten toelaten, bijvoorbeeld half-om-half gehakt wanneer het recept niet specifiek rundergehakt vereist;
+- specifieke recepteisen blijven hard: bijvoorbeeld kip blijft kip en verse basilicum wordt niet automatisch gedroogde basilicum;
+- gebruik de bestaande prijsregel: nieuwste betrouwbare positieve prijs, anders laatst bekende betrouwbare positieve prijs als fallback;
+- geen €0-prijzen, fictieve hoeveelheden of geforceerde matches;
+- optimaliseer op totale boodschappen-/verpakkingskosten voor het recept;
+- een expliciete productkeuze van de gebruiker heeft altijd voorrang op automatische prijsoptimalisatie;
+- gekozen SKU, verpakking, receptprijs, budget en boodschappenlijst moeten daarna consistent dezelfde selectie gebruiken.
+
+Voorbeeld: als 500 g nodig is, kan 1 verpakking van 600 g à €2,40 goedkoper zijn dan 2 verpakkingen van 400 g à €1,50. Kies dan €2,40, ook als de andere variant per gram goedkoper lijkt.
+
+## Home-mascotte vernieuwen — Optie 2
+Later als gerichte branding-/Home-polish uitvoeren; niet meenemen in de huidige PR #28-functionele acceptatie tenzij expliciet gevraagd.
+
+Gekozen richting: **Optie 2 — vriendelijk en expressief**.
+
+Doel:
+- vervang op Home het huidige oude lijnfiguurtje rechtsboven door de nieuwe 3D BoodschappenMaatje-bonnetjesmascotte;
+- gebruik de mascotte als los karakter, dus zonder het volledige blauwe vierkante app-icoonvlak;
+- iets groter en expressiever dan de huidige mascotte, maar in balans met de Home-header;
+- behoud het tekstwolkje **“Samen binnen budget!”**;
+- vriendelijke duimpjes-/positieve pose, passend bij het nieuwe app-icoon;
+- subtiele schaduw/diepte, zonder dat het als knop oogt;
+- bestaande Home-layout, metallic-blauwe huisstijl en mobile-first rust behouden;
+- dezelfde mascotte-identiteit later consistent kunnen hergebruiken op passende lege/succes-/onboardingstaten zonder de UI te overladen.
+
+De goedgekeurde visuele referentie is de eerder besproken **Optie 2: vriendelijk en expressief**.
 
 ## Gerechtfoto's
 - rechtenvrije of eigen/AI-beelden kunnen gebruiken;
@@ -226,6 +341,8 @@ Hoogvliet blijft voorlopig de ondersteunde supermarkt en huidige prijsbron.
 # Technische en productregels
 
 ## Budget & prijzen
+- Gebruik de nieuwste betrouwbare positieve prijs. Als die niet beschikbaar is, gebruik de laatst bekende betrouwbare positieve catalogusprijs als fallback. Zodra een nieuwere geldige prijs beschikbaar komt, wordt die automatisch actief.
+- Prijsleeftijd alleen is geen reden om een verder geldig recept, mix of verpakkingsbediening te blokkeren. Oudere prijzen blijven herkenbaar; expliciete gebruikerskeuzes blijven behouden bij prijsverversing.
 - Budget rekent met daadwerkelijk te kopen verpakkingen.
 - Geen fictieve deelprijzen als eindtotaal.
 - Ontbrekende prijs mag geen definitief betrouwbaar totaal opleveren.
@@ -239,6 +356,7 @@ Hoogvliet blijft voorlopig de ondersteunde supermarkt en huidige prijsbron.
 - Cache/performance mag correctheid niet veranderen.
 
 ## Gebruikersdata
+- Geplande receptingrediënten en hun boodschappenlijstbijdragen zijn tweerichtings gekoppeld. Een expliciete verpakkingswijziging vanuit recept of lijst synchroniseert naar de andere kant, terwijl onafhankelijke handmatige bijdragen beschermd blijven.
 - Manual wijzigingen beschermen.
 - Herkomst van lijstitems behouden.
 - Nieuwe week heeft een expliciete lifecycle.

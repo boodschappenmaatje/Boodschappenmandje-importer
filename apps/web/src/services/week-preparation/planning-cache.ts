@@ -50,6 +50,7 @@ export interface CachedRecipeReadiness {
 }
 
 export interface WeekPlanningSnapshotCache {
+  invalidateProducts(productIds: string[]): void;
   prepareCatalog(
     sourceCatalog: RecipeCatalog,
     prepare: () => RecipeCatalog,
@@ -140,6 +141,18 @@ export function createCachedCatalogRepository(
   >();
 
   return {
+    invalidateProducts(productIds) {
+      const ids = new Set(productIds);
+      source.invalidateProducts?.(productIds);
+      for (const [key] of productsByIds) {
+        if (key.split("|").some(id => ids.has(id))) productsByIds.delete(key);
+      }
+      // Retire only searches depending on changed products. Awaited results
+      // cannot evict a newer replacement for the same key.
+      for (const [key, entry] of searches) void entry.value.then(result => {
+        if (searches.get(key) === entry && result.products.some(product => ids.has(product.id))) searches.delete(key);
+      }).catch(() => undefined);
+    },
     getPage: (request) => source.getPage(request),
     query: (request) => source.query(request),
     getFilterOptions: (request) => source.getFilterOptions(request),
@@ -184,6 +197,8 @@ export function createWeekPlanningSnapshotCache(
   const ttlMs = options.ttlMs ?? PLANNING_CACHE_TTL_MS;
   const now = options.now ?? Date.now;
   const persistentRepository = options.persistentRepository ?? null;
+  const liveBuckets = new Set<ReadinessBucket>();
+  const liveWeeks = new Set<Map<string, WeekSnapshotEntry>>();
   const preparedCatalogs = new WeakMap<RecipeCatalog, RecipeCatalog>();
   const readinessByCatalog = new WeakMap<
     RecipeCatalog,
@@ -213,6 +228,8 @@ export function createWeekPlanningSnapshotCache(
       candidatesByRequirement: new Map(),
       pending: null,
     };
+    if (existing) liveBuckets.delete(existing);
+    liveBuckets.add(created);
     byPeople.set(numberOfPeople, created);
     return created;
   }
@@ -257,6 +274,27 @@ export function createWeekPlanningSnapshotCache(
   }
 
   return {
+    invalidateProducts(productIds) {
+      const ids = new Set(productIds);
+      for (const bucket of liveBuckets) {
+        if (bucket.expiresAt <= now()) { liveBuckets.delete(bucket); continue; }
+        for (const [id, recipe] of bucket.recipes) {
+          if (recipe.ingredients.some(item => item.productId && ids.has(item.productId))) bucket.recipes.delete(id);
+        }
+        for (const [key, candidates] of bucket.candidatesByRequirement) {
+          if (candidates.products.some(product => ids.has(product.id))) {
+            bucket.candidatesByRequirement.delete(key);
+            bucket.matchedProductsByRequirement.delete(key);
+            for (const [id, recipe] of bucket.recipes) if (recipe.ingredients.some(item => item.requirementKey === key)) bucket.recipes.delete(id);
+          }
+        }
+        for (const [key, product] of bucket.matchedProductsByRequirement) if (ids.has(product.id)) bucket.matchedProductsByRequirement.delete(key);
+      }
+      for (const weeks of liveWeeks) {
+        for (const [key, entry] of weeks) if (entry.expiresAt <= now() || entry.value.ingredients.some(item => item.product && ids.has(item.product.productId))) weeks.delete(key);
+        if (!weeks.size) liveWeeks.delete(weeks);
+      }
+    },
     prepareCatalog(sourceCatalog, prepare) {
       const existing = preparedCatalogs.get(sourceCatalog);
       if (existing) return existing;
@@ -313,6 +351,7 @@ export function createWeekPlanningSnapshotCache(
         byKey = new Map();
         weeksByCatalog.set(sourceCatalog, byKey);
       }
+      liveWeeks.add(byKey);
       byKey.set(key, {
         expiresAt: now() + ttlMs,
         value: preparation,
