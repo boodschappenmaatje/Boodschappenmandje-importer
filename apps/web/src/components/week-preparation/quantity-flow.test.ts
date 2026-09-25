@@ -158,6 +158,7 @@ describe('final iPhone trash and manual budget controls', () => {
     expect(container.textContent).toContain('0,01');
     expect(container.textContent).toContain('Boven je weekbudget');
     expect(currentWeek).toEqual(beforeWeek); expect(currentList).toEqual(beforeList);
+    if (mode !== 'Lijst') expect(container.querySelector('[aria-label="Benodigd Roerbakgroente"]')!.textContent).toContain('400 g');
     await clickText('Annuleren');
     expect(currentWeek).toEqual(beforeWeek); expect(currentList).toEqual(beforeList);
     await click(more); await clickText('Toch verhogen');
