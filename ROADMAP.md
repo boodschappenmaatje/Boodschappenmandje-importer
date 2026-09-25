@@ -173,6 +173,23 @@ Uitgangspunten:
 
 Voorbeeld: als 500 g nodig is, kan 1 verpakking van 600 g à €2,40 goedkoper zijn dan 2 verpakkingen van 400 g à €1,50. Kies dan €2,40, ook als de andere variant per gram goedkoper lijkt.
 
+## Home-mascotte vernieuwen — Optie 2
+Later als gerichte branding-/Home-polish uitvoeren; niet meenemen in de huidige PR #28-functionele acceptatie tenzij expliciet gevraagd.
+
+Gekozen richting: **Optie 2 — vriendelijk en expressief**.
+
+Doel:
+- vervang op Home het huidige oude lijnfiguurtje rechtsboven door de nieuwe 3D BoodschappenMaatje-bonnetjesmascotte;
+- gebruik de mascotte als los karakter, dus zonder het volledige blauwe vierkante app-icoonvlak;
+- iets groter en expressiever dan de huidige mascotte, maar in balans met de Home-header;
+- behoud het tekstwolkje **“Samen binnen budget!”**;
+- vriendelijke duimpjes-/positieve pose, passend bij het nieuwe app-icoon;
+- subtiele schaduw/diepte, zonder dat het als knop oogt;
+- bestaande Home-layout, metallic-blauwe huisstijl en mobile-first rust behouden;
+- dezelfde mascotte-identiteit later consistent kunnen hergebruiken op passende lege/succes-/onboardingstaten zonder de UI te overladen.
+
+De goedgekeurde visuele referentie is de eerder besproken **Optie 2: vriendelijk en expressief**.
+
 ## Gerechtfoto's
 - rechtenvrije of eigen/AI-beelden kunnen gebruiken;
 - afbeelding moet inhoudelijk bij het gerecht en de ingrediënten passen;
