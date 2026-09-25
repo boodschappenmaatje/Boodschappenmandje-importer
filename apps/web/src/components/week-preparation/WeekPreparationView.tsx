@@ -40,7 +40,7 @@ import {
   calculateDishCostSummary,
   calculateWeekBudgetSummary,
   dayReadinessIssueCount,
-  hasValidUserApprovedBudgetOverride,
+  hasValidManualBudgetDecision,
 } from "@/services/week-preparation/week-generation";
 import {
   MEAL_CATEGORIES,
@@ -171,7 +171,7 @@ export function WeekPreparationView() {
       .map((day) => day.dayIndex),
   );
   const incompleteDishCount = incompleteDayIndexes.size;
-  const approvedBudgetOverride = hasValidUserApprovedBudgetOverride(preparation);
+  const approvedBudgetOverride = hasValidManualBudgetDecision(preparation);
   const mealBudgetCompletionAllowed =
     ["withinMealBudget", "exactlyMealBudget"].includes(
       preparation.generation?.mealBudgetStatus ?? "noMealBudget",
@@ -281,7 +281,7 @@ export function WeekPreparationView() {
                       ),
                     )} boven je maaltijd-budget.
                   </p>
-                  <p>{approvedBudgetOverride ? "Door jou goedgekeurde keuze." : "Je opgeslagen gerechten zijn behouden. Zoek een andere week binnen je budget of pas zelf je keuzes aan."}</p>
+                  <p>{approvedBudgetOverride ? "Je handmatige keuze is behouden." : "Je opgeslagen gerechten zijn behouden. Zoek een andere week binnen je budget of pas zelf je keuzes aan."}</p>
                   <button type="button" className="compact-choice-button" onClick={() => week.confirmPreparation()}>Zoek een week binnen budget</button>
                 </div>
               ) : null}

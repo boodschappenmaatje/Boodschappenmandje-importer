@@ -86,7 +86,8 @@ export type WeekBudgetDecision =
   | { mode: "automaticPlanValidation" }
   | { mode: "userConfirmedManualChoice" }
   | {
-      mode: "userApprovedBudgetOverride";
+      // A reduction records only a non-increasing cost ceiling, not consent to spend more.
+      mode: "userApprovedBudgetOverride" | "userReducedCosts";
       approvedAt: string;
       approvedMealPlanCostCents: number;
       approvedTotalWeekCostCents: number;

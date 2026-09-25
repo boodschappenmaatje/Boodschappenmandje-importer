@@ -460,9 +460,9 @@ function recipeBudgetDecision(
   impact: ManualProductBudgetImpact,
   now: Date,
 ): WeekBudgetDecision {
-  return impact.requiresBudgetOverride
+  return impact.mealBudgetOverageCents > 0 || impact.weekBudgetOverageCents > 0
     ? {
-        mode: "userApprovedBudgetOverride",
+        mode: impact.requiresBudgetOverride ? "userApprovedBudgetOverride" : "userReducedCosts",
         approvedAt: now.toISOString(),
         approvedMealPlanCostCents: impact.nextMealPlanCostCents,
         approvedTotalWeekCostCents: impact.nextTotalWeekCostCents,
@@ -1169,7 +1169,9 @@ export function budgetImpact(
       ? null
       : Math.max(0, next.budgetCents - updated.totalKnownWeekCostCents),
     requiresBudgetOverride:
-      mealBudgetOverageCents > 0 || weekBudgetOverageCents > 0,
+      (mealBudgetOverageCents > 0 || weekBudgetOverageCents > 0) &&
+      (updated.mealPlanKnownCostCents > current.mealPlanKnownCostCents ||
+        updated.totalKnownWeekCostCents > current.totalKnownWeekCostCents),
   };
 }
 
@@ -1411,9 +1413,9 @@ export function commitManualProductChoice(
       preview: result.preview,
     };
   }
-  const decision: WeekBudgetDecision = result.preview.impact.requiresBudgetOverride
+  const decision: WeekBudgetDecision = result.preview.impact.mealBudgetOverageCents > 0 || result.preview.impact.weekBudgetOverageCents > 0
     ? {
-        mode: "userApprovedBudgetOverride",
+        mode: result.preview.impact.requiresBudgetOverride ? "userApprovedBudgetOverride" : "userReducedCosts",
         approvedAt: now.toISOString(),
         approvedMealPlanCostCents:
           result.preview.impact.nextMealPlanCostCents,

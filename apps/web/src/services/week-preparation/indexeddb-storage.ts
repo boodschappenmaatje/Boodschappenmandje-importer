@@ -65,7 +65,7 @@ function isBudgetDecision(value: unknown): boolean {
     return true;
   }
   return (
-    value.mode === "userApprovedBudgetOverride" &&
+    (value.mode === "userApprovedBudgetOverride" || value.mode === "userReducedCosts") &&
     typeof value.approvedAt === "string" &&
     Number.isSafeInteger(value.approvedMealPlanCostCents) &&
     Number(value.approvedMealPlanCostCents) >= 0 &&

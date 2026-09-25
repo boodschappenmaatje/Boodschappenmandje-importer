@@ -145,6 +145,76 @@ async function clickText(text: string, itemName?: string) {
 function ingredientUse(id: string, dayIndex = 0) { return currentWeek.ingredients.find(row => row.ingredientId === id && row.usedIn.some(use => use.dayIndex === dayIndex))!.usedIn.find(use => use.dayIndex === dayIndex)!; }
 function cleanLinkedList() { savedList = completeShoppingListFromWeek(createEmptyActiveShoppingList(), savedWeek.ingredients, savedWeek.id); }
 
+describe('final iPhone trash and manual budget controls', () => {
+  it.each(['Menu', 'Vrije keuze', 'Lijst'] as const)('%s: repeated overrides, cancel, persistence and reductions while both budgets stay exceeded', async mode => {
+    if (mode === 'Vrije keuze') savedWeek.days[0].category = 'freeChoice';
+    savedWeek = { ...savedWeek, mealBudgetCents: 536, budgetCents: 700 };
+    // 358 meal + 179 independent = 537 week. First increase is one cent over meal budget.
+    await mount(mode);
+    const more = mode === 'Lijst' ? 'Verhoog aantal Roerbakgroente' : 'Meer Roerbakgroente';
+    const less = mode === 'Lijst' ? 'Verlaag aantal Roerbakgroente' : 'Minder Roerbakgroente';
+    const beforeWeek = structuredClone(currentWeek); const beforeList = structuredClone(currentList);
+    await click(more);
+    expect(container.textContent).toContain('0,01');
+    expect(container.textContent).toContain('Boven je weekbudget');
+    expect(currentWeek).toEqual(beforeWeek); expect(currentList).toEqual(beforeList);
+    await clickText('Annuleren');
+    expect(currentWeek).toEqual(beforeWeek); expect(currentList).toEqual(beforeList);
+    await click(more); await clickText('Toch verhogen');
+    expect(ingredientUse('1').requiredQuantity).toBe(800);
+    expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(537); expect(total).toBe(716);
+    expect(currentWeek.generation!.mealBudgetStatus).toBe('overMealBudget');
+    if (mode === 'Lijst') expect(container.querySelector('[role="dialog"]')).toBeNull();
+    await click(more); await clickText('Toch verhogen');
+    expect(ingredientUse('1').requiredQuantity).toBe(1200); expect(total).toBe(895);
+    await reopen(mode);
+    await click(less); // still €5.37 > €5.36 and €7.16 > €7.00: no approval needed
+    expect(container.textContent).not.toContain('Toch verhogen');
+    expect(ingredientUse('1').requiredQuantity).toBe(800); expect(total).toBe(716);
+    expect(currentWeek.status).toBe('generated');
+    expect(currentWeek.customizations[0].recipeBudgetDecision.mode).toBe('userReducedCosts');
+    await reopen(mode); expect(ingredientUse('1').requiredQuantity).toBe(800);
+    await click(less); expect(ingredientUse('1').requiredQuantity).toBe(400); expect(total).toBe(537);
+    expect(currentList.items.find(row => row.productId === '0')!.quantityContributions.persistentQuantity).toBe(1);
+    if (mode === 'Lijst') {
+      await click('Verwijderactie Roerbakgroente');
+      expect(container.textContent).toContain('minimaal één verpakking');
+      expect(ingredientUse('1').requiredQuantity).toBe(400);
+    }
+  });
+  it.each([537, 700])('manual increase directly reaches meal budget %i without confirmation', async mealBudgetCents => {
+    savedWeek.mealBudgetCents = mealBudgetCents; cleanLinkedList(); await mount('Lijst');
+    await click('Verhoog aantal Spaghetti');
+    expect(ingredientUse('0').requiredQuantity).toBe(800); expect(total).toBe(537);
+    expect(container.textContent).not.toContain('Toch verhogen');
+    expect(container.querySelector('[aria-label="Verlaag aantal Spaghetti"]')).not.toBeNull();
+    await click('Verlaag aantal Spaghetti');
+    expect(container.querySelector('[aria-label="Verwijderactie Spaghetti"]')).not.toBeNull();
+  });
+  it('checked manual 2→1→trash is presentation-safe and persists deletion even above budget', async () => {
+    savedWeek.mealBudgetCents = 100; savedWeek.budgetCents = 100;
+    cleanLinkedList(); savedList = addCatalogProduct(savedList, product('manual', 'Los product', false));
+    await mount('Lijst'); await click('Verhoog aantal Los product');
+    expect(currentList.items.find(item => item.productId === 'manual')!.quantity).toBe(1);
+    await clickText('Annuleren');
+    await click('Verhoog aantal Los product'); await clickText('Toch verhogen');
+    await click('Verlaag aantal Los product');
+    expect(container.querySelector('[aria-label="Verlaag aantal Los product"]')).toBeNull();
+    const before = total; const ingredients = structuredClone(currentWeek.ingredients);
+    await act(async () => container.querySelector<HTMLInputElement>('[aria-label="Afvinken Los product"]')!.click());
+    await clickText('Overig');
+    const filter = container.querySelector<HTMLSelectElement>('[aria-label="Boodschappen filteren"]')!;
+    await act(async () => { filter.value = 'checked'; filter.dispatchEvent(new Event('change', { bubbles: true })); });
+    await click('Verwijderactie Los product');
+    expect(currentList.items.some(item => item.productId === 'manual')).toBe(false);
+    expect(total).toBe(before - 179); expect(currentWeek.ingredients).toEqual(ingredients);
+    expect(container.querySelectorAll('li.shopping-item-card')).toHaveLength(0);
+    await reopen('Lijst');
+    expect(currentList.items).toHaveLength(2); expect(total).toBe(358);
+    expect(container.querySelector('[aria-label="Productdetails Los product"]')).toBeNull();
+  });
+});
+
 describe('bidirectional real shopping-list and recipe interaction', () => {
   it('list 1→2→1 changes canonical 400→800→400g, budgets and reopening in Menu/Free choice', async () => {
     cleanLinkedList(); await mount('Lijst'); await click('Verhoog aantal Spaghetti');
@@ -166,7 +236,7 @@ describe('bidirectional real shopping-list and recipe interaction', () => {
     await click('Meer Spaghetti voor Testpasta dag 1');
     const row = currentList.items.find(item => item.productId === '0')!;
     expect(row.quantity).toBe(3); expect(row.quantityContributions.persistentQuantity).toBe(1); expect(ingredientUse('0').requiredQuantity).toBe(800);
-    await click('Minder losse Spaghetti'); expect(ingredientUse('0').requiredQuantity).toBe(800);
+    await click('Verwijder losse Spaghetti'); expect(ingredientUse('0').requiredQuantity).toBe(800);
     expect(currentList.items.find(item => item.productId === '0')!.quantity).toBe(2);
     await reopen('Menu'); await click('Minder Spaghetti'); expect(currentList.items.find(item => item.productId === '0')!.quantity).toBe(1);
   });
@@ -191,8 +261,8 @@ describe('bidirectional real shopping-list and recipe interaction', () => {
   });
   it('minimum and remove cannot silently delete a required planned ingredient', async () => {
     cleanLinkedList(); await mount('Lijst');
-    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Verlaag aantal Spaghetti"]')!.disabled).toBe(true);
-    await click('Productdetails Spaghetti'); await click('Verwijder Spaghetti'); expect(container.textContent).toContain('minimaal één verpakking');
+    expect(container.querySelector('button[aria-label="Verlaag aantal Spaghetti"]')).toBeNull();
+    await click('Verwijderactie Spaghetti'); expect(container.textContent).toContain('minimaal één verpakking');
     expect(currentList.items.find(item => item.productId === '0')!.quantity).toBe(1); expect(ingredientUse('0').requiredQuantity).toBe(400);
   });
   it('list package choice persists through people changes and planner refresh', async () => {
@@ -234,7 +304,7 @@ describe('bidirectional real shopping-list and recipe interaction', () => {
 it('list over-budget preview can be cancelled without changing either quantity', async () => {
   savedWeek = { ...savedWeek, mealBudgetCents: 400 };
   cleanLinkedList(); await mount('Lijst'); await click('Verhoog aantal Spaghetti');
-  expect(container.textContent).toContain('Boven budget'); expect(ingredientUse('0').requiredQuantity).toBe(400);
+  expect(container.textContent).toContain('Boven je maaltijdbudget'); expect(ingredientUse('0').requiredQuantity).toBe(400);
   expect(currentList.items.find(row => row.productId === '0')!.quantity).toBe(1);
   await clickText('Annuleren'); expect(ingredientUse('0').requiredQuantity).toBe(400); expect(total).toBe(358);
 });

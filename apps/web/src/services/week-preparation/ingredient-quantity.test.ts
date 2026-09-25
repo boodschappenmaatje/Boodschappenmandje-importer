@@ -103,6 +103,23 @@ describe("ingredient quantity steps", () => {
 });
 
 describe("quantity persistence, packages and the existing recipe commit", () => {
+  it("a persisted cost reduction is not consent for later price increases or automatic over-budget planning", async () => {
+    const base = { ...await prepared(), mealBudgetCents: 100 };
+    const high = await commit(base, 1200, list, true);
+    const lower = await commit(high, 800);
+    expect(lower.status).toBe("generated");
+    expect(lower.generation!.mealPlanKnownCostCents).toBe(400);
+    expect(lower.customizations[0].recipeBudgetDecision.mode).toBe("userReducedCosts");
+    const reopened = decodeStoredWeekPreparation(encodeStoredWeekPreparation(lower))!;
+    expect((await revalidatePreparedWeek(reopened, recipes, products(), NOW, list)).ready).toBe(true);
+    const pricier = { ...product, currentPrice: { ...product.currentPrice!, price: 3 } };
+    expect((await revalidatePreparedWeek(reopened, recipes, products(pricier), NOW, list)).ready).toBe(false);
+    const automatic = await generatePreparedWeek({ ...reopened, status: "readyForGeneration" }, recipes, products(), NOW, list);
+    expect(automatic.status).not.toBe("generated");
+    const plus = await preview(reopened, 1200);
+    expect(plus.impact.requiresBudgetOverride).toBe(true);
+    expect(await commitExplicitRecipeAlternative(reopened, 0, plus, false, recipes, products(), list, NOW)).toMatchObject({ ok: false, reason: "budget_override_required" });
+  });
   it("adds and removes full packages; 850 g in 400 g packs costs three full packs", async () => {
     const base=await prepared(); const more=await commit(base,850);
     expect(more.ingredients[0]).toMatchObject({ requiredQuantity:850, purchaseQuantity:3, packageCapacity:400 });

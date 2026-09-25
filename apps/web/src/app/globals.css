@@ -4614,6 +4614,9 @@ html {
 .shopping-origin-chip[data-kind="loose"] { flex-shrink: 0; max-width: 55%; background: var(--color-success-soft); color: var(--color-success-text); }
 .compact-shopping-row .shopping-row-bottom .quantity-control { flex-shrink: 0; display: grid; grid-template-columns: 44px 24px 44px; gap: 0; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-background); }
 .shopping-row-bottom .quantity-control button { background: transparent; }
+.quantity-control button.quantity-remove { color: var(--color-danger); }
+.quantity-control button:active:not(:disabled) { transform: scale(.96); }
+.quantity-control button:focus-visible { outline: 2px solid var(--color-primary-strong); outline-offset: 2px; }
 .shopping-row-bottom .quantity-control output { min-width: 24px; font-size: .875rem; }
 .compact-shopping-row[data-checked="true"] { background: var(--color-success-soft); }
 .compact-shopping-row[data-checked="true"] .shopping-item-name { text-decoration: line-through; color: var(--color-muted); }

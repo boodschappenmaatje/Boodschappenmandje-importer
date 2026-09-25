@@ -64,7 +64,7 @@ import {
   calculateWeekBudgetSummary,
   budgetOverrideReapprovalPreview,
   generatePreparedWeek,
-  hasValidUserApprovedBudgetOverride,
+  hasValidManualBudgetDecision,
   markWeekGenerating,
   markWeekGenerationFailed,
   recalculateMealBudgetSummary,
@@ -442,7 +442,7 @@ export function WeekPreparationProvider({
   const projectLinkedIngredients = useEffectEvent(() => {
     const current = preparationRef.current;
     if (!current || !["generated", "generationPartial"].includes(current.status) || !shoppingList.list) return;
-    if (!current.generation?.isMealBudgetComplete || !(["withinMealBudget", "exactlyMealBudget", "noMealBudget"].includes(current.generation.mealBudgetStatus) || hasValidUserApprovedBudgetOverride(current))) return;
+    if (!current.generation?.isMealBudgetComplete || !(["withinMealBudget", "exactlyMealBudget", "noMealBudget"].includes(current.generation.mealBudgetStatus) || hasValidManualBudgetDecision(current))) return;
     if (shoppingList.list.items.some(item => item.quantityContributions.mealPlans.some(part => part.weekPreparationId === current.id))) {
       void shoppingList.completeFromWeek(current.ingredients, current.id);
     }

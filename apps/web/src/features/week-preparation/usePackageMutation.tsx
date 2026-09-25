@@ -1,8 +1,8 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWeekPreparation } from "./WeekPreparationProvider";
 import { formatCents } from "@/services/budget/budget-engine";
-import type { RecipeAlternative } from "@/services/week-preparation/meal-customization";
+import type { ManualProductBudgetImpact, RecipeAlternative } from "@/services/week-preparation/meal-customization";
 import type { PlannedIngredientLink } from "@/types/shopping-list";
 
 /** Both recipe and list submit the same canonical package command and budget gate. */
@@ -43,14 +43,24 @@ export function usePackageMutation() {
     busy: busy || week.customizationBusy, blocked: busy || week.customizationBusy || Boolean(pending), message };
 }
 
-export function PackageMutationFeedback({ mutation }: { mutation: ReturnType<typeof usePackageMutation> }) {
+export function PackageMutationFeedback({ mutation }: { mutation: {
+  busy: boolean; pending: { impact: ManualProductBudgetImpact } | null; message: string;
+  cancel: () => void; confirm: () => Promise<void>;
+} }) {
   const { busy, pending, message } = mutation;
+  const confirmation = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pending) return;
+    confirmation.current?.focus({ preventScroll: true });
+    confirmation.current?.scrollIntoView({ block: "nearest" });
+  }, [pending]);
   return <>
     {busy ? <p role="status">Hoeveelheid en prijs worden bijgewerkt…</p> : null}
-    {pending ? <div className="customization-confirm" role="alert">
+    {pending ? <div className="customization-confirm" role="alert" ref={confirmation} tabIndex={-1}>
       <p>Na aanpassen: {formatCents(pending.impact.nextMealPlanCostCents)} voor maaltijden en {formatCents(pending.impact.nextTotalWeekCostCents)} voor de week.</p>
-      {pending.impact.requiresBudgetOverride ? <p>Boven budget: maaltijden {formatCents(pending.impact.mealBudgetOverageCents)}, week {formatCents(pending.impact.weekBudgetOverageCents)}.</p> : null}
-      <div className="customization-confirm-actions"><button type="button" disabled={busy} onClick={mutation.cancel}>Annuleren</button><button type="button" className="primary-action compact-action" disabled={busy} onClick={mutation.confirm}>{pending.impact.requiresBudgetOverride ? "Toch gebruiken" : "Bevestig hoeveelheid"}</button></div>
+      {pending.impact.mealBudgetOverageCents > 0 ? <p>Boven je maaltijdbudget: {formatCents(pending.impact.mealBudgetOverageCents)} boven je ingestelde {formatCents(pending.impact.mealBudgetCents!)}.</p> : null}
+      {pending.impact.weekBudgetOverageCents > 0 ? <p>Boven je weekbudget: {formatCents(pending.impact.weekBudgetOverageCents)} boven je ingestelde {formatCents(pending.impact.weekBudgetCents!)}.</p> : null}
+      <div className="customization-confirm-actions"><button type="button" disabled={busy} onClick={mutation.cancel}>Annuleren</button><button type="button" className="primary-action compact-action" disabled={busy} onClick={mutation.confirm}>{pending.impact.requiresBudgetOverride ? "Toch verhogen" : "Bevestig hoeveelheid"}</button></div>
     </div> : null}
     {message ? <p role="status">{message}</p> : null}
   </>;

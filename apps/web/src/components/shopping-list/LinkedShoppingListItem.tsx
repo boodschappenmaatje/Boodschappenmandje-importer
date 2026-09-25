@@ -7,6 +7,7 @@ import { ShoppingListDetails } from "./ShoppingListDetails";
 import { ShoppingListQuantity } from "./ShoppingListQuantity";
 import { independentOriginLabel, isOwnRecipe, ShoppingListOrigins } from "./ShoppingListOrigins";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
+import { useIndependentPackageMutation } from "@/features/shopping-list/useIndependentPackageMutation";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { PackageMutationFeedback, usePackageMutation } from "@/features/week-preparation/usePackageMutation";
 import { recipeContributionTargets, type RecipeContributionTarget } from "@/services/shopping-list/recipe-contributions";
@@ -17,33 +18,35 @@ export function LinkedShoppingListItem({ item }: { item: ShoppingListItem }) {
   const list = useActiveShoppingList();
   const week = useWeekPreparation();
   const mutation = usePackageMutation();
+  const independentMutation = useIndependentPackageMutation(item.productId);
   const [expanded, setExpanded] = useState(false);
   const [removeNotice, setRemoveNotice] = useState(false);
   const hasMeals = item.quantityContributions.mealPlans.length > 0;
   const { targets, unresolved } = recipeContributionTargets(item, week.preparation);
   const independent = item.quantityContributions.persistentQuantity;
   const direct = targets.length === 1 && independent === 0 && !unresolved ? targets[0] : null;
-  const blocked = mutation.blocked || week.status !== "ready" || week.preparation?.status === "generating";
-  const open = expanded || Boolean(mutation.pending);
+  const blocked = mutation.blocked || independentMutation.blocked || week.status !== "ready" || week.preparation?.status === "generating";
+  const open = expanded || Boolean(mutation.pending) || Boolean(independentMutation.pending);
   function change(target: RecipeContributionTarget, direction: -1 | 1) {
     void mutation.change(target.link.dayIndex, target.link.ingredientId, target.packages + direction, target.link);
   }
   function step(direction: -1 | 1) {
-    if (!hasMeals) { void (direction === 1 ? list.increase(item.productId) : list.decrease(item.productId)); return; }
+    if (!hasMeals) { void independentMutation.change(direction); return; }
     if (direct) change(direct, direction);
     else setExpanded(true);
   }
-  function close() { setExpanded(false); setRemoveNotice(false); if (mutation.pending) mutation.cancel(); }
+  function close() { setExpanded(false); setRemoveNotice(false); if (mutation.pending) mutation.cancel(); independentMutation.cancel(); }
   function remove() {
-    if (hasMeals) setRemoveNotice(true);
+    if (hasMeals) { setExpanded(true); setRemoveNotice(true); }
     else void list.remove(item.productId);
   }
   const totalControls = (details = false) => <ShoppingListQuantity quantity={item.quantity}
     label={`Aantal ${item.name}${details ? " in details" : ""}`}
     decreaseLabel={`Verlaag aantal ${item.name}${details ? " in details" : ""}`}
     increaseLabel={`Verhoog aantal ${item.name}${details ? " in details" : ""}`}
-    decreaseDisabled={hasMeals ? blocked || Boolean(direct && (!direct.adjustable || direct.packages <= 1)) : item.quantity <= 1}
-    increaseDisabled={hasMeals && (blocked || Boolean(direct && (!direct.adjustable || direct.packages >= MAX_INGREDIENT_PACKAGES)))}
+    decreaseDisabled={independentMutation.blocked || (hasMeals && (blocked || (item.quantity > 1 && Boolean(direct && (!direct.adjustable || direct.packages <= 1)))))}
+    increaseDisabled={independentMutation.blocked || (hasMeals && (blocked || Boolean(direct && (!direct.adjustable || direct.packages >= MAX_INGREDIENT_PACKAGES))))}
+    onRemove={remove} removeLabel={`Verwijderactie ${item.name}${details ? " in details" : ""}`}
     onDecrease={() => step(-1)} onIncrease={() => step(1)} />;
   return <ShoppingListItemCard item={item}
     onToggleChecked={() => void list.toggleChecked(item.productId)} onOpenDetails={() => setExpanded(true)}
@@ -63,8 +66,9 @@ export function LinkedShoppingListItem({ item }: { item: ShoppingListItem }) {
               <ShoppingListQuantity quantity={target.packages} output={packageCountLabel(target.packages)} label={`${target.recipeName} dag ${target.link.dayIndex + 1}`}
                 decreaseLabel={`Minder ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`}
                 increaseLabel={`Meer ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`}
-                decreaseDisabled={blocked || !target.adjustable || target.packages <= 1}
+                decreaseDisabled={blocked || (target.packages > 1 && !target.adjustable)}
                 increaseDisabled={blocked || !target.adjustable || target.packages >= MAX_INGREDIENT_PACKAGES}
+                onRemove={remove} removeLabel={`Verwijderactie ${item.name} voor ${target.recipeName} dag ${target.link.dayIndex + 1}`}
                 onDecrease={() => change(target, -1)} onIncrease={() => change(target, 1)} />
               {!target.adjustable ? <small>Hoeveelheid niet betrouwbaar aanpasbaar. Bekijk het gerecht in Menu.</small> : null}
             </div>;
@@ -73,13 +77,15 @@ export function LinkedShoppingListItem({ item }: { item: ShoppingListItem }) {
           {independent > 0 ? <div className="linked-list-origin"><span className="linked-list-origin-title"><Icon name="plus" size={18} /><span>Los van recepten<small>{independentOriginLabel(item)}</small></span></span>
             <ShoppingListQuantity quantity={independent} output={packageCountLabel(independent)} label={`Losse ${item.name}`}
               decreaseLabel={`Minder losse ${item.name}`} increaseLabel={`Meer losse ${item.name}`} decreaseDisabled={blocked} increaseDisabled={blocked}
-              onDecrease={() => void list.adjustIndependent(item.productId, -1)} onIncrease={() => void list.adjustIndependent(item.productId, 1)} />
+              onRemove={() => void independentMutation.change(-1)} removeLabel={`Verwijder losse ${item.name}`}
+              onDecrease={() => void independentMutation.change(-1)} onIncrease={() => void independentMutation.change(1)} />
           </div> : null}
           {unresolved ? <div><p>Een receptkoppeling is nog niet beschikbaar. <Link href="/week-voorbereiden">Open Menu om die te controleren.</Link></p>
             {item.quantityContributions.mealPlans.map((contribution, index) => <p key={index}>{contribution.usedIn.join(" · ") || "Gepland menu"}: {packageCountLabel(contribution.quantity)} gezamenlijk</p>)}
           </div> : null}
         </div>}
-        <button className="shopping-add-loose" type="button" disabled={hasMeals && blocked} onClick={() => void list.adjustIndependent(item.productId, 1)}><Icon name="plus" size={18} />Losse verpakking toevoegen</button>
+        <button className="shopping-add-loose" type="button" disabled={independentMutation.blocked || (hasMeals && blocked)} onClick={() => void independentMutation.change(1)}><Icon name="plus" size={18} />Losse verpakking toevoegen</button>
+        <PackageMutationFeedback mutation={independentMutation} />
         {hasMeals ? <PackageMutationFeedback mutation={mutation} /> : null}
         {removeNotice ? <p role="status">Dit product hoort bij je menu. Houd minimaal één verpakking per ingrediënt. Je kunt losse verpakkingen hierboven weghalen, of het gerecht in <Link href="/week-voorbereiden">Menu</Link> aanpassen.</p> : null}
         <button className="shopping-detail-remove" type="button" aria-label={`Verwijder ${item.name}`} onClick={remove}><Icon name="trash" size={18} />Verwijderen</button>

@@ -284,7 +284,7 @@ interface ApprovalCostSnapshot {
 }
 
 interface ScopedApproval {
-  decision: Extract<WeekBudgetDecision, { mode: "userApprovedBudgetOverride" }>;
+  decision: Extract<WeekBudgetDecision, { mode: "userApprovedBudgetOverride" | "userReducedCosts" }>;
   mutationMatches: boolean;
   currentMutation: WeekBudgetMutation | null;
 }
@@ -321,7 +321,7 @@ function mutationMatches(
 function scopedApprovals(preparation: WeekPreparation): ScopedApproval[] {
   return preparation.customizations.flatMap((customization) => {
     const approvals: ScopedApproval[] = [];
-    if (customization.recipeBudgetDecision.mode === "userApprovedBudgetOverride") {
+    if (customization.recipeBudgetDecision.mode === "userApprovedBudgetOverride" || customization.recipeBudgetDecision.mode === "userReducedCosts") {
       const currentMutation: WeekBudgetMutation | null =
         customization.replacementRecipe === null
           ? null
@@ -342,7 +342,7 @@ function scopedApprovals(preparation: WeekPreparation): ScopedApproval[] {
       });
     }
     for (const override of customization.productOverrides) {
-      if (override.budgetDecision.mode !== "userApprovedBudgetOverride") continue;
+      if (override.budgetDecision.mode !== "userApprovedBudgetOverride" && override.budgetDecision.mode !== "userReducedCosts") continue;
       const currentMutation: WeekBudgetMutation | null = override.quantity === null
         ? null
         : {
@@ -363,7 +363,7 @@ function scopedApprovals(preparation: WeekPreparation): ScopedApproval[] {
       });
     }
     for (const addition of customization.manualProductAdditions) {
-      if (addition.budgetDecision.mode !== "userApprovedBudgetOverride") continue;
+      if (addition.budgetDecision.mode !== "userApprovedBudgetOverride" && addition.budgetDecision.mode !== "userReducedCosts") continue;
       const currentMutation: WeekBudgetMutation = {
         kind: "addToMeal",
         weekPreparationId: preparation.id,
@@ -403,7 +403,7 @@ function approvedBudgetOverrideAllowsPlan(
   );
 }
 
-export function hasValidUserApprovedBudgetOverride(
+export function hasValidManualBudgetDecision(
   preparation: WeekPreparation,
 ): boolean {
   const generation = preparation.generation;

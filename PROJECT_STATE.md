@@ -138,3 +138,11 @@ Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual co
 
 - Slotcontrole: Toch gebruiken past de handmatige wijziging pas na bevestiging toe: boomstammetjes 2 verpakkingen/400g, maaltijdentotaal €28,46 en lijst €30,75 inclusief los €2,29. Testbudget daarna terug naar €70 bij 4 personen/5 dagen/€100.
 - Periodieke cataloguscontrole zonder gewijzigde product-/prijsgegevens behoudt nu lijst- en itemidentiteit. Geen vals conflict tijdens een lopende bevestiging door uitsluitend een nieuw controletijdstip. Echte prijswijziging behoudt de veilige herbevestigingscontrole. Code `d4b29d15`, regressie expliciet getest; volledige check 676 tests groen.
+
+## Actieve laatste iPhone-feedback — prullenmand en handmatig budget
+- Hervat vanaf opnieuw gecontroleerde remote `209c716dca3d067f40eb307372641349f488abc8`, dezelfde branch/Draft PR #28. De voorgaande vierpuntsronde blijft behouden; fysieke acceptatie is nog open.
+- Lijstbediening bij 1 toont trash op dezelfde 44px-positie; bij >1 min. Manual-only verwijdert via bestaande herstelbare lijstactie. Gekoppeld ingrediënt blijft minimaal 1; trash opent bestaande herkomst/uitleg. Meerdere/gemengde bijdragen blijven exact gescheiden.
+- Bestaande verhogingsbevestiging heet nu “Toch verhogen”, meldt beide budgetten afzonderlijk en krijgt focus/scroll zodat zij op mobiel niet buiten beeld blijft.
+- Oorzaak verlaging: budgetImpact vroeg bevestiging voor iedere overschreden eindsituatie, ook bij lagere kosten. Handmatige niet-kostenverhogende mutaties vragen nu geen budgetoverride. Een begrensde `userReducedCosts`-snapshot bewaart de nieuwe, lagere kostengrens bij heropenen, zonder toestemming voor latere verhogingen of automatische planning te suggereren.
+- Losse verhogingen controleren het weekbudget met dezelfde waarschuwing; losse min/delete blijven direct. Bevestiging controleert of de lijst/prijs/budget nog overeenkomen.
+- Volledige regressie en bijgewerkte Preview worden in deze ronde gecontroleerd. **Deze ronde nog niet klaar voor iPhone-hertest.** Geen merge/Production/databaseactie/import.
