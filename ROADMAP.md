@@ -55,7 +55,7 @@ Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknop
 
 Laatste aanvullende iPhone-feedback binnen PR #28 geïmplementeerd en functioneel getest: veilige prullenmand bij lijstquantity 1, zichtbare bevestiging “Toch verhogen”, en nooit budgetblokkade bij kostenverlagende handmatige mutaties. 683 webtests/189 importerfixtures en volledige check groen; functionele Preview success. Klaar voor fysieke iPhone-hertest na Ready van documentatiehead; acceptatie nog open. Eerdere vierpuntsronde blijft behouden.
 
-Nieuwe fysieke correctie binnen dezelfde PR: prullenmand moet direct de eenduidige contribution verwijderen en nooit eerst Productdetails openen. Expliciete ingrediëntuitsluiting houdt recept/lijst/budget synchroon, zonder quantity 0. Implementatie en nieuwe hertest in uitvoering; vorige Preview niet geaccepteerd.
+Nieuwe fysieke correctie binnen dezelfde PR voltooid: prullenmand verwijdert direct de eenduidige contribution en opent nooit eerst Productdetails. Expliciete ingrediëntuitsluiting houdt recept/lijst/budget synchroon, zonder quantity 0. 687 webtests/189 importerfixtures en volledige check groen; functionele Preview Ready en live gecontroleerd, inclusief gemengde/gedeelde bijdragen en refresh. Fysieke iPhone-hertest/acceptatie blijft open.
 
 Deze onderdelen hebben hoge waarde en worden vóór verdere slimme/personaliserende functies ingepland. De exacte PWA-nummers worden pas toegekend wanneer PR #28 is afgerond.
 
