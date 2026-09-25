@@ -63,3 +63,11 @@ it('produces deterministic unique cache keys and skips current records when back
   expect(planPlannerReadinessMaintenance(recipes.map(r=>r.id),rows,[1,2,3,4,5,6,7,8,9,10],now)).toEqual([]);
   expect(rowsForGate(gate,4,now)).toEqual(rowsForGate(gate,4,now));
 });
+
+
+it('rejects a baby meal for an ordinary sweet-potato recipe without rejecting fresh baby spinach', () => {
+  const ingredient = { id: 'sweet-potato', sourceKey: 'sweetPotato', name: 'zoete aardappel', normalizedName: 'zoete aardappel', defaultUnit: 'g', category: 'Groente', aliases: ['zoete aardappel'] };
+  const product = { id: 'baby-meal', sku: 'baby-meal', supermarket: 'Hoogvliet', name: 'Bonbébé Broccoli zoete aardappel 12+ maanden', category: 'Baby, kind/Groentehapjes', isAvailable: true } as Product;
+  expect(isReliableIngredientMatch(ingredient, product)).toBe(false);
+  expect(isReliableIngredientMatch({ ...ingredient, name: 'spinazie', normalizedName: 'spinazie', aliases: ['spinazie'] }, { ...product, name: 'Baby spinazie', category: 'Aardappelen, groente, fruit/Groente' })).toBe(true);
+});

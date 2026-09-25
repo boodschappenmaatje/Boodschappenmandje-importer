@@ -204,6 +204,9 @@ function reliableBrandedMealMixMatch(
 function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinition, product: Product): boolean {
   const required = normalize(ingredient.name);
   const name = normalize(product.name);
+  // A baby meal is not a raw ingredient, even if its title contains that food.
+  // Use the catalog category, so fresh baby spinach/carrot names remain valid.
+  if (/\bbaby\b|babyvoeding|peutervoeding/.test(normalize(product.category))) return false;
   // Discovery aliases must not erase explicit recipe properties.
   if (ingredient.sourceKey.startsWith("mix-supplement-")) {
     const context = normalize(`${product.name} ${product.category}`);
