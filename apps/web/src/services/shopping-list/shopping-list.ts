@@ -558,10 +558,10 @@ export function refreshShoppingListFromCatalog(
       packageText: product.packageText,
       imageUrl: product.imageUrl,
       price: refreshedPrice ?? item.price,
-      updatedAt: timestamp,
     };
-    changed = changed || JSON.stringify(next) !== JSON.stringify(item);
-    return next;
+    if (JSON.stringify(next) === JSON.stringify(item)) return item;
+    changed = true;
+    return { ...next, updatedAt: timestamp };
   });
 
   return changed ? { ...list, items, updatedAt: timestamp } : list;
