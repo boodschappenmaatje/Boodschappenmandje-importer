@@ -335,6 +335,7 @@ describe("PR28 iPhone vervanging en categorieën", () => {
     expect(total).toBe(607); // explicit loose original product remains protected
     expect(container.querySelector(`img[alt="Afbeelding van Hoogvliet ${newName}"]`)).not.toBeNull();
     expect(container.querySelector(`[aria-label="Benodigd ${oldName}"]`)).toBeNull();
+    expect(container.querySelector('.product-alternatives')).toBeNull();
     await reopen("Lijst");
     expect(currentList.items.find(item => item.productId === "replacement")!.quantity).toBe(1);
     expect(currentList.items.find(item => item.productId === "0")!.quantityContributions.persistentQuantity).toBe(1);

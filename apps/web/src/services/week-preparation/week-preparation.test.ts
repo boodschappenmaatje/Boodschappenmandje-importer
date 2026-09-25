@@ -190,6 +190,29 @@ describe("PWA 10 weekvoorbereidingsmodel", () => {
     expect(changed.status).toBe("readyForGeneration");
   });
 
+  it("behoudt expliciete product- en verpakkingskeuzes wanneer een goedkoper weekplan wordt gezocht", () => {
+    const ready = prepareWeek(withDistribution({ dutch: 3, pasta: 3 }),
+      { knownSubtotalCents: 0, unpricedItemCount: 0 }, NOW);
+    const recipe = { id: "recipe-chicken", sourceKey: "chicken", name: "Kipgerecht" };
+    ready.days[0] = { ...ready.days[0], recipeId: recipe.id, recipe, status: "recipeSelected" };
+    ready.customizations = [{
+      dayIndex: 0, baseRecipe: recipe, replacementRecipe: null,
+      recipeBudgetDecision: { mode: "userConfirmedManualChoice" },
+      ingredientOverrides: [], manualProductAdditions: [], updatedAt: NOW.toISOString(),
+      quantityOverrides: [{ ingredientId: "chicken", recipeId: recipe.id,
+        quantity: 800, unit: "g", people: 4, packageCount: 2, productId: "replacement" }],
+      productOverrides: [{ ingredientId: "chicken", productId: "replacement", sku: "replacement",
+        quantity: 2, selectionSource: "manualSearch", applicationMode: "explicitUserChoice",
+        budgetDecision: { mode: "userConfirmedManualChoice" }, updatedAt: NOW.toISOString() }],
+    }];
+    const retry = prepareWeek(setMealBudgetCents(ready, 3_000, NOW),
+      { knownSubtotalCents: 4_000, unpricedItemCount: 0 }, NOW);
+    expect(retry.days[0].recipe).toEqual(recipe);
+    expect(retry.customizations).toEqual(ready.customizations);
+    expect(retry.mealBudgetCents).toBe(3_000);
+    expect(retry.days.slice(1).every(day => day.recipe === null)).toBe(true);
+  });
+
   it("maakt na een gewijzigd aantal dagen weer een draft zonder categorieën stil te wissen", () => {
     const ready = prepareWeek(
       withDistribution({ dutch: 3, pasta: 3 }),

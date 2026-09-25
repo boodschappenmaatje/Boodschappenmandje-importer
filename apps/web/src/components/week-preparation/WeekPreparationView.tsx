@@ -424,7 +424,7 @@ export function WeekPreparationView() {
                               {day.customDish ? <button type="button" className="text-action" onClick={() => setEditingDay(day.dayIndex)}>Bewerk recept</button> : null}
                               <details className="compact-recipe-manage"><summary>Gerecht aanpassen</summary>
                                 <DishIngredients ingredients={dayIngredients} dayIndex={day.dayIndex} renderAction={(ingredient) => ingredient.product && ingredient.price && ingredient.purchaseQuantity !== null ? (
-                                  <ProductAlternativeControl dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
+                                  <ProductAlternativeControl key={ingredient.product.productId} dayIndex={day.dayIndex} ingredientId={ingredient.ingredientId} currentProductName={ingredient.product.name} ingredients={ingredientOptions} />
                                 ) : null} />
                                 {day.category === "freeChoice" ? <Link className="text-action" href={`/vrije-keuze?day=${day.dayIndex}`}>Vervang een vrije keuze</Link> : !dishNeedsReview ? <MealReplacementControl dayIndex={day.dayIndex} currentRecipeName={dishTitle} ingredients={ingredientOptions} /> : null}
                               </details>
