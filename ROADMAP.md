@@ -53,7 +53,7 @@ Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknop
 
 # Eerstvolgende funderingsmijlpalen na PR #28
 
-Laatste aanvullende iPhone-feedback binnen PR #28: veilige prullenmand bij lijstquantity 1, zichtbare bevestiging “Toch verhogen”, en nooit budgetblokkade bij kostenverlagende handmatige mutaties. Preview/hertest van deze aanvulling nog in uitvoering; eerdere vierpuntsronde blijft behouden.
+Laatste aanvullende iPhone-feedback binnen PR #28 geïmplementeerd en functioneel getest: veilige prullenmand bij lijstquantity 1, zichtbare bevestiging “Toch verhogen”, en nooit budgetblokkade bij kostenverlagende handmatige mutaties. 683 webtests/189 importerfixtures en volledige check groen; functionele Preview success. Klaar voor fysieke iPhone-hertest na Ready van documentatiehead; acceptatie nog open. Eerdere vierpuntsronde blijft behouden.
 
 Deze onderdelen hebben hoge waarde en worden vóór verdere slimme/personaliserende functies ingepland. De exacte PWA-nummers worden pas toegekend wanneer PR #28 is afgerond.
 
