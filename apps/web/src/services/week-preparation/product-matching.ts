@@ -495,6 +495,16 @@ export function applyProductToRequirement(
  * automatic matcher this deliberately does not infer semantic compatibility
  * or a gram/ml requirement: the user chose both the product and quantity.
  */
+/** Strip only an explicit catalog brand prefix; never infer a food from a SKU. */
+export function selectedIngredientName(product: Pick<Product, "name" | "brand">): string {
+  const name = product.name.trim();
+  const brand = product.brand?.trim();
+  if (brand && name.toLocaleLowerCase("nl-NL").startsWith(`${brand.toLocaleLowerCase("nl-NL")} `)) {
+    return name.slice(brand.length).trim() || name;
+  }
+  return name;
+}
+
 export function applyManualProductToRequirement(
   requirement: WeekIngredientRequirement,
   product: Product,
@@ -511,6 +521,7 @@ export function applyManualProductToRequirement(
 
   return {
     ...requirement,
+    name: selectedIngredientName(product),
     unit: "piece",
     quantityIsPackageCount: true,
     kind: "ingredient",

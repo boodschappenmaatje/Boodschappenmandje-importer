@@ -82,6 +82,7 @@ export interface WeekGenerationMetrics {
 }
 
 export interface WeekGenerationOptions {
+  preserveDayIndexes?: number[];
   cache?: WeekPlanningSnapshotCache;
   onMetrics?: (metrics: WeekGenerationMetrics) => void;
 }
@@ -213,16 +214,16 @@ async function applyStoredCustomizations(
     );
     const groups = Map.groupBy(
       requirement.usedIn,
-      (use) => overrideByDay.get(use.dayIndex)?.productId ?? "base",
+      (use) => overrideByDay.has(use.dayIndex) ? `day:${use.dayIndex}` : "base",
     );
 
-    return [...groups.entries()].map(([productId, uses]) => {
+    return [...groups.entries()].map(([groupKey, uses]) => {
       const requiredQuantity = uses.reduce(
         (total, use) => total + use.requiredQuantity,
         0,
       );
       const scoped = { ...requirement, requiredQuantity, usedIn: uses };
-      if (productId === "base") {
+      if (groupKey === "base") {
         return {
           ...scoped,
           purchaseQuantity: scoped.packageCapacity
@@ -231,8 +232,8 @@ async function applyStoredCustomizations(
         };
       }
       const override = overrideByDay.get(uses[0]!.dayIndex)!;
-      const product = products.get(productId) ?? null;
-      if (override.selectionSource === "manualSearch") {
+      const product = products.get(override.productId) ?? null;
+      if (override.selectionSource === "manualSearch" || (override.applicationMode === "explicitUserChoice" && override.quantity !== null)) {
         const quantity = override.quantity ?? 1;
         if (
           product &&
@@ -614,13 +615,14 @@ function evaluatePlan(
   readiness: Awaited<ReturnType<typeof evaluateRecipeReadiness>>,
   list: ActiveShoppingList,
   now: Date,
+  fixedIngredients: WeekIngredientRequirement[] = [],
 ): EvaluatedPlan {
   const requirements = aggregateWeekIngredients(
     days,
     preparation.numberOfPeople!,
     catalog,
   );
-  const ingredients = applyReadinessProducts(requirements, readiness);
+  const ingredients = [...applyReadinessProducts(requirements, readiness), ...fixedIngredients];
   return {
     days,
     ingredients,
@@ -858,6 +860,7 @@ function selectWeekWithinMealBudget(
   readiness: Awaited<ReturnType<typeof evaluateRecipeReadiness>>,
   list: ActiveShoppingList,
   now: Date,
+  fixedIngredients: WeekIngredientRequirement[] = [],
 ): BudgetedSelection {
   const readyIds = readyRecipeIds(readiness);
   const candidatesByDay = candidateDays(preparation, catalog, readyIds);
@@ -875,7 +878,7 @@ function selectWeekWithinMealBudget(
     const evaluation = evaluateMealBudget(
       preparation.budgetCents,
       preparation.mealBudgetCents,
-      [],
+      fixedIngredients,
       list,
       now,
     );
@@ -910,7 +913,7 @@ function selectWeekWithinMealBudget(
     const key = recipeSelectionKey(days);
     const cached = evaluatedPlanCache.get(key);
     if (cached) return cached;
-    const evaluated = evaluatePlan(days, preparation, catalog, readiness, list, now);
+    const evaluated = evaluatePlan(days, preparation, catalog, readiness, list, now, fixedIngredients);
     evaluatedPlanCache.set(key, evaluated);
     return evaluated;
   };
@@ -1156,7 +1159,7 @@ function selectWeekWithinMealBudget(
     const evaluation = evaluateMealBudget(
       preparation.budgetCents,
       preparation.mealBudgetCents,
-      [],
+      fixedIngredients,
       list,
       now,
     );
@@ -1227,16 +1230,25 @@ export async function generatePreparedWeek(
     return preparation;
   }
 
-  const explicitDays = preparation.days.filter((day) => day.recipe && (day.category === "freeChoice" || preparation.customizations.some(item => item.dayIndex === day.dayIndex && item.quantityOverrides?.length)));
+  const original = preparation;
+  const explicitDays = preparation.days.filter(day => day.recipe && (
+    options.preserveDayIndexes?.includes(day.dayIndex) || day.category === "freeChoice" || day.customDish ||
+    preparation.customizations.some(item => item.dayIndex === day.dayIndex)
+  ));
+  let fixedIngredients: WeekIngredientRequirement[] = [];
   if (explicitDays.length) {
-    const automatic = await generatePreparedWeek({
-      ...preparation,
-      days: preparation.days.map((day) => explicitDays.includes(day) ? { ...day, freeChoice: true, recipeId: null, recipe: null, customDish: undefined } : day),
-    }, recipeRepository, catalogRepository, now, list, options);
-    return (await revalidatePreparedWeek({ ...automatic,
-      days: automatic.days.map((day) => explicitDays.find((chosen) => chosen.dayIndex === day.dayIndex) ?? day),
-      customizations: preparation.customizations,
-    }, recipeRepository, catalogRepository, now, list)).preparation;
+    const fixed = await revalidatePreparedWeek({ ...preparation, days: explicitDays },
+      recipeRepository, catalogRepository, now, list, options.cache);
+    fixedIngredients = fixed.preparation.ingredients;
+    if (!fixed.preparation.generation?.isMealBudgetComplete || explicitDays.some(day =>
+      !fixedIngredients.some(ingredient => ingredient.usedIn.some(use => use.dayIndex === day.dayIndex)))) {
+      return { ...original, ingredients: fixedIngredients, status: "generationPartial",
+        generation: fixed.preparation.generation ? { ...fixed.preparation.generation, mealBudgetStatus: "incompleteValidation", lowestCompleteMealPlanCostCents: null, lowestCompleteMealPlanCostReliable: false } : null };
+    }
+    // Keep explicit selections, but include their cost in EVERY automatic candidate.
+    preparation = { ...preparation, days: preparation.days.map(day => explicitDays.includes(day)
+      ? { ...day, freeChoice: true, recipeId: null, recipe: null, customDish: undefined }
+      : day) };
   }
   const catalogStartedAt = monotonicNow();
   const loadedCatalog = await recipeRepository.loadCatalog();
@@ -1249,7 +1261,7 @@ export async function generatePreparedWeek(
   };
   const catalogMs = monotonicNow() - catalogStartedAt;
   const cacheLookupStartedAt = monotonicNow();
-  const snapshotKey = weekGenerationSnapshotKey(preparation, list);
+  const snapshotKey = weekGenerationSnapshotKey(preparation, list) + JSON.stringify({ explicitDays, fixedIngredients });
   const cachedWeek = options.cache?.getWeek(loadedCatalog, snapshotKey) ?? null;
   const cacheLookupMs = monotonicNow() - cacheLookupStartedAt;
   if (cachedWeek) {
@@ -1276,14 +1288,14 @@ export async function generatePreparedWeek(
     ? await options.cache.evaluateReadiness(
         loadedCatalog,
         candidates,
-        preparation.numberOfPeople,
+        preparation.numberOfPeople!,
         catalog,
         catalogRepository,
       )
     : {
         gate: await evaluateRecipeReadiness(
           candidates,
-          preparation.numberOfPeople,
+          preparation.numberOfPeople!,
           catalog,
           catalogRepository,
         ),
@@ -1299,12 +1311,14 @@ export async function generatePreparedWeek(
     readiness,
     list,
     now,
+    fixedIngredients,
   );
   const selectionMs = monotonicNow() - selectionStartedAt;
-  const { days, ingredients } = selection;
+  const days = selection.days.map(day => explicitDays.find(chosen => chosen.dayIndex === day.dayIndex) ?? day);
+  const ingredients = selection.found ? selection.ingredients : fixedIngredients;
   const generatedAt = now.toISOString();
   const prepared = {
-    ...preparation,
+    ...original,
     days,
     ingredients,
   };

@@ -79,6 +79,7 @@ import {
   prepareWeek,
   setMealBudgetCents as updateMealBudgetCents,
   setCategoryCount,
+  emptyCategoryDistribution,
   setWeekPreference,
   updateWeekSettings,
 } from "@/services/week-preparation/week-preparation";
@@ -100,6 +101,8 @@ interface WeekPreparationContextValue {
   preparation: WeekPreparation | null;
   persistenceWarning: string | null;
   actionMessage: string | null;
+  planningFailure: WeekPreparation | null;
+  chooseUnfilledManually: () => void;
   startPreparation: () => void;
   startNewPreparation: () => Promise<void>;
   setNumberOfPeople: (value: number | null) => void;
@@ -219,6 +222,7 @@ export function WeekPreparationProvider({
   );
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [planningFailure, setPlanningFailure] = useState<WeekPreparation | null>(null);
   const [customizationBusy, setCustomizationBusy] = useState(false);
   const [pendingBudgetReapproval, setPendingBudgetReapproval] =
     useState<PendingBudgetReapproval | null>(null);
@@ -313,14 +317,18 @@ export function WeekPreparationProvider({
   );
 
   const runGeneration = useCallback(
-    async (base: WeekPreparation) => {
+    async (base: WeekPreparation, previous: WeekPreparation = base) => {
       if (generationInFlightRef.current) return;
       generationInFlightRef.current = true;
       const run = generationRunRef.current + 1;
       generationRunRef.current = run;
       setPendingBudgetReapproval(null);
       setActionMessage(null);
-      replace(markWeekGenerating(base));
+      setPlanningFailure(null);
+      // Keep the saved week intact until a complete affordable candidate exists.
+      const pending = markWeekGenerating(previous);
+      preparationRef.current = pending;
+      setPreparation(pending);
       try {
         const generated = await generatePreparedWeek(
           { ...base, status: "readyForGeneration" },
@@ -331,8 +339,14 @@ export function WeekPreparationProvider({
           { cache: planningSnapshotCacheRef.current },
         );
         if (generationRunRef.current !== run) return;
-        const maySync = generated.generation?.isMealBudgetComplete &&
-          (["withinMealBudget", "exactlyMealBudget"].includes(generated.generation.mealBudgetStatus) || hasValidUserApprovedBudgetOverride(generated));
+        const maySync = generated.status === "generated" && generated.generation?.isMealBudgetComplete &&
+          ["withinMealBudget", "exactlyMealBudget"].includes(generated.generation.mealBudgetStatus);
+        if (!maySync && previous.days.some(day => day.recipe)) {
+          setPlanningFailure(generated);
+          refreshedWeekRef.current = previous.id;
+          await replace(previous.status === "draft" ? { ...previous, status: "generationPartial" } : previous);
+          return;
+        }
         if (maySync && (base.days.some(day => day.category === "freeChoice" && day.recipe) || shoppingList.list?.items.some(item => item.quantityContributions.mealPlans.some(contribution => contribution.weekPreparationId === base.id)))) {
           await shoppingList.completeFromWeek(generated.ingredients, generated.id);
         }
@@ -340,7 +354,7 @@ export function WeekPreparationProvider({
         replace(generated);
       } catch {
         if (generationRunRef.current !== run) return;
-        replace(markWeekGenerationFailed(base));
+        replace(previous.days.some(day => day.recipe) ? previous : markWeekGenerationFailed(base));
       } finally {
         generationInFlightRef.current = false;
       }
@@ -605,12 +619,26 @@ export function WeekPreparationProvider({
     [commit],
   );
 
+  const chooseUnfilledManually = useCallback(() => {
+    if (generationInFlightRef.current || customizationRunRef.current) return;
+    setPlanningFailure(null);
+    commit(current => {
+      const days = current.days.map(day => day.recipe ? day : {
+        ...day, category: "freeChoice" as const, freeChoice: true, status: "freeChoice" as const,
+      });
+      const categoryDistribution = emptyCategoryDistribution();
+      for (const day of days) categoryDistribution[day.category] += 1;
+      const next = { ...current, days, categoryDistribution };
+      return shoppingList.list ? recalculateMealBudgetSummary(next, shoppingList.list) : next;
+    });
+  }, [commit, shoppingList.list]);
+
   const confirmPreparation = useCallback((keepDayIndexes?: number[]) => {
     const current = preparationRef.current;
     if (!current) return;
     const prepared = prepareWeek(current, currentListContext(), new Date(), keepDayIndexes);
     if (prepared.status !== "readyForGeneration") return;
-    void runGeneration(prepared);
+    void runGeneration(prepared, current);
   }, [currentListContext, runGeneration]);
 
   const retryGeneration = useCallback(() => {
@@ -840,13 +868,23 @@ export function WeekPreparationProvider({
       if (changed === current) return;
       customizationRunRef.current = true;
       setCustomizationBusy(true);
+      setPlanningFailure(null);
       const selectChangedDay = async () => {
-        if (category === "freeChoice") return changed;
-        const selected = await generatePreparedWeek({ ...changed, days: changed.days.filter((day) => day.dayIndex === dayIndex), customizations: [] }, recipeRepository(), catalogRepository());
-        return { ...changed, days: changed.days.map((day) => day.dayIndex === dayIndex ? selected.days[0] : day) };
+        if (category === "freeChoice") return (await revalidatePreparedWeek(changed, recipeRepository(), catalogRepository(), new Date(), currentList())).preparation;
+        return generatePreparedWeek(changed, recipeRepository(), catalogRepository(), new Date(), currentList(), {
+          cache: planningSnapshotCacheRef.current,
+          preserveDayIndexes: current.days.filter(day => day.dayIndex !== dayIndex).map(day => day.dayIndex),
+        });
       };
-      void selectChangedDay().then((next) => revalidatePreparedWeek(next, recipeRepository(), catalogRepository(), new Date(), listWithoutCurrentWeekMealPlan(currentList(), current.id)))
-        .then((result) => syncValidatedCustomization(result.preparation))
+      void selectChangedDay().then(async next => {
+        if (preparationRef.current !== current) return;
+        if (!next.generation?.isMealBudgetComplete || !["withinMealBudget", "exactlyMealBudget"].includes(next.generation.mealBudgetStatus)) {
+          setPlanningFailure(next);
+          setActionMessage("Er is niets gewijzigd aan je gerechten of boodschappenlijst.");
+          return;
+        }
+        await syncValidatedCustomization(next);
+      })
         .catch(() => setActionMessage("Wijzigen lukt nu niet. Je huidige week is behouden."))
         .finally(() => { customizationRunRef.current = false; setCustomizationBusy(false); });
     }, [catalogRepository, currentList, recipeRepository, syncValidatedCustomization],
@@ -1222,6 +1260,8 @@ export function WeekPreparationProvider({
       preparation,
       persistenceWarning,
       actionMessage,
+      planningFailure,
+      chooseUnfilledManually,
       startPreparation: createFreshPreparation,
       startNewPreparation,
       setNumberOfPeople,
@@ -1249,6 +1289,8 @@ export function WeekPreparationProvider({
     }),
     [
       actionMessage,
+      planningFailure,
+      chooseUnfilledManually,
       searchDishes,
       previewCustomDish,
       previewIngredientPackages,

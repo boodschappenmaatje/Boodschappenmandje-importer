@@ -33,7 +33,7 @@ let products: Product[];
 const catalog: RecipeCatalog = { recipes: [recipe], ingredients: ["Spaghetti", "Roerbakgroente"].map((name, index) => ({ id: String(index), sourceKey: name.toLowerCase(), name, normalizedName: name.toLowerCase(), defaultUnit: "g", category: "", aliases: [name] })), relations: [0, 1].map(index => ({ id: String(index), recipeId: recipe.id, ingredientId: String(index), amountPerPerson: 100, unit: "g", position: index })) };
 let activeCatalog = catalog;
 const recipes = { loadCatalog: async () => activeCatalog };
-const repository: CatalogRepository = { getByIds: async ids => ({ products: products.filter(p => ids.includes(p.id)), priceStatus: "complete" }), search: async () => ({ products, priceStatus: "complete" }), query: async () => { throw Error("unused"); }, getPage: async () => { throw Error("unused"); }, getFilterOptions: async () => ({ categories: [], brands: [] }) };
+const repository: CatalogRepository = { getByIds: async ids => ({ products: products.filter(p => ids.includes(p.id)), priceStatus: "complete" }), search: async () => ({ products, priceStatus: "complete" }), query: async (request = {}) => ({ products: products.filter(p => p.name.toLowerCase().includes((request.term ?? "").toLowerCase())), priceStatus: "complete", page: 1, pageSize: 12, hasMore: false, query: { term: request.term ?? "", category: null, brand: null, offersOnly: false, maxPrice: null, sort: "relevance" } }), getPage: async () => { throw Error("unused"); }, getFilterOptions: async () => ({ categories: [], brands: [] }) };
 let root: Root;
 let container: HTMLDivElement;
 let savedWeek: WeekPreparation;
@@ -63,6 +63,7 @@ async function click(label: string) {
   await act(async () => button!.click()); await settle();
 }
 beforeEach(async () => {
+  localStorage.removeItem("boodschappenmaatje:collapsed-list-categories");
   activeCatalog = catalog;
   products = [product("0", "Spaghetti", false), product("1", "Roerbakgroente", true)];
   const base = createWeekPreparation({ schemaVersion: 1, people: 4, days: 1, budgetCents: 10000 }, { knownSubtotalCents: 0, unpricedItemCount: 0 }, now, "ui-week", 5000);
@@ -300,4 +301,135 @@ describe('compact list presentation preserves linked state', () => {
     expect(currentList.items.find(item => item.productId === 'manual')!.quantity).toBe(2);
     expect(currentWeek.customizations).toEqual(choices);
   });
+});
+
+
+describe("PR28 iPhone vervanging en categorieën", () => {
+  it.each([
+    ["Kipfilet", "Boomstammetjes", "600 g", 600],
+    ["Spaghetti", "Rijst", "1 kg", 1000],
+    ["Melk", "Havermelk", "1 l", null],
+  ] as const)("%s → %s: echte zoek/gebruik-click, naam/foto/hoeveelheid/prijs/lijst en heropenen", async (oldName, newName, packageText, weightGrams) => {
+    activeCatalog = { ...catalog, ingredients: catalog.ingredients.map((item, i) => i ? item : { ...item, name: oldName, normalizedName: oldName.toLowerCase(), aliases: [oldName] }) };
+    products[0] = { ...products[0], name: oldName };
+    const replacement = { ...product("replacement", `Hoogvliet ${newName}`, false), brand: "Hoogvliet", imageUrl: "https://example.test/new-product.jpg", packageText, weightGrams, currentPrice: { ...product("replacement", newName, false).currentPrice!, price: 2.49 } };
+    products.push(replacement);
+    savedWeek = (await revalidatePreparedWeek(savedWeek, recipes, repository)).preparation;
+    savedList = adjustPersistentQuantity(completeShoppingListFromWeek(createEmptyActiveShoppingList(), savedWeek.ingredients, savedWeek.id), "0", 1);
+    await mount("Menu");
+    const originalRow = [...container.querySelectorAll('.recipe-ingredients > li')].find(row => row.querySelector('strong')?.textContent === oldName)!;
+    await act(async () => originalRow.querySelector<HTMLButtonElement>('button')!.click()); await settle();
+    await clickText("Zelf zoeken");
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="Zoek producten op naam, merk, verpakking of categorie"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, newName);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 380)); });
+    const result = container.querySelector<HTMLButtonElement>('ul[aria-label="Zoekresultaten"] button')!;
+    expect(result.textContent).toContain(newName);
+    await act(async () => result.click()); await clickText("Gebruiken");
+    const chosen = () => currentWeek.ingredients.find(item => item.ingredientId === "0")!;
+    expect(chosen()).toMatchObject({ name: newName, purchaseQuantity: 1, price: { amountCents: 249 }, product: { productId: "replacement", name: `Hoogvliet ${newName}`, imageUrl: replacement.imageUrl, packageText } });
+    expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(428);
+    expect(total).toBe(607); // explicit loose original product remains protected
+    expect(container.querySelector(`img[alt="Afbeelding van Hoogvliet ${newName}"]`)).not.toBeNull();
+    expect(container.querySelector(`[aria-label="Benodigd ${oldName}"]`)).toBeNull();
+    await reopen("Lijst");
+    expect(currentList.items.find(item => item.productId === "replacement")!.quantity).toBe(1);
+    expect(currentList.items.find(item => item.productId === "0")!.quantityContributions.persistentQuantity).toBe(1);
+    await click(`Verhoog aantal Hoogvliet ${newName}`);
+    await reopen("Menu");
+    expect(chosen().name).toBe(newName);
+    expect(container.querySelector(`[aria-label="Benodigd ${newName}"]`)!.textContent).toContain(weightGrams === 600 ? "1.200 g" : weightGrams === 1000 ? "2.000 g" : "2.000 ml");
+    await click(`Minder ${newName}`);
+    expect(currentList.items.find(item => item.productId === "replacement")!.quantity).toBe(1);
+    expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(428);
+    expect(catalog.ingredients[0].name).toBe("Spaghetti");
+  });
+
+  it("alle categorieën onafhankelijk, met tellers, filters, checkbox en heropenen zonder datamutatie", async () => {
+    const categories = ["Aardappelen, groente, fruit", "Vlees, vis, kip", "Zuivel, eieren", "Brood, beleg"];
+    for (let index = 2; index < 4; index++) {
+      const extra = product(String(index), `Los product ${index}`, false); products.push(extra);
+      savedList = addCatalogProduct(savedList, extra);
+    }
+    savedList.items = savedList.items.map((item, index) => ({ ...item, category: categories[index], checked: index === 0 }));
+    await mount("Lijst");
+    const before = JSON.stringify(currentList.items), beforeTotal = total;
+    const toggle = (category: string) => [...container.querySelectorAll<HTMLButtonElement>('.shopping-category-toggle')].find(button => button.textContent?.includes(category))!;
+    for (const category of categories) {
+      expect(toggle(category).querySelector("small")!.textContent).toBe("1");
+      await act(async () => toggle(category).click());
+      expect(toggle(category).getAttribute("aria-expanded")).toBe("false");
+    }
+    await act(async () => toggle(categories[1]).click());
+    expect(toggle(categories[0]).getAttribute("aria-expanded")).toBe("false");
+    expect(toggle(categories[1]).getAttribute("aria-expanded")).toBe("true");
+    await clickText("Maaltijden"); await clickText("Overig"); await clickText("Alles");
+    const filter = container.querySelector<HTMLSelectElement>('select[aria-label="Boodschappen filteren"]')!;
+    await act(async () => { filter.value = "checked"; filter.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(toggle(categories[0]).getAttribute("aria-expanded")).toBe("false");
+    await reopen("Lijst");
+    expect(toggle(categories[0]).getAttribute("aria-expanded")).toBe("false");
+    expect(toggle(categories[1]).getAttribute("aria-expanded")).toBe("true");
+    expect(JSON.stringify(currentList.items)).toBe(before); expect(total).toBe(beforeTotal);
+  });
+});
+
+it('Meer alternatieven en Zelf zoeken zijn echte bedienbare knoppen met behoud van de zoekflow', async () => {
+  products.push(...Array.from({ length: 4 }, (_, i) => ({ ...product(`alt-${i}`, `Spaghetti variant ${i}`, false), currentPrice: { ...product(`alt-${i}`, '', false).currentPrice!, price: 2 + i } })));
+  await mount('Menu');
+  const row = [...container.querySelectorAll('.recipe-ingredients > li')].find(item => item.querySelector('strong')?.textContent === 'Spaghetti')!;
+  await act(async () => row.querySelector<HTMLButtonElement>('button')!.click()); await settle();
+  const more = [...row.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Meer alternatieven')!;
+  expect(more.classList.contains('compact-choice-button')).toBe(true);
+  expect(row.querySelectorAll('.compact-product-list > li')).toHaveLength(3);
+  await act(async () => more.click());
+  expect(row.querySelectorAll('.compact-product-list > li')).toHaveLength(4);
+  const search = [...row.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'Zelf zoeken')!;
+  expect(search.classList.contains('compact-choice-button')).toBe(true);
+  await act(async () => search.click());
+  expect(row.querySelector('input[type="search"]')).not.toBeNull();
+});
+
+it('onhaalbaar automatisch budget bewaart bestaande week/lijst en biedt werkende herstelacties', async () => {
+  savedWeek = { ...savedWeek, mealBudgetCents: 1, categoryDistribution: { ...savedWeek.categoryDistribution, pasta: 1 } };
+  await mount('Menu');
+  const beforeDays = structuredClone(currentWeek.days), beforeItems = structuredClone(currentList.items);
+  await clickText('Zoek een week binnen budget');
+  expect(currentWeek.days).toEqual(beforeDays);
+  expect(currentList.items).toEqual(beforeItems);
+  expect(currentWeek.mealBudgetCents).toBe(1);
+  expect(container.textContent).toContain('De goedkoopste geldige combinatie');
+  expect(container.textContent).toContain('Je bestaande gerechten en boodschappenlijst zijn behouden');
+  expect(container.querySelector('a[href="/vrije-keuze"]')).not.toBeNull();
+  expect(container.textContent).toContain('Testpasta');
+  await clickText('Maaltijdbudget of dagen aanpassen');
+  expect(container.querySelector('.week-basics')!.hasAttribute('hidden')).toBe(false);
+  await reopen('Lijst'); expect(currentList.items).toEqual(beforeItems);
+});
+
+it('een lege budgetgeblokkeerde week houdt READY gerechten selecteerbaar via expliciete handmatige keuze', async () => {
+  const { generatePreparedWeek } = await import('@/services/week-preparation/week-generation');
+  savedWeek = await generatePreparedWeek({ ...savedWeek, status: 'readyForGeneration', mealBudgetCents: 1, days: savedWeek.days.map(day => ({ ...day, recipeId: null, recipe: null, status: 'categoryAssigned' })) }, recipes, repository);
+  await mount('Menu');
+  const before = structuredClone(currentList.items);
+  await clickText('Bekijk gerechten voor deze dag');
+  expect(currentList.items).toEqual(before);
+  const input = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'Testpasta');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 380)); });
+  const result = [...container.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Testpasta'))!;
+  expect(result.disabled).toBe(false);
+  await act(async () => result.click());
+  expect(container.textContent).toContain('Toch toevoegen aan lijst');
+  expect(currentWeek.days[0].recipe).toBeNull();
+  await clickText('Toch toevoegen aan lijst');
+  expect(currentWeek.days[0].recipe?.name).toBe('Testpasta');
+  expect(currentWeek.generation!.mealBudgetStatus).toBe('overMealBudget');
+  expect(currentWeek.customizations[0].recipeBudgetDecision.mode).toBe('userApprovedBudgetOverride');
 });

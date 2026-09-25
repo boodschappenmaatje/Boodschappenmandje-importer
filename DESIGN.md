@@ -124,3 +124,11 @@ Bij nieuwe UI:
 - Bij gemengde herkomst opent algemene −/+ het detailpaneel met de bestaande veilige bijdragekeuze. Eén eenduidige receptbijdrage blijft direct bedienbaar. Recept ⇄ lijst-sync en handmatige bescherming blijven leidend.
 - Alles/Maaltijden/Overig is een presentatiefilter. Een product met maaltijd én losse bijdrage hoort bij beide filters; het getoonde aantal blijft het volledige te kopen totaal. Nog te halen/Afgevinkt blijft beschikbaar.
 - Behoud categoriegroepering, metallic-blauwe tokens en bottom navigation. Maak geen permanente grote actieknoppen of geneste kaarten per product.
+
+## iPhone-feedback PR #28 — 25 september 2026
+- “Meer alternatieven” en “Zelf zoeken” zijn compacte metallic-blauwe knoppen met minimaal 44px raakvlak, zichtbare focus, pressed- en disabled-state.
+- Een expliciete productvervanging gebruikt de actuele consumentennaam van het gekozen catalogusproduct als ingrediëntkop. Alleen een expliciet bekende merkprefix mag worden weggelaten. De oorspronkelijke receptdefinitie en het exacte ingrediëntadres blijven intact.
+- Iedere lijstcategorie is onafhankelijk inklapbaar met teller en chevron. Bewaar de presentatiekeuze lokaal; inklappen en filteren wijzigen geen product-, bijdrage-, afvink- of budgetgegevens.
+- Het ingestelde maaltijdbudget is een harde grens voor automatische weekplanning. De planner zoekt actief naar een volledige geldige combinatie binnen deze grens. Alleen een expliciete handmatige gebruikerskeuze mag via de bestaande bevestigde override boven budget gaan.
+- Neem behouden gerechten en expliciete verpakkingen mee tijdens het zoeken. Bij een onhaalbare poging blijven de bestaande week en lijst staan. Toon bruikbare instellingen-/handmatige-keuzeacties; onderscheid een bewezen minimum van de goedkoopste gevonden combinatie.
+- Alleen na een bewuste actie om lege dagen zelf in te vullen worden die lege plaatsen vrije keuzes. Bestaande gerechten en lijstbijdragen blijven behouden.

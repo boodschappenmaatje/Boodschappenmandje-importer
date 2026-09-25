@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { Icon } from "@/components/Icon";
+import { ShoppingListCategory } from "./ShoppingListCategory";
 import { ListBudgetSummary } from "@/components/budget/ListBudgetSummary";
 import { LinkedShoppingListItem } from "@/components/shopping-list/LinkedShoppingListItem";
 import { ShoppingListProductSearch } from "@/components/shopping-list/ShoppingListProductSearch";
@@ -107,10 +108,9 @@ export function ActiveShoppingListView() {
             </button>
           </div>
 
-          {groups.map(([category, items]) => <section className="ux-shopping-category" key={category} aria-label={category}>
-            <h3><Icon name="products" size={17} /><span>{category}</span><small aria-label={`${items.length} ${items.length === 1 ? "product" : "producten"}`}>{items.length}</small></h3>
+          {groups.map(([category, items]) => <ShoppingListCategory key={category} category={category} count={items.length}>
             <ul className="shopping-items">{items.map((item) => <LinkedShoppingListItem key={item.productId} item={item} />)}</ul>
-          </section>)}
+          </ShoppingListCategory>)}
           {groups.length === 0 ? <p role="status">{originFilter !== "all" ? "Geen producten met deze herkomst binnen je filter." : filter === "checked" ? "Nog niets afgevinkt." : "Alles is afgevinkt. Klaar voor deze ronde!"}</p> : null}
           <Link className="secondary-text-link" href="/producten">Producten zoeken</Link>
 

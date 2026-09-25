@@ -49,6 +49,8 @@ Aanvullende fysieke feedback: compacte boodschappenlijst volgens goedgekeurd con
 
 ---
 
+Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknoppen, generieke ingrediëntnaam bij vervanging, alle categorieën inklapbaar en harde automatische maaltijdbudgetgrens met actieve goedkopere selectie en bruikbare herstelroute. Bestaande compacte lijst en recept ⇄ lijst blijven leidend. Implementatie en regressies uitgevoerd; nieuwe Preview/hertest nog in uitvoering. De eerdere compacte Preview is niet geaccepteerd.
+
 # Eerstvolgende funderingsmijlpalen na PR #28
 
 Deze onderdelen hebben hoge waarde en worden vóór verdere slimme/personaliserende functies ingepland. De exacte PWA-nummers worden pas toegekend wanneer PR #28 is afgerond.
