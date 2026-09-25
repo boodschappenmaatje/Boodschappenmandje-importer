@@ -49,7 +49,7 @@ Aanvullende fysieke feedback: compacte boodschappenlijst volgens goedgekeurd con
 
 ---
 
-Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknoppen, generieke ingrediëntnaam bij vervanging, alle categorieën inklapbaar en harde automatische maaltijdbudgetgrens met actieve goedkopere selectie en bruikbare herstelroute. Bestaande compacte lijst en recept ⇄ lijst blijven leidend. Implementatie en regressies uitgevoerd; nieuwe Preview/hertest nog in uitvoering. De eerdere compacte Preview is niet geaccepteerd.
+Aanvullende iPhone-feedbackronde 25 september: herkenbare alternatieven/zoekknoppen, generieke ingrediëntnaam bij vervanging, alle categorieën inklapbaar en harde automatische maaltijdbudgetgrens met actieve goedkopere selectie en bruikbare herstelroute. Bestaande compacte lijst en recept ⇄ lijst blijven leidend. Implementatie en 676 webtests/189 importerfixtures, lint, TypeScript en build zijn groen. Live vervangingen, inklappen, beide syncrichtingen en goedkopere/onhaalbare budgetscenario’s zijn gecontroleerd; **Preview Ready; KLAAR VOOR FYSIEKE IPHONE-HERTEST.** Fysieke iPhone-acceptatie blijft open. Goedkopere live week €25,97 binnen €30; onhaalbaar budget behoudt week/lijst met bruikbare acties.
 
 # Eerstvolgende funderingsmijlpalen na PR #28
 

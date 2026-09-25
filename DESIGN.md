@@ -132,3 +132,5 @@ Bij nieuwe UI:
 - Het ingestelde maaltijdbudget is een harde grens voor automatische weekplanning. De planner zoekt actief naar een volledige geldige combinatie binnen deze grens. Alleen een expliciete handmatige gebruikerskeuze mag via de bestaande bevestigde override boven budget gaan.
 - Neem behouden gerechten en expliciete verpakkingen mee tijdens het zoeken. Bij een onhaalbare poging blijven de bestaande week en lijst staan. Toon bruikbare instellingen-/handmatige-keuzeacties; onderscheid een bewezen minimum van de goedkoopste gevonden combinatie.
 - Alleen na een bewuste actie om lege dagen zelf in te vullen worden die lege plaatsen vrije keuzes. Bestaande gerechten en lijstbijdragen blijven behouden.
+
+- Budgetbevestigingen gebruiken dezelfde bijdrageverdeling als de uiteindelijke boodschappenlijst. Een losse extra van dezelfde SKU is een afzonderlijke aankoop, geen impliciete voorraad voor het recept.
