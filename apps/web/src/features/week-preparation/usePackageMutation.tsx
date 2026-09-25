@@ -39,7 +39,14 @@ export function usePackageMutation() {
     catch { setMessage("Opslaan lukt nu niet. Probeer opnieuw."); }
     finally { inFlight.current = false; setBusy(false); }
   }
-  return { change, confirm, cancel: () => { setPending(null); setMessage(""); }, pending: pending?.alternative ?? null,
+  async function remove(link: PlannedIngredientLink) {
+    if (inFlight.current || week.customizationBusy || pending) return;
+    inFlight.current = true; setBusy(true); setMessage("");
+    try { setMessage(await week.removeLinkedIngredient(link) ? "Ingrediënt uit dit gerecht en je lijst verwijderd." : "Verwijderen is niet gelukt. Je vorige keuze blijft staan."); }
+    catch { setMessage("Opslaan lukt nu niet. Probeer opnieuw."); }
+    finally { inFlight.current = false; setBusy(false); }
+  }
+  return { change, remove, confirm, cancel: () => { setPending(null); setMessage(""); }, pending: pending?.alternative ?? null,
     busy: busy || week.customizationBusy, blocked: busy || week.customizationBusy || Boolean(pending), message };
 }
 

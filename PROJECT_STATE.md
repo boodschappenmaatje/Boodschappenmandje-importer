@@ -148,3 +148,10 @@ Behoud alle PR #28-fundamenten: compacte lijst, recept ⇄ lijst-sync, manual co
 - Functionele code `05f60bd0ea0ee1afca43b1292d362d7049cc6006`, Vercel success; 683/683 webtests (57 bestanden), 189/189 importerfixtures, lint, TypeScript en Production-build groen, inclusief hercontrole van de laatste weergavecorrectie.
 - Live Preview: exact budget direct; bevestigde recept- en lijstverhogingen; annuleren zonder hoeveelheidsmutatie; verlagen terwijl nog boven budget; trash bij manual-only/gekoppeld; gemengde en gedeelde bijdragen; afvinken, filters, categorieteller en heropenen. Uitgebreid bewijs en hertestchecklist: `docs/pr28-trash-budget-2026-09-25.md`.
 - **KLAAR VOOR FYSIEKE IPHONE-HERTEST** zodra de bijbehorende documentatiehead eveneens Vercel success heeft. Desktopfunctionele controle uitgevoerd; fysieke iPhone-acceptatie blijft open. DESIGN.md niet als geaccepteerd aangepast. Geen merge/Production/databaseactie/import.
+
+## Actieve correctie — trash verwijdert direct
+- Fysieke iPhone-test afgekeurd: trash bij gekoppeld ingrediënt opende bewust Productdetails. Hervat vanaf remote `6c90f3a0946e750ac7060fb82ef756618fe73ed7`; dezelfde Draft PR #28/branch. Nieuwe Home-mascotte-roadmapnotitie behouden, niet geïmplementeerd.
+- Directe centrale verwijderroute: exacte week/dag/recept/ingrediënt/product-koppeling gecontroleerd, expliciete `excludedIngredients`-keuze in de bestaande lokale customization, geen quantity 0 of databasewijziging. De afgeleide recept- en lijstbijdragen worden samen herberekend.
+- Manual-only blijft direct verwijderen met bestaande undo. Ambigue/gedeelde totale bijdrage toont geen trash; gerichte bijdrage wel. Trash-event stopt propagation; product/chevron blijft details openen.
+- Recept benoemt verwijderde ingrediënten. Uitsluiting blijft bestaan bij opslag, personenwijziging en prijs-/plannerrefresh; originele receptdefinitie behouden. Leeggekocht gerecht is geen automatische gratis READY-maaltijd.
+- Implementatie en regressie-/Preview-controle in uitvoering. **Nog niet klaar voor fysieke iPhone-hertest.**

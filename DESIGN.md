@@ -112,7 +112,7 @@ Bij nieuwe UI:
 - Bij precies één geplande ingrediëntbijdrage zonder los deel bedient lijst −/+ direct dat ingrediënt; toon het betreffende gerecht.
 - Bij meerdere ingrediënten/recepten of een los deel opent de totale lijstbediening een herkomstkeuze. Geef per gerecht de dag en het ingrediënt aan; wijzig alleen de gekozen bijdrage.
 - “Losse verpakking toevoegen” maakt expliciet een onafhankelijke lijstbijdrage. Toon deze als “Los van recepten”, met eigen bediening tot 0.
-- Houd receptbijdragen op minimaal 1 verpakking. Een verwijderactie op een gekoppeld item legt uit dat aanpassen via Menu nodig is; verwijder nooit stil een vereist ingrediënt. Afvinken verandert geen hoeveelheid.
+- Min houdt actieve receptbijdragen op minimaal 1 verpakking. De aparte prullenmand verwijdert een eenduidige bijdrage direct via een expliciete “door gebruiker verwijderd”-keuze voor dat geplande ingrediënt; geen kunstmatige hoeveelheid 0. Recept en lijst worden samen bijgewerkt. Afvinken verandert geen hoeveelheid.
 - Waar recepten automatisch verpakkingen delen, leg dat bij de herkomstkeuze uit. Het lijsttotaal blijft gebaseerd op de gezamenlijk te kopen verpakkingen.
 - Beide richtingen gebruiken dezelfde berekening, budgetbevestiging en laadstatus. Bij gewijzigde week/lijst tijdens validatie moet opnieuw worden gecontroleerd.
 
@@ -134,3 +134,10 @@ Bij nieuwe UI:
 - Alleen na een bewuste actie om lege dagen zelf in te vullen worden die lege plaatsen vrije keuzes. Bestaande gerechten en lijstbijdragen blijven behouden.
 
 - Budgetbevestigingen gebruiken dezelfde bijdrageverdeling als de uiteindelijke boodschappenlijst. Een losse extra van dezelfde SKU is een afzonderlijke aankoop, geen impliciete voorraad voor het recept.
+
+## Directe prullenmand — PR #28, fysieke acceptatie volgt
+- Quantity >1 toont min; bij 1 toont alleen een veilig direct verwijderbare bijdrage de prullenmand, op dezelfde 44px-positie. Trash opent nooit Productdetails.
+- Productnaam/chevron blijven de afzonderlijke detailactie. Quantity-knoppen handelen hun eigen click af zonder doorbubbelen.
+- Bij meerdere/ongeldige koppelingen geen totale trash: eerst de bestaande herkomstkeuze. De prullenmand bij een specifieke bijdrage bedient alleen die bijdrage.
+- Verwijderde geplande ingrediënten blijven zichtbaar als expliciete gebruikerskeuze in het recept, maar tellen niet meer mee als aankoop. De originele receptdefinitie blijft behouden. Een volledig leeggekocht gerecht wordt niet door de automatische planner als geldige gratis maaltijd gebruikt.
+- Kostenverlagende handmatige mutaties worden nooit door een overschreden budget geblokkeerd. Kostenverhoging boven budget vereist expliciete bevestiging; automatische planning krijgt nooit een budgetoverride.

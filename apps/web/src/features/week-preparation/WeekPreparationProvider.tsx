@@ -19,6 +19,7 @@ import { recipeContributionTargets, sameIngredientLink } from "@/services/shoppi
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { previewFreeChoice, searchFreeChoice, type FreeChoiceResult } from "@/services/week-preparation/free-choice";
 import { previewIngredientPackages as loadIngredientQuantityPreview } from "@/services/week-preparation/ingredient-quantity-preview";
+import { removeLinkedIngredientContribution } from "@/services/week-preparation/meal-customization";
 import { customIngredientDefinition } from "@/services/week-preparation/custom-dish";
 import { searchIngredientProduct } from "@/services/week-preparation/product-matching";
 import type { CustomDish, WeekIngredientUnit } from "@/types/week-preparation";
@@ -93,6 +94,7 @@ type WeekPreparationProviderStatus = "loading" | "ready" | "error";
 
 interface WeekPreparationContextValue {
   previewLinkedIngredientPackages: (link: PlannedIngredientLink, quantity: number) => Promise<RecipeAlternative | null>;
+  removeLinkedIngredient: (link: PlannedIngredientLink) => Promise<boolean>;
   previewIngredientPackages: (dayIndex: number, ingredientId: string, quantity: number, source?: WeekPreparation) => Promise<RecipeAlternative | null>;
   searchDishes: (dayIndex: number, query: string, route?: "recipe" | "mix") => Promise<FreeChoiceResult[]>;
   previewCustomDish: (dayIndex: number, dish: CustomDish) => Promise<RecipeAlternative | null>;
@@ -1249,12 +1251,24 @@ export function WeekPreparationProvider({
     return previewIngredientPackages(link.dayIndex, link.ingredientId, quantity);
   }, [previewIngredientPackages, getCurrentList]);
 
+  const removeLinkedIngredient = useCallback(async (link: PlannedIngredientLink) => {
+    const current = preparationRef.current;
+    const list = getCurrentList();
+    if (!current || !list || customizationRunRef.current || generationInFlightRef.current) return false;
+    const next = removeLinkedIngredientContribution(current, link, list);
+    if (!next) return false;
+    customizationRunRef.current = true; setCustomizationBusy(true);
+    try { return await syncValidatedCustomization(next); }
+    finally { customizationRunRef.current = false; setCustomizationBusy(false); }
+  }, [getCurrentList, syncValidatedCustomization]);
+
   const value = useMemo<WeekPreparationContextValue>(
     () => ({
       searchDishes,
       previewCustomDish,
       previewIngredientPackages,
       previewLinkedIngredientPackages,
+      removeLinkedIngredient,
       matchCustomIngredient,
       status,
       preparation,
@@ -1295,6 +1309,7 @@ export function WeekPreparationProvider({
       previewCustomDish,
       previewIngredientPackages,
       previewLinkedIngredientPackages,
+      removeLinkedIngredient,
       matchCustomIngredient,
       adjustCategory,
       changeDayCategory,

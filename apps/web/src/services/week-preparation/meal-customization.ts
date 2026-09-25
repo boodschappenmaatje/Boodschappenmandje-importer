@@ -1,5 +1,7 @@
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import { reliablePriceCents } from "@/services/catalog/price";
+import { recipeContributionTargets, sameIngredientLink } from "@/services/shopping-list/recipe-contributions";
+import { withIngredientExcluded, applyIngredientQuantityOverrides } from "./ingredient-quantity";
 import { completeShoppingListFromWeek, removeMealPlanContributionsForWeek } from "@/services/shopping-list/shopping-list";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import { evaluateMealBudget, mealBudgetAllowsPlan } from "@/services/week-preparation/meal-budget";
@@ -36,7 +38,7 @@ import {
   revalidatePreparedWeek,
 } from "@/services/week-preparation/week-generation";
 import type { Product, Recipe } from "@/types/catalog";
-import type { ActiveShoppingList } from "@/types/shopping-list";
+import type { ActiveShoppingList, PlannedIngredientLink } from "@/types/shopping-list";
 import type {
   PreparedDay,
   RecipeMealCategory,
@@ -55,6 +57,22 @@ const EMPTY_LIST: ActiveShoppingList = {
   updatedAt: "1970-01-01T00:00:00.000Z",
   items: [],
 };
+
+/** Removing a known contribution needs no rematch/network roundtrip and cannot authorize spending. */
+export function removeLinkedIngredientContribution(current: WeekPreparation, link: PlannedIngredientLink, list: ActiveShoppingList, now = new Date()): WeekPreparation | null {
+  const item = list.items.find(row => row.productId === link.productId);
+  if (!item || !recipeContributionTargets(item, current).targets.some(target => sameIngredientLink(target.link, link))) return null;
+  const changed = withIngredientExcluded(current, link.dayIndex, link.ingredientId);
+  if (!changed) return null;
+  const ingredients = applyIngredientQuantityOverrides(changed, current.ingredients);
+  const baseline = listWithoutCurrentWeekMealPlan(list, current.id, now)!;
+  const projected = rebuildPreparedWeekSelection(changed, changed.days, ingredients, baseline, now);
+  const impact = budgetImpact(current, projected, baseline, now);
+  // Guard against an inconsistent source snapshot; never turn deletion into a cost increase.
+  if (impact.nextMealPlanCostCents > impact.currentMealPlanCostCents || impact.nextTotalWeekCostCents > impact.currentTotalWeekCostCents) return null;
+  return recalculateMealBudgetSummary(withRecipeBudgetDecision(projected, link.dayIndex,
+    recipeBudgetDecision(current, link.dayIndex, link.recipeId, impact, now)), baseline, now);
+}
 
 export function listWithoutCurrentWeekMealPlan(
   list: ActiveShoppingList | undefined,
@@ -235,7 +253,7 @@ function withCustomization(
     customization.productOverrides.length === 0 &&
     customization.ingredientOverrides.length === 0 &&
     customization.manualProductAdditions.length === 0 &&
-    !customization.quantityOverrides?.length;
+    !customization.quantityOverrides?.length && !customization.excludedIngredients?.length;
   return isOriginal ? retained : [...retained, customization];
 }
 
@@ -529,7 +547,7 @@ function hasIngredientLevelCustomizations(preparation: WeekPreparation): boolean
       customization.productOverrides.length > 0 ||
       customization.ingredientOverrides.length > 0 ||
       customization.manualProductAdditions.length > 0 ||
-      Boolean(customization.quantityOverrides?.length),
+      Boolean(customization.quantityOverrides?.length) || Boolean(customization.excludedIngredients?.length),
   );
 }
 

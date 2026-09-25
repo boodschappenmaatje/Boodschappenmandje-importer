@@ -104,10 +104,24 @@ export function withIngredientQuantity(preparation: WeekPreparation, dayIndex: n
   };
 }
 
+/** Preserve the recipe definition and remove only this day's explicit ingredient contribution. */
+export function withIngredientExcluded(preparation: WeekPreparation, dayIndex: number, ingredientId: string): WeekPreparation | null {
+  const day = preparation.days.find(item => item.dayIndex === dayIndex);
+  const ingredient = preparation.ingredients.find(item => item.ingredientId === ingredientId && item.usedIn.some(use => use.dayIndex === dayIndex && use.recipeId === day?.recipeId));
+  if (!day?.recipe || !ingredient?.product) return null;
+  const current = preparation.customizations.find(item => item.dayIndex === dayIndex);
+  const customization = { ...(current ?? { dayIndex, baseRecipe: day.recipe, productOverrides: [], ingredientOverrides: [], manualProductAdditions: [], updatedAt: preparation.updatedAt }),
+    replacementRecipe: day.recipe, recipeBudgetDecision: { mode: "userConfirmedManualChoice" as const },
+    excludedIngredients: [...(current?.excludedIngredients ?? []).filter(item => item.ingredientId !== ingredientId || item.recipeId !== day.recipeId),
+      { ingredientId, recipeId: day.recipe.id, name: ingredient.name }],
+  };
+  return { ...preparation, customizations: [...preparation.customizations.filter(item => item.dayIndex !== dayIndex), customization] };
+}
+
 /** Apply after product selection so the same package calculator also handles product overrides. */
 export function applyIngredientQuantityOverrides(preparation: WeekPreparation, ingredients: WeekIngredientRequirement[]): WeekIngredientRequirement[] {
   return ingredients.flatMap(ingredient => {
-    const scoped = ingredient.usedIn.map(use => {
+    const scoped = ingredient.usedIn.filter(use => !preparation.customizations.find(item => item.dayIndex === use.dayIndex)?.excludedIngredients?.some(item => item.ingredientId === ingredient.ingredientId && item.recipeId === use.recipeId)).map(use => {
       const override = preparation.customizations.find(item => item.dayIndex === use.dayIndex)?.quantityOverrides?.find(item => item.ingredientId === ingredient.ingredientId && item.recipeId === use.recipeId);
       if (!override) return { ingredient, use };
       if (override.packageCount) {

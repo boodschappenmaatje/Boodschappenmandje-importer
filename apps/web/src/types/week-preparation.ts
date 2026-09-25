@@ -127,6 +127,8 @@ export interface WeekManualProductAddition {
 }
 
 export interface WeekMealCustomization {
+  /** Explicit removal from this planned recipe, never a quantity of zero. */
+  excludedIngredients?: { ingredientId: UUID; recipeId: UUID; name: string }[];
   /** Desired ingredient amounts at a known serving count; absent in older local data. */
   quantityOverrides?: WeekIngredientQuantityOverride[];
   dayIndex: number;

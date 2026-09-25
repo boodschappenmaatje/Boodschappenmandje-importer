@@ -8,8 +8,8 @@ export function ShoppingListQuantity({ quantity, onDecrease, onIncrease, decreas
 }) {
   const remove = quantity === 1 && Boolean(onRemove);
   return <div className="quantity-control" role="group" aria-label={label}>
-    <button type="button" className={remove ? "quantity-remove" : undefined} aria-label={remove ? removeLabel : decreaseLabel} disabled={decreaseDisabled} onClick={remove ? onRemove : onDecrease}><Icon name={remove ? "trash" : "minus"} size={17} /></button>
+    <button type="button" className={remove ? "quantity-remove" : undefined} aria-label={remove ? removeLabel : decreaseLabel} disabled={decreaseDisabled} onClick={event => { event.stopPropagation(); if (remove) onRemove?.(); else onDecrease(); }}><Icon name={remove ? "trash" : "minus"} size={17} /></button>
     <output aria-live="polite" aria-label={output ?? `${quantity} stuks`}>{output ?? quantity}</output>
-    <button type="button" aria-label={increaseLabel} disabled={increaseDisabled} onClick={onIncrease}><Icon name="plus" size={17} /></button>
+    <button type="button" aria-label={increaseLabel} disabled={increaseDisabled} onClick={event => { event.stopPropagation(); onIncrease(); }}><Icon name="plus" size={17} /></button>
   </div>;
 }

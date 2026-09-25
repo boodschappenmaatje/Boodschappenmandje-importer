@@ -179,8 +179,8 @@ describe('final iPhone trash and manual budget controls', () => {
     expect(currentList.items.find(row => row.productId === '0')!.quantityContributions.persistentQuantity).toBe(1);
     if (mode === 'Lijst') {
       await click('Verwijderactie Roerbakgroente');
-      expect(container.textContent).toContain('minimaal één verpakking');
-      expect(ingredientUse('1').requiredQuantity).toBe(400);
+      expect(container.querySelector('[role="dialog"]')).toBeNull();
+      expect(currentWeek.ingredients.some(item => item.ingredientId === '1')).toBe(false);
     }
   });
   it.each([537, 700])('manual increase directly reaches meal budget %i without confirmation', async mealBudgetCents => {
@@ -207,6 +207,7 @@ describe('final iPhone trash and manual budget controls', () => {
     const filter = container.querySelector<HTMLSelectElement>('[aria-label="Boodschappen filteren"]')!;
     await act(async () => { filter.value = 'checked'; filter.dispatchEvent(new Event('change', { bubbles: true })); });
     await click('Verwijderactie Los product');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
     expect(currentList.items.some(item => item.productId === 'manual')).toBe(false);
     expect(total).toBe(before - 179); expect(currentWeek.ingredients).toEqual(ingredients);
     expect(container.querySelectorAll('li.shopping-item-card')).toHaveLength(0);
@@ -260,11 +261,67 @@ describe('bidirectional real shopping-list and recipe interaction', () => {
     await click('Verlaag aantal Los product'); await click('Productdetails Los product'); await click('Verwijder Los product');
     expect(currentList.items.some(item => item.productId === 'manual')).toBe(false); expect(currentWeek.customizations).toEqual(choices);
   });
-  it('minimum and remove cannot silently delete a required planned ingredient', async () => {
+  it('removes only the selected mixed contribution and the remaining manual trash stays direct', async () => {
+    await mount('Lijst'); // Spaghetti: recipe 1 + independent 1
+    await click('Verlaag aantal Spaghetti');
+    expect(currentList.items.find(item => item.productId === '0')!.quantity).toBe(2);
+    await click('Verwijderactie Spaghetti voor Testpasta dag 1');
+    expect(currentList.items.find(item => item.productId === '0')!.quantityContributions).toMatchObject({persistentQuantity:1,mealPlans:[]});
+    expect(currentWeek.ingredients.some(item => item.ingredientId === '0')).toBe(false);
+    expect(total).toBe(358);
+    await click('Sluit productdetails');
+    await click('Verwijderactie Spaghetti');
+    expect(container.querySelector('[role="dialog"]')).toBeNull(); expect(total).toBe(179);
+    await reopen('Lijst'); expect(currentList.items.some(item => item.productId === '0')).toBe(false);
+  });
+  it('a shared single package has no aggregate trash; explicit day removal preserves the other recipe', async () => {
+    const second = {...recipe,id:'second-recipe',name:'Tweede pasta'};
+    activeCatalog = {...catalog,recipes:[recipe,second],relations:[...catalog.relations,...catalog.relations.map(row=>({...row,id:`second-${row.id}`,recipeId:second.id}))]};
+    savedWeek = (await revalidatePreparedWeek({...savedWeek,numberOfPeople:1,numberOfDays:2,days:[...savedWeek.days,{...savedWeek.days[0],dayIndex:1,recipeId:second.id,recipe:second}]},recipes,repository)).preparation;
     cleanLinkedList(); await mount('Lijst');
+    expect(currentList.items.find(item=>item.productId==='0')!.quantity).toBe(1);
+    expect(container.querySelector('[aria-label="Verwijderactie Spaghetti"]')).toBeNull();
+    await click('Verlaag aantal Spaghetti');
+    expect(currentWeek.customizations).toHaveLength(0);
+    await click('Verwijderactie Spaghetti voor Tweede pasta dag 2');
+    expect(ingredientUse('0',0).requiredQuantity).toBe(100);
+    expect(currentWeek.ingredients.find(item=>item.ingredientId==='0')!.usedIn).toHaveLength(1);
+    expect(currentList.items.find(item=>item.productId==='0')!.quantity).toBe(1);
+    await click('Sluit productdetails'); await reopen('Lijst');
+    await click('Verwijderactie Spaghetti');
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(currentList.items.some(item=>item.productId==='0')).toBe(false);
+    expect(currentWeek.customizations).toHaveLength(2);
+  });
+  it('linked deletion still above both budgets commits without warning and survives price refresh', async () => {
+    savedWeek.mealBudgetCents=100; savedWeek.budgetCents=100; cleanLinkedList(); await mount('Lijst');
+    await click('Verwijderactie Spaghetti');
+    expect(total).toBe(179); expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(179);
+    expect(currentWeek.generation!.mealBudgetStatus).toBe('overMealBudget');
+    expect(container.textContent).not.toContain('Toch verhogen');
+    expect(currentWeek.customizations[0].recipeBudgetDecision.mode).toBe('userReducedCosts');
+    await reopen('Lijst'); expect(currentList.items.some(item=>item.productId==='0')).toBe(false);
+    products[0]={...products[0],currentPrice:{...products[0].currentPrice!,price:1.99,updatedAt:new Date().toISOString()}};
+    await act(async()=>window.dispatchEvent(new Event('focus'))); await settle();
+    expect(currentList.items.some(item=>item.productId==='0')).toBe(false); expect(total).toBe(179);
+  });
+  it('2→1→trash explicitly excludes the linked ingredient without opening details, and persists', async () => {
+    cleanLinkedList(); await mount('Lijst');
+    await click('Verhoog aantal Spaghetti'); await click('Verlaag aantal Spaghetti');
     expect(container.querySelector('button[aria-label="Verlaag aantal Spaghetti"]')).toBeNull();
-    await click('Verwijderactie Spaghetti'); expect(container.textContent).toContain('minimaal één verpakking');
-    expect(currentList.items.find(item => item.productId === '0')!.quantity).toBe(1); expect(ingredientUse('0').requiredQuantity).toBe(400);
+    const bubbled=vi.fn(); document.body.addEventListener('click',bubbled);
+    await click('Verwijderactie Spaghetti');
+    document.body.removeEventListener('click',bubbled); expect(bubbled).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(currentList.items.some(item => item.productId === '0')).toBe(false);
+    expect(currentWeek.ingredients.some(item => item.ingredientId === '0')).toBe(false);
+    expect(currentWeek.customizations[0].excludedIngredients).toEqual([{ingredientId:'0',recipeId:recipe.id,name:'Spaghetti'}]);
+    expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(179); expect(total).toBe(179);
+    expect(container.querySelectorAll('li.shopping-item-card')).toHaveLength(1);
+    await reopen('Menu'); expect(container.textContent).toContain('Door jou verwijderd uit dit gerecht: Spaghetti');
+    savedWeek = (await revalidatePreparedWeek({...savedWeek,numberOfPeople:6},recipes,repository)).preparation;
+    await reopen('Lijst'); expect(currentList.items.some(item => item.productId === '0')).toBe(false);
+    await click('Productdetails Roerbakgroente'); expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
   it('list package choice persists through people changes and planner refresh', async () => {
     cleanLinkedList(); await mount('Lijst'); await click('Verhoog aantal Spaghetti');
@@ -285,6 +342,11 @@ describe('bidirectional real shopping-list and recipe interaction', () => {
     await click('Sluit productdetails'); await click('Verhoog aantal Spaghetti');
     expect(currentWeek.days[0].customDish!.ingredients[0]).toMatchObject({ quantity: 800, packageCount: 2 });
     await reopen('Lijst'); await click('Verlaag aantal Spaghetti'); expect(currentWeek.days[0].customDish!.ingredients[0]).toMatchObject({ quantity: 400, packageCount: 1 });
+    await click('Verwijderactie Spaghetti'); expect(currentList.items).toHaveLength(0);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(currentWeek.days[0].customDish!.ingredients[0].quantity).toBe(400);
+    await reopen('Menu'); expect(currentWeek.ingredients).toHaveLength(0);
+    expect(container.textContent).toContain('Door jou verwijderd');
   });
   it.each(['honig-macaroni', 'knorr-hokkien-mie'])('%s: list buttons update the exact meal-mix contribution', async sourceKey => {
     const profile = { ...MEAL_MIX_PROFILES.find(row => row.recipeSourceKey === sourceKey)!, productId: 'mix' };
@@ -299,6 +361,11 @@ describe('bidirectional real shopping-list and recipe interaction', () => {
     await click(`Verhoog aantal ${item.name}`); expect(currentList.items.find(row => row.productId === 'mix')!.quantity).toBe(before + 1);
     expect(currentWeek.customizations[0].quantityOverrides!.find(row => row.productId === 'mix')!.packageCount).toBe(before + 1);
     await click(`Verlaag aantal ${item.name}`); expect(currentList.items.find(row => row.productId === 'mix')!.quantity).toBe(before);
+    for (let count=before; count>1; count--) await click(`Verlaag aantal ${item.name}`);
+    await click(`Verwijderactie ${item.name}`);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(currentList.items.some(row=>row.productId==='mix')).toBe(false);
+    await reopen('Menu'); expect(currentWeek.ingredients.some(row=>row.product?.productId==='mix')).toBe(false);
   });
 });
 

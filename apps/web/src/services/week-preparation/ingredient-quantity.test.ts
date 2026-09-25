@@ -3,7 +3,8 @@ import { previewFreeChoice } from "./free-choice";
 import { MEAL_MIX_PROFILES, enrichIngredientsForMealMixes } from "./meal-mix-profiles";
 import { canAdjustIngredient, customDishWithIngredientQuantity, quantityStep, steppedIngredientQuantity, withIngredientQuantity, withIngredientPackages, applyIngredientQuantityOverrides } from "./ingredient-quantity";
 import { previewIngredientQuantity, previewIngredientPackages } from "./ingredient-quantity-preview";
-import { commitExplicitRecipeAlternative, previewManualProductChoice } from "./meal-customization";
+import { commitExplicitRecipeAlternative, previewManualProductChoice, removeLinkedIngredientContribution } from "./meal-customization";
+import { recipeContributionTargets } from "@/services/shopping-list/recipe-contributions";
 import { calculateDishCostSummary, generatePreparedWeek, revalidatePreparedWeek } from "./week-generation";
 import { createWeekPreparation, updateWeekSettings } from "./week-preparation";
 import { decodeStoredWeekPreparation, encodeStoredWeekPreparation } from "./indexeddb-storage";
@@ -23,6 +24,30 @@ function products(selected = product): CatalogRepository {
   return { getByIds: async ids => ({ products: ids.includes(selected.id) ? [selected] : [], priceStatus: "complete" }), search: async () => ({ products: [selected], priceStatus: "complete" }), query: async () => { throw Error("unused"); }, getPage: async () => { throw Error("unused"); }, getFilterOptions: async () => ({ categories: [], brands: [] }) };
 }
 const list = createEmptyActiveShoppingList(NOW);
+
+describe('explicit ingredient exclusion', () => {
+  it('removes the exact day, persists without zero quantities, and never creates an automatic empty meal', async () => {
+    const base = await prepared(2);
+    const original = structuredClone(base.days);
+    const shopping = completeShoppingListFromWeek(list,base.ingredients,base.id);
+    const link = recipeContributionTargets(shopping.items[0],base).targets.find(item=>item.link.dayIndex===0)!.link;
+    const result = removeLinkedIngredientContribution(base,link,shopping,NOW);
+    expect(result).not.toBeNull();
+    for (const wrongLink of [{...link,weekPreparationId:'other'},{...link,recipeId:'other'},{...link,ingredientId:'other'},{...link,sku:'other'},{...link,dayIndex:6}]) {
+      expect(removeLinkedIngredientContribution(base,wrongLink,shopping,NOW)).toBeNull();
+    }
+    const reopened = decodeStoredWeekPreparation(encodeStoredWeekPreparation(result!))!;
+    const refreshed = (await revalidatePreparedWeek({...reopened,numberOfPeople:6},recipes,products(),NOW,list)).preparation;
+    expect(refreshed.days).toEqual(original);
+    expect(refreshed.ingredients[0].usedIn.map(use=>use.dayIndex)).toEqual([1]);
+    expect(refreshed.ingredients[0].requiredQuantity).toBe(600);
+    expect(refreshed.customizations[0].excludedIngredients).toEqual([{ingredientId:'pasta',recipeId:recipe.id,name:'Spaghetti'}]);
+    const automatic = await generatePreparedWeek({...refreshed,status:'readyForGeneration'},recipes,products(),NOW,list);
+    expect(automatic.status).toBe('generationPartial');
+    expect(automatic.generation?.mealBudgetStatus).toBe('incompleteValidation');
+    expect(()=>decodeStoredWeekPreparation(encodeStoredWeekPreparation({...reopened,customizations:[{...reopened.customizations[0],excludedIngredients:[{ingredientId:'',recipeId:recipe.id,name:'bad'}]}]}))).toThrow('invalid-data');
+  });
+});
 
 describe("free choice quantities", () => {
   it("persists a custom recipe amount through commit and reopening", async () => {
