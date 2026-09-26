@@ -17,6 +17,14 @@
 - Data-aandachtspunt voor volgende mijlpaal: productnaam “Rode uien net 3 stuks” naast catalogusinhoud “1 stuk”. Niet stil gecorrigeerd. Preview-herberekeningen kunnen op catalogus/revalidatie wachten.
 - Volgende funderingsstappen blijven Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis. Geen merge/Production/migratie/import binnen deze opdracht.
 
+## Hervatcontrole na gemelde Work-time-out — 26 september 2026
+- Remote Draft PR #29 gecontroleerd op `09bda66b262aa93e1fd6fde504a1cf71f726fbef`; open, Draft en mergeable. Dit checkpoint krijgt alleen een aansluitende documentatiecommit; de actuele PR-head staat op GitHub.
+- Vóór deze hervatting al afgerond en gepusht: functionele correctie/testset/CI (`85141349`), testcheckpoint (`b2c50992`) en geslaagde echte Preview-controle (`09bda66b`). Geen verloren of nog te implementeren functioneel werk aangetroffen.
+- Deze hervatting: remote commits/bestanden en lokale tree vergeleken (exact gelijk), workflow/testdekking en onafgemaakte TODO’s gecontroleerd, alle CI-stappen en Vercel-success op de exacte head bevestigd. Geen zware lokale regressies herhaald omdat de ongewijzigde code aantoonbaar groen is.
+- Main staat inmiddels op `eab80882582eb026a3b7a26cebfc8dbaf7afaef3`: uitsluitend ROADMAP-aanvulling over datatransparantie vóór publieke lancering. Die aanvulling behouden, zonder de bijbehorende latere feature te bouwen.
+- Laatste extra Preview-bewijs uit de vorige run: afgevinkte losse spinazie direct verwijderd zonder Productdetails; lijst €47,21→€46,26 en na refresh weg. De maaltijdkeuzes bleven behouden.
+- Acceptatiepunt blijft **KLAAR VOOR FYSIEKE IPHONE-TEST**; nog niet fysiek geaccepteerd of gemerged. De vastgelegde desktopbrowsercontrole blijft geldig voor dezelfde functionele code.
+
 ## Production — PR #28
 - Repository: `boodschappenmaatje/Boodschappenmandje-importer`; branch `main`.
 - Fysieke iPhone-hertest: **geslaagd**, door de gebruiker op 25 september 2026 expliciet geaccepteerd.
