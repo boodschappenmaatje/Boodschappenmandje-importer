@@ -49,7 +49,7 @@ Beide presentaties gebruiken nu dezelfde daghoeveelheid en betrouwbare verpakkin
 - Fixtures voor Honig/Knorr bewaken softwaregedrag; zij zijn geen nieuwe live assortimentsaudit en herstellen geen ontbrekende productdata. Echte datablokkades blijven onder Productdata & receptkwaliteit.
 - happy-dom simuleert routes/opslagpoorten; native IndexedDB, Safari-touch, PWA-resume en offlinegedrag vragen browser/iPhone-controle. Geen claim van cloud/accountsync of atomaire opslag over meerdere stores.
 - Geen timingasserties of nieuwe productiecode voor caching; geen extra catalogusrequests door deze presentatiecorrectie.
-- Preview- en eindregressieresultaten worden bij voltooiing hieronder vastgelegd.
+- Preview- en eindregressieresultaten staan hieronder; fysieke iPhone-acceptatie blijft open.
 
 ## Checkpoint 26 september 2026
 
@@ -57,9 +57,23 @@ Beide presentaties gebruiken nu dezelfde daghoeveelheid en betrouwbare verpakkin
 - 733/733 webtests (63 bestanden), 189/189 importerfixtures, lint, TypeScript, seed-/syntaxchecks en Production-build groen. Snelle kernset 248/248.
 - Eerste lokale build faalde uitsluitend doordat de hergebruikte node_modules-symlink buiten de checkout wees; met lokale dependencies geslaagd, zonder aanpassing aan de app/buildconfig.
 - Vercel-check op deze commit: success / Ready. Branch-Preview: https://boodschappenmaatje-pwa-git-feature-st-07a781-dennisverkaik-4661.vercel.app
-- Echte browsercontrole **niet uitgevoerd**: de Preview toont Vercel-login. Tijdelijke toegangsaanvraag via de gekoppelde Vercel-app is geweigerd omdat project/team niet geautoriseerd zijn. Geen beveiliging of permissies gewijzigd. GitHub CI-releasecheck op de functionele head: **success**, inclusief schone dependency-installatie en alle test/buildstappen.
+- GitHub CI-releasecheck op de functionele head én aansluitende documentatiehead: **success**, inclusief schone dependency-installatie en alle test/buildstappen.
+- Eerste Preview-toegang was geblokkeerd door Vercel-login; de gebruiker heeft via de beveiligde aanmeldflow toegang gegeven. Geen projectbeveiliging of permissies gewijzigd. Live browsercontrole daarna hervat.
 - Geen merge, Production-deployment, databasewijziging of productimport.
 
 ## Nog uit te voeren acceptatie
 
-Na toegang: genereer een week; recept 1→2 / lijst 2→1; voeg een losse extra toe; vervang een product door 800g/een liter/stuksverpakking en vergelijk compact/bewerken; klap categorie in/uit en vink af; controleer bedragen; herlaad; voeg een geldige Honig-, Knorr- en eigen-receptkeuze toe. Bevestig hoeveelheden, origins en behoud van de losse extra. Daarna fysieke iPhone-touch/PWA-hervatting.
+**KLAAR VOOR FYSIEKE IPHONE-TEST.** Controleer op iPhone: receptplus/lijstmin met manual extra; vervanging en gelijke hoeveelheid in compact/bewerken; herkomstkeuze bij gedeeld product; categorie/filter/afvinken/trash; maaltijd versus weekbudget; Honig/Knorr/eigen recept; sluiten/heropenen van de PWA. De beschikbare Work-browser heeft geen telefoonviewport.
+
+Live data-aandachtspunt voor Productdata & receptkwaliteit: bij Knorr werd “Rode uien net 3 stuks” als productnaam getoond naast catalogusverpakking “1 stuk”. Geen cataloguscorrectie of geforceerde hoeveelheid uitgevoerd; afzonderlijk van de herstelde interne verpakkingsaantalpresentatie beoordelen.
+
+## Live Preview-bewijs (functionele code 85141349)
+
+- Schone lokale Preview-state: 4 personen, 5 dagen, €100 week / €70 maaltijden; 1 Hollandse +1 pasta +3 vrije plekken. Twee automatisch geldige gerechten voor €8,86, expliciet naar lijst gesynchroniseerd.
+- Spinazie receptplus: 1→2, 600g receptbehoefte → expliciet 1.600g, gerecht €4,79→€5,74, maaltijd/lijst €8,86→€9,81. Lijstmin: terug naar expliciet 800g/1, €8,86. Productdetails bevestigt exact dag 2.
+- Losse spinazie +1: recept1 + los1; lijst €9,81, maaltijden €8,86. Productwissel naar G'woon Broccoli 800g à €1,97: beide receptweergaven 800g; gerecht €5,81, maaltijden €9,88, lijst €10,83. Losse oorspronkelijke spinazie blijft €0,95.
+- Diepvries in/uit, Overig-filter en afvinken werken; browserrefresh behoudt lijsttotaal/vervanging/losse bijdrage. Geen nieuwe prijs in Production gewijzigd.
+- Honig macaroni geselecteerd; Italiaanse wokgroenten bewust van 2 naar1 verpakking/400g, gerecht €13,52→€11,63. Knorr Hokkien geselecteerd voor €20,81; onvolledige parallelle variant bleef veilig niet selecteerbaar.
+- Eigen recept “Kernflow broccoli” gemaakt en bewaard met gekoppelde 800g broccoli à €1,97. Algemene lijstplus bij gedeelde broccoli opent eerst de herkomstkeuze zonder mutatie. Gerichte plus voor eigen recept dag 5: 1→2 / 800→1.600g / €1,97→€3,94; gewoon gerecht dag 2 blijft 1/800g. Totale broccoli 3 verpakkingen.
+- Volledige reload + heropenen behoudt beide afzonderlijke bijdragen en afgevinkte manual spinazie. Menu toont eigen recept 1.600g, €3,94 / €0,99 p.p. Eindstand maaltijden €46,26 (ruimte €23,74), lijst €47,21 (weekruimte €52,79). Verschil €0,95 is exact de losse spinazie. Budgetpagina bevestigt dezelfde lijst/weekwaarden.
+- Preview-herberekeningen kunnen merkbaar wachten op catalogus/revalidatie; geen snelheidsgarantie/benchmark. Werkelijke telefoonviewport en iOS-PWA-hervatten blijven fysieke acceptatie.
