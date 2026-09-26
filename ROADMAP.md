@@ -228,6 +228,11 @@ Vóór publieke lancering expliciet maken:
 - BoodschappenMaatje is een **onafhankelijke boodschappenassistent** en geen officiële Hoogvliet-app;
 - supermarktinstelling toont: “Supermarkt: Hoogvliet” en “Momenteel ondersteund”;
 - prijsinformatie krijgt compacte bronvermelding, bijvoorbeeld “Gebaseerd op beschikbare Hoogvliet-prijzen”;
+- voeg een aparte pagina **“Over onze gegevens”** toe met een transparante, begrijpelijke uitleg over herkomst en actualiteit van product- en prijsinformatie;
+- leg daar uit dat productafbeeldingen via externe afbeeldings-URL’s rechtstreeks vanaf externe/winkelservers kunnen worden geladen en niet door BoodschappenMaatje als eigen productfoto’s worden geclaimd;
+- vermeld dat rechten op productafbeeldingen, merken en andere beschermde materialen bij de betreffende rechthebbenden blijven;
+- bewaar de correspondentie met Hoogvliet over toestemming, afbeeldingen en scraping als onderdeel van het project-/compliancedossier; behandel deze correspondentie niet als een formele licentie of toestemming;
+- huidige technische werkwijze blijft voor deze roadmapstap ongewijzigd: geen migratie van afbeeldingen en geen wijziging aan de scraper uitsluitend vanwege deze transparantie-/positioneringsstap;
 - uitleg blijft vriendelijk en compact, niet juridisch/technisch op hoofdschermen.
 
 ## Gebruikstest & launch-polish
