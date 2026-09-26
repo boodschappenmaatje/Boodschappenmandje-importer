@@ -56,7 +56,7 @@ Minimaal bewaken:
 - Honig/Knorr en eigen recepten;
 - vaste planner-scenario's.
 
-Deze mijlpaal wordt uitgevoerd op `feature/stability-core-flows`: automatische route-/opslagintegraties, personen-/dagenmatrix voor vier recepttypen, gedeelde hoeveelheidspresentatie en CI-releasecheck. Preview en fysieke iPhone-acceptatie volgen. Technische dekking: `docs/stability-core-flows.md`. Geen nieuwe consumentenfeature. Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis blijven de volgende funderingsstappen.
+Deze mijlpaal wordt uitgevoerd op `feature/stability-core-flows`: automatische route-/opslagintegraties, personen-/dagenmatrix voor vier recepttypen, gedeelde hoeveelheidspresentatie en CI-releasecheck. Draft PR #29: 733 webtests en 189 importerfixtures groen; Preview Ready. Functionele Preview-controle wacht op Vercel-toegang, daarna fysieke iPhone-acceptatie. Technische dekking: `docs/stability-core-flows.md`. Geen nieuwe consumentenfeature. Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis blijven de volgende funderingsstappen.
 
 ## E2E-kernflows + centrale recept ⇄ lijst-logica
 Doel: receptingrediënten en hun boodschappenlijstbijdragen gebruiken één consistente gekoppelde contribution/state-logica.

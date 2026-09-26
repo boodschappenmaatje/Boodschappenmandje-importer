@@ -50,3 +50,16 @@ Beide presentaties gebruiken nu dezelfde daghoeveelheid en betrouwbare verpakkin
 - happy-dom simuleert routes/opslagpoorten; native IndexedDB, Safari-touch, PWA-resume en offlinegedrag vragen browser/iPhone-controle. Geen claim van cloud/accountsync of atomaire opslag over meerdere stores.
 - Geen timingasserties of nieuwe productiecode voor caching; geen extra catalogusrequests door deze presentatiecorrectie.
 - Preview- en eindregressieresultaten worden bij voltooiing hieronder vastgelegd.
+
+## Checkpoint 26 september 2026
+
+- Draft PR #29 / `feature/stability-core-flows`, functionele commit `851413496cd6fba5d3ed18443d74060d6b23169a`.
+- 733/733 webtests (63 bestanden), 189/189 importerfixtures, lint, TypeScript, seed-/syntaxchecks en Production-build groen. Snelle kernset 248/248.
+- Eerste lokale build faalde uitsluitend doordat de hergebruikte node_modules-symlink buiten de checkout wees; met lokale dependencies geslaagd, zonder aanpassing aan de app/buildconfig.
+- Vercel-check op deze commit: success / Ready. Branch-Preview: https://boodschappenmaatje-pwa-git-feature-st-07a781-dennisverkaik-4661.vercel.app
+- Echte browsercontrole **niet uitgevoerd**: de Preview toont Vercel-login. Tijdelijke toegangsaanvraag via de gekoppelde Vercel-app is geweigerd omdat project/team niet geautoriseerd zijn. Geen beveiliging of permissies gewijzigd. GitHub CI-releasecheck op de functionele head: **success**, inclusief schone dependency-installatie en alle test/buildstappen.
+- Geen merge, Production-deployment, databasewijziging of productimport.
+
+## Nog uit te voeren acceptatie
+
+Na toegang: genereer een week; recept 1→2 / lijst 2→1; voeg een losse extra toe; vervang een product door 800g/een liter/stuksverpakking en vergelijk compact/bewerken; klap categorie in/uit en vink af; controleer bedragen; herlaad; voeg een geldige Honig-, Knorr- en eigen-receptkeuze toe. Bevestig hoeveelheden, origins en behoud van de losse extra. Daarna fysieke iPhone-touch/PWA-hervatting.

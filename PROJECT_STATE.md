@@ -9,8 +9,10 @@
 - Uitgangspunt remote main `ba4119677cc054039bebab7dd4424fef670caf25`, Vercel Production success; alleen historische Draft PR #21 stond nog open. Nieuwe featurebranch vanaf exact deze main, geen vervolgwijziging in PR #28.
 - Compacte en uitgeklapte recepthoeveelheid gebruiken dezelfde bestaande dag-/verpakkingsberekening; generieke gram/ml/stuks-correctie, geen tweede quantity-state.
 - Nieuwe route-/opslagintegratie vanaf lege Home; lees-/schrijffouten, navigatie, beide syncrichtingen en losse extra. Nieuwe 24-cellenmatrix voor vier recepttypen. Vijf productvervangingen testen beide hoeveelheidsweergaven.
-- Vitest ontdekt ook bestaande TSX-tests; CI-releasecheck toegevoegd zonder DB/secrets/import. Snelle kernset: 248 tests / 14 bestanden groen. Volledige eindregressie en Preview volgen vóór het acceptatiepunt.
-- Draft PR/Preview nog te publiceren; **nog niet klaar voor fysieke iPhone-test**. Volledig testplan en architectuurbevindingen: `docs/stability-core-flows.md`.
+- Vitest ontdekt ook bestaande TSX-tests; CI-releasecheck toegevoegd zonder DB/secrets/import. Snelle kernset: 248 tests / 14 bestanden groen. Volledige eindregressie: **733/733 webtests (63 bestanden), 189/189 importerfixtures, lint, TypeScript, seed-/syntaxchecks en Production-build groen**.
+- Draft PR **#29**, functionele head `851413496cd6fba5d3ed18443d74060d6b23169a`. Vercel Preview-check **success / Ready**. Preview: https://boodschappenmaatje-pwa-git-feature-st-07a781-dennisverkaik-4661.vercel.app
+- **Nog niet klaar voor fysieke iPhone-test:** echte Preview-browsercontrole geblokkeerd door Vercel-login. De gekoppelde Vercel-app weigert tijdelijke toegang: project/team niet geautoriseerd. Geen beveiliging gewijzigd. Eerst Preview-toegang herstellen, dan week/recept/lijst/manual/vervanging/categorie/refresh en Honig/Knorr/eigen recept in de browser controleren.
+- Nieuwe GitHub CI-releasecheck op de functionele head: **success**, inclusief schone npm-installaties, volledige webcheck en importerfixtures/seedchecks. De aansluitende documentatiecommit wijzigt geen functionele code. Volledig testplan en architectuurbevindingen: `docs/stability-core-flows.md`.
 - Volgende funderingsstappen blijven Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis. Geen merge/Production/migratie/import binnen deze opdracht.
 
 ## Production — PR #28
