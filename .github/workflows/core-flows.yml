@@ -1,0 +1,36 @@
+name: Stability & core flows
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-flows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gate:
+    name: Core flows, regressions & production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix apps/web
+      # Fixtures/syntax only: no importer entry point, DB, secrets or network data.
+      - name: Importer fixtures and seed consistency
+        run: npm test && npm run check
+      # Full web suite includes the core subset once, avoiding duplicate runs.
+      - name: Web core flows, regressions, lint, TypeScript and build
+        run: npm run check --prefix apps/web

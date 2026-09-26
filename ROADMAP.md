@@ -38,7 +38,7 @@ Belangrijke productprincipes:
 ## Afgeronde release — PR #28
 PR #28 is na geslaagde fysieke iPhone-hertest gemerged naar `main` (`d7a234df5ac24ab6fec558413ff2c73649071584`) en in Production uitgerold. Gerichte Production-smoke geslaagd. De verpakkingen-, lijst- en budgetronde is afgerond: compacte inklapbare lijst, oorsprong, directe veilige prullenmand, recept ⇄ lijst-sync, productvervanging, prijsfallback en handmatige bevestiging boven het maaltijdbudget. De automatische planner behoudt de harde grens. Volledige regressie: 687 webtests, 189 importerfixtures, lint, TypeScript en build groen. Echte assortimentsdatablokkades blijven als datawerk apart gedocumenteerd.
 
-## Volgende stap — actief: STABILITEIT & KERNFLOWS
+## Actief / in uitvoering: STABILITEIT & KERNFLOWS
 De onderstaande drie funderingswerkstromen zijn nu eerst aan de beurt. De presentatie van vervangingshoeveelheden in de bewerkingslijst (na broccoliwissel “1 stuk nodig” naast 800 g in receptdetail) wordt in de E2E-/integratieronde gericht onderzocht. Geen nieuwe functie uit een latere mijlpaal is binnen PR #28 gestart.
 
 ## Stabiliteit & kernflows
@@ -56,7 +56,7 @@ Minimaal bewaken:
 - Honig/Knorr en eigen recepten;
 - vaste planner-scenario's.
 
-Deze mijlpaal levert vooral automatische E2E-/integratietests en betrouwbare release-gates op; geen onnodige nieuwe consumenten-UI.
+Deze mijlpaal wordt uitgevoerd op `feature/stability-core-flows`: automatische route-/opslagintegraties, personen-/dagenmatrix voor vier recepttypen, gedeelde hoeveelheidspresentatie en CI-releasecheck. Preview en fysieke iPhone-acceptatie volgen. Technische dekking: `docs/stability-core-flows.md`. Geen nieuwe consumentenfeature. Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis blijven de volgende funderingsstappen.
 
 ## E2E-kernflows + centrale recept ⇄ lijst-logica
 Doel: receptingrediënten en hun boodschappenlijstbijdragen gebruiken één consistente gekoppelde contribution/state-logica.

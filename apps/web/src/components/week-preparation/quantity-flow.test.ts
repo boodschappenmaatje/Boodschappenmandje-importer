@@ -444,10 +444,12 @@ describe('compact list presentation preserves linked state', () => {
 
 describe("PR28 iPhone vervanging en categorieën", () => {
   it.each([
-    ["Kipfilet", "Boomstammetjes", "600 g", 600],
-    ["Spaghetti", "Rijst", "1 kg", 1000],
-    ["Melk", "Havermelk", "1 l", null],
-  ] as const)("%s → %s: echte zoek/gebruik-click, naam/foto/hoeveelheid/prijs/lijst en heropenen", async (oldName, newName, packageText, weightGrams) => {
+    ["Kipfilet", "Boomstammetjes", "600 g", 600, "600 g", "1.200 g"],
+    ["Spaghetti", "Rijst", "1 kg", 1000, "1.000 g", "2.000 g"],
+    ["Melk", "Havermelk", "1 l", null, "1.000 ml", "2.000 ml"],
+    ["Courgette", "Broccoli", "800 g", 800, "800 g", "1.600 g"],
+    ["Kipfilet", "Falafel", "6 stuks", null, "6 stuks", "12 stuks"],
+  ] as const)("%s → %s: echte zoek/gebruik-click, naam/foto/hoeveelheid/prijs/lijst en heropenen", async (oldName, newName, packageText, weightGrams, initialAmount, doubledAmount) => {
     activeCatalog = { ...catalog, ingredients: catalog.ingredients.map((item, i) => i ? item : { ...item, name: oldName, normalizedName: oldName.toLowerCase(), aliases: [oldName] }) };
     products[0] = { ...products[0], name: oldName };
     const replacement = { ...product("replacement", `Hoogvliet ${newName}`, false), brand: "Hoogvliet", imageUrl: "https://example.test/new-product.jpg", packageText, weightGrams, currentPrice: { ...product("replacement", newName, false).currentPrice!, price: 2.49 } };
@@ -472,6 +474,8 @@ describe("PR28 iPhone vervanging en categorieën", () => {
     expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(428);
     expect(total).toBe(607); // explicit loose original product remains protected
     expect(container.querySelector(`img[alt="Afbeelding van Hoogvliet ${newName}"]`)).not.toBeNull();
+    expect(container.querySelector(`[aria-label="Benodigd ${newName} (bewerken)"]`)!.textContent).toBe(`${initialAmount} nodig`);
+    expect(container.querySelector(`[aria-label="Benodigd ${newName}"]`)!.textContent).toContain(initialAmount);
     expect(container.querySelector(`[aria-label="Benodigd ${oldName}"]`)).toBeNull();
     expect(container.querySelector('.product-alternatives')).toBeNull();
     await reopen("Lijst");
@@ -480,7 +484,8 @@ describe("PR28 iPhone vervanging en categorieën", () => {
     await click(`Verhoog aantal Hoogvliet ${newName}`);
     await reopen("Menu");
     expect(chosen().name).toBe(newName);
-    expect(container.querySelector(`[aria-label="Benodigd ${newName}"]`)!.textContent).toContain(weightGrams === 600 ? "1.200 g" : weightGrams === 1000 ? "2.000 g" : "2.000 ml");
+    expect(container.querySelector(`[aria-label="Benodigd ${newName}"]`)!.textContent).toContain(doubledAmount);
+    expect(container.querySelector(`[aria-label="Benodigd ${newName} (bewerken)"]`)!.textContent).toBe(`${doubledAmount} nodig`);
     await click(`Minder ${newName}`);
     expect(currentList.items.find(item => item.productId === "replacement")!.quantity).toBe(1);
     expect(currentWeek.generation!.mealPlanKnownCostCents).toBe(428);

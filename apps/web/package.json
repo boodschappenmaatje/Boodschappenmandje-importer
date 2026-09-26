@@ -14,7 +14,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "test:core": "vitest run src/test/core-flows src/components/week-preparation/quantity-flow.test.ts src/components/week-preparation/ingredient-amount-presentation.test.ts src/services/week-preparation/meal-budget-selection.test.ts src/services/week-preparation/planner-five-days.test.ts src/services/week-preparation/planning-cache.test.ts src/services/week-preparation/my-recipes.test.ts src/services/shopping-list/recipe-contributions.test.ts src/services/catalog/price.test.ts src/services/week-preparation/recipe-readiness.test.ts src/services/week-preparation/indexeddb-storage.test.ts src/services/shopping-list/indexeddb-storage.test.ts src/components/pwa-update-policy.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.116.0",

@@ -3,7 +3,15 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**PR #28 afgerond en in Production. Volgende mijlpaal: STABILITEIT & KERNFLOWS.**
+**STABILITEIT & KERNFLOWS — in uitvoering op `feature/stability-core-flows`. PR #28 blijft afgerond/in Production.**
+
+## Actief checkpoint — 26 september 2026
+- Uitgangspunt remote main `ba4119677cc054039bebab7dd4424fef670caf25`, Vercel Production success; alleen historische Draft PR #21 stond nog open. Nieuwe featurebranch vanaf exact deze main, geen vervolgwijziging in PR #28.
+- Compacte en uitgeklapte recepthoeveelheid gebruiken dezelfde bestaande dag-/verpakkingsberekening; generieke gram/ml/stuks-correctie, geen tweede quantity-state.
+- Nieuwe route-/opslagintegratie vanaf lege Home; lees-/schrijffouten, navigatie, beide syncrichtingen en losse extra. Nieuwe 24-cellenmatrix voor vier recepttypen. Vijf productvervangingen testen beide hoeveelheidsweergaven.
+- Vitest ontdekt ook bestaande TSX-tests; CI-releasecheck toegevoegd zonder DB/secrets/import. Snelle kernset: 248 tests / 14 bestanden groen. Volledige eindregressie en Preview volgen vóór het acceptatiepunt.
+- Draft PR/Preview nog te publiceren; **nog niet klaar voor fysieke iPhone-test**. Volledig testplan en architectuurbevindingen: `docs/stability-core-flows.md`.
+- Volgende funderingsstappen blijven Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis. Geen merge/Production/migratie/import binnen deze opdracht.
 
 ## Production — PR #28
 - Repository: `boodschappenmaatje/Boodschappenmandje-importer`; branch `main`.
