@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import HomePage from "@/app/page";
-import PrepareWeekPage from "@/app/week-voorbereiden/page";
+import { WeekPreparationView as PrepareWeekPage } from "./WeekPreparationView";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -593,7 +593,7 @@ describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
     expect(html.match(/data-over="true"/g)).toHaveLength(3);
   });
 
-  it("kiest het eerste echte gerecht na een vrije plaats, met actuele personen en lange naam", () => {
+  it("toont ook vrije plaatsen en lange gerechten met actuele personen", () => {
     const data = generated();
     const dish = { ...data.days[0], dayIndex: 1, recipe: { ...data.days[0].recipe!, name: "Romige volkoren groentepasta met geroosterde courgette en champignons" } };
     data.days = [{ ...data.days[1], dayIndex: 0 }, dish];
@@ -603,7 +603,9 @@ describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
     expect(html).toContain(dish.recipe.name);
     expect(html).toContain("10 personen");
     expect(html).toContain("€ 8,98");
-    expect(html).toContain("Eerst op je menu");
+    expect(html).not.toContain("Eerst op je menu");
+    expect(html).toContain("Vrije keuze");
+    expect(html).toContain("Dinsdag");
     expect(html).not.toContain("Vanavond");
   });
 
@@ -619,7 +621,8 @@ describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
   it("houdt een lege gegenereerde week bruikbaar zonder fictief gerecht", () => {
     const data = generated(); data.days = data.days.slice(1); data.ingredients = [];
     const html = render(createElement(HomePage), data);
-    expect(html).toContain("Nog geen gerechten gekozen");
+    expect(html).toContain("Vrije keuze");
+    expect(html).toContain("Kies een maaltijd");
     expect(html).not.toContain("Spaghetti bolognese");
     expect(html).toContain("Bekijk je week");
     expect(html).toContain('href="/lijst"');
@@ -638,5 +641,48 @@ describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
     expect(html).toContain("€ 1.000,00");
     expect(html).toContain("€ 966,39");
     expect(html).toContain("€ 700,00");
+  });
+});
+
+ describe("Home weekslider — opgeslagen dagen, geen tweede dagmodel", () => {
+  it.each([1, 3, 5, 7])("toont precies %i kaarten met dag, foto, personen, prijs en directe route", count => {
+    const data = generated();
+    const first = data.days[0];
+    data.numberOfDays = count;
+    data.days = Array.from({ length: count }, (_, dayIndex) => ({ ...first, dayIndex }));
+    data.ingredients[0].usedIn = data.days.map(day => ({ ...data.ingredients[0].usedIn[0], dayIndex: day.dayIndex }));
+    const html = render(createElement(HomePage), data);
+    const cards = [...html.matchAll(/<a class="home-c-day-card"[\s\S]*?<\/a>/g)].map(match => match[0]);
+    expect(cards).toHaveLength(count);
+    cards.forEach((card, index) => {
+      expect(card).toContain(["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"][index]);
+      expect(card).toContain(`href="/week-voorbereiden?day=${index}"`);
+      expect(card).toContain("Spaghetti bolognese");
+      expect(card).toContain("pasta-spaghetti-bolognese.webp");
+      expect(card).toContain("4 personen · € 8,98");
+    });
+    expect(html).not.toContain("Eerst op je menu");
+    expect(html.indexOf("home-c-budget")).toBeLessThan(html.indexOf("home-c-week-slider"));
+    expect(html.indexOf("home-c-week-slider")).toBeLessThan(html.indexOf("home-c-list"));
+  });
+
+  it("bewaart exacte opgeslagen volgorde, lege dag en Vrije keuze zonder fictieve prijs/foto", () => {
+    const data = generated();
+    data.days = [data.days[4], { ...data.days[0], dayIndex: 2, recipe: null, recipeId: null }, data.days[0]];
+    const html = render(createElement(HomePage), data);
+    const cards = [...html.matchAll(/<a class="home-c-day-card"[\s\S]*?<\/a>/g)].map(match => match[0]);
+    expect(cards).toHaveLength(3);
+    expect(cards[0]).toContain('href="/vrije-keuze?day=4"');
+    expect(cards[0]).toContain("Vrijdag");
+    expect(cards[0]).toContain("Vrije keuze");
+    expect(cards[1]).toContain('href="/week-voorbereiden?day=2"');
+    expect(cards[1]).toContain("Woensdag");
+    expect(cards[1]).toContain("Nog geen maaltijd");
+    for (const card of cards.slice(0, 2)) {
+      expect(card).toContain("Kies een maaltijd");
+      expect(card).toContain('data-image-source="placeholder"');
+      expect(card).not.toContain("€");
+    }
+    expect(cards[2]).toContain("Maandag");
   });
 });

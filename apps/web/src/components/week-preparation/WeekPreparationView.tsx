@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { DAY_LABELS } from "./day-labels";
 import { DishImage } from "@/components/ui/DishImage";
 import Link from "next/link";
 import { PlannerBudgetRecovery } from "./PlannerBudgetRecovery";
@@ -49,21 +50,12 @@ import {
 
 const PEOPLE_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const DAY_OPTIONS = Array.from({ length: 7 }, (_, index) => index + 1);
-const DAY_LABELS = [
-  "Maandag",
-  "Dinsdag",
-  "Woensdag",
-  "Donderdag",
-  "Vrijdag",
-  "Zaterdag",
-  "Zondag",
-] as const;
 
 function listCountLabel(count: number): string {
   return `${count} ${count === 1 ? "product" : "producten"}`;
 }
 
-export function WeekPreparationView() {
+export function WeekPreparationView({ initialDay = null }: { initialDay?: number | null }) {
   const [choosingDay, setChoosingDay] = useState<number | null>(null);
   const [editingDay, setEditingDay] = useState<number | null>(null);
   const [keepDayIndexes, setKeepDayIndexes] = useState<number[]>([]);
@@ -78,6 +70,20 @@ export function WeekPreparationView() {
   const [budgetError, setBudgetError] = useState<string | null>(null);
   const [mealBudgetDraft, setMealBudgetDraft] = useState<string | null>(null);
   const [mealBudgetError, setMealBudgetError] = useState<string | null>(null);
+
+  const linkedDay = useRef<HTMLLIElement>(null);
+  const targetDay = week.preparation?.days.find(day => day.dayIndex === initialDay);
+  // A route target only opens/focuses the existing Menu UI. It never changes week data.
+  useEffect(() => {
+    if (week.status !== "ready" || budget.status === "loading") return;
+    const element = linkedDay.current;
+    if (!element) return;
+    const detail = element.querySelector<HTMLDetailsElement>(".recipe-detail");
+    if (detail) detail.open = true;
+    const focusTarget = element.querySelector<HTMLElement>(detail ? ".recipe-detail > summary" : "button, a");
+    focusTarget?.focus({ preventScroll: true });
+    element.scrollIntoView({ block: "start" });
+  }, [initialDay, week.status, budget.status, week.preparation?.id, week.preparation?.status, targetDay?.recipe?.id]);
 
   if (week.status === "loading" || budget.status === "loading") {
     return (
@@ -366,7 +372,7 @@ export function WeekPreparationView() {
                     productName: ingredient.product?.name ?? "Nog geen product",
                   }));
                   return (
-                    <li key={day.dayIndex}>
+                    <li key={day.dayIndex} id={`menu-day-${day.dayIndex}`} ref={day.dayIndex === initialDay ? linkedDay : undefined} style={{ scrollMarginTop: "16px" }}>
                       <label className="prepared-day-category" htmlFor={`prepared-day-${day.dayIndex}`}>
                         <span>{DAY_LABELS[day.dayIndex]}</span>
                         <select

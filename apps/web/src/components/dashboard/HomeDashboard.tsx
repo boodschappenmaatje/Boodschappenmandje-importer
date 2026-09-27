@@ -3,15 +3,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
-import { DishImage } from "@/components/ui/DishImage";
+import { HomeWeekSlider } from "./HomeWeekSlider";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationProvider";
 import { formatCents } from "@/services/budget/budget-engine";
-import { calculateDishCostSummary, calculateWeekBudgetSummary } from "@/services/week-preparation/week-generation";
-import { mealMixProfileForRecipe } from "@/services/week-preparation/meal-mix-profiles";
-import { recipeImageFor } from "@/services/week-preparation/recipe-images";
+import { calculateWeekBudgetSummary } from "@/services/week-preparation/week-generation";
 import "./home-option-c.css";
 
 function Chevron() {
@@ -53,17 +51,6 @@ export function HomeDashboard() {
   const pricesComplete = !unavailable && (weekBudget?.isComplete ?? budget.result.isComplete);
   const remainingCents = budgetCents !== null && pricesComplete ? Math.max(0, budgetCents - plannedCents) : null;
   const overBudgetCents = budgetCents === null ? 0 : Math.max(0, plannedCents - budgetCents);
-  const generatedDays = preparation?.days.filter(day => day.recipe || day.freeChoice) ?? [];
-  // Existing week state has no calendar dates. Show the first actual dish in menu order.
-  const nextDay = generatedDays.find(day => day.recipe && !day.freeChoice);
-  const title = nextDay?.recipe ? mealMixProfileForRecipe(nextDay.recipe.sourceKey)?.dishName ?? nextDay.recipe.name : null;
-  const cost = nextDay && preparation ? calculateDishCostSummary(nextDay.dayIndex, preparation.ingredients) : null;
-  const image = nextDay?.recipe && preparation ? recipeImageFor({
-    recipeSourceKey: nextDay.recipe.sourceKey, recipeName: title!,
-    categories: nextDay.category === "freeChoice" ? [] : [nextDay.category],
-    ingredients: preparation.ingredients.filter(i => i.usedIn.some(use => use.dayIndex === nextDay.dayIndex)),
-  }) : null;
-  const people = nextDay?.customDish?.targetServings ?? preparation?.numberOfPeople;
   const count = shoppingList.list?.items.length ?? 0;
   const generation = preparation?.generation;
   const hasWeek = Boolean(generation);
@@ -87,12 +74,7 @@ export function HomeDashboard() {
       <BudgetRow label="Maaltijden" icon="meals" planned={loading || unavailable ? null : generation?.mealPlanKnownCostCents ?? (hasWeek ? null : 0)} limit={preparation?.mealBudgetCents ?? null} complete={generation?.isMealBudgetComplete ?? !hasWeek} />
       {!loading && !pricesComplete ? <p className="home-c-price-note">Er ontbreken prijzen. Het resterende budget is nog niet bekend.</p> : null}
     </Link>
-    <Link className="home-c-meal" href="/week-voorbereiden">
-      <DishImage asset={image} className="home-c-meal-image" sizes="(max-width: 360px) 88px, 120px" title={title ?? "Gerecht kiezen"} />
-      <span className="home-c-meal-copy"><small>{loading ? "Je week wordt geopend…" : title ? "Eerst op je menu" : "Jouw menu"}</small><strong>{title ?? "Nog geen gerechten gekozen"}</strong>
-        <span>{title ? <>{people ?? "–"} {people === 1 ? "persoon" : "personen"} · {cost && cost.knownCostCents > 0 ? `${formatCents(cost.knownCostCents)}${cost.complete ? "" : " bekend"}` : "Prijs nog onbekend"}</> : "Kies wat je deze week wilt eten"}</span>
-      </span><Chevron />
-    </Link>
+    <HomeWeekSlider preparation={preparation} loading={loading} />
     <Link className="home-c-list" href="/lijst"><span className="home-c-cart"><Cart /></span><span className="home-c-list-copy"><strong>Pak je lijst erbij</strong><small>{loading ? "Lijst wordt geopend…" : `${count} ${count === 1 ? "product" : "producten"}`}</small></span><Chevron /></Link>
     <Link className="home-c-week" href="/week-voorbereiden"><Icon name="week" size={23} /><span>{hasWeek ? "Bekijk je week" : "Maak mijn week"}</span><Chevron /></Link>
     <details className="home-c-settings"><summary>Weekinstellingen</summary><div className="home-c-settings-content"><p>{preparation?.numberOfPeople ?? budget.settings.people ?? "–"} personen · {preparation?.numberOfDays ?? "–"} dagen · Hoogvliet</p>
