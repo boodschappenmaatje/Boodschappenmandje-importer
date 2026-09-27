@@ -3,7 +3,27 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**PR #28 afgerond en in Production. Volgende mijlpaal: STABILITEIT & KERNFLOWS.**
+**STABILITEIT & KERNFLOWS — in uitvoering op `feature/stability-core-flows`. PR #28 blijft afgerond/in Production.**
+
+## Actief checkpoint — 26 september 2026
+- Uitgangspunt remote main `ba4119677cc054039bebab7dd4424fef670caf25`, Vercel Production success; alleen historische Draft PR #21 stond nog open. Nieuwe featurebranch vanaf exact deze main, geen vervolgwijziging in PR #28.
+- Compacte en uitgeklapte recepthoeveelheid gebruiken dezelfde bestaande dag-/verpakkingsberekening; generieke gram/ml/stuks-correctie, geen tweede quantity-state.
+- Nieuwe route-/opslagintegratie vanaf lege Home; lees-/schrijffouten, navigatie, beide syncrichtingen en losse extra. Nieuwe 24-cellenmatrix voor vier recepttypen. Vijf productvervangingen testen beide hoeveelheidsweergaven.
+- Vitest ontdekt ook bestaande TSX-tests; CI-releasecheck toegevoegd zonder DB/secrets/import. Snelle kernset: 248 tests / 14 bestanden groen. Volledige eindregressie: **733/733 webtests (63 bestanden), 189/189 importerfixtures, lint, TypeScript, seed-/syntaxchecks en Production-build groen**.
+- Draft PR **#29**, functionele head `851413496cd6fba5d3ed18443d74060d6b23169a`. Vercel Preview-check **success / Ready**. Preview: https://boodschappenmaatje-pwa-git-feature-st-07a781-dennisverkaik-4661.vercel.app
+- **KLAAR VOOR FYSIEKE IPHONE-TEST.** Preview-toegang via beveiligde aanmelding hersteld; echte desktopbrowsercontrole geslaagd: weekgeneratie, recept ⇄ lijst, losse extra, broccoliwissel (compact én bewerken 800g), categorie/filter/afvinken, refresh, Honig, Knorr en eigen recept. Geen telefoonviewport beschikbaar; iPhone-touch/PWA-hervatten blijven acceptatiepunt.
+- Nieuwe GitHub CI-releasecheck op de functionele head: **success**, inclusief schone npm-installaties, volledige webcheck en importerfixtures/seedchecks. De aansluitende documentatiecommit wijzigt geen functionele code. Volledig testplan en architectuurbevindingen: `docs/stability-core-flows.md`.
+- Live gedeelde broccoli: algemene lijstplus vraagt om herkomst; alleen eigen recept dag 5 naar 2/1.600g, gerecht dag 2 blijft 1/800g. Na volledige reload behouden. Eindstand: maaltijden €46,26 / lijst €47,21 / weekruimte €52,79; verschil €0,95 is de beschermde losse spinazie.
+- Data-aandachtspunt voor volgende mijlpaal: productnaam “Rode uien net 3 stuks” naast catalogusinhoud “1 stuk”. Niet stil gecorrigeerd. Preview-herberekeningen kunnen op catalogus/revalidatie wachten.
+- Volgende funderingsstappen blijven Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis. Geen merge/Production/migratie/import binnen deze opdracht.
+
+## Hervatcontrole na gemelde Work-time-out — 26 september 2026
+- Remote Draft PR #29 gecontroleerd op `09bda66b262aa93e1fd6fde504a1cf71f726fbef`; open, Draft en mergeable. Dit checkpoint krijgt alleen een aansluitende documentatiecommit; de actuele PR-head staat op GitHub.
+- Vóór deze hervatting al afgerond en gepusht: functionele correctie/testset/CI (`85141349`), testcheckpoint (`b2c50992`) en geslaagde echte Preview-controle (`09bda66b`). Geen verloren of nog te implementeren functioneel werk aangetroffen.
+- Deze hervatting: remote commits/bestanden en lokale tree vergeleken (exact gelijk), workflow/testdekking en onafgemaakte TODO’s gecontroleerd, alle CI-stappen en Vercel-success op de exacte head bevestigd. Geen zware lokale regressies herhaald omdat de ongewijzigde code aantoonbaar groen is.
+- Main staat inmiddels op `eab80882582eb026a3b7a26cebfc8dbaf7afaef3`: uitsluitend ROADMAP-aanvulling over datatransparantie vóór publieke lancering. Die aanvulling behouden, zonder de bijbehorende latere feature te bouwen.
+- Laatste extra Preview-bewijs uit de vorige run: afgevinkte losse spinazie direct verwijderd zonder Productdetails; lijst €47,21→€46,26 en na refresh weg. De maaltijdkeuzes bleven behouden.
+- Acceptatiepunt blijft **KLAAR VOOR FYSIEKE IPHONE-TEST**; nog niet fysiek geaccepteerd of gemerged. De vastgelegde desktopbrowsercontrole blijft geldig voor dezelfde functionele code.
 
 ## Production — PR #28
 - Repository: `boodschappenmaatje/Boodschappenmandje-importer`; branch `main`.

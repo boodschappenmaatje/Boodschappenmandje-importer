@@ -103,6 +103,8 @@ Bij nieuwe UI:
 - Blokkeer dubbele acties tijdens herberekening. Vraag expliciete bevestiging bij budgetoverschrijding en behoud bij fouten de vorige keuze.
 - Expliciet gekozen verpakkingen blijven vast bij personen wijzigen, heropenen en normale synchronisatie. Andere ingrediënten blijven volgens de bestaande personenlogica schalen.
 
+- Compact receptdetail en uitgeklapte bewerkingslijst tonen dezelfde actuele hoeveelheid per gerecht. Een expliciete verpakking wordt met betrouwbare inhoud omgerekend naar gram/ml/stuks; onbekende inhoud blijft als verpakking aangeduid. Normale receptbehoefte en te kopen verpakkingen blijven herkenbaar afzonderlijke begrippen.
+
 ## Laatst bekende prijzen
 - Oudere betrouwbare positieve catalogusprijzen blijven bruikbaar; toon compact “Laatste bekende prijs” bij de ingrediëntrij. Label ze niet als vers.
 - Een automatische prijsupdate verandert bedragen, geen expliciet gekozen verpakkingen of gerechten. Bestaande budgetbevestiging blijft gelden bij overschrijding.
@@ -116,7 +118,7 @@ Bij nieuwe UI:
 - Waar recepten automatisch verpakkingen delen, leg dat bij de herkomstkeuze uit. Het lijsttotaal blijft gebaseerd op de gezamenlijk te kopen verpakkingen.
 - Beide richtingen gebruiken dezelfde berekening, budgetbevestiging en laadstatus. Bij gewijzigde week/lijst tijdens validatie moet opnieuw worden gecontroleerd.
 
-## Compacte boodschappenlijst — PR #28, fysieke acceptatie volgt
+## Compacte boodschappenlijst — PR #28, fysiek geaccepteerd
 - De boodschappenlijst toont standaard compacte productregels binnen categorieblokken. Richtdoel: 4–5 normale producten in een telefoonscherm waar namen en schermhoogte dit toelaten; geen kleinere touch targets of onleesbare tekst om dit af te dwingen.
 - Primair: checkbox, kleine productfoto, naam, verpakking/inhoud, gebruikte prijs, compact − aantal + en subtiele herkomst. Checkbox en −/+ behouden minimaal 44px raakvlak.
 - Tik op product/chevron opent een mobiel detailpaneel. Volledige naam, prijsdatum, totaal, herkomstverdeling, losse verpakking en verwijderen staan daar. Sluiten/Escape keert terug naar dezelfde lijstpositie en bediening; achtergrond scrollt niet mee.
@@ -135,7 +137,7 @@ Bij nieuwe UI:
 
 - Budgetbevestigingen gebruiken dezelfde bijdrageverdeling als de uiteindelijke boodschappenlijst. Een losse extra van dezelfde SKU is een afzonderlijke aankoop, geen impliciete voorraad voor het recept.
 
-## Directe prullenmand — PR #28, fysieke acceptatie volgt
+## Directe prullenmand — PR #28, fysiek geaccepteerd
 - Quantity >1 toont min; bij 1 toont alleen een veilig direct verwijderbare bijdrage de prullenmand, op dezelfde 44px-positie. Trash opent nooit Productdetails.
 - Productnaam/chevron blijven de afzonderlijke detailactie. Quantity-knoppen handelen hun eigen click af zonder doorbubbelen.
 - Bij meerdere/ongeldige koppelingen geen totale trash: eerst de bestaande herkomstkeuze. De prullenmand bij een specifieke bijdrage bedient alleen die bijdrage.
