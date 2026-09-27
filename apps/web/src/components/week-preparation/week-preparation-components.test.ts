@@ -327,6 +327,7 @@ function render(
   component: ReturnType<typeof createElement>,
   preparation: WeekPreparation | null,
   activeList: ActiveShoppingList = list(),
+  settings: BudgetSettings = SETTINGS,
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -334,7 +335,7 @@ function render(
       { initialList: activeList },
       createElement(
         BudgetProvider,
-        { initialSettings: SETTINGS },
+        { initialSettings: settings },
         createElement(
           WeekPreparationProvider,
           { initialPreparation: preparation },
@@ -552,5 +553,90 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(css).toContain("grid-template-columns: 44px 32px 44px");
     expect(css).toContain("height: 47px");
     expect(css).toContain("@media (max-width: 360px)");
+  });
+});
+
+
+describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
+  it("toont week- en maaltijdbudget apart en gebruikt bestaande verpakkingskosten", () => {
+    const html = render(createElement(HomePage), generated());
+    expect(html).toContain("€ 33,61"); // 24.63 losse lijst + 8.98 maaltijd
+    expect(html).toContain("€ 66,39");
+    expect(html).toContain("€ 50,00"); // maaltijdgrens, geen weekgrens
+    expect(html).toContain('aria-label="Week: gepland budget"');
+    expect(html).toContain('aria-label="Maaltijden: gepland budget"');
+    expect(html).toContain('aria-valuenow="33.61"');
+    expect(html).toContain('aria-valuenow="17.96"');
+    expect(html).not.toContain("52,79");
+    expect(html).toContain("1 product");
+  });
+
+  it("meldt onvolledige prijzen zonder fictief resterend bedrag of gerechtprijs", () => {
+    const data = generated();
+    data.ingredients[0].price = null;
+    data.generation = { ...data.generation!, isMealBudgetComplete: false, mealPlanKnownCostCents: 0 };
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain("Nog onbekend");
+    expect(html).toContain("Prijs nog onbekend");
+    expect(html).toContain("Er ontbreken prijzen");
+    expect(html).toContain("€ 0,00 bekend");
+    expect(html).not.toContain("€ 66,39");
+  });
+
+  it("begrensde balken en tekst blijven correct bij handmatige overschrijding", () => {
+    const data = generated(); data.mealBudgetCents = 500;
+    const html = render(createElement(HomePage), data, list(120));
+    expect(html).toContain("€ 28,98");
+    expect(html).toContain("boven budget");
+    expect(html).toContain("€ 3,98 boven maaltijdbudget");
+    expect(html.match(/aria-valuenow="100"/g)).toHaveLength(2);
+    expect(html.match(/data-over="true"/g)).toHaveLength(3);
+  });
+
+  it("kiest het eerste echte gerecht na een vrije plaats, met actuele personen en lange naam", () => {
+    const data = generated();
+    const dish = { ...data.days[0], dayIndex: 1, recipe: { ...data.days[0].recipe!, name: "Romige volkoren groentepasta met geroosterde courgette en champignons" } };
+    data.days = [{ ...data.days[1], dayIndex: 0 }, dish];
+    data.ingredients[0].usedIn[0].dayIndex = 1;
+    data.numberOfPeople = 10;
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain(dish.recipe.name);
+    expect(html).toContain("10 personen");
+    expect(html).toContain("€ 8,98");
+    expect(html).toContain("Eerst op je menu");
+    expect(html).not.toContain("Vanavond");
+  });
+
+  it("presenteert een volledig gegenereerde week en echte eigen-receptpersonen", () => {
+    const data = generated(); data.days = [data.days[0]]; data.numberOfDays = 1;
+    data.days[0].customDish = { name: "Eigen pasta", servings: 4, targetServings: 2, ingredients: [] };
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain("staat klaar.");
+    expect(html).toContain("2 personen");
+    expect(html).toContain("Bekijk je week");
+  });
+
+  it("houdt een lege gegenereerde week bruikbaar zonder fictief gerecht", () => {
+    const data = generated(); data.days = data.days.slice(1); data.ingredients = [];
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain("Nog geen gerechten gekozen");
+    expect(html).not.toContain("Spaghetti bolognese");
+    expect(html).toContain("Bekijk je week");
+    expect(html).toContain('href="/lijst"');
+    expect(html).toContain("week-reset-button");
+  });
+
+  it.each([1, 2, 4, 10])("toont %i personen zonder vaste voorbeeldwaarden", people => {
+    const data = generated(); data.numberOfPeople = people;
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain(`${people} ${people === 1 ? "persoon" : "personen"} ·`);
+  });
+
+  it("ondersteunt duizenden euro's en houdt de maaltijdgrens afzonderlijk", () => {
+    const data = generated(); data.budgetCents = 100000; data.mealBudgetCents = 70000;
+    const html = render(createElement(HomePage), data, list(), { ...SETTINGS, budgetCents: 100000 });
+    expect(html).toContain("€ 1.000,00");
+    expect(html).toContain("€ 966,39");
+    expect(html).toContain("€ 700,00");
   });
 });

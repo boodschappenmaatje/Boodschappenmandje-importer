@@ -13,11 +13,11 @@ body:has(.home-c) { background: var(--home-c-background); }
 .home-c-hero .home-c-hello { font-size: 1.48em; line-height: 1.08; letter-spacing: -.06em; }
 .home-c-character { position: relative; align-self: stretch; min-width: 0; }
 .home-c-character::before { content: ""; position: absolute; inset: -15px -2px 0 18px; border-radius: 60% 55% 42% 40%; background: var(--home-c-halo); transform: rotate(15deg); }
-.home-c-mascot { position: absolute; z-index: 2; width: 132%; max-width: none; height: auto; right: -8%; top: 16px; transform: rotate(15deg); filter: drop-shadow(0 3px 2px var(--home-c-shadow)); pointer-events: none; }
+.home-c-mascot { position: absolute; z-index: 2; width: 112%; max-width: none; height: auto; right: -3%; top: -6px; transform: rotate(15deg); filter: drop-shadow(0 3px 2px var(--home-c-shadow)); pointer-events: none; }
 .home-c-speech { position: absolute; z-index: 3; top: -19px; left: -33%; width: 80px; padding: 10px 9px; border-radius: 47% 43% 39% 49%; transform: rotate(-12deg); background: var(--home-c-bubble); color: var(--color-on-primary); font-size: .95rem; line-height: 1.08; text-align: center; }
 .home-c-speech::after { content: ""; position: absolute; bottom: -5px; right: 12px; width: 15px; height: 18px; background: inherit; clip-path: polygon(0 0, 70% 0, 100% 100%); }
 .home-c-budget { position: relative; display: grid; gap: 10px; padding: 15px 12px 23px; border-radius: 17px 17px 5px 5px; background: linear-gradient(130deg, var(--home-c-card-top), var(--home-c-card-bottom)); color: var(--color-on-primary); filter: drop-shadow(0 5px 4px var(--home-c-shadow)); }
-.home-c-budget::after { content: ""; position: absolute; left: 0; right: 0; bottom: -7px; height: 9px; background: var(--home-c-card-bottom); mask: linear-gradient(135deg, transparent 6px, #000 0) 0 0 / 22px 100%, linear-gradient(225deg, transparent 6px, #000 0) 11px 0 / 22px 100%; transform: rotate(180deg); }
+.home-c-budget::after { content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 11px; background: var(--home-c-card-bottom); clip-path: polygon(0 0, 100% 0, 100% 25%, 98% 100%, 96% 25%, 94% 100%, 92% 25%, 90% 100%, 88% 25%, 86% 100%, 84% 25%, 82% 100%, 80% 25%, 78% 100%, 76% 25%, 74% 100%, 72% 25%, 70% 100%, 68% 25%, 66% 100%, 64% 25%, 62% 100%, 60% 25%, 58% 100%, 56% 25%, 54% 100%, 52% 25%, 50% 100%, 48% 25%, 46% 100%, 44% 25%, 42% 100%, 40% 25%, 38% 100%, 36% 25%, 34% 100%, 32% 25%, 30% 100%, 28% 25%, 26% 100%, 24% 25%, 22% 100%, 20% 25%, 18% 100%, 16% 25%, 14% 100%, 12% 25%, 10% 100%, 8% 25%, 6% 100%, 4% 25%, 2% 100%, 0% 25%); }
 .home-c-budget h2 { margin: 0 8px; font-size: 1.15rem; line-height: 1.2; font-weight: 750; }
 .home-c-remaining { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 9px; margin: -8px 7px 1px; }
 .home-c-remaining strong { font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; font-size: clamp(2rem, 14.4cqi, 3.5rem); line-height: 1.2; letter-spacing: -.055em; overflow-wrap: anywhere; }
@@ -67,3 +67,6 @@ body:has(.home-c) { background: var(--home-c-background); }
   .home-c-list { gap: 10px; }
   .home-c-list-copy strong { font-size: 1rem; }
 }
+
+.app-shell:has(.home-c) .navigation-item { font-size: .7rem; }
+.app-shell:has(.home-c) .navigation-item[data-active="true"] { background: transparent; box-shadow: none; }

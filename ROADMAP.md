@@ -75,7 +75,7 @@ PR #28 leverde de noodzakelijke tweerichtingssync; deze funderingsstap consolide
 
 **Status:** het stabiliteits- en bewakingsdeel is afgerond in PR #29. De centrale contribution/state-logica en bijbehorende kernflows worden op toekomstige PR's automatisch gecontroleerd.
 
-## Actief / volgende: PRODUCTDATA & RECEPTKWALITEIT
+## Volgende funderingsstap: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
 
 Omvat:
@@ -89,7 +89,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is de eerstvolgende stap, maar is nog **niet gestart**.
+Deze mijlpaal volgt na de expliciet gekozen visuele Home-tussenstap en is nog **niet gestart**.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
@@ -163,22 +163,14 @@ Uitgangspunten:
 
 Voorbeeld: als 500 g nodig is, kan 1 verpakking van 600 g à €2,40 goedkoper zijn dan 2 verpakkingen van 400 g à €1,50. Kies dan €2,40, ook als de andere variant per gram goedkoper lijkt.
 
-## Home-mascotte vernieuwen — Optie 2
-Later als gerichte branding-/Home-polish uitvoeren; niet meenemen in de huidige PR #28-functionele acceptatie tenzij expliciet gevraagd.
+## Actieve visuele tussenstap — Home Optie C
+De gebruiker koos op 27 september 2026 definitief de **rechter Optie C — Speels & persoonlijk**. Uitvoering via `feature/home-option-c`, Draft PR #30; nog geen fysieke acceptatie of release.
 
-Gekozen richting: **Optie 2 — vriendelijk en expressief**.
+Scope: Home-compositie nauwkeurig volgen met lichte blauwe achtergrond, grote vriendelijke hero, los officieel 3D-bonnetje en “Samen binnen budget!”, blauwe budgetbon met afzonderlijke echte week-/maaltijdbedragen, eerstvolgende maaltijd en lijst-/weekactie. Alle werkende kernflows en overige schermen blijven behouden.
 
-Doel:
-- vervang op Home het huidige oude lijnfiguurtje rechtsboven door de nieuwe 3D BoodschappenMaatje-bonnetjesmascotte;
-- gebruik de mascotte als los karakter, dus zonder het volledige blauwe vierkante app-icoonvlak;
-- iets groter en expressiever dan de huidige mascotte, maar in balans met de Home-header;
-- behoud het tekstwolkje **“Samen binnen budget!”**;
-- vriendelijke duimpjes-/positieve pose, passend bij het nieuwe app-icoon;
-- subtiele schaduw/diepte, zonder dat het als knop oogt;
-- bestaande Home-layout, metallic-blauwe huisstijl en mobile-first rust behouden;
-- dezelfde mascotte-identiteit later consistent kunnen hergebruiken op passende lege/succes-/onboardingstaten zonder de UI te overladen.
+De eerdere **mascotte Optie 2 — vriendelijk en expressief** is hierin opgenomen als karakterrichting, niet als afzonderlijke latere Home-stap. Het officiële app-icoon blijft ongewijzigd.
 
-De goedgekeurde visuele referentie is de eerder besproken **Optie 2: vriendelijk en expressief**.
+Stoppunt: gecontroleerde Preview → fysieke iPhone-test → expliciete mergegoedkeuring. Productdata & receptkwaliteit niet tegelijk starten.
 
 ## Gerechtfoto's
 - rechtenvrije of eigen/AI-beelden kunnen gebruiken;

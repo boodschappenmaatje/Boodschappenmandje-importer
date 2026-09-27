@@ -123,7 +123,23 @@ it("blank Home → settings → generated Menu → linked list → Budget/Free c
   expect(decodeStoredWeekPreparation(weekRecord)!.generation!.mealPlanKnownCostCents).toBe(537);
   await click("Menu", "nav[aria-label='Hoofdnavigatie'] a");
   expect(container.querySelector('[aria-label="Benodigd Spaghetti"]')?.textContent).toContain("800 g");
-  await click("Home", "nav[aria-label='Hoofdnavigatie'] a"); expect(container.textContent).toContain("7,16");
+  await click("Home", "nav[aria-label='Hoofdnavigatie'] a");
+  expect(container.querySelector(".home-c-budget")?.textContent).toContain("7,16");
+  expect(container.querySelector(".home-c-budget")?.textContent).toContain("5,37");
+  expect(container.querySelector(".home-c-remaining")?.textContent).toContain("92,84");
+  expect(container.querySelector(".home-c-list")?.textContent).toContain("2 producten");
+  expect(container.querySelector(".home-c-meal")?.textContent).toContain("Groentepasta");
+  await click("Pak je lijst erbij2 producten", "a");
+  expect(router.path).toBe("/lijst");
+  await click("Home", "nav[aria-label='Hoofdnavigatie'] a");
+  await click("Bekijk je week", "a");
+  expect(router.path).toBe("/week-voorbereiden");
+  await click("Home", "nav[aria-label='Hoofdnavigatie'] a");
+  await refresh();
+  expect(container.querySelector(".home-c-remaining")?.textContent).toContain("92,84");
+  await click("Weekinstellingen", "summary");
+  await click("Nieuwe week"); await click("Annuleren");
+  expect(decodeStoredWeekPreparation(weekRecord)!.customizations).toEqual(choices);
 });
 
 it("a failed week load preserves the persisted list and week instead of silently replacing them", async () => {

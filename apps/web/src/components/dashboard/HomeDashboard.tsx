@@ -49,7 +49,8 @@ export function HomeDashboard() {
   const weekBudget = preparation && shoppingList.list ? calculateWeekBudgetSummary(preparation, shoppingList.list) : null;
   const budgetCents = budget.settings.budgetCents;
   const plannedCents = weekBudget?.knownTotalCents ?? budget.result.knownSubtotalCents;
-  const pricesComplete = weekBudget?.isComplete ?? budget.result.isComplete;
+  const unavailable = week.status === "error" || shoppingList.status === "error";
+  const pricesComplete = !unavailable && (weekBudget?.isComplete ?? budget.result.isComplete);
   const remainingCents = budgetCents !== null && pricesComplete ? Math.max(0, budgetCents - plannedCents) : null;
   const overBudgetCents = budgetCents === null ? 0 : Math.max(0, plannedCents - budgetCents);
   const generatedDays = preparation?.days.filter(day => day.recipe || day.freeChoice) ?? [];
@@ -66,7 +67,7 @@ export function HomeDashboard() {
   const count = shoppingList.list?.items.length ?? 0;
   const generation = preparation?.generation;
   const hasWeek = Boolean(generation);
-  const ready = hasWeek && generatedDays.length > 0 && generatedDays.every(day => day.recipe && !day.freeChoice);
+  const ready = hasWeek && preparation!.days.length === preparation!.numberOfDays && preparation!.days.every(day => day.recipe && !day.freeChoice);
   return <div className="home-c" aria-busy={loading}>
     <section className="home-c-hero" aria-labelledby="home-c-title">
       <h1 id="home-c-title"><span className="home-c-hello">Hoi!</span><span>Je week</span><span>{ready ? "staat klaar." : "begint hier."}</span></h1>
@@ -74,6 +75,7 @@ export function HomeDashboard() {
         <Image className="home-c-mascot" src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
       </div>
     </section>
+    {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
       <h2>Deze week</h2>
       <div className="home-c-remaining" data-compact={budgetCents === null || !pricesComplete || loading} data-over={overBudgetCents > 0}>
@@ -81,8 +83,8 @@ export function HomeDashboard() {
         {!loading && budgetCents !== null && pricesComplete ? <span>{overBudgetCents > 0 ? "boven budget" : "over"}</span> : null}
       </div>
       {!loading && budgetCents === null ? <p className="home-c-price-note">Stel een weekbudget in</p> : null}
-      <BudgetRow label="Week" icon="week" planned={loading ? null : plannedCents} limit={budgetCents} complete={pricesComplete} />
-      <BudgetRow label="Maaltijden" icon="meals" planned={loading ? null : generation?.mealPlanKnownCostCents ?? (hasWeek ? null : 0)} limit={preparation?.mealBudgetCents ?? null} complete={generation?.isMealBudgetComplete ?? !hasWeek} />
+      <BudgetRow label="Week" icon="week" planned={loading || unavailable ? null : plannedCents} limit={budgetCents} complete={pricesComplete} />
+      <BudgetRow label="Maaltijden" icon="meals" planned={loading || unavailable ? null : generation?.mealPlanKnownCostCents ?? (hasWeek ? null : 0)} limit={preparation?.mealBudgetCents ?? null} complete={generation?.isMealBudgetComplete ?? !hasWeek} />
       {!loading && !pricesComplete ? <p className="home-c-price-note">Er ontbreken prijzen. Het resterende budget is nog niet bekend.</p> : null}
     </Link>
     <Link className="home-c-meal" href="/week-voorbereiden">
