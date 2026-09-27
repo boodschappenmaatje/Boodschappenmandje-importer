@@ -3,9 +3,21 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**STABILITEIT & KERNFLOWS — in uitvoering op `feature/stability-core-flows`. PR #28 blijft afgerond/in Production.**
+**STABILITEIT & KERNFLOWS — AFGEROND / PRODUCTION. Volgende mijlpaal: PRODUCTDATA & RECEPTKWALITEIT — nog niet gestart.**
 
-## Actief checkpoint — 26 september 2026
+## Production-release — PR #29 — 27 september 2026
+- De gebruiker heeft de actuele Stabiliteit & kernflows-Preview fysiek op iPhone getest en **geslaagd** verklaard. Bevestigd: recept 1→2, lijst 2→1, hoeveelheden/bedragen, productvervanging, consistente hoeveelheidspresentatie, manual extra, gedeelde herkomst, categorieën, filters, afvinken, directe trash, Honig, Knorr, eigen recepten en PWA-persistence.
+- Gecontroleerde PR-head vóór merge: `2123e071395d30a81d44b0cd965b3475d577b9bf`. Sinds de fysiek geteste functionele commit `851413496cd6fba5d3ed18443d74060d6b23169a` volgden alleen documentatiecommits; geen onverwachte functionele wijziging.
+- PR **#29** is via de bestaande squash-mergeflow gemerged. Release-/mergecommit op `main`: `373f1542e43e4eef3794dca17e07cc9eeee287d1`.
+- Vercel Production voor exact deze releasecommit: **success / Ready**. GitHub Actions **Core flows, regressions & production build** op exact deze commit: **success**. De nieuwe kernflow-releasegate staat daarmee actief op `main`.
+- Gerichte Production-smoke in een schone browsersessie: **geslaagd**. Home, Menu, Vrije keuze, Lijst en Budget openen; 2 personen / 2 dagen / €100 weekbudget / €70 maaltijdbudget plant twee geldige maaltijden voor €9,40 binnen de harde grens.
+- Recept courgette 1→2 gaf 1→2 verpakkingen, 1→2 stuks, gerecht €4,07→€4,86 en lijst €9,40→€10,19; lijst 2→1 synchroniseerde terug. Een losse extra bleef als afzonderlijke contribution beschermd.
+- Productvervanging courgette→G'woon Broccoli 800 gram actualiseerde naam, afbeelding, verpakking, recept, lijst en budget. Compact receptdetail én bewerkingsweergave tonen na heropenen **800 g**; de eerdere “1 stuk nodig” versus “800 g”-inconsistentie komt niet terug.
+- Categorie in-/uitklappen, Alles/Overig en Afgevinkt, checkbox, normale Productdetails en directe manual-trash gecontroleerd. Trash opende geen detailpaneel, rekende lijst €11,37→€10,58 terug en bleef na refresh verwijderd. De vervanging, bedragen en keuzes bleven eveneens behouden.
+- Volledig regressiecheckpoint op de ongewijzigde functionele code: **733/733 webtests (63 bestanden), 248/248 kernsettests (14 bestanden), 189/189 importerfixtures, lint, TypeScript, seed-/syntaxchecks en Production-build groen**.
+- Geen databasewijziging, migratie, productimport of nieuwe consumentenfeature uitgevoerd. Eerstvolgende stap is **PRODUCTDATA & RECEPTKWALITEIT**; deze mijlpaal is nog niet gestart.
+
+## Historisch ontwikkelcheckpoint — 26 september 2026
 - Uitgangspunt remote main `ba4119677cc054039bebab7dd4424fef670caf25`, Vercel Production success; alleen historische Draft PR #21 stond nog open. Nieuwe featurebranch vanaf exact deze main, geen vervolgwijziging in PR #28.
 - Compacte en uitgeklapte recepthoeveelheid gebruiken dezelfde bestaande dag-/verpakkingsberekening; generieke gram/ml/stuks-correctie, geen tweede quantity-state.
 - Nieuwe route-/opslagintegratie vanaf lege Home; lees-/schrijffouten, navigatie, beide syncrichtingen en losse extra. Nieuwe 24-cellenmatrix voor vier recepttypen. Vijf productvervangingen testen beide hoeveelheidsweergaven.
@@ -17,13 +29,13 @@
 - Data-aandachtspunt voor volgende mijlpaal: productnaam “Rode uien net 3 stuks” naast catalogusinhoud “1 stuk”. Niet stil gecorrigeerd. Preview-herberekeningen kunnen op catalogus/revalidatie wachten.
 - Volgende funderingsstappen blijven Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis. Geen merge/Production/migratie/import binnen deze opdracht.
 
-## Hervatcontrole na gemelde Work-time-out — 26 september 2026
+## Historische hervatcontrole na gemelde Work-time-out — 26 september 2026
 - Remote Draft PR #29 gecontroleerd op `09bda66b262aa93e1fd6fde504a1cf71f726fbef`; open, Draft en mergeable. Dit checkpoint krijgt alleen een aansluitende documentatiecommit; de actuele PR-head staat op GitHub.
 - Vóór deze hervatting al afgerond en gepusht: functionele correctie/testset/CI (`85141349`), testcheckpoint (`b2c50992`) en geslaagde echte Preview-controle (`09bda66b`). Geen verloren of nog te implementeren functioneel werk aangetroffen.
 - Deze hervatting: remote commits/bestanden en lokale tree vergeleken (exact gelijk), workflow/testdekking en onafgemaakte TODO’s gecontroleerd, alle CI-stappen en Vercel-success op de exacte head bevestigd. Geen zware lokale regressies herhaald omdat de ongewijzigde code aantoonbaar groen is.
 - Main staat inmiddels op `eab80882582eb026a3b7a26cebfc8dbaf7afaef3`: uitsluitend ROADMAP-aanvulling over datatransparantie vóór publieke lancering. Die aanvulling behouden, zonder de bijbehorende latere feature te bouwen.
 - Laatste extra Preview-bewijs uit de vorige run: afgevinkte losse spinazie direct verwijderd zonder Productdetails; lijst €47,21→€46,26 en na refresh weg. De maaltijdkeuzes bleven behouden.
-- Acceptatiepunt blijft **KLAAR VOOR FYSIEKE IPHONE-TEST**; nog niet fysiek geaccepteerd of gemerged. De vastgelegde desktopbrowsercontrole blijft geldig voor dezelfde functionele code.
+- Dit checkpoint wachtte destijds nog op fysieke acceptatie. Die iPhone-test is op 27 september 2026 geslaagd en de release is vervolgens gemerged en naar Production gebracht; zie het actuele releasecheckpoint bovenaan.
 
 ## Production — PR #28
 - Repository: `boodschappenmaatje/Boodschappenmandje-importer`; branch `main`.

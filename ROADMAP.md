@@ -34,12 +34,13 @@ Belangrijke productprincipes:
 | UX simplification | Afgerond / Production | Rustiger Home, begeleide flows en duidelijkere mobiele UX |
 | PWA 14 | Afgerond / Production | Eigen recepten, compact detail, dynamische Vrije keuze, actuele prijzen, budget en lijstsync |
 | PR #28 — verpakkingen/lijst/budget | Afgerond / Production | Compacte lijst, recept ⇄ lijst, veilige trash, prijsfallback, handmatige override en harde automatische maaltijdgrens |
+| PR #29 — Stabiliteit & kernflows | Afgerond / Production | Kernflow-integraties, centrale hoeveelheidspresentatie en actieve CI-releasegate |
 
 ## Afgeronde release — PR #28
 PR #28 is na geslaagde fysieke iPhone-hertest gemerged naar `main` (`d7a234df5ac24ab6fec558413ff2c73649071584`) en in Production uitgerold. Gerichte Production-smoke geslaagd. De verpakkingen-, lijst- en budgetronde is afgerond: compacte inklapbare lijst, oorsprong, directe veilige prullenmand, recept ⇄ lijst-sync, productvervanging, prijsfallback en handmatige bevestiging boven het maaltijdbudget. De automatische planner behoudt de harde grens. Volledige regressie: 687 webtests, 189 importerfixtures, lint, TypeScript en build groen. Echte assortimentsdatablokkades blijven als datawerk apart gedocumenteerd.
 
-## Actief / in uitvoering: STABILITEIT & KERNFLOWS
-De onderstaande drie funderingswerkstromen zijn nu eerst aan de beurt. De presentatie van vervangingshoeveelheden in de bewerkingslijst (na broccoliwissel “1 stuk nodig” naast 800 g in receptdetail) is in Draft PR #29 generiek opgelost en met integratie- en Preview-controle bewezen. Geen nieuwe functie uit een latere mijlpaal is binnen PR #28 gestart.
+## Afgerond / Production: STABILITEIT & KERNFLOWS
+PR #29 is na geslaagde fysieke iPhone-test gemerged naar `main` (`373f1542e43e4eef3794dca17e07cc9eeee287d1`) en succesvol in Production uitgerold. De gerichte Production-smoke is geslaagd. De presentatie van vervangingshoeveelheden is generiek gelijkgetrokken en de kritieke kernflows worden voortaan door de CI-releasegate bewaakt.
 
 ## Stabiliteit & kernflows
 Doel: de belangrijkste gebruikersflows automatisch van begin tot eind bewaken, zodat nieuwe wijzigingen bestaande kernfunctionaliteit niet stil breken.
@@ -56,7 +57,7 @@ Minimaal bewaken:
 - Honig/Knorr en eigen recepten;
 - vaste planner-scenario's.
 
-Deze mijlpaal wordt uitgevoerd op `feature/stability-core-flows`: automatische route-/opslagintegraties, personen-/dagenmatrix voor vier recepttypen, gedeelde hoeveelheidspresentatie en CI-releasecheck. Draft PR #29: 733 webtests en 189 importerfixtures groen; Preview Ready. Functionele Preview-controle geslaagd, inclusief beide syncrichtingen, gedeelde/manual bijdragen, refresh en normaal/Honig/Knorr/eigen recept. Implementatie, regressies en CI afgerond; fysieke iPhone-acceptatie staat nog open. Technische dekking: `docs/stability-core-flows.md`. Geen nieuwe consumentenfeature. Productdata & receptkwaliteit en Betrouwbare opslag + geschiedenis blijven de volgende funderingsstappen.
+Afgerond via `feature/stability-core-flows` en PR #29: automatische route-/opslagintegraties, personen-/dagenmatrix voor vier recepttypen, gedeelde hoeveelheidspresentatie en CI-releasecheck. Eindcheckpoint: 733 webtests, 248 kernsettests en 189 importerfixtures groen; lint, TypeScript en Production-build groen. Preview, fysieke iPhone-acceptatie en Production-smoke zijn geslaagd. Technische dekking: `docs/stability-core-flows.md`. Geen nieuwe consumentenfeature toegevoegd.
 
 ## E2E-kernflows + centrale recept ⇄ lijst-logica
 Doel: receptingrediënten en hun boodschappenlijstbijdragen gebruiken één consistente gekoppelde contribution/state-logica.
@@ -72,7 +73,9 @@ Eisen:
 
 PR #28 leverde de noodzakelijke tweerichtingssync; deze funderingsstap consolideert en bewaakt het model daarna structureel.
 
-## Productdata & receptkwaliteit
+**Status:** het stabiliteits- en bewakingsdeel is afgerond in PR #29. De centrale contribution/state-logica en bijbehorende kernflows worden op toekomstige PR's automatisch gecontroleerd.
+
+## Actief / volgende: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
 
 Omvat:
@@ -83,7 +86,10 @@ Omvat:
 - automatische Data Health-bewaking;
 - cataloguskwaliteit en prijsbetrouwbaarheid;
 - duidelijke audit van echte datablokkades;
+- bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
+
+Deze mijlpaal is de eerstvolgende stap, maar is nog **niet gestart**.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
