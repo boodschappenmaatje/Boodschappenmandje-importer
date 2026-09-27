@@ -475,29 +475,29 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(emptyHtml).toContain("Nog geen gerechten gekozen");
     expect(emptyHtml).toContain("Maak mijn week");
     expect(draftHtml).toContain("4 personen");
-    expect(draftHtml).toContain("0 maaltijden");
+    expect(draftHtml).toContain("Weekinstellingen");
     expect(draftHtml).toContain("Maak mijn week");
-    expect(readyHtml).toContain("Jouw week");
-    expect(readyHtml).toContain("Bekijk week");
+    expect(readyHtml).toContain("Je week");
+    expect(readyHtml).toContain("Maak mijn week");
   });
 
   it("behoudt Budget en boodschappenlijst op Home naast de weekkaarten", () => {
     const html = render(createElement(HomePage), draft());
-    expect(html).toContain("Bekijk weekbudget");
+    expect(html).toContain("Bekijk je weekbudget");
     expect(html).toContain("€ 24,63");
-    expect(html).toContain("Verder met mijn lijst");
+    expect(html).toContain("Pak je lijst erbij");
     expect(html).toContain('href="/lijst"');
   });
 
-  it("toont gegenereerde gerechten als horizontale dagkaarten met echte prijs en eigen gerechtfoto", () => {
+  it("toont het eerste gerecht compact met echte prijs en bijbehorende gerechtfoto", () => {
     const html = render(createElement(HomePage), generated());
-    expect(html).toContain("meal-day-scroller");
+    expect(html).toContain("home-c-meal");
     expect(html).toContain("Spaghetti bolognese");
     expect(html).toContain("€ 8,98");
     expect(html).toContain("pasta-spaghetti-bolognese.webp");
     expect(html).toContain('data-image-source="recipe"');
     expect(html).not.toContain("rundergehakt.webp&quot; class=\"meal-day-image");
-    expect(html).toContain("Maak mijn week");
+    expect(html).toContain("Bekijk je week");
   });
 
   it("gebruikt op weekkaart en gerechtdetail dezelfde nette fallback bij een niet-gevalideerde foto", () => {

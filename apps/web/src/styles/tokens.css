@@ -59,3 +59,21 @@
   --content-width: 760px;
   --bottom-nav-height: 76px;
 }
+
+/* Reference C: Home accents; accepted shared tokens remain unchanged. */
+:root {
+  --home-c-background: #E7F4FC;
+  --home-c-ink: #0D2546;
+  --home-c-halo: #D7EDFA;
+  --home-c-card-top: #427DAC;
+  --home-c-card-bottom: #285984;
+  --home-c-cta: #183F68;
+  --home-c-bubble: #3579AE;
+  --home-c-green: #0DBE83;
+  --home-c-green-light: #49E3A4;
+  --home-c-track: #204E75;
+  --home-c-row: rgba(255, 255, 255, .025);
+  --home-c-line: rgba(255, 255, 255, .15);
+  --home-c-shadow: rgba(21, 59, 91, .19);
+  --home-c-over: #FFC976;
+}
