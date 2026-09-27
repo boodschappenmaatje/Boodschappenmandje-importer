@@ -58,10 +58,9 @@ export function isDailyImportWindowOpen(now = new Date(), {
 
 export function dailyRetryDelayMinutes(attemptNumber) {
   const attempt = Math.max(1, Math.trunc(Number(attemptNumber) || 1));
-  if (attempt === 1) return 10;
-  if (attempt === 2) return 20;
-  if (attempt === 3) return 40;
-  return 60;
+  if (attempt === 1) return 120;
+  if (attempt === 2) return 180;
+  return 240;
 }
 
 export function dailyRetryAt(attemptNumber, now = new Date()) {
@@ -275,8 +274,9 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
       nextRetryAt: job.nextRetryAt ? new Date(job.nextRetryAt) : null,
       retryReason: retryable ? failure.code : null,
     }));
-    if (!failure.retryable) throw error;
-    return { attempted: true, reason: job.status, job, error };
+    // De dagstate is al veilig vastgelegd, zodat de volgende retry kan
+    // doorgaan. Een echte bron-/importfout blijft een zichtbare Actions-fout.
+    throw error;
   }
 
   const completedAt = dependencies.now?.() ?? new Date();

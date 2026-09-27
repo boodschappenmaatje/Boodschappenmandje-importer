@@ -7,6 +7,7 @@ import {
   classifyDailyImportError,
   dailyRetryAt,
   dailyRetryDelayMinutes,
+  inspectDailyCatalogAttempt,
   isDailyImportWindowOpen,
   runDailyCatalogAttempt,
   shouldRunDailyImport,
@@ -168,19 +169,57 @@ test("tijdelijke bronuitval bewaart gedeeltelijke groei en plant een retry", asy
     catalogAttemptMetrics: { candidatesViewed: 240, sourceErrors: 3 },
   });
   const harness = createHarness([sourceError]);
-  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
-  assert.equal(result.job.newProductsCollected, 137);
-  assert.equal(result.job.status, "retry_scheduled");
+  await assert.rejects(runDailyCatalogAttempt(config, logger, harness.dependencies), /Bron tijdelijk/);
+  assert.equal(harness.state.newProductsCollected, 137);
+  assert.equal(harness.state.status, "retry_scheduled");
   assert.equal(harness.attempts[0].outcome, "retryable_failure");
   assert.equal(harness.attempts[0].retryReason, "source_unavailable");
 });
 
-test("back-off gebruikt 10, 20, 40 en daarna 60 minuten", () => {
-  assert.deepEqual([1, 2, 3, 4, 9].map(dailyRetryDelayMinutes), [10, 20, 40, 60, 60]);
+test("een inspectiefout is geen normale skip", async () => {
+  await assert.rejects(
+    inspectDailyCatalogAttempt(config, new Date("2026-09-17T13:17:00Z"), {
+      fetchJob: async () => { throw new Error("Dagstatus onbereikbaar"); },
+    }),
+    /Dagstatus onbereikbaar/,
+  );
+});
+
+test("back-off wacht minstens twee uur en groeit gecontroleerd tot vier uur", () => {
+  assert.deepEqual([1, 2, 3, 4, 9].map(dailyRetryDelayMinutes), [120, 180, 240, 240, 240]);
   assert.equal(
     dailyRetryAt(2, new Date("2026-09-17T08:00:00Z")).toISOString(),
-    "2026-09-17T08:20:00.000Z",
+    "2026-09-17T11:00:00.000Z",
   );
+});
+
+test("inspecteren houdt target, cooldown en actieve lange poging als normale skips", async () => {
+  const now = new Date("2026-09-17T13:17:00Z");
+  const base = { newProductsCollected: 61, targetNewProducts: 400, status: "retry_scheduled" };
+  async function decision(job) {
+    return inspectDailyCatalogAttempt(config, now, { fetchJob: async () => job });
+  }
+  assert.equal((await decision({ ...base, newProductsCollected: 400 })).reason, "target_reached");
+  assert.equal((await decision({ ...base, nextRetryAt: "2026-09-17T14:00:00Z" })).reason, "retry_not_due");
+  assert.equal((await decision({ ...base, status: "running" })).reason, "attempt_running");
+  assert.deepEqual(
+    { run: (await decision({ ...base, nextRetryAt: "2026-09-17T13:00:00Z" })).run },
+    { run: true },
+  );
+});
+
+test("nieuwe Amsterdamse dag start eigen job, oude onvolledige dag blokkeert niet", async () => {
+  const now = new Date("2026-09-18T07:17:00Z");
+  const requested = [];
+  const result = await inspectDailyCatalogAttempt(config, now, {
+    fetchJob: async (_config, query) => {
+      requested.push(query.jobDate);
+      return null;
+    },
+  });
+  assert.deepEqual(requested, ["2026-09-18"]);
+  assert.equal(result.reason, "daily_job_missing");
+  assert.equal(result.run, true);
 });
 
 test("een lopende attempt en een dubbele retrytrigger worden geweigerd", () => {
@@ -315,7 +354,7 @@ test("daily job-RPC's gebruiken typed claims en locktokens", async () => {
   assert.equal(requests[1].body.p_lock_token, "lock-1");
 });
 
-test("Actions gebruikt één concurrencygroep, korte schedulerchecks en geen urenlange sleep", async () => {
+test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenlange sleep", async () => {
   const [initial, retry, monitor] = await Promise.all([
     readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8"),
     readFile(new URL("../.github/workflows/retry-daily-catalog-import.yml", import.meta.url), "utf8"),
@@ -323,9 +362,13 @@ test("Actions gebruikt één concurrencygroep, korte schedulerchecks en geen ure
   ]);
   assert.match(initial, /npm run import:daily/);
   assert.match(initial, /group: hoogvliet-supabase-update/);
-  assert.match(retry, /cron: "\*\/10 4-21 \* \* \*"/);
+  assert.match(retry, /cron: "17 8,13,18 \* \* \*"/);
+  assert.doesNotMatch(retry, /\*\/10/);
   assert.match(retry, /npm run --silent inspect:daily/);
   assert.match(retry, /group: hoogvliet-supabase-update/);
+  assert.match(retry, /cancel-in-progress: false/);
+  assert.match(retry, /if: steps\.due\.outputs\.run_attempt == '1'/);
+  assert.doesNotMatch(retry, /continue-on-error: true/);
   assert.doesNotMatch(retry, /\bsleep\s+[1-9]\d{2,}/i);
   assert.match(monitor, /ontbrekende dagjob wordt veilig klaargezet/i);
 });
