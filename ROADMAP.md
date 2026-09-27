@@ -164,7 +164,7 @@ Uitgangspunten:
 Voorbeeld: als 500 g nodig is, kan 1 verpakking van 600 g à €2,40 goedkoper zijn dan 2 verpakkingen van 400 g à €1,50. Kies dan €2,40, ook als de andere variant per gram goedkoper lijkt.
 
 ## Actieve visuele tussenstap — Home Optie C
-De gebruiker koos op 27 september 2026 definitief de **rechter Optie C — Speels & persoonlijk**. Uitvoering via `feature/home-option-c`, Draft PR #30; nog geen fysieke acceptatie of release.
+De gebruiker koos op 27 september 2026 definitief de **rechter Optie C — Speels & persoonlijk**. Uitvoering via `feature/home-option-c`, Draft PR #30; **klaar voor fysieke iPhone-test**, nog geen fysieke acceptatie of release.
 
 Scope: Home-compositie nauwkeurig volgen met lichte blauwe achtergrond, grote vriendelijke hero, los officieel 3D-bonnetje en “Samen binnen budget!”, blauwe budgetbon met afzonderlijke echte week-/maaltijdbedragen, eerstvolgende maaltijd en lijst-/weekactie. Alle werkende kernflows en overige schermen blijven behouden.
 

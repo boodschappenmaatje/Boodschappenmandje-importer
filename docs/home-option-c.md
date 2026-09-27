@@ -43,4 +43,18 @@ Preview: https://boodschappenmaatje-pwa-git-feature-ho-02f3d4-dennisverkaik-4661
 
 Work-browser heeft geen telefoonviewport/resize-capability; gecontroleerd in een echte smalle Home-contentkolom van 390px binnen desktop. Dit is geen fysieke mobiele of Dynamic Type-acceptatie.
 
-Live eindbewijs wordt na de laatste Preview-controle hieronder aangevuld. Fysieke iPhone-test blijft vereist vóór merge.
+## Live eindbewijs — functionele head d30f304
+- Preview en volledige CI-releasegate success. 745/745 webtests, 189/189 importerfixtures en seedchecks; lint, TypeScript en Production-build groen. Lokale kernset 248/248; laatste gerichte Home/UI/providerselectie 41/41.
+- Schone Home toont geen fictieve week of gerecht; weekinstelling 4 personen / 3 dagen / €100 / €70 voltooid via bestaande UI.
+- Drie echte maaltijden €11,77, 8 lijstproducten. Eerste gerecht Vegetarische pasta met courgette, 4 personen, €4,07. Bestaande passende receptafbeelding.
+- Losse verpakking spinazie €0,95 toegevoegd via bestaande lijstherkomstactie: week €12,72, maaltijden €11,77, resterend €87,28. Beide balken afzonderlijk: 12,72% en 16,8143%. Na volledige reload behouden.
+- Recept courgette 1→2: gerecht €4,86, week €13,51, maaltijden €12,56, resterend €86,49; Home toont alle wijzigingen. Lijstmin 2→1 herstelt de oorspronkelijke bedragen en laat de losse spinazie staan.
+- Lijst-CTA, week-CTA, maaltijd→Menu, budgetkaart→Budget, vijf tabs en refresh/heropenen geslaagd. Andere schermen behouden hun ontwerp en gegevens.
+- Budget tijdelijk €1.000 via bestaande Budget-UI: Home €987,28 over en afzonderlijke maaltijdgrens €70. Kaart, bedrag en budgetregels hadden geen interne horizontale overflow bij 390px contentbreedte. Daarna teruggezet op €100.
+- Definitieve mascotte geladen met alpha. Pagina scrollWidth = clientWidth (1363px); Home gecontroleerd als echte 390px kolom, geen gesimuleerde iPhone. Gedraaid mascottevlak binnen de kolom, decoratieve halo blijft binnen schermpadding. De kaart, bedrag, maaltijd en CTA's passen zonder tekstoverlap.
+
+**KLAAR VOOR FYSIEKE IPHONE-TEST — HOME OPTIE C.** Geen merge, Production, databasewijziging of productimport. DESIGN.md blijft ongewijzigd tot fysieke acceptatie.
+
+![Echte Preview met 390px Home-contentkolom; geen telefoonemulatie](screenshots/home-option-c-preview.jpg)
+
+Fysieke checklist: vergelijk hero/mascotte/budgetbon met C; controleer beide budgetten en maaltijd/producttelling; open beide CTA's en vijf tabs; wijzig één verpakking in recept en terug in lijst; heropen app; controleer smal scherm, grotere tekst, safe areas en scrollen. Weekinstellingen/Nieuwe week zitten onder de compacte uitklapper.

@@ -3,18 +3,20 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**HOME OPTIE C — VISUELE TUSSENSTAP IN PREVIEW-VALIDATIE. Stabiliteit & kernflows is gereleased. Productdata & receptkwaliteit blijft niet gestart.**
+**HOME OPTIE C — KLAAR VOOR FYSIEKE IPHONE-TEST. Stabiliteit & kernflows is gereleased. Productdata & receptkwaliteit blijft niet gestart.**
 
 ## Home Optie C — 27 september 2026
 - Branch `feature/home-option-c`, Draft PR **#30**. Remote basis main `31705dd90c1f6d4b6d705b24219958f0c7894c84`; PR #29 gemerged en Production success bevestigd. Alleen historische PR #21 stond daarnaast open.
-- Eerste functionele commit `95b031fd0852f0da29f86cabfd32e4f88e8b7842`; aansluitende verfijning/testcommit volgt. Gebruik de actuele remote PR-head als technische bron.
+- Gevalideerde functionele head: `d30f304c8fdccd627a21f9aaaea49edcd118f175`. De aansluitende documentatiecommit bevat alleen dit checkpoint, de roadmapstatus, het verslag en screenshot; de actuele PR-head staat op GitHub.
 - Uitsluitend Home volgens de rechter referentie **C — Speels & persoonlijk**. Hero, los officieel 3D-bonnetje, tekstwolkje, budgetbon met afzonderlijke week-/maaltijdbalk, actuele maaltijd, lijst-/weekactie, compact openklapbare weekinstellingen. Bestaande Nieuwe week-bevestiging behouden.
 - Geen gewijzigde providers/services/planner/budgetberekeningen/opslag/API's; Menu/Vrije keuze/Lijst/Budget/Meer behouden hun ontwerp. Alleen Home krijgt scoped tokens/CSS en lokale Nunito-headingfont.
 - Mascotte: via imagegen achtergrondextractie uit `maatje-v1-512.png`, transparante WebP (640px, 55 kB), geen nieuw app-icoon. Herkomst/prompt in `docs/home-option-c.md`.
-- Eerste regressieronde: **745/745 webtests (63 bestanden)** inclusief 12 nieuwe Home/navigatiescenario's; kernset **248/248**, uitgebreid met Home→Lijst/Menu en cold reopen. Lint, TypeScript en Production-build groen. Importer ongewijzigd; CI behoudt zijn bestaande verplichte fixturegate.
-- Preview: https://boodschappenmaatje-pwa-git-feature-ho-02f3d4-dennisverkaik-4661.vercel.app . Lege Home en weekinstelling echt geopend; actieve-weekcontrole en visuele verfijning lopen nog.
+- **745/745 webtests (63 bestanden)** inclusief 12 nieuwe Home/navigatiescenario's; kernset **248/248**, uitgebreid met Home→Lijst/Menu en cold reopen. Lint, TypeScript en Production-build groen. CI-releasegate op functionele head `d30f304` **success**, inclusief verplichte **189/189 importerfixtures** en seedchecks; geen import uitgevoerd.
+- Preview **Ready / success**: https://boodschappenmaatje-pwa-git-feature-ho-02f3d4-dennisverkaik-4661.vercel.app . Echte lege Home → 4p/3d/€100/€70-week → 8 producten, maaltijden €11,77. Losse extra €0,95 geeft week €12,72, maaltijden €11,77, restant €87,28; na volledige refresh behouden.
+- Live recept courgette 1→2: gerecht €4,07→€4,86, week €13,51, maaltijden €12,56, restant €86,49. Lijst 2→1 herstelt Home. Beide Home-CTA's, maaltijd→Menu, Budgetlink, alle vijf tabs en €1.000-budgetweergave gecontroleerd.
 - Geen telefoonviewport beschikbaar in de Work-browser; Home wordt in een echte 390px-brede contentkolom gecontroleerd. Geen fysieke iPhone-acceptatie geclaimd.
-- **Nog niet klaar voor acceptatie:** finale Previewvergelijking, actuele CI en bewijs moeten nog worden afgerond. Geen merge/Production/database/migratie/import.
+- Visueel met uitsluitend rechter Optie C vergeleken en verfijnd: kleinere mascotte-overlap, kartelrand, zware afgeronde kop/bedrag, ronde groene winkelwagen en rustige navigatie. Schermafbeelding en bewuste verschillen in `docs/home-option-c.md`.
+- **KLAAR VOOR FYSIEKE IPHONE-TEST — HOME OPTIE C.** Geen fysieke acceptatie, merge/Production/database/migratie/import. `DESIGN.md` bewust nog niet definitief aangepast.
 
 ## Production-release — PR #29 — 27 september 2026
 - De gebruiker heeft de actuele Stabiliteit & kernflows-Preview fysiek op iPhone getest en **geslaagd** verklaard. Bevestigd: recept 1→2, lijst 2→1, hoeveelheden/bedragen, productvervanging, consistente hoeveelheidspresentatie, manual extra, gedeelde herkomst, categorieën, filters, afvinken, directe trash, Honig, Knorr, eigen recepten en PWA-persistence.
