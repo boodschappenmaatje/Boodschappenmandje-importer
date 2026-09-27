@@ -26,7 +26,7 @@ Gebruikersreferentie `IMG_0326(2).jpeg`, uitsluitend rechter telefoon **C — Sp
 ## Bewuste verschillen met de referentie
 - Echte bedragen, aantallen, gerecht en bijbehorende bestaande afbeelding; nooit de referentievoorbeelddata.
 - Zonder volledige week: “Je week begint hier.”, passende lege maaltijd en “Maak mijn week”.
-- “Eerst op je menu” in plaats van “Vanavond”: de huidige week heeft volgordeposities, geen datum per gerecht of gegeten-markering. Eerste daadwerkelijk gekozen gerecht wordt getoond; vrije plaatsen worden overgeslagen.
+- Eerste checkpoint gebruikte “Eerst op je menu”. Dit is op fysieke feedback vervangen door de horizontale week-/gerechtslider; zie het actuele slidercheckpoint in PROJECT_STATE.md. Iedere opgeslagen dag blijft daarin zichtbaar, ook Vrije keuze en lege dagen.
 - Bestaande weekinstellingen en Nieuwe week blijven in een compacte uitklapper bereikbaar. Bevestigingsflow ongewijzigd.
 - Overschrijding heeft tekst en een amberkleurige balk; onbekende prijzen geven geen fictief restant.
 - Geen exacte bronfont beschikbaar in rasterreferentie; lokale Nunito geeft de zware afgeronde lettervorm. Kartelrand is een robuuste CSS-benadering.
@@ -58,3 +58,17 @@ Work-browser heeft geen telefoonviewport/resize-capability; gecontroleerd in een
 ![Echte Preview met 390px Home-contentkolom; geen telefoonemulatie](screenshots/home-option-c-preview.jpg)
 
 Fysieke checklist: vergelijk hero/mascotte/budgetbon met C; controleer beide budgetten en maaltijd/producttelling; open beide CTA's en vijf tabs; wijzig één verpakking in recept en terug in lijst; heropen app; controleer smal scherm, grotere tekst, safe areas en scrollen. Weekinstellingen/Nieuwe week zitten onder de compacte uitklapper.
+
+
+## Correctie op fysieke feedback — weekslider (PR #30)
+De huidige Home bevat **één horizontale week-/gerechtslider** op de plaats van de oude enkele maaltijdregel. Geen losse dagchips en geen extra verticale sectie. Het bestaande dagmodel bepaalt kaartenaantal en volgorde; daglabels zijn gedeeld met Menu.
+
+Functionele head `215586a5cf77a461626f8607c0a66c3a8b19dbd5`: 765 webtests / 64 bestanden, 254 kernsettests / 14 bestanden, lint, TypeScript, Production-build en volledige GitHub-releasegate groen. De nieuwe tests bewaken 1/3/5/7 dagen, alle kaartgegevens/foto's, afwijkende opgeslagen volgorde, Vrije keuze/lege dagen, exacte geopende Menu-dag met ingrediënten/−/+, routevalidatie, refresh en weekwijziging.
+
+Echte Previewcontrole: zeven opgeslagen dagen → zeven kaarten. Woensdag opent Penne arrabbiata direct in Menu met drie ingrediënten (400g penne, 600g passata, 160g ui) en verpakkingsknoppen. Dit blijft na refresh correct open. Penne 1→2 gaf €2,91→€3,63 op Home; herkomstspecifieke lijstmin zette dit terug. Zondag opende de bestaande Vrije keuze-route voor dag 7; ingevulde Macaroni verschijnt vervolgens op de zondagkaart en opent Menu met vier ingrediënten. Eindstand 19 producten; €41,37 weekkosten, €40,42 maaltijdkosten en €58,63 over. Geen voorbeelddata gebruikt.
+
+Native horizontale overflow/snap: 390px content, 2550px scrollbreedte voor zeven kaarten, sprong van 0 naar 365px via native bediening, geen horizontale overflow van het document. De volgende kaart is gedeeltelijk zichtbaar. Normale kaart circa 102px hoog; geen grote verticale uitbreiding.
+
+Work heeft geen telefoonviewport-capability. Touch-scrollcommando's gaven browserprotocol-time-outs, dus daadwerkelijke aanraking is niet geverifieerd; toetsenbordscroll, focus, snap en kaartnavigatie wel. Controleer fysiek op iPhone links/rechts swipen, snap, grotere tekst, safe areas, 1/3/5/7 dagen, dag 3 openen, Vrije keuze/lege dag, beide CTA's en heropenen.
+
+![Home Optie C met horizontale weekslider, echte Preview](screenshots/home-option-c-week-slider.jpg)

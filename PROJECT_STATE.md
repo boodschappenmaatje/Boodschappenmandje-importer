@@ -3,9 +3,27 @@
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Huidige milestone
-**HOME OPTIE C — KLAAR VOOR FYSIEKE IPHONE-TEST. Stabiliteit & kernflows is gereleased. Productdata & receptkwaliteit blijft niet gestart.**
+**HOME OPTIE C WEEKSLIDER — KLAAR VOOR FYSIEKE IPHONE-HERTEST. Stabiliteit & kernflows is gereleased. Productdata & receptkwaliteit blijft niet gestart.**
 
-## Home Optie C — 27 september 2026
+## Home Optie C — correctie horizontale week-/gerechtslider — 27 september 2026
+- Bestaande branch `feature/home-option-c`, bestaande Draft PR **#30** hervat vanaf remote `358669be1e62eaf3d4dfe2cc6efaf7974e17e869`; main blijft `31705dd90c1f6d4b6d705b24219958f0c7894c84`.
+- Functionele sliderhead: `215586a5cf77a461626f8607c0a66c3a8b19dbd5`. Vercel Preview **Ready/success** en volledige CI-releasegate **success** op deze functionele head. De aansluitende docscommit bevat alleen dit checkpoint en Previewbewijs; actuele PR-head staat op GitHub.
+- **De ene sectie “Eerst op je menu” is vervangen door één horizontale week-/gerechtslider op exact dezelfde plek. Geen losse dagchips, geen geselecteerde dag met één apart gerecht en geen extra verticale sectie bouwen.**
+- `HomeWeekSlider` volgt uitsluitend `preparation.days` in opgeslagen volgorde. Iedere dag krijgt foto/fallback, gerecht, actuele personen en bestaande verpakkingsprijs; 1/3/5/7 kaarten. Native horizontale overflow en CSS scroll-snap, volgende kaart deels zichtbaar; één kaart benut de volle breedte. Geen carouseldependency.
+- De planner heeft geen globale actieve dag of kalenderdatums. Slider begint daarom bij de eerste opgeslagen dag; geen nieuwe selectie-, kalender- of persistence-state.
+- Gevuld gerecht → `/week-voorbereiden?day=N`: dezelfde Menu-weergave focust/scrolt naar die dag en opent het bestaande receptdetail met ingrediënten, hoeveelheden, verpakkingen, −/+ en gerechtacties. Gedeelde daglabels uit bestaande Menu-constante; geen tweede dagmodel.
+- Vrije keuze → bestaande `/vrije-keuze?day=N`-flow. Lege dag → eigen dag in Menu met bestaande gerechtkeuzeknop, zonder fictieve prijs/foto/recept. Ongeldige of verdwenen route-dag wijzigt geen weekstate.
+- Hero/mascotte/tekstwolkje, budgetbon, beide CTA's en vijf tabs blijven behouden. Geen provider-, planner-, budget-, matching-, recept-/lijst-, quantity- of opslagwijzigingen. DESIGN.md niet definitief gewijzigd; ROADMAP-status blijft lopende visuele tussenstap.
+- Lokaal **765/765 webtests (64 bestanden), 254/254 kernsettests (14 bestanden), lint, TypeScript en Production-build groen**. Nieuwe dekking: 1/3/5/7 dagen, opgeslagen volgorde, kaartgegevens/foto, exacte geopende Menu-dag, ingrediënten en −/+, Vrije keuze/lege dag, routevalidatie, cold reopen en week wijzigen. Bestaande recept ⇄ lijst-regressies behouden.
+- Live Preview: 4 personen / 7 dagen / €100 week / €70 maaltijden geeft exact zeven kaarten Ma→Zo. Zes gerechten plus zondag Vrije keuze gecontroleerd, daarna zondag ingevuld via bestaande keuze-flow. Eindstand zeven echte gerechten, 19 producten, week €41,37 / maaltijden €40,42 / €58,63 over; los verschil €0,95 behouden.
+- Woensdag → `/week-voorbereiden?day=2` opent alleen Penne arrabbiata, scrolt naar die dag (circa 32px vanaf bovenkant) en toont drie ingrediënten, hoeveelheden, verpakkingen en −/+. Na volledige reload opnieuw correct open. Penne 1→2: €2,91→€3,63 op recept én Home; herkomstspecifieke lijstmin herstelt €2,91.
+- Zondag Vrije keuze → `/vrije-keuze?day=6`, expliciet “Je kiest voor dag 7”; na toevoegen van Macaroni met gehakt en groente gaat dezelfde Home-kaart naar Menu dag 7 met vier ingrediënten. Beide Home-CTA's en alle vijf tabs gecontroleerd.
+- Native horizontale scroll/snap in echte 390px Home-kolom gecontroleerd: 7 kaarten, scrollbreedte 2550px, `x mandatory`, scrollpositie 0→365px; documentbreedte gelijk aan document-scrollbreedte (1348px), geen pagina-overflow. Geen extra sectie; kaarten circa 102px hoog, compositie/CTA's/nav blijven compact zichtbaar.
+- Browser ondersteunt geen instelbare telefoonviewport. Aanraakscroll-opdrachten van de Work-browser gaven protocol-time-outs; horizontale native bediening is via toetsenbord en kaartfocus gecontroleerd. **Echte iPhone-touch/swipe, safe area en tekstgroei blijven expliciete fysieke acceptatiepunten.** Geen fysieke acceptatie geclaimd.
+- Screenshot: `docs/screenshots/home-option-c-week-slider.jpg`. Preview: https://boodschappenmaatje-pwa-git-feature-ho-02f3d4-dennisverkaik-4661.vercel.app . CI-importerfixtures/seedcheck verplicht groen; geen import uitgevoerd.
+- **KLAAR VOOR FYSIEKE IPHONE-HERTEST — HOME OPTIE C WEEKSLIDER.** Geen merge, Production-deployment, databaseactie/migratie of productimport.
+
+## Historisch eerste Home Optie C-checkpoint — 27 september 2026
 - Branch `feature/home-option-c`, Draft PR **#30**. Remote basis main `31705dd90c1f6d4b6d705b24219958f0c7894c84`; PR #29 gemerged en Production success bevestigd. Alleen historische PR #21 stond daarnaast open.
 - Gevalideerde functionele head: `d30f304c8fdccd627a21f9aaaea49edcd118f175`. De aansluitende documentatiecommit bevat alleen dit checkpoint, de roadmapstatus, het verslag en screenshot; de actuele PR-head staat op GitHub.
 - Uitsluitend Home volgens de rechter referentie **C — Speels & persoonlijk**. Hero, los officieel 3D-bonnetje, tekstwolkje, budgetbon met afzonderlijke week-/maaltijdbalk, actuele maaltijd, lijst-/weekactie, compact openklapbare weekinstellingen. Bestaande Nieuwe week-bevestiging behouden.
