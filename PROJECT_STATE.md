@@ -5,6 +5,14 @@
 ## Huidige milestone
 **STABILITEIT & KERNFLOWS — AFGEROND / PRODUCTION. Volgende mijlpaal: PRODUCTDATA & RECEPTKWALITEIT — nog niet gestart.**
 
+## Production-auth toegang opnieuw gecontroleerd — 28 september 2026, 10:55 Amsterdam
+- Hervat dezelfde Draft PR #31, remote uitgangshead `91c5e3f16e6de869857990fa2b2cbc40d2faa236`; main ongewijzigd. Bestaande functionele fixes en groene regressies behouden.
+- Juiste scope onafhankelijk bevestigd via Vercel-status op actuele main: **`dennisverkaik-4661`**, project **`boodschappenmaatje-pwa`**. Rechtstreekse projectcontrole geeft **403 Forbidden**: opnieuw authenticeren voor deze scope of een credential met toegang gebruiken. Team-ID uit de fout: `team_BAFUVdOiQaUcI9j5JXkZXHXq`. Dit is een concrete beheerrechtenblokkade, los van de app-endpoints die eerder 401 gaven.
+- Verbonden Vercel-account toont nog geen teams; browsersessie niet aangemeld, geen veilige browserauth-capability. Production-config/tokenkoppeling daarom niet geïnspecteerd of gewijzigd. Oorzaak van app-401 (ontbrekende waarde versus mismatch) blijft onbewezen. Geen nieuwe probe uitgevoerd zonder herstel; laatste bewijs blijft beide endpoints 401 om 10:28.
+- **Read-only 10:55:** 10/400 toegevoegd, restant 390, 6.062 unieke Hoogvliet-SKU's; `failed_requires_attention`, geen lock en geen retry. Dagjob niet vrijgegeven; tweede importpoging niet gestart. Geen database-/onderhoudswrite, merge of deployment.
+- Gebruiker autoriseert nu ook een uitsluitend voor authherstel minimaal noodzakelijke Production-configuratie/redeploy van de bestaande applicatie, indien technisch vereist. Geen applicatierelease of merge van PR #31. Toestemming voor exact één tweede import blijft ongebruikt en voorwaardelijk: beide authprobes eerst groen; maximum `min(actueel restant, 390)`; eerdere 10 behouden; daarna stoppen.
+- Nodig: Vercel opnieuw koppelen met toegang tot scope `dennisverkaik-4661` en dit project. Daarna de daadwerkelijk gedeployde tokenconfig veilig vergelijken/herstellen en beide lege-lijst-probes verifiëren. Geen secrets via chat delen. Geen extra tests gestart: alleen documentatie, geen functionele wijziging. ROADMAP ongewijzigd; nog niet klaar voor release-acceptatie wegens geblokkeerde live eindvalidatie.
+
 ## Tweede live validatie toegestaan, nog niet uitgevoerd — 28 september 2026, 10:42 Amsterdam
 - Nieuwe expliciete toestemming: eerst daadwerkelijke Production-tokenkoppeling herstellen en beide lege-lijst-authprobes laten slagen; pas daarna dezelfde terminale dagjob gericht vrijgeven met behoud van eerdere 10 producten. Exact één importpoging, maximaal het opnieuw gemeten restant én nooit meer dan 390. Daarna stoppen ongeacht resultaat. Toestemming is **nog niet gebruikt**.
 - Actuele remote uitgangshead bevestigd: `b0568eda07222373d91952d5231475c2c3fad5f0`, dezelfde Draft PR #31; main ongewijzigd `31705dd90c1f6d4b6d705b24219958f0c7894c84`.
