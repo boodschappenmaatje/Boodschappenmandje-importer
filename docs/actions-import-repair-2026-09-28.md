@@ -116,3 +116,22 @@ Read-only authprobe toegevoegd als geïsoleerde workflow_dispatch-optie, uitslui
 233 tests groen, inclusief A–H, fouten halverwege page/detail/write met sluitende telling, redirectcontext over windows, pagina >20, v3/v4-state, queue-/ackvolgorde en read-only probeguard. `npm run check`, alle workflow-YAML en diffcheck groen. Geen webcodewijziging; automatische bestaande CI-releasegate wordt wel gecontroleerd.
 
 Read-only dagcontrole 10:25 Amsterdam: 10/400, restant390, geen lock/retry, 6.062 unieke Hoogvliet-SKU's. Geen tweede import/onderhoudswrite/merge/Production. Eventuele tweede run vereist opnieuw expliciete toestemming én actuele dagstand: cap=min(400, 400−actuele daggroei). Terminale dagjob moet gericht vrijgegeven worden met behoud van eerdere telling en bestaande lockregels. Product-/prijs-/dag-/metadatarequests vormen geen atomische transactie bij een harde kill; dit resterende risico is niet weggeschreven.
+
+### Actueel authbewijs — 10:28 Amsterdam
+
+Functionele head **3cb13b30c6cad7ed14b140e8cd71491f8bf4bd62**, alle 17 bestanden remote hash-identiek aan lokaal getest. Alleen read-only authprobe uitgevoerd: [run 36397512040](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/36397512040), job108847307552. Resultaat:
+
+- `new-products`: HTTP401, `unauthorized`.
+- `mix-refresh`: HTTP401, `unauthorized`.
+- `import`, `falafel-e2e` en historische `preflight`: **skipped**.
+- Geen databasewrites, import, cache-/profielonderhoud of tweede importpoging.
+
+Beide endpoints zijn bereikbaar op de bedoelde Production-origin, maar de app weigert het Actions-token. De actuele code accepteert alleen `Bearer` met dezelfde getrimde `PLANNER_CACHE_ADMIN_TOKEN` als de gedeployde server. Een ontbrekende Production-waarde en een afwijkende waarde geven dezelfde401. Vercel-beheertoegang ontbreekt (403); die twee configuratiegevallen zijn dus niet nader vastgesteld. Er zijn geen secrets gelezen/gewijzigd, geen headers nagebootst om auth te omzeilen en geen Production-deployment uitgevoerd.
+
+Benodigde externe correctie: laat het repositorysecret overeenkomen met de **reeds gedeployde** Production-tokenwaarde via de bevoegde beheerder. Als Production nog geen token heeft, is een afzonderlijk toegestane configuratie/deploymentactie nodig; die valt buiten dit verbod op Production-deployment. Daarna dezelfde lege-lijst-probe moet voor beide routes400/invalid-request geven. De huidige401 verklaart de reproduceerbare onderhoudsblokkade, maar is geen terugwerkend bewijs van de niet-gelogde status in run82.
+
+De codefix en fixtures zijn gereed; live eindvalidatie blijft geblokkeerd door deze authconfiguratie. Toestemming voor een tweede import wordt afzonderlijk gevraagd; vooraf actuele dagstand controleren (nu390restant), geen reset van eerdere10 en geen automatische derde poging. De oude10pendingmeldingen mogen alleen gericht en met aparte onderhoudsautorisatie opnieuw worden uitgevoerd; deze opdracht voerde ze niet uit.
+
+### Afsluitend verificatiecheckpoint
+
+[CI 36397427573](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/36397427573) op functionele head3cb13b3: **success** (233 importer-/onderhoudstests, 733 webtests/63 bestanden, kernset, lint, TypeScript en build). Alleen de afsluitende documentatie wijzigt daarna. Laatste read-only controle10:29 Amsterdam bevestigt opnieuw10/400, resterend390,6.062 unieke Hoogvliet-SKU's, failed_requires_attention, geen lock en geen retry.
