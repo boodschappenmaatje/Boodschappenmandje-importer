@@ -168,13 +168,17 @@ jobs:
             .includes(body?.code) ? body.code : 'unexpected-response';
           const upstreamStatus = Number.isInteger(body?.upstreamStatus) &&
             body.upstreamStatus >= 100 && body.upstreamStatus <= 599 ? body.upstreamStatus : null;
+          const responseStatus = body?.responseReceived === true && Number.isInteger(body?.responseStatus) &&
+            body.responseStatus >= 100 && body.responseStatus <= 599 ? body.responseStatus : null;
           const ok = response.status === 200 && code === 'database-read-ok' &&
             body?.authenticated === true && body?.serverClientAvailable === true &&
             body?.databaseReadSuccess === true && body?.databaseWrites === 0;
           console.log(JSON.stringify({ status: response.status, code, upstreamStatus,
             authenticated: body?.authenticated === true,
             serverClientAvailable: body?.serverClientAvailable === true,
-            databaseReadSuccess: body?.databaseReadSuccess === true, databaseWrites: body?.databaseWrites === 0 ? 0 : null }));
+            databaseReadSuccess: body?.databaseReadSuccess === true, databaseWrites: body?.databaseWrites === 0 ? 0 : null,
+            fetchCalled: body?.fetchCalled === true, responseReceived: body?.responseReceived === true,
+            responseStatus }));
           if (!ok) process.exitCode = 1;
           NODE
 
