@@ -7,6 +7,10 @@ on:
         description: Alleen Production-auth met lege ID-lijsten controleren; geen databasewrites of import
         type: boolean
         default: false
+      server_client_probe_only:
+        description: Alleen Production-serverclient en een bewezen lege profielquery controleren; geen writes of import
+        type: boolean
+        default: false
       daily_attempt_only:
         description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry
         type: boolean
@@ -92,7 +96,7 @@ concurrency:
 jobs:
   maintenance-probe:
     permissions: {}
-    if: github.event_name == 'workflow_dispatch' && inputs.maintenance_probe_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/daily-catalog-retry-schedule' && inputs.daily_attempt_only != true && inputs.falafel_e2e_only != true && inputs.preflight_only != true && inputs.e2e_test_sku == ''
+    if: github.event_name == 'workflow_dispatch' && inputs.maintenance_probe_only == true && inputs.server_client_probe_only != true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/daily-catalog-retry-schedule' && inputs.daily_attempt_only != true && inputs.falafel_e2e_only != true && inputs.preflight_only != true && inputs.e2e_test_sku == ''
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -127,6 +131,66 @@ jobs:
             if (!verified) failed = true;
           }
           if (failed) process.exitCode = 1;
+          NODE
+
+  server-client-probe:
+    permissions: {}
+    if: github.event_name == 'workflow_dispatch' && inputs.server_client_probe_only == true && inputs.maintenance_probe_only != true && inputs.daily_attempt_only != true && inputs.falafel_e2e_only != true && inputs.preflight_only != true && inputs.e2e_test_sku == '' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/daily-catalog-retry-schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check Production client and read-only profile lookup
+        shell: bash
+        env:
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const origin = 'https://boodschappenmaatje-pwa.vercel.app';
+          const expectedSupabase = 'https://pjcqxufvbkkjehituzxz.supabase.co';
+          // Reserved probe ID: the workflow first proves it is absent. It is never
+          // treated as an actual recipe or fed into planner maintenance.
+          const absentId = '00000000-0000-0000-0000-000000000000';
+          const token = process.env.PLANNER_CACHE_ADMIN_TOKEN?.trim();
+          const secret = process.env.SUPABASE_SECRET_KEY?.trim();
+          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+          if (!token || !secret || new URL(process.env.SUPABASE_URL ?? '').origin !== expectedSupabase) {
+            throw new Error('probe-configuration-missing-or-wrong-project');
+          }
+          const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json',
+            ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
+          const safeFetch = (url, options) => fetch(url, {
+            ...options, redirect: 'manual', signal: AbortSignal.timeout(20000),
+          });
+          // The Production repair route creates its server client BEFORE rejecting
+          // the empty body; a 400 proves client initialization without a DB write.
+          const client = await safeFetch(`${origin}/api/internal/planner-readiness/repair`,
+            { method: 'POST', headers, body: '{}' });
+          const clientBody = await client.json().catch(() => null);
+          const initialized = client.status === 400 && clientBody?.error === 'invalid-request';
+          console.log(JSON.stringify({ probe: 'server-client-initialization',
+            status: client.status, code: initialized ? 'invalid-request' : 'unexpected-response', databaseWrites: 0 }));
+          if (!initialized) throw new Error('server-client-not-initialized');
+          // Independent read-only guard: a missing profile cannot enter the
+          // mix-refresh write branch. Never print credentials or response bodies.
+          const url = new URL('/rest/v1/meal_mix_profiles', expectedSupabase);
+          url.search = `?select=recipe_id&recipe_id=eq.${absentId}`;
+          const scope = await safeFetch(url, { method: 'GET', headers: { apikey: secret,
+            ...(!secret.startsWith('sb_secret_') ? { authorization: `Bearer ${secret}` } : {}) } });
+          const scopeBody = await scope.json().catch(() => null);
+          if (scope.status !== 200 || !Array.isArray(scopeBody) || scopeBody.length !== 0) {
+            throw new Error('reserved-profile-not-proven-absent');
+          }
+          const read = await safeFetch(`${origin}/api/internal/planner-readiness/mix-refresh`,
+            { method: 'POST', headers, body: JSON.stringify({ recipeIds: [absentId] }) });
+          const readBody = await read.json().catch(() => null);
+          const rejectedAbsent = read.status === 409 && readBody?.error === 'profile-not-verified';
+          console.log(JSON.stringify({ probe: 'production-profile-lookup', status: read.status,
+            code: rejectedAbsent ? 'profile-not-verified' : 'unexpected-response', databaseWrites: 0 }));
+          if (!rejectedAbsent) throw new Error('production-profile-lookup-unexpected');
           NODE
 
   preflight:
@@ -252,7 +316,7 @@ jobs:
 
   import:
     # Fail closed for both typed boolean and raw workflow_dispatch input.
-    if: ${{ inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
+    if: ${{ inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && inputs.server_client_probe_only != true && github.event.inputs.server_client_probe_only != 'true' && inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
