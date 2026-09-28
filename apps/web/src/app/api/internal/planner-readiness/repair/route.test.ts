@@ -3,9 +3,13 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const mocked = vi.hoisted(() => ({
   serverClient: vi.fn<() => SupabaseClient | null>(),
+  probeClient: vi.fn<(probeFetch: typeof fetch) => SupabaseClient | null>(),
   repair: vi.fn(),
 }));
-vi.mock("@/lib/supabase/server", () => ({ getSupabaseServerClient: mocked.serverClient }));
+vi.mock("@/lib/supabase/server", () => ({
+  getSupabaseServerClient: mocked.serverClient,
+  getSupabaseServerClientForReadProbe: mocked.probeClient,
+}));
 vi.mock("@/server/planner-cache-service", () => ({ repairIngredientProductMatch: mocked.repair }));
 
 import { POST } from "./route";
@@ -23,15 +27,17 @@ describe("authenticated, write-free Production database probe", () => {
   beforeEach(() => {
     vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "local-test-token");
     mocked.serverClient.mockReset();
+    mocked.probeClient.mockReset();
     mocked.repair.mockReset();
   });
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 
   function readClient(result: unknown) {
     const retry = vi.fn().mockResolvedValue(result);
     const limit = vi.fn().mockReturnValue({ retry });
     const select = vi.fn().mockReturnValue({ limit });
     const from = vi.fn().mockReturnValue({ select });
+    mocked.probeClient.mockReturnValue({ from } as unknown as SupabaseClient);
     mocked.serverClient.mockReturnValue({ from } as unknown as SupabaseClient);
     return { from, select, limit, retry };
   }
@@ -43,7 +49,7 @@ describe("authenticated, write-free Production database probe", () => {
     expect(response.status).toBe(expectedHttp);
     expect(await response.json()).toEqual({ code, upstreamStatus, authenticated: true,
       serverClientAvailable: true, databaseReadSuccess: code === "database-read-ok",
-      databaseWrites: 0 });
+      databaseWrites: 0, fetchCalled: false, responseReceived: false, responseStatus: null });
     expect(from).toHaveBeenCalledExactlyOnceWith("meal_mix_profiles");
     expect(select).toHaveBeenCalledExactlyOnceWith("recipe_id");
     expect(limit).toHaveBeenCalledExactlyOnceWith(1);
@@ -94,11 +100,12 @@ describe("authenticated, write-free Production database probe", () => {
     const retry = vi.fn().mockRejectedValue(new Error("sensitive database detail"));
     const limit = vi.fn().mockReturnValue({ retry });
     const select = vi.fn().mockReturnValue({ limit });
-    mocked.serverClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
+    mocked.probeClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ code: "database-query-exception", upstreamStatus: null,
-      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
+      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0,
+      fetchCalled: false, responseReceived: false, responseStatus: null });
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
@@ -106,49 +113,56 @@ describe("authenticated, write-free Production database probe", () => {
     const retry = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
     const limit = vi.fn().mockReturnValue({ retry });
     const select = vi.fn().mockReturnValue({ limit });
-    mocked.serverClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
+    mocked.probeClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ code: "database-query-exception", upstreamStatus: null,
-      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
+      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0,
+      fetchCalled: false, responseReceived: false, responseStatus: null });
     expect(retry).toHaveBeenCalledExactlyOnceWith(false);
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
   it("classifies a synchronous query-builder exception separately from SDK status 0", async () => {
-    mocked.serverClient.mockReturnValue({ from: vi.fn(() => {
+    mocked.probeClient.mockReturnValue({ from: vi.fn(() => {
       throw new Error("private query detail");
     }) } as unknown as SupabaseClient);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ code: "database-query-exception", upstreamStatus: null,
-      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
+      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0,
+      fetchCalled: false, responseReceived: false, responseStatus: null });
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
   it("reports missing configuration separately without querying or changing a queue", async () => {
-    mocked.serverClient.mockReturnValue(null);
+    mocked.probeClient.mockReturnValue(null);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ code: "database-client-unavailable", authenticated: true,
-      serverClientAvailable: false, databaseReadSuccess: false, databaseWrites: 0 });
+      serverClientAvailable: false, databaseReadSuccess: false, databaseWrites: 0,
+      fetchCalled: false, responseReceived: false, responseStatus: null });
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
   describe("pinned supabase-js 2.116.0 with a local-only fetch", () => {
     async function throughSdk(fetcher: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
-      code: string, upstreamStatus: number | null, httpStatus = 502) {
+      code: string, upstreamStatus: number | null, httpStatus = 502,
+      observedStatus: number | null = upstreamStatus) {
       const fetchSpy = vi.fn(fetcher);
-      const client = createClient("https://local-sdk-test.invalid", "sb_secret_local_test_only", {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-        global: { fetch: fetchSpy },
-      });
-      mocked.serverClient.mockReturnValue(client);
+      vi.stubGlobal("fetch", fetchSpy);
+      mocked.probeClient.mockImplementation((observedFetch) => createClient(
+        "https://local-sdk-test.invalid", "sb_secret_local_test_only", {
+          auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+          global: { fetch: observedFetch },
+        }));
       const response = await POST(request({ databaseReadProbe: "v1" }));
       expect(response.status).toBe(httpStatus);
       expect(await response.json()).toEqual({ code, upstreamStatus, authenticated: true,
         serverClientAvailable: true, databaseReadSuccess: code === "database-read-ok",
-        databaseWrites: 0 });
+        databaseWrites: 0, fetchCalled: true,
+        responseReceived: observedStatus !== null,
+        responseStatus: observedStatus });
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, options] = fetchSpy.mock.calls[0];
       expect(new URL(String(url)).pathname).toBe("/rest/v1/meal_mix_profiles");
@@ -185,14 +199,27 @@ describe("authenticated, write-free Production database probe", () => {
     it("SDK converts a body-reading exception after HTTP 200 to status 0", async () => {
       const unreadable = new Response("[]", { status: 200 });
       unreadable.text = async () => { throw new Error("body unreadable"); };
-      await throughSdk(async () => unreadable, "database-sdk-status-zero", null);
+      await throughSdk(async () => unreadable, "database-sdk-status-zero", null, 502, 200);
+    });
+
+    it("does not mark fetch called when SDK preparation fails before the network call", async () => {
+      const fetchSpy = vi.fn(async () => new Response("[]"));
+      vi.stubGlobal("fetch", fetchSpy);
+      mocked.probeClient.mockReturnValue({ from: vi.fn(() => {
+        throw new Error("private preparation failure");
+      }) } as unknown as SupabaseClient);
+      const response = await POST(request({ databaseReadProbe: "v1" }));
+      expect(await response.json()).toMatchObject({ code: "database-query-exception",
+        fetchCalled: false, responseReceived: false, responseStatus: null, databaseWrites: 0 });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(mocked.repair).not.toHaveBeenCalled();
     });
   });
 
   it("requires the admin token and an exact probe sentinel", async () => {
     const unauthorized = await POST(request({ databaseReadProbe: "v1" }, false));
     expect(unauthorized.status).toBe(401);
-    expect(mocked.serverClient).not.toHaveBeenCalled();
+    expect(mocked.probeClient).not.toHaveBeenCalled();
     readClient({ data: [], error: null, status: 200 });
     const malformed = await POST(request({ databaseReadProbe: "v1", productId: "extra" }));
     expect(malformed.status).toBe(400);

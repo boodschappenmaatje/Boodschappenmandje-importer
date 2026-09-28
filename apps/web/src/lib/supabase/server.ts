@@ -35,3 +35,19 @@ export function getSupabaseServerClient(): SupabaseClient | null {
   });
   return serverClient;
 }
+
+/** One-off diagnostic client: the same server-only URL/key and auth settings,
+ * with a fetch scoped to a single read-only probe instead of the shared client.
+ */
+export function getSupabaseServerClientForReadProbe(probeFetch: typeof fetch): SupabaseClient | null {
+  const config = serverSupabaseConfig();
+  if (!config) return null;
+  return createClient(config.url, config.secret, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: { fetch: probeFetch },
+  });
+}
