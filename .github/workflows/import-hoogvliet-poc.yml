@@ -161,12 +161,18 @@ jobs:
             });
             body = await response.json().catch(() => null);
           } catch { throw new Error('production-db-probe-network-or-timeout'); }
-          const code = ['database-read-ok', 'database-read-failed', 'database-client-unavailable']
+          const code = ['database-read-ok', 'database-http-auth-failed', 'database-http-permission-failed',
+            'database-http-not-found', 'database-http-server-error', 'database-http-other-failed',
+            'database-network-failed', 'database-sdk-query-failed', 'database-unexpected-response',
+            'database-client-unavailable']
             .includes(body?.code) ? body.code : 'unexpected-response';
+          const upstreamStatus = Number.isInteger(body?.upstreamStatus) &&
+            body.upstreamStatus >= 100 && body.upstreamStatus <= 599 ? body.upstreamStatus : null;
           const ok = response.status === 200 && code === 'database-read-ok' &&
             body?.authenticated === true && body?.serverClientAvailable === true &&
             body?.databaseReadSuccess === true && body?.databaseWrites === 0;
-          console.log(JSON.stringify({ status: response.status, code, authenticated: body?.authenticated === true,
+          console.log(JSON.stringify({ status: response.status, code, upstreamStatus,
+            authenticated: body?.authenticated === true,
             serverClientAvailable: body?.serverClientAvailable === true,
             databaseReadSuccess: body?.databaseReadSuccess === true, databaseWrites: body?.databaseWrites === 0 ? 0 : null }));
           if (!ok) process.exitCode = 1;

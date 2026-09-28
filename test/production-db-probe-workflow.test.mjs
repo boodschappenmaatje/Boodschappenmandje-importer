@@ -25,7 +25,8 @@ test('one authenticated Production POST, safe logging, no product or maintenance
   for (const [status, data, expected] of [
     [200, { code: 'database-read-ok', authenticated: true, serverClientAvailable: true,
       databaseReadSuccess: true, databaseWrites: 0 }, true],
-    [502, { code: 'database-read-failed', authenticated: true, serverClientAvailable: true,
+    [502, { code: 'database-http-auth-failed', upstreamStatus: 401,
+      authenticated: true, serverClientAvailable: true,
       databaseReadSuccess: false, databaseWrites: 0, detail: 'hidden-secret' }, false],
     [503, { code: 'database-client-unavailable', authenticated: true, serverClientAvailable: false,
       databaseReadSuccess: false, databaseWrites: 0 }, false],
@@ -49,5 +50,7 @@ test('one authenticated Production POST, safe logging, no product or maintenance
     assert.equal(logs[0].includes('secret-fixture'), false);
     assert.equal(logs[0].includes('bypass-fixture'), false);
     assert.equal(logs[0].includes('hidden-secret'), false);
+    const recorded = JSON.parse(logs[0]);
+    if (data.upstreamStatus) assert.equal(recorded.upstreamStatus, data.upstreamStatus);
   }
 });
