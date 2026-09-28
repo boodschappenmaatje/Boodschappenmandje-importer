@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const mocked = vi.hoisted(() => ({
   serverClient: vi.fn<() => SupabaseClient | null>(),
@@ -74,17 +74,19 @@ describe("authenticated, write-free Production database probe", () => {
   });
 
   it.each([
-    [{ data: null, error: { message: "TypeError: fetch failed", details: "private" }, status: 0 }, "database-network-failed"],
-    [{ data: null, error: { hint: "Request was aborted (timeout or manual cancellation)" }, status: 0 }, "database-network-failed"],
-    [{ data: null, error: { message: "internal SDK failure" }, status: 0 }, "database-sdk-query-failed"],
+    [{ data: null, error: { message: "TypeError: fetch failed", details: "private" }, status: 0 }, "database-sdk-status-zero"],
+    [{ data: null, error: { hint: "Request was aborted (timeout or manual cancellation)" }, status: 0 }, "database-sdk-status-zero"],
+    [{ data: null, error: { message: "internal SDK failure" }, status: 0 }, "database-sdk-status-zero"],
     [{ data: null, error: { code: "PGRST123", message: "sensitive detail" }, status: 400 }, "database-http-other-failed"],
     [{ data: null, error: { message: "malformed JSON" }, status: 200 }, "database-sdk-query-failed"],
+    [{ data: null, error: { message: "SDK response without status" } }, "database-sdk-query-failed"],
     [{ data: null, error: null, status: 200 }, "database-unexpected-response"],
     [{ data: null, error: null, status: 0 }, "database-unexpected-response"],
     [{ data: [], error: null, status: "200" }, "database-unexpected-response"],
     [null, "database-unexpected-response"],
   ] as const)("keeps error bodies private: %o", async (result, code) => {
-    await expectProbe(result, code, typeof result?.status === "number" && result.status >= 100
+    await expectProbe(result, code, result && "status" in result &&
+      typeof result.status === "number" && result.status >= 100
       ? result.status : null);
   });
 
@@ -95,7 +97,7 @@ describe("authenticated, write-free Production database probe", () => {
     mocked.serverClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ code: "database-sdk-query-failed", upstreamStatus: null,
+    expect(await response.json()).toEqual({ code: "database-query-exception", upstreamStatus: null,
       authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
     expect(mocked.repair).not.toHaveBeenCalled();
   });
@@ -107,9 +109,20 @@ describe("authenticated, write-free Production database probe", () => {
     mocked.serverClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ code: "database-network-failed", upstreamStatus: null,
+    expect(await response.json()).toEqual({ code: "database-query-exception", upstreamStatus: null,
       authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
     expect(retry).toHaveBeenCalledExactlyOnceWith(false);
+    expect(mocked.repair).not.toHaveBeenCalled();
+  });
+
+  it("classifies a synchronous query-builder exception separately from SDK status 0", async () => {
+    mocked.serverClient.mockReturnValue({ from: vi.fn(() => {
+      throw new Error("private query detail");
+    }) } as unknown as SupabaseClient);
+    const response = await POST(request({ databaseReadProbe: "v1" }));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ code: "database-query-exception", upstreamStatus: null,
+      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
@@ -120,6 +133,60 @@ describe("authenticated, write-free Production database probe", () => {
     expect(await response.json()).toEqual({ code: "database-client-unavailable", authenticated: true,
       serverClientAvailable: false, databaseReadSuccess: false, databaseWrites: 0 });
     expect(mocked.repair).not.toHaveBeenCalled();
+  });
+
+  describe("pinned supabase-js 2.116.0 with a local-only fetch", () => {
+    async function throughSdk(fetcher: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+      code: string, upstreamStatus: number | null, httpStatus = 502) {
+      const fetchSpy = vi.fn(fetcher);
+      const client = createClient("https://local-sdk-test.invalid", "sb_secret_local_test_only", {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+        global: { fetch: fetchSpy },
+      });
+      mocked.serverClient.mockReturnValue(client);
+      const response = await POST(request({ databaseReadProbe: "v1" }));
+      expect(response.status).toBe(httpStatus);
+      expect(await response.json()).toEqual({ code, upstreamStatus, authenticated: true,
+        serverClientAvailable: true, databaseReadSuccess: code === "database-read-ok",
+        databaseWrites: 0 });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, options] = fetchSpy.mock.calls[0];
+      expect(new URL(String(url)).pathname).toBe("/rest/v1/meal_mix_profiles");
+      expect(options?.method).toBe("GET");
+      expect(new URL(String(url)).searchParams.get("select")).toBe("recipe_id");
+      expect(new URL(String(url)).searchParams.get("limit")).toBe("1");
+      expect(mocked.repair).not.toHaveBeenCalled();
+    }
+
+    it.each([
+      [200, "[]", "database-read-ok", 200],
+      [200, '[{"recipe_id":"private"}]', "database-read-ok", 200],
+      [401, '{"message":"private"}', "database-http-auth-failed", 502],
+      [403, '{"message":"private"}', "database-http-permission-failed", 502],
+      [404, '{"message":"private"}', "database-http-not-found", 502],
+      [500, '{"message":"private"}', "database-http-server-error", 502],
+      [503, '{"message":"private"}', "database-http-server-error", 502],
+      [200, "not-json", "database-sdk-query-failed", 502],
+      [200, "{}", "database-unexpected-response", 502],
+    ] as const)("classifies simulated HTTP %i with actual SDK (%s)",
+      async (status, body, code, httpStatus) => {
+        await throughSdk(async () => new Response(body, { status }), code, status, httpStatus);
+      });
+
+    it.each([
+      ["fetch rejected", new TypeError("fetch failed")],
+      ["DNS failed", Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } })],
+      ["abort", Object.assign(new Error("aborted"), { name: "AbortError" })],
+      ["non-fetch exception", new Error("internal processing failure")],
+    ])("SDK converts %s to a status-0 result", async (_name, failure) => {
+      await throughSdk(async () => { throw failure; }, "database-sdk-status-zero", null);
+    });
+
+    it("SDK converts a body-reading exception after HTTP 200 to status 0", async () => {
+      const unreadable = new Response("[]", { status: 200 });
+      unreadable.text = async () => { throw new Error("body unreadable"); };
+      await throughSdk(async () => unreadable, "database-sdk-status-zero", null);
+    });
   });
 
   it("requires the admin token and an exact probe sentinel", async () => {

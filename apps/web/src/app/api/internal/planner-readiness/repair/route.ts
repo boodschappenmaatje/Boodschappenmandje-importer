@@ -11,12 +11,13 @@ type DatabaseReadCode =
   | "database-http-not-found"
   | "database-http-server-error"
   | "database-http-other-failed"
-  | "database-network-failed"
+  | "database-sdk-status-zero"
+  | "database-query-exception"
   | "database-sdk-query-failed"
   | "database-unexpected-response";
 
-/** The SDK folds transport and response-processing exceptions into status 0.
- * Only its known fetch/abort signatures justify calling that case a network failure.
+/** PostgREST without throwOnError folds fetch and response-processing exceptions
+ * into a status-0 result. This does not prove which operation failed.
  */
 function databaseReadOutcome(result: unknown): { code: DatabaseReadCode; upstreamStatus: number | null } {
   if (!result || typeof result !== "object") {
@@ -31,16 +32,8 @@ function databaseReadOutcome(result: unknown): { code: DatabaseReadCode; upstrea
   if (status === 404) return { code: "database-http-not-found", upstreamStatus };
   if (status !== null && status >= 500) return { code: "database-http-server-error", upstreamStatus };
   if (status === 0) {
-    const error = value.error;
-    if (!error) return { code: "database-unexpected-response", upstreamStatus: null };
-    const message = error && typeof error === "object" ? (error as Record<string, unknown>).message : null;
-    const hint = error && typeof error === "object" ? (error as Record<string, unknown>).hint : null;
-    return {
-      code: message === "TypeError: fetch failed" ||
-        hint === "Request was aborted (timeout or manual cancellation)"
-        ? "database-network-failed" : "database-sdk-query-failed",
-      upstreamStatus: null,
-    };
+    return { code: value.error ? "database-sdk-status-zero" : "database-unexpected-response",
+      upstreamStatus: null };
   }
   if (status !== null && status >= 400) return { code: "database-http-other-failed", upstreamStatus };
   if (value.error) return { code: "database-sdk-query-failed", upstreamStatus };
@@ -79,11 +72,8 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ ...outcome, authenticated: true,
         serverClientAvailable: true, databaseReadSuccess: outcome.code === "database-read-ok",
         databaseWrites: 0 }, { status: outcome.code === "database-read-ok" ? 200 : 502 });
-    } catch (error) {
-      const code = error instanceof Error &&
-        ((error instanceof TypeError && error.message === "fetch failed") || error.name === "AbortError")
-        ? "database-network-failed" : "database-sdk-query-failed";
-      return Response.json({ code, upstreamStatus: null,
+    } catch {
+      return Response.json({ code: "database-query-exception", upstreamStatus: null,
         authenticated: true, serverClientAvailable: true, databaseReadSuccess: false,
         databaseWrites: 0 }, { status: 502 });
     }
