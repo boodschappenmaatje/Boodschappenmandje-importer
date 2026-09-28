@@ -8,7 +8,8 @@ const workflowWithProbe = readFileSync(new URL("../.github/workflows/import-hoog
 // Remove only the separately tested read-only probe additions for the historical fingerprint.
 const workflow = workflowWithProbe.replace(/^      maintenance_probe_only:\n[\s\S]*?(?=^      daily_attempt_only:)/m, '')
   .replace(/^  maintenance-probe:\n[\s\S]*?(?=^  preflight:)/m, '')
-  .replace("inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && ", '');
+  .replace("inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && ", '')
+  .replace("inputs.server_client_probe_only != true && github.event.inputs.server_client_probe_only != 'true' && ", '');
 const standalone = readFileSync(new URL("../.github/workflows/planner-cache-preflight.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const job = workflow.match(/^  preflight:\n[\s\S]*?(?=^  import:)/m)?.[0];
 const input = "      preflight_only:\n" +
