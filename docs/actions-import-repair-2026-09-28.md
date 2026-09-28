@@ -48,3 +48,29 @@
 - Voor definitief live bewijs is na aparte toestemming één begrensde dagelijkse growth-attempt op de geteste branch nodig, voor uitsluitend het resterende dagdoel (nooit meer dan 400 bevestigd nieuwe producten). Deze schrijft products/product_prices, import-/dag-/discovery-status en kan gericht planner-/profielqueues/cache bijwerken. De actuele dagstand moet vlak vóór uitvoering opnieuw worden gelezen.
 - Een live Honig/Knorr-run schrijft profiel-/recept-/readinessgegevens en is eveneens niet uitgevoerd. De eerstvolgende echte run geeft bij een eventueel resterende configuratiefout de concrete technische diagnose.
 - De bestaande product- en prijswrites zijn afzonderlijke requests; een harde proceskill exact tussen writes en dagboekbevestiging valt niet onder de fixturegarantie. Bestaande lock/timeoutbeveiliging en idempotente SKU's blijven behouden; er is geen nieuwe transactionele database-RPC ingevoerd.
+
+## Eén expliciet toegestane live poging — uitkomst
+
+- Gebruiker gaf na bovenstaande rapportage toestemming voor precies één begrensde dagelijkse poging, daarna stoppen en eerst rapporteren. De bestaande handmatige growth-route gebruikte geen dagclaim; daarom op dezelfde branch een expliciete `daily_attempt_only` toegevoegd die dezelfde dagelijkse functie/claim gebruikt met `DAILY_SINGLE_ATTEMPT=1`. Doel onveranderd 400; geen lock/cooldown/terminale status omzeild. Bij gedeeltelijk resultaat of tijdelijke fout worden geen vervolgretries ingepland.
+- Uitvoeringscommit `68a97f516d1b085863850309887ab299f2d3c441`; 217/217 importer-/onderhoudstests groen. Volledige remote CI `36394196658` success.
+- Workflow #82, run https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/36394336293, job `108837066992`. Preflight/falafeljobs skipped; uitsluitend importer. Eén dispatch, geen rerun. Importstart `2026-09-28T07:56:12.837Z`, einde `08:02:43.008Z` (09:56–10:02 Amsterdam, ongeveer 6m30s).
+- Begin: dagstand 0/400, geen actieve lock of queued import, catalogus 6.052 unieke Hoogvliet-SKU’s. Dagattempt 2, omdat attempt 1 van de ochtend reeds bestond.
+
+| Gemeten veld | Uitkomst |
+| --- | ---: |
+| Doel / resterend bij start | 400 / 400 |
+| Ruwe kandidaten bekeken | 3.096 |
+| Nieuwe inserts met positieve prijs | 10 |
+| Bestaand overgeslagen | 1.498 |
+| Duplicaten overgeslagen | 566 |
+| Ongeldig volgens dagteller | 0 |
+| Technische stopfouten | 1 |
+| Catalogus na afloop (Hoogvliet) | 6.062 unieke SKU’s |
+| Resterend dagdoel | 390 |
+
+- Read-only DB-controle bevestigt precies 10 producten aangemaakt binnen het attemptvenster, alle 10 met positieve productprijs. Geen dubbele SKU’s. Producttotaal nam exact 10 toe. Bestaande producten niet verwijderd.
+- **Stopreden `pagination_stalled`: “Paginering herhaalt resultaten voor fruit”.** Workflow failure en attempt `non_retryable_failure`; dagjob `failed_requires_attention`, `next_retry_at=null`, lock vrij. Dit is een technische stop, geen bewezen bronuitputting en geen succesvolle 400-eindvalidatie. De precieze oorzaak van de herhaling (bronresponse versus detectie/adapter) is na de geautoriseerde poging nog niet verder onderzocht of aangepast.
+- Live log toont wel hervatting `groente | vanaf_pagina=20` en `groenten | vanaf_pagina=20`, met de eerste 10 inserts na de oude afkapgrens.
+- De ruwe kandidaat- en fasetellers vormen nog geen sluitende optelsom: 3.096 minus 1.498 bestaand minus 566 duplicaten minus 10 nieuw = 1.022 niet afzonderlijk verklaard in het dagverslag. De error-metrics bevatten een afzonderlijke irrelevantCount, maar die wordt niet door de dagsamenvatting uitgesplitst. Zonder volledig opgeslagen detail mogen deze 1.022 niet als gemeten ongeldig/bestaand worden bestempeld.
+- **Planner-cacheonderhoud niet bevestigd** voor de batch van 10; de bestaande notificatiecode logt geen specifieke HTTP-status bij deze waarschuwing. Dit is een afzonderlijk open onderhoudspunt en telt niet mee in de ene geregistreerde pagination-stopfout. Geen extra cache-/profielrun uitgevoerd. Betrokken product-ID’s: `7f4bb596-4f5d-4c27-b048-063d17a6379c`, `369d7f98-41af-414a-8c77-2ce92a03c5bf`, `3f3122cb-213b-42bf-a06f-9d09c5cedb79`, `6b0f5f1c-a68e-4187-b8a1-13decb2aef84`, `5ee51711-835e-489c-9faa-487cb806cded`, `b4946693-a6ef-4b61-9433-3941922c8e82`, `eea9d009-062e-4212-b89d-9c3f82f38c19`, `78922554-a52f-4397-b416-ea8ea2ba8ef0`, `8261d351-b826-4b69-b9c3-08f0abef2030`, `a7ed0a8b-6a93-406a-ad6a-6b67efb98c81`.
+- Na deze poging uitsluitend eindcontrole/rapportage; geen tweede import, verdere functionele reparatie, merge of Production-deployment. Bestaande geplande workflows op main zijn niet gewijzigd of uitgeschakeld; hun dagclaim weigert vandaag verdere attempts vanwege de terminale dagstatus.
