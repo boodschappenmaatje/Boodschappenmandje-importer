@@ -186,6 +186,7 @@ export function loadConfig(env = process.env) {
       .trim()
       .replace(/[^a-z0-9_-]/gi, "-")
       .slice(0, 80) || "daily-catalog-growth",
+    dailySingleAttempt: env.DAILY_SINGLE_ATTEMPT === "1",
     dailyTargetNewProducts: Math.min(
       positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
       SAFE_NEW_PRODUCT_LIMIT,

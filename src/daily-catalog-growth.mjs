@@ -257,7 +257,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     );
     const targetReached = cumulative >= claim.job.targetNewProducts;
     const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
-    const retryable = failure.retryable && windowOpen && !targetReached;
+    const retryable = failure.retryable && windowOpen && !targetReached && !config.dailySingleAttempt;
     const outcome = targetReached
       ? "succeeded"
       : (retryable
@@ -279,7 +279,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
       publicMessage: retryable
         ? publicPauseMessage()
         : (failure.retryable
-          ? "Dagupdate gedeeltelijk voltooid. De bestaande catalogus blijft beschikbaar."
+          ? (config.dailySingleAttempt ? "Eenmalige poging afgerond; verdere imports wachten op beoordeling." : "Dagupdate gedeeltelijk voltooid. De bestaande catalogus blijft beschikbaar.")
           : publicAttentionMessage()),
       now: completedAt,
     });
@@ -304,12 +304,12 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
   const targetReached = cumulative >= claim.job.targetNewProducts;
   const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
   const sourceExhausted = result.sourceExhausted === true && counts.sourceErrors === 0;
-  const nextRetryAt = !targetReached && !sourceExhausted && windowOpen
+  const nextRetryAt = !targetReached && !sourceExhausted && windowOpen && !config.dailySingleAttempt
     ? dailyRetryAt(claim.job.attemptCount, completedAt)
     : null;
   const outcome = targetReached
     ? "succeeded"
-    : (windowOpen && !sourceExhausted ? "succeeded" : "daily_target_partial");
+    : (windowOpen && !sourceExhausted && !config.dailySingleAttempt ? "succeeded" : "daily_target_partial");
   const job = await finish(config, {
     jobID: claim.job.id,
     attemptID: claim.attemptId,
@@ -321,7 +321,8 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     publicMessage: targetReached
       ? "Dagdoel behaald."
       : (sourceExhausted ? "Beschikbare zoekroutes uitgeput; geen verdere nieuwe geldige kandidaten gevonden."
-        : (windowOpen ? publicPauseMessage() : "Dagupdate onvolledig; veiligheidsgrens of dagvenster bereikt, bronuitputting niet bewezen.")),
+        : (config.dailySingleAttempt ? "Eenmalige poging afgerond; verdere imports wachten op beoordeling. Bronuitputting niet bewezen."
+          : (windowOpen ? publicPauseMessage() : "Dagupdate onvolledig; veiligheidsgrens of dagvenster bereikt, bronuitputting niet bewezen."))),
     now: completedAt,
   });
   logger.info(formatDailyAttemptSummary({

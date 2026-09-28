@@ -400,3 +400,24 @@ test("twee gelijktijdige dagtriggers starten maar één collector", async () => 
   assert.equal(results.filter(x => x.attempted).length, 1);
   assert.equal(h.attempts.length, 1);
 });
+
+test('eenmalige dagpoging respecteert restant en sluit zonder vervolgretry', async () => {
+  const h = createHarness([{ new: 7, stopReason: 'page_safety_limit' }], { initialNew: 390 });
+  const run = h.dependencies.runGrowth;
+  h.dependencies.runGrowth = async c => { assert.equal(c.maxNewProducts, 10); return run(c); };
+  const result = await runDailyCatalogAttempt({ ...config, dailySingleAttempt: true }, logger, h.dependencies);
+  assert.equal(result.job.newProductsCollected, 397);
+  assert.equal(result.job.status, 'daily_target_partial');
+  assert.equal(result.job.nextRetryAt, null);
+  assert.equal(h.attempts.length, 1);
+  assert.equal(shouldRunDailyImport(result.job, new Date('2026-09-17T10:00:00Z')).run, false);
+});
+
+test('eenmalige dagpoging plant ook na tijdelijke storing geen vervolgrun', async () => {
+  const error = Object.assign(new Error('tijdelijke bronuitval'), { code: 'source_unavailable' });
+  const h = createHarness([error]);
+  await assert.rejects(runDailyCatalogAttempt({ ...config, dailySingleAttempt: true }, logger, h.dependencies), error);
+  assert.equal(h.state.status, 'daily_target_partial');
+  assert.equal(h.state.nextRetryAt, null);
+  assert.equal(h.attempts.length, 1);
+});

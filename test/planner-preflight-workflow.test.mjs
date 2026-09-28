@@ -16,7 +16,7 @@ const scriptFrom = (text) => text.match(/node --input-type=module <<'NODE'\n([\s
   .replace(/^          /gm, "");
 const script = scriptFrom(job ?? "");
 
-test("normal importer is byte-identical apart from the optional bypass environment mapping", () => {
+test("historical importer guards remain intact with explicit daily validation additions", () => {
   assert.ok(job);
   assert.ok(workflow.includes(input));
   assert.ok(workflow.includes(guard));
@@ -28,7 +28,15 @@ test("normal importer is byte-identical apart from the optional bypass environme
     .replace(input, "").replace(job, "").replace(guard, "");
   assert.equal(withoutPreflight.split(bypassEnv).length - 1, 1);
   assert.match(withoutPreflight, /^  import:\n[\s\S]*?    env:\n[\s\S]*?      VERCEL_AUTOMATION_BYPASS_SECRET: \$\{\{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/m);
-  const original = withoutPreflight.replace(bypassEnv, "")
+  const onceInput = "      daily_attempt_only:\n        description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry\n        type: boolean\n        default: false\n";
+  const oncePlan = '\n          # Explicit one-shot validation uses the existing daily claim and closes today\'s job.\n'
+    + '          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.daily_attempt_only }}" == "true" ]]; then\n'
+    + '            update_mode="growth"\n            catalog_batch="growth"\n            max_products="400"\n'
+    + '            daily_import_job="1"\n            import_trigger="schedule"\n            advance_discovery_state="1"\n'
+    + '            echo "DAILY_SINGLE_ATTEMPT=1" >> "$GITHUB_ENV"\n          fi\n';
+  assert.ok(workflow.includes(onceInput)); assert.ok(workflow.includes(oncePlan));
+  const original = withoutPreflight.replace(bypassEnv, "").replace(onceInput, "").replace(oncePlan, "")
+    .replace("Alleen bevestigde nieuwe inserts met bevestigde geldige prijs tellen mee.", "De importer valideert dit met het verschil tussen de Supabase-aantallen vóór en na de run.")
     .replace("PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app", "PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}");
   // Approved workflow at 8dd0d4a / db0b8d2, before the isolated preflight additions.
   assert.equal(createHash("sha256").update(original).digest("hex"),

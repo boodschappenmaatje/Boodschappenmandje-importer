@@ -5,6 +5,11 @@
 ## Huidige milestone
 **STABILITEIT & KERNFLOWS — AFGEROND / PRODUCTION. Volgende mijlpaal: PRODUCTDATA & RECEPTKWALITEIT — nog niet gestart.**
 
+## Eenmalige live validatie — 28 september 2026 — expliciet toegestaan
+- Gebruiker heeft één begrensde dagelijkse importpoging toegestaan, maximaal het resterende dagdoel (nooit meer dan 400), daarna stoppen en rapporteren. Geen merge/Production. Voorcontrole: dagstand 0/400, geen actieve daglock, Hoogvliet 6.052 unieke SKU’s.
+- Handmatige `daily_attempt_only` gebruikt dezelfde dagclaim/concurrency en zet `DAILY_SINGLE_ATTEMPT=1`. Ook bij gedeeltelijk resultaat of tijdelijke storing geen vervolgretry; dagstatus wordt terminaal voor beoordeling. Geen omzeiling van actieve locks, cooldown of daglimiet.
+- 217 importer-/onderhoudstests groen, inclusief resterend doel en stoppen zonder retry na een tijdelijke fout. Uitkomst van de live poging volgt.
+
 ## Actions/importer herstel — 28 september 2026 — Draft PR #31
 - Hervat bestaande branch `fix/daily-catalog-retry-schedule` op remote `8c72e42e76b5c9ec5499ec694303dab84f261c5e`; main gecontroleerd op `31705dd90c1f6d4b6d705b24219958f0c7894c84`. De aansluitende herstelcommit staat als actuele PR-head op GitHub. PR #30 Home blijft buiten scope.
 - Huidige runners starten; de oude billingblokkade hieronder is historisch. Honig/Knorr gebruikt ten onrechte de oude PR #23-Preview. Supabase GET 200 bewezen; vervolgens faalt cache-refresh. De oude branch mist mix-refresh. Historische HTTP-status niet gelogd; Vercel-logtoegang ontbreekt, dus geen verzonnen 401/404-diagnose.
