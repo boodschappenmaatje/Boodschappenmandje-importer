@@ -163,7 +163,7 @@ jobs:
           } catch { throw new Error('production-db-probe-network-or-timeout'); }
           const code = ['database-read-ok', 'database-http-auth-failed', 'database-http-permission-failed',
             'database-http-not-found', 'database-http-server-error', 'database-http-other-failed',
-            'database-network-failed', 'database-sdk-query-failed', 'database-unexpected-response',
+            'database-sdk-status-zero', 'database-query-exception', 'database-sdk-query-failed', 'database-unexpected-response',
             'database-client-unavailable']
             .includes(body?.code) ? body.code : 'unexpected-response';
           const upstreamStatus = Number.isInteger(body?.upstreamStatus) &&

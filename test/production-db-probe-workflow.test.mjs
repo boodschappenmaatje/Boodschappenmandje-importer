@@ -30,6 +30,10 @@ test('one authenticated Production POST, safe logging, no product or maintenance
       databaseReadSuccess: false, databaseWrites: 0, detail: 'hidden-secret' }, false],
     [503, { code: 'database-client-unavailable', authenticated: true, serverClientAvailable: false,
       databaseReadSuccess: false, databaseWrites: 0 }, false],
+    [502, { code: 'database-sdk-status-zero', authenticated: true, serverClientAvailable: true,
+      databaseReadSuccess: false, databaseWrites: 0, detail: 'hidden-secret' }, false],
+    [502, { code: 'database-query-exception', authenticated: true, serverClientAvailable: true,
+      databaseReadSuccess: false, databaseWrites: 0, detail: 'hidden-secret' }, false],
   ]) {
     const calls = [], logs = [], process = { env: {
       PLANNER_CACHE_ADMIN_TOKEN: 'secret-fixture', VERCEL_AUTOMATION_BYPASS_SECRET: 'bypass-fixture',
@@ -51,6 +55,7 @@ test('one authenticated Production POST, safe logging, no product or maintenance
     assert.equal(logs[0].includes('bypass-fixture'), false);
     assert.equal(logs[0].includes('hidden-secret'), false);
     const recorded = JSON.parse(logs[0]);
+    assert.equal(recorded.code, data.code);
     if (data.upstreamStatus) assert.equal(recorded.upstreamStatus, data.upstreamStatus);
   }
 });
