@@ -28,46 +28,88 @@ describe("authenticated, write-free Production database probe", () => {
   afterEach(() => vi.unstubAllEnvs());
 
   function readClient(result: unknown) {
-    const limit = vi.fn().mockResolvedValue(result);
+    const retry = vi.fn().mockResolvedValue(result);
+    const limit = vi.fn().mockReturnValue({ retry });
     const select = vi.fn().mockReturnValue({ limit });
     const from = vi.fn().mockReturnValue({ select });
     mocked.serverClient.mockReturnValue({ from } as unknown as SupabaseClient);
-    return { from, select, limit };
+    return { from, select, limit, retry };
   }
 
-  it("reports success only after a valid small SELECT; never invokes repair or a write", async () => {
-    const { from, select, limit } = readClient({ data: [], error: null, status: 200 });
+  async function expectProbe(result: unknown, code: string, upstreamStatus: number | null,
+    expectedHttp = 502) {
+    const { from, select, limit, retry } = readClient(result);
     const response = await POST(request({ databaseReadProbe: "v1" }));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ code: "database-read-ok", authenticated: true,
-      serverClientAvailable: true, databaseReadSuccess: true, databaseWrites: 0 });
+    expect(response.status).toBe(expectedHttp);
+    expect(await response.json()).toEqual({ code, upstreamStatus, authenticated: true,
+      serverClientAvailable: true, databaseReadSuccess: code === "database-read-ok",
+      databaseWrites: 0 });
     expect(from).toHaveBeenCalledExactlyOnceWith("meal_mix_profiles");
     expect(select).toHaveBeenCalledExactlyOnceWith("recipe_id");
     expect(limit).toHaveBeenCalledExactlyOnceWith(1);
+    expect(retry).toHaveBeenCalledExactlyOnceWith(false);
     expect(mocked.repair).not.toHaveBeenCalled();
+  }
+
+  it.each([
+    [{ recipe_id: "never returned" }],
+    [],
+  ])("reports a successful SELECT without returning rows (%o)", async (...rows) => {
+    await expectProbe({ data: rows, error: null, status: 200 }, "database-read-ok", 200, 200);
+  });
+
+  it("accepts a valid partial SELECT response", async () => {
+    await expectProbe({ data: [], error: null, status: 206 }, "database-read-ok", 206, 200);
   });
 
   it.each([
-    { data: null, error: { code: "unauthorized" }, status: 401 },
-    { data: null, error: null, status: 200 },
-    { data: [], error: null, status: 500 },
-  ])("reports an error for a failed or invalid query response: %o", async (result) => {
-    const { from } = readClient(result);
-    const response = await POST(request({ databaseReadProbe: "v1" }));
-    expect(response.status).toBe(502);
-    expect(await response.json()).toEqual({ code: "database-read-failed", authenticated: true,
-      serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
-    expect(from).toHaveBeenCalledTimes(1);
-    expect(mocked.repair).not.toHaveBeenCalled();
+    [401, "database-http-auth-failed"],
+    [403, "database-http-permission-failed"],
+    [404, "database-http-not-found"],
+    [503, "database-http-server-error"],
+    [500, "database-http-server-error"],
+    [429, "database-http-other-failed"],
+  ] as const)("classifies HTTP %i using status alone", async (status, code) => {
+    await expectProbe({ data: null, error: { message: "sensitive error" }, status }, code, status);
+  });
+
+  it.each([
+    [{ data: null, error: { message: "TypeError: fetch failed", details: "private" }, status: 0 }, "database-network-failed"],
+    [{ data: null, error: { hint: "Request was aborted (timeout or manual cancellation)" }, status: 0 }, "database-network-failed"],
+    [{ data: null, error: { message: "internal SDK failure" }, status: 0 }, "database-sdk-query-failed"],
+    [{ data: null, error: { code: "PGRST123", message: "sensitive detail" }, status: 400 }, "database-http-other-failed"],
+    [{ data: null, error: { message: "malformed JSON" }, status: 200 }, "database-sdk-query-failed"],
+    [{ data: null, error: null, status: 200 }, "database-unexpected-response"],
+    [{ data: null, error: null, status: 0 }, "database-unexpected-response"],
+    [{ data: [], error: null, status: "200" }, "database-unexpected-response"],
+    [null, "database-unexpected-response"],
+  ] as const)("keeps error bodies private: %o", async (result, code) => {
+    await expectProbe(result, code, typeof result?.status === "number" && result.status >= 100
+      ? result.status : null);
   });
 
   it("does not mistake a thrown query for success", async () => {
-    const limit = vi.fn().mockRejectedValue(new Error("sensitive database detail"));
+    const retry = vi.fn().mockRejectedValue(new Error("sensitive database detail"));
+    const limit = vi.fn().mockReturnValue({ retry });
     const select = vi.fn().mockReturnValue({ limit });
     mocked.serverClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
     const response = await POST(request({ databaseReadProbe: "v1" }));
     expect(response.status).toBe(502);
-    expect(JSON.stringify(await response.json())).not.toContain("sensitive database detail");
+    expect(await response.json()).toEqual({ code: "database-sdk-query-failed", upstreamStatus: null,
+      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
+    expect(mocked.repair).not.toHaveBeenCalled();
+  });
+
+  it("classifies a thrown fetch failure without exposing exception contents", async () => {
+    const retry = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+    const limit = vi.fn().mockReturnValue({ retry });
+    const select = vi.fn().mockReturnValue({ limit });
+    mocked.serverClient.mockReturnValue({ from: vi.fn().mockReturnValue({ select }) } as unknown as SupabaseClient);
+    const response = await POST(request({ databaseReadProbe: "v1" }));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ code: "database-network-failed", upstreamStatus: null,
+      authenticated: true, serverClientAvailable: true, databaseReadSuccess: false, databaseWrites: 0 });
+    expect(retry).toHaveBeenCalledExactlyOnceWith(false);
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
