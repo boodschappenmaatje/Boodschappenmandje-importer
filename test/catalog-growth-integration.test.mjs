@@ -59,3 +59,38 @@ test('a structural write failure preserves earlier confirmed inserts and collect
   });
   assert.equal(h.saved[0].pageCursor, 20); assert.equal(h.finished[0].newCount, 1);
 });
+
+test('durable maintenance scope precedes notification and remains visible after failure and later success', async () => {
+  const h = harness({
+    upsertProducts: async (_config, rows, lifecycle) => {
+      await lifecycle.onMaintenancePending(['new-id']);
+      assert.deepEqual(h.saved.at(-1).plannerMaintenance.pendingProductIds, ['previous-id', 'new-id']);
+      await lifecycle.onMaintenanceResult({ notifiedProducts: 0, pendingProductIds: ['new-id'],
+        failures: [{ stage: 'new-product-cache-refresh', status: 401 }] }, ['new-id']);
+      return { imported: rows.map((row, index) => ({ ...row, inserted: index !== 0 })), errors: [] };
+    },
+    fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture', termCursor: 0,
+      plannerMaintenance: { status: 'pending_requires_attention', pendingProductIds: ['previous-id'], notifiedProducts: 0, failures: [] } }),
+  });
+  const result = await runCatalogGrowth(config, logger, h.dependencies);
+  assert.equal(result.actualGrowth, 1);
+  assert.equal(result.plannerMaintenance.status, 'pending_requires_attention');
+  assert.deepEqual(h.saved.at(-1).lastAttemptReport.plannerMaintenance.pendingProductIds, ['previous-id', 'new-id']);
+  assert.equal(result.plannerMaintenance.failures[0].status, 401);
+});
+
+test('a stalled term from an earlier same-day window cannot disappear into global exhaustion', async () => {
+  const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture', termCursor: 0,
+    scanDate: config.discoveryScanDate, stalledTerms: [{ term: 'rijst', page: 2, reason: 'repeated_sku_set' }] }),
+    collectProducts: async settings => {
+      assert.equal(settings.searchTerms.includes('rijst'), false);
+      assert.equal(settings.searchTerms.includes('pasta'), true);
+      return { products: [], stats: { sourceExhausted: true, stopReason: 'discovery_exhausted', exhaustedTerms: settings.searchTerms } };
+    },
+  });
+  const result = await runCatalogGrowth(config, logger, h.dependencies);
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stopReason, 'discovery_incomplete_stalled_terms');
+  assert.equal(result.stalledTerms.length, 1);
+  assert.equal(h.saved.at(-1).lastAttemptReport.stalledTerms.length, 1);
+});

@@ -74,3 +74,45 @@
 - De ruwe kandidaat- en fasetellers vormen nog geen sluitende optelsom: 3.096 minus 1.498 bestaand minus 566 duplicaten minus 10 nieuw = 1.022 niet afzonderlijk verklaard in het dagverslag. De error-metrics bevatten een afzonderlijke irrelevantCount, maar die wordt niet door de dagsamenvatting uitgesplitst. Zonder volledig opgeslagen detail mogen deze 1.022 niet als gemeten ongeldig/bestaand worden bestempeld.
 - **Planner-cacheonderhoud niet bevestigd** voor de batch van 10; de bestaande notificatiecode logt geen specifieke HTTP-status bij deze waarschuwing. Dit is een afzonderlijk open onderhoudspunt en telt niet mee in de ene geregistreerde pagination-stopfout. Geen extra cache-/profielrun uitgevoerd. Betrokken product-ID’s: `7f4bb596-4f5d-4c27-b048-063d17a6379c`, `369d7f98-41af-414a-8c77-2ce92a03c5bf`, `3f3122cb-213b-42bf-a06f-9d09c5cedb79`, `6b0f5f1c-a68e-4187-b8a1-13decb2aef84`, `5ee51711-835e-489c-9faa-487cb806cded`, `b4946693-a6ef-4b61-9433-3941922c8e82`, `eea9d009-062e-4212-b89d-9c3f82f38c19`, `78922554-a52f-4397-b416-ea8ea2ba8ef0`, `8261d351-b826-4b69-b9c3-08f0abef2030`, `a7ed0a8b-6a93-406a-ad6a-6b67efb98c81`.
 - Na deze poging uitsluitend eindcontrole/rapportage; geen tweede import, verdere functionele reparatie, merge of Production-deployment. Bestaande geplande workflows op main zijn niet gewijzigd of uitgeschakeld; hun dagclaim weigert vandaag verdere attempts vanwege de terminale dagstatus.
+
+## Vervolg na run #82: fruit, accounting en onderhoud
+
+Basis 29bc099, dezelfde Draft PR #31. Read-only bronreproductie toont een redirectfout in de importer: `SearchTerm=fruit&PageNumber=1` wordt door Hoogvliet omgezet in een categoriezoekopdracht (`CategoryName=100-10003`, lege SearchTerm) op pagina 0. De oude URL-opbouw verloor die context telkens. Met dezelfde categorie-URL en PageNumber=1 volgen 16 andere SKU's. Opgeloste routes worden nu per term bewaard; een hervatting op pagina >0 volgt na de redirect eenmaal de correcte categoriepagina.
+
+Termstalls stoppen de term, niet de globale discovery. SKU-setsignaturen detecteren ook herordening en cycli; een cursor moet vooruitgaan; een lege pagina zonder expliciet eindbewijs is onvolledig, geen uitputting. Andere termen gaan verder tot bevestigd doel, veiligheidsstop of alle routes bezocht. Stalls blijven in de dagmetadata zichtbaar. Als alle overige routes bezocht zijn, is `discovery_incomplete_stalled_terms` een terminale aandachtstatus zonder nutteloze retry. Geen vaste pagina-20-afkap.
+
+### Metricdefinities
+
+`rawPageHits` is het aantal parsed `.product-tile` observaties, inclusief herhaling. Dit is geen unieke producttelling. `uniqueRelevantSKUs` telt de relevante unieke SKU's die in deze poging daadwerkelijk zijn beoordeeld. Elke raw hit eindigt in precies één ledgercategorie:
+
+| Categorie | Betekenis |
+|---|---|
+| new | Nieuwe insert én positieve prijs bevestigd |
+| existing | SKU stond in begininventaris |
+| concurrentExisting | Schrijver bevestigt een bestaand/concurrent ingevoegd product |
+| duplicate | Zelfde SKU al gezien in window of run |
+| repeatedPage | Tegel op een herhaalde SKU-setpagina; pagina niet opnieuw verwerkt |
+| invalidIdentity | Geen bruikbare SKU/naam/product-URL |
+| irrelevant | Bestaande relevantiefilter wijst tegel af |
+| invalidPrice | Detailpagina levert geen geldige positieve prijs |
+| invalidDetail | Detail ontbreekt of identiteit/naam/verpakking ongeldig |
+| validatedOnly | Alleen validatie, geen schrijfcallback (geen live dagjob) |
+| writeUnconfirmed | Gevalideerd, maar opslag niet bevestigd bij onderbreking |
+| notProcessed | Wel opgehaald, niet behandeld wegens doel/veiligheidsstop |
+| technicalUnprocessed | Opgehaald maar niet behandeld door technische onderbreking |
+
+De som moet exact `rawPageHits` zijn; mismatch faalt expliciet. `new` is hetzelfde aantal bevestigde nieuwe producten als het dagdoel. Reeds opgeslagen/afgekeurde items verbruiken geen doelruimte. Rapporten bevatten ook stalled term/pagina/reden, onderhoudsstatus en totaal waar betrouwbaar. Ledger en status staan in logs/Actions-summary en `catalog_discovery_state.last_batch.lastAttemptReport` (metadata v4). Reader accepteert v2, v3 en v4; voorheen werd eigen v3-metadata genegeerd.
+
+Run #82: termStats bevestigen 1.508 unieke relevante kandidaten (1.498 bestaand + 10 nieuwe). Het verschil 3.096 − 1.508 − 566 = 1.022 bestaat uit relevantiefilterhits die de dagrapportage wegliet en raw hits van herhaalde pagina's die geen categorie kregen. De historische verdeling over die twee codepaden is niet opgeslagen. Een exacte numerieke splitsing is daarom niet verantwoord.
+
+### Planneronderhoud en grenzen
+
+De oude helper slikte de foutdetails in en de growth-caller negeerde het resultaat. Nieuwe product-ID's worden nu als pending opgeslagen voordat de external notification start. Daarna wordt de exacte acknowledgement of pending-foutstatus opgeslagen. Fouten bevatten alleen toegestane stage/HTTP/API/netwerkcodes; geen willekeurige bodies, URL's of secrets. Transiënte requests maximaal driemaal met 1s/2s backoff; permanente auth-/redirect-/schemafouten stoppen. Bij queue-opslagfout blijven bevestigde inserts meetellen en stopt de run expliciet. Geen automatische replay van oude IDs of extra workflowruns.
+
+De tien run-82 producten vallen niet onder de specifieke Honig/Knorr-profieltrigger. Geen profielrij voor deze producten bewijst dus geen queueprobleem. Hun generieke planner-cachemelding is nog onbevestigd. De exacte IDs staan in het eerdere live checkpoint in dit rapport. Historische logs bevatten geen HTTP-status; read-only Supabase-logs tonen de product/prijsinserts zonder daaropvolgende planner-databasereads in dat venster. Dat bewijst niet welke HTTP-status de app gaf.
+
+Read-only authprobe toegevoegd als geïsoleerde workflow_dispatch-optie, uitsluitend op PR31-branch. Deze stuurt `{productIds:[]}` en `{recipeIds:[]}` naar de vaste Production-origin. Beide routes controleren auth en weigeren deze lege lijst vóór het aanmaken van een databaseclient. Geen Supabase-credentials, checkout of importer in de probejob. Typed/raw probe-input sluit de normale importjob uit; historische preflightguards blijven intact. HTTP400/invalid-request bewijst bereikbaarheid en auth, niet daadwerkelijke cacheverwerking.
+
+233 tests groen, inclusief A–H, fouten halverwege page/detail/write met sluitende telling, redirectcontext over windows, pagina >20, v3/v4-state, queue-/ackvolgorde en read-only probeguard. `npm run check`, alle workflow-YAML en diffcheck groen. Geen webcodewijziging; automatische bestaande CI-releasegate wordt wel gecontroleerd.
+
+Read-only dagcontrole 10:25 Amsterdam: 10/400, restant390, geen lock/retry, 6.062 unieke Hoogvliet-SKU's. Geen tweede import/onderhoudswrite/merge/Production. Eventuele tweede run vereist opnieuw expliciete toestemming én actuele dagstand: cap=min(400, 400−actuele daggroei). Terminale dagjob moet gericht vrijgegeven worden met behoud van eerdere telling en bestaande lockregels. Product-/prijs-/dag-/metadatarequests vormen geen atomische transactie bij een harde kill; dit resterende risico is niet weggeschreven.

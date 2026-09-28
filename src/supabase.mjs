@@ -702,7 +702,7 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
   if (typeof row?.last_batch === "string" && row.last_batch.startsWith("{")) {
     try {
       const parsed = JSON.parse(row.last_batch);
-      if (parsed?.version === 2) metadata = parsed;
+      if ([2, 3, 4].includes(parsed?.version)) metadata = parsed;
     } catch {}
   }
   return row ? {
@@ -715,6 +715,9 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     termStats: metadata.termStats ?? {},
     scanDate: metadata.scanDate ?? null,
     exhaustedTerms: metadata.exhaustedTerms ?? [],
+    stalledTerms: metadata.stalledTerms ?? [],
+    lastAttemptReport: metadata.lastAttemptReport ?? null,
+    plannerMaintenance: metadata.plannerMaintenance ?? null,
     saturatedUntil: metadata.saturatedUntil ?? {},
     updatedAt: row.updated_at ?? null,
   } : {
@@ -732,9 +735,12 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
 
 export async function saveCatalogDiscoveryState(config, state) {
   const lastBatch = JSON.stringify({
-    version: 3,
+    version: 4,
     scanDate: state.scanDate ?? null,
     exhaustedTerms: state.exhaustedTerms ?? [],
+    stalledTerms: state.stalledTerms ?? [],
+    lastAttemptReport: state.lastAttemptReport ?? null,
+    plannerMaintenance: state.plannerMaintenance ?? null,
     batch: state.lastBatch ?? null,
     lastTerm: state.lastTerm ?? null,
     lastStopReason: state.lastStopReason ?? null,
@@ -849,7 +855,7 @@ function pricePayload(productID, product) {
   };
 }
 
-export async function upsertProducts(config, products) {
+export async function upsertProducts(config, products, lifecycle = {}) {
   // Explicit configuration keeps the existing importer unchanged until activation.
   // Validate it before any writes; the API token never reaches Supabase/browser code.
   const maintenance = config.updateMode === "prices" || config.updateMode === "classify"
@@ -910,7 +916,7 @@ export async function upsertProducts(config, products) {
         }
         imported.push({ sku: product.sku, name: product.name, price: product.price,
           ...(insertionId ? { inserted: stored.id === insertionId } : {}) });
-        if (maintenance && stored.id === insertionId) newProductIds.push(stored.id);
+        if (insertionId && stored.id === insertionId) newProductIds.push(stored.id);
       } catch (error) {
         const structural = error instanceof SupabaseRequestError
           && (error.kind === "network" || error.kind === "dns" || error.kind === "tls"
@@ -926,12 +932,19 @@ export async function upsertProducts(config, products) {
   } finally {
     // A later structural import failure must not lose notifications for earlier
     // successfully confirmed product/price pairs in this batch.
-    if (maintenance && newProductIds.length > 0) {
-      const result = maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
-      if (result.pendingProductIds.length > 0) {
-        // Successful catalog writes remain successful. Preserve exact replay scope,
-        // never include response bodies, URLs, tokens or a global refresh instruction.
-        console.warn(`Planner-cacheonderhoud nog niet bevestigd; gerichte herhaling nodig voor product-ID's: ${result.pendingProductIds.join(",")}`);
+    if (newProductIds.length > 0) {
+      try {
+        // Persist replay scope before making an external request. A failed acknowledgement
+        // save leaves the durable pending scope intact for idempotent recovery.
+        await lifecycle.onMaintenancePending?.(newProductIds);
+        maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
+        await lifecycle.onMaintenanceResult?.(maintenanceResult, newProductIds);
+      } catch (error) {
+        error.confirmedImports = [...imported];
+        throw error;
+      }
+      if (maintenanceResult.pendingProductIds.length > 0) {
+        console.warn(`Planner-cacheonderhoud: ${JSON.stringify(maintenanceResult)}`);
       }
     }
   }

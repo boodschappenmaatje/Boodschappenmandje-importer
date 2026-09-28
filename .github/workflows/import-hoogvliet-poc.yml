@@ -3,6 +3,10 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
+      maintenance_probe_only:
+        description: Alleen Production-auth met lege ID-lijsten controleren; geen databasewrites of import
+        type: boolean
+        default: false
       daily_attempt_only:
         description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry
         type: boolean
@@ -86,6 +90,45 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  maintenance-probe:
+    permissions: {}
+    if: github.event_name == 'workflow_dispatch' && inputs.maintenance_probe_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/daily-catalog-retry-schedule' && inputs.daily_attempt_only != true && inputs.falafel_e2e_only != true && inputs.preflight_only != true && inputs.e2e_test_sku == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read-only Production maintenance authentication probe
+        shell: bash
+        env:
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          // Both production routes reject an empty list BEFORE creating a DB client.
+          const token = process.env.PLANNER_CACHE_ADMIN_TOKEN?.trim();
+          if (!token) throw new Error('missing-planner-admin-token');
+          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+          let failed = false;
+          for (const [route, key] of [['new-products', 'productIds'], ['mix-refresh', 'recipeIds']]) {
+            let status = null, code = 'network-or-timeout';
+            try {
+              const response = await fetch(`https://boodschappenmaatje-pwa.vercel.app/api/internal/planner-readiness/${route}`, {
+                method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20000),
+                headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json',
+                  ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
+                body: JSON.stringify({ [key]: [] }),
+              });
+              status = response.status;
+              const body = await response.json().catch(() => null);
+              code = ['invalid-request', 'unauthorized'].includes(body?.error) ? body.error : 'unexpected-response';
+            } catch { /* Never print raw exceptions, bodies, headers or tokens. */ }
+            const verified = status === 400 && code === 'invalid-request';
+            console.log(JSON.stringify({ route, status, code, authenticated: verified, databaseWrites: 0 }));
+            if (!verified) failed = true;
+          }
+          if (failed) process.exitCode = 1;
+          NODE
+
   preflight:
     permissions: {}
     if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
@@ -209,7 +252,7 @@ jobs:
 
   import:
     # Fail closed for both typed boolean and raw workflow_dispatch input.
-    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
+    if: ${{ inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 

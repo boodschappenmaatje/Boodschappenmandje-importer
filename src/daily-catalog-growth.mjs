@@ -104,6 +104,8 @@ export function shouldRunDailyImport(job, now = new Date(), options = {}) {
 
 function resultCounts(result = {}) {
   return {
+    accounting: result.accounting ?? null, stalledTerms: result.stalledTerms ?? [], plannerMaintenance: result.plannerMaintenance ?? null,
+    irrelevant: integer(result.irrelevantCount),
     candidates: integer(result.candidatesViewed),
     new: integer(result.actualGrowth),
     updated: integer(result.updatedCount),
@@ -119,6 +121,8 @@ function resultCounts(result = {}) {
 function errorCounts(error) {
   const metrics = error?.catalogAttemptMetrics ?? {};
   return {
+    accounting: metrics.accounting ?? null, stalledTerms: metrics.stalledTerms ?? [], plannerMaintenance: metrics.plannerMaintenance ?? null,
+    irrelevant: integer(metrics.irrelevantCount), total: metrics.totalUniqueProductsAfter ?? null,
     candidates: integer(metrics.candidatesViewed),
     new: integer(error?.actualGrowth),
     updated: integer(metrics.updatedCount),
@@ -154,7 +158,10 @@ export function formatDailyAttemptSummary({
     job.lastAttemptAt ? `gestart=${job.lastAttemptAt}` : null,
     completedAt ? `afgerond=${completedAt.toISOString()}` : null,
     `doel_nieuw=${job.targetNewProducts}`,
-    `kandidaten_bekeken=${counts.candidates}`,
+    `raw_paginahits=${counts.candidates}`,
+    counts.accounting ? `kandidaatboekhouding=${JSON.stringify(counts.accounting)}` : null,
+    counts.stalledTerms?.length ? `gestalde_termen=${JSON.stringify(counts.stalledTerms)}` : null,
+    counts.plannerMaintenance ? `planner_onderhoud=${JSON.stringify(counts.plannerMaintenance)}` : null,
     `bestaand=${counts.existing ?? 0}`,
     `duplicaten=${counts.duplicates ?? 0}`,
     `stopreden=${counts.stopReason ?? retryReason ?? job.status}`,
@@ -304,12 +311,14 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
   const targetReached = cumulative >= claim.job.targetNewProducts;
   const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
   const sourceExhausted = result.sourceExhausted === true && counts.sourceErrors === 0;
-  const nextRetryAt = !targetReached && !sourceExhausted && windowOpen && !config.dailySingleAttempt
+  const stalledCoverage = result.stopReason === "discovery_incomplete_stalled_terms";
+  const nextRetryAt = !targetReached && !sourceExhausted && !stalledCoverage && windowOpen && !config.dailySingleAttempt
     ? dailyRetryAt(claim.job.attemptCount, completedAt)
     : null;
   const outcome = targetReached
     ? "succeeded"
-    : (windowOpen && !sourceExhausted && !config.dailySingleAttempt ? "succeeded" : "daily_target_partial");
+    : (stalledCoverage ? "non_retryable_failure"
+      : (windowOpen && !sourceExhausted && !config.dailySingleAttempt ? "succeeded" : "daily_target_partial"));
   const job = await finish(config, {
     jobID: claim.job.id,
     attemptID: claim.attemptId,
@@ -318,7 +327,8 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     counts,
     retryReason: targetReached ? null : (sourceExhausted ? "discovery_exhausted" : result.stopReason ?? "daily_target_not_reached"),
     nextRetryAt,
-    publicMessage: targetReached
+    errorCode: stalledCoverage ? "discovery_incomplete_stalled_terms" : null,
+    publicMessage: stalledCoverage && !targetReached ? publicAttentionMessage() : targetReached
       ? "Dagdoel behaald."
       : (sourceExhausted ? "Beschikbare zoekroutes uitgeput; geen verdere nieuwe geldige kandidaten gevonden."
         : (config.dailySingleAttempt ? "Eenmalige poging afgerond; verdere imports wachten op beoordeling. Bronuitputting niet bewezen."

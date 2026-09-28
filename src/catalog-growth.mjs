@@ -257,14 +257,24 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
   let writeErrors = [];
   const imported = [];
   let discoveryState, originalTerms, exhaustedTerms, scanDate;
+  let previousStalls = [], plannerMaintenance = { status: "not_required", pendingProductIds: [], notifiedProducts: 0, failures: [] };
+  const maintenanceCheckpoint = async (state) => {
+    plannerMaintenance = state;
+    discoveryState = { ...discoveryState, plannerMaintenance, updatedAt: new Date().toISOString() };
+    await services.saveCatalogDiscoveryState(config, discoveryState);
+  };
+  const report = () => ({ accounting: stats.accounting ?? null,
+    stalledTerms: [...previousStalls, ...(stats.stalledTerms ?? [])], plannerMaintenance,
+    stopReason: stats.stopReason, updatedAt: new Date().toISOString() });
   const saveProgress = async () => {
-    if (!config.advanceDiscoveryState || !discoveryState || !stats.lastSearchedTerm) return;
+    if (!config.advanceDiscoveryState || !discoveryState) return;
     const completed = [...new Set([...exhaustedTerms, ...(stats.exhaustedTerms ?? [])])];
     const index = originalTerms.indexOf(stats.lastSearchedTerm);
     await services.saveCatalogDiscoveryState(config, { ...discoveryState,
-      termCursor: Math.max(0, index), pageCursor: stats.nextPageCursor ?? 0,
+      termCursor: index < 0 ? discoveryState.termCursor : index, pageCursor: stats.nextPageCursor ?? 0,
       lastBatch: config.catalogBatch, lastTerm: stats.lastSearchedTerm, lastStopReason: stats.stopReason,
-      scanDate, exhaustedTerms: completed, ...mergeDiscoveryMetrics(discoveryState, stats.termCoverage),
+      scanDate, exhaustedTerms: completed, stalledTerms: report().stalledTerms,
+      lastAttemptReport: report(), plannerMaintenance, ...mergeDiscoveryMetrics(discoveryState, stats.termCoverage),
       updatedAt: new Date().toISOString(),
     });
   };
@@ -273,13 +283,15 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
     discoveryState = await services.fetchCatalogDiscoveryState(config, config.discoveryStateKey);
     scanDate = config.discoveryScanDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
     exhaustedTerms = discoveryState.scanDate === scanDate ? discoveryState.exhaustedTerms ?? [] : [];
+    previousStalls = discoveryState.scanDate === scanDate ? discoveryState.stalledTerms ?? [] : [];
+    plannerMaintenance = discoveryState.plannerMaintenance ?? plannerMaintenance;
     const dynamicTerms = buildDynamicDiscoveryTerms(existingProducts, config.searchTerms);
     originalTerms = [...new Set([...config.searchTerms, ...dynamicTerms])];
     const rotatedTerms = rotateDiscoveryTerms(originalTerms, originalTerms.includes(discoveryState.lastTerm)
       ? originalTerms.indexOf(discoveryState.lastTerm) : discoveryState.termCursor);
     // A completed route stays completed for this scan day. Yield sorting must
     // not repeatedly put the same high-yield, now-known routes before unvisited ones.
-    const prioritizedTerms = rotatedTerms.filter((term) => !exhaustedTerms.includes(term));
+    const prioritizedTerms = rotatedTerms.filter((term) => !exhaustedTerms.includes(term) && !previousStalls.some(entry => entry.term === term));
     const growthConfig = {
       ...config,
       searchTerms: prioritizedTerms,
@@ -294,14 +306,29 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
 
     const persistBatch = async (batch) => {
       let result;
-      try { result = await persist(growthConfig, batch); }
+      try { result = await persist(growthConfig, batch, {
+        onMaintenancePending: async ids => maintenanceCheckpoint({
+          ...plannerMaintenance, status: "pending_requires_attention",
+          pendingProductIds: [...new Set([...plannerMaintenance.pendingProductIds, ...ids])],
+        }),
+        onMaintenanceResult: async (maintenance, ids) => {
+          const pendingProductIds = [...new Set([
+            ...plannerMaintenance.pendingProductIds.filter(id => !ids.includes(id)), ...maintenance.pendingProductIds,
+          ])];
+          await maintenanceCheckpoint({ status: pendingProductIds.length ? "pending_requires_attention" : "confirmed",
+            pendingProductIds, notifiedProducts: plannerMaintenance.notifiedProducts + maintenance.notifiedProducts,
+            failures: [...plannerMaintenance.failures, ...maintenance.failures],
+          });
+        },
+      }); }
       catch (error) { imported.push(...(error.confirmedImports ?? [])); throw error; }
       imported.push(...result.imported);
       writeErrors.push(...result.errors);
-      if (result.errors.length) throw Object.assign(new Error("Productopslag niet volledig bevestigd"), { code: "product_write_failure" });
+      if (result.errors.length) throw Object.assign(new Error("Productopslag niet volledig bevestigd"), { code: "product_write_failure", confirmedImports: result.imported });
       logger.info(`Catalogusgroei tussentijds opgeslagen: ${imported.length}.`);
       return {
         newProducts: result.imported.filter((product) => product.inserted === true).length,
+        existingProducts: result.imported.filter((product) => product.inserted === false).length,
       };
     };
     const collected = await collect(growthConfig, logger, {
@@ -312,6 +339,9 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
         ? discoveryState.pageCursor : 0,
     });
     stats = collected.stats;
+    if (previousStalls.length && stats.sourceExhausted) {
+      stats.sourceExhausted = false; stats.stopReason = "discovery_incomplete_stalled_terms";
+    }
     const importedSKUs = new Set(imported.map((product) => product.sku));
     const counts = classifyCatalogOutcomes({
       products: collected.products,
@@ -323,7 +353,7 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
     });
     const totalUniqueProductsAfter = (await services.fetchExistingSKUs(config)).size;
     const actualGrowth = new Set(imported.filter((row) => row.inserted === true).map((row) => row.sku)).size;
-    const searchErrors = stats.searchErrors ?? 0;
+    const searchErrors = (stats.searchErrors ?? 0) + previousStalls.length;
     const targetReached = actualGrowth >= config.maxNewProducts;
     const sourceExhausted = stats.sourceExhausted === true && !searchErrors && !counts.errorCount;
     const growthStatus = targetReached
@@ -333,6 +363,7 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
       : (sourceExhausted ? "discovery_exhausted" : "partial_growth_target_not_reached");
     const result = {
       ...counts,
+      accounting: stats.accounting, stalledTerms: report().stalledTerms, plannerMaintenance,
       processedCount: stats.processedProducts ?? counts.processedCount,
       newCount: actualGrowth,
       sourceExhausted,
@@ -368,9 +399,11 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
 
     await saveProgress();
     logger.info(formatCatalogGrowthSummary(result));
+    logger.info(`Discovery-verantwoording: ${JSON.stringify(report())}`);
     return result;
   } catch (error) {
     stats = error.collectionStats ?? stats;
+    logger.info(`Discovery-verantwoording: ${JSON.stringify(report())}`);
     await saveProgress().catch((saveError) => logger.error(`Discovery-checkpoint mislukt: ${saveError.message}`));
     const totalUniqueProductsAfter = await services.fetchExistingSKUs(config)
       .then((skus) => skus.size)
@@ -399,6 +432,8 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
       Object.assign(error, {
         actualGrowth,
         catalogAttemptMetrics: {
+          accounting: stats.accounting, stalledTerms: report().stalledTerms, plannerMaintenance,
+          totalUniqueProductsAfter,
           candidatesViewed: stats.candidatesExamined ?? stats.uniqueSKUsDiscovered ?? 0,
           existingCount: stats.existingCandidatesSkipped ?? 0,
           duplicateCount: stats.duplicateSKUsSkipped ?? 0,

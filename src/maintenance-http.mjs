@@ -1,7 +1,7 @@
 export const PRODUCTION_PLANNER_ORIGIN = 'https://boodschappenmaatje-pwa.vercel.app';
 const TRANSIENT = new Set([408, 425, 429, 500, 502, 503, 504]);
 const NETWORK_CODES = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT']);
-const API_CODES = new Set(['unauthorized', 'invalid-request', 'cache-unavailable', 'profile-not-verified', 'cache-refresh-failed']);
+const API_CODES = new Set(['unauthorized', 'invalid-request', 'cache-unavailable', 'profile-not-verified', 'cache-refresh-failed', 'new-product-maintenance-failed']);
 function networkCode(error) {
   for (let depth = 0; error && depth < 4; depth++, error = error.cause) {
     if (NETWORK_CODES.has(error.code)) return error.code;

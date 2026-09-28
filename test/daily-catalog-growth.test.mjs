@@ -421,3 +421,13 @@ test('eenmalige dagpoging plant ook na tijdelijke storing geen vervolgrun', asyn
   assert.equal(h.state.nextRetryAt, null);
   assert.equal(h.attempts.length, 1);
 });
+
+test('all usable routes visited with a stalled term ends in attention without an automatic retry', async () => {
+  const h = createHarness([{ new: 10, sourceErrors: 1, sourceExhausted: false,
+    stopReason: 'discovery_incomplete_stalled_terms' }]);
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.status, 'failed_requires_attention');
+  assert.equal(result.job.nextRetryAt, null);
+  assert.equal(result.job.remainingTarget, 390);
+  assert.equal(h.attempts[0].errorCode, 'discovery_incomplete_stalled_terms');
+});
