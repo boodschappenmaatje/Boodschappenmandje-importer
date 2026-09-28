@@ -3,7 +3,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const workflow = readFileSync(new URL('../.github/workflows/import-hoogvliet-poc.yml', import.meta.url), 'utf8');
-const job = workflow.match(/^  maintenance-probe:\n[\s\S]*?(?=^  preflight:)/m)[0];
+const job = workflow.match(/^  maintenance-probe:\n[\s\S]*?(?=^  server-client-probe:)/m)[0];
 const script = job.match(/node --input-type=module <<'NODE'\n([\s\S]*?)^          NODE/m)[1].replace(/^          /gm, '');
 
 test('production probe is explicit branch-scoped, has no DB credentials or import and excludes normal importer', () => {
