@@ -145,6 +145,19 @@ describe("authenticated, write-free Production database probe", () => {
     expect(mocked.repair).not.toHaveBeenCalled();
   });
 
+  it("reports a client construction failure without invoking fetch or maintenance", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    mocked.probeClient.mockImplementation(() => { throw new Error("private configuration detail"); });
+    const response = await POST(request({ databaseReadProbe: "v1" }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ code: "database-client-unavailable",
+      authenticated: true, serverClientAvailable: false, databaseReadSuccess: false,
+      databaseWrites: 0, fetchCalled: false, responseReceived: false, responseStatus: null });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mocked.repair).not.toHaveBeenCalled();
+  });
+
   describe("pinned supabase-js 2.116.0 with a local-only fetch", () => {
     async function throughSdk(fetcher: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
       code: string, upstreamStatus: number | null, httpStatus = 502,

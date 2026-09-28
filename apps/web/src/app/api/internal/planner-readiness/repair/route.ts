@@ -78,9 +78,18 @@ export async function POST(request: Request): Promise<Response> {
       response.status >= 100 && response.status <= 599 ? response.status : null;
     return response;
   };
-  const client = databaseReadProbe
-    ? getSupabaseServerClientForReadProbe(observedFetch)
-    : getSupabaseServerClient();
+  let client;
+  if (databaseReadProbe) {
+    try {
+      client = getSupabaseServerClientForReadProbe(observedFetch);
+    } catch {
+      return Response.json({ code: "database-client-unavailable", authenticated: true,
+        serverClientAvailable: false, databaseReadSuccess: false, databaseWrites: 0,
+        ...observation }, { status: 503 });
+    }
+  } else {
+    client = getSupabaseServerClient();
+  }
   if (!client) {
     return databaseReadProbe
       ? Response.json({ code: "database-client-unavailable", authenticated: true,
