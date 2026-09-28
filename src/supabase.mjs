@@ -713,6 +713,8 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     lastTerm: metadata.lastTerm ?? null,
     lastStopReason: metadata.lastStopReason ?? null,
     termStats: metadata.termStats ?? {},
+    scanDate: metadata.scanDate ?? null,
+    exhaustedTerms: metadata.exhaustedTerms ?? [],
     saturatedUntil: metadata.saturatedUntil ?? {},
     updatedAt: row.updated_at ?? null,
   } : {
@@ -730,7 +732,9 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
 
 export async function saveCatalogDiscoveryState(config, state) {
   const lastBatch = JSON.stringify({
-    version: 2,
+    version: 3,
+    scanDate: state.scanDate ?? null,
+    exhaustedTerms: state.exhaustedTerms ?? [],
     batch: state.lastBatch ?? null,
     lastTerm: state.lastTerm ?? null,
     lastStopReason: state.lastStopReason ?? null,
@@ -868,8 +872,8 @@ export async function upsertProducts(config, products) {
         continue;
       }
       try {
-        const insertionId = maintenance ? randomUUID() : null;
-        const inserted = maintenance ? await postJSON(
+        const insertionId = maintenance || config.updateMode === "growth" ? randomUUID() : null;
+        const inserted = insertionId ? await postJSON(
           config.supabaseURL,
           "products",
           config.supabaseSecret,
@@ -904,7 +908,8 @@ export async function upsertProducts(config, products) {
         if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
           throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
         }
-        imported.push({ sku: product.sku, name: product.name, price: product.price });
+        imported.push({ sku: product.sku, name: product.name, price: product.price,
+          ...(insertionId ? { inserted: stored.id === insertionId } : {}) });
         if (maintenance && stored.id === insertionId) newProductIds.push(stored.id);
       } catch (error) {
         const structural = error instanceof SupabaseRequestError
@@ -914,7 +919,7 @@ export async function upsertProducts(config, products) {
             || error.status === 401 || error.status === 403 || error.status === 404
             || error.status === 408 || error.status === 425 || error.status === 429
             || (error.status ?? 0) >= 500);
-        if (structural) throw error;
+        if (structural) { error.confirmedImports = [...imported]; throw error; }
         errors.push({ sku: product.sku, message: error instanceof Error ? error.message : "onbekende fout" });
       }
     }

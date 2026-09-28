@@ -1377,7 +1377,8 @@ test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compat
     globalThis.fetch = originalFetch;
   }
   const persistedMetadata = JSON.parse(storedPayload.last_batch);
-  assert.equal(persistedMetadata.version, 2);
+  assert.equal(persistedMetadata.version, 3);
+  assert.deepEqual(persistedMetadata.exhaustedTerms, []);
   assert.equal(persistedMetadata.lastTerm, "pasta");
   assert.equal(persistedMetadata.saturatedUntil.fruit, "2026-09-19T12:00:00.000Z");
 });
@@ -1508,4 +1509,14 @@ test("Supabase-migratie voegt alleen de optionele producttype-kolom en index toe
   assert.match(migration, /add column if not exists product_type text/i);
   assert.match(migration, /products_supermarket_product_type_idx/i);
   assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from/i);
+});
+
+test('live-observed Hoogvliet pagination metadata distinguishes last page from missing markup', async () => {
+  const { searchPaginationEvidence } = await import('../src/hoogvliet.mjs');
+  assert.deepEqual(searchPaginationEvidence({ currentPage: 1, totalPages: 2, totalProducts: 31, candidateCount: 16 }),
+    { sourceExhausted: false, nextPage: 1, currentPage: 1 });
+  assert.equal(searchPaginationEvidence({ currentPage: 2, totalPages: 2, totalProducts: 31, candidateCount: 15 }).sourceExhausted, true);
+  assert.equal(searchPaginationEvidence({ totalProducts: 0, candidateCount: 0 }).sourceExhausted, true);
+  assert.equal(searchPaginationEvidence({ explicitEmpty: true, candidateCount: 0 }).sourceExhausted, true);
+  assert.throws(() => searchPaginationEvidence({ currentPage: null, totalPages: null, totalProducts: null, candidateCount: 0 }), /metadata/);
 });

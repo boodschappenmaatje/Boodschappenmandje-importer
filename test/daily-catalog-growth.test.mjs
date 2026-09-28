@@ -85,6 +85,8 @@ function createHarness(growthSequence, {
           unchangedCount: entry.unchanged ?? 0,
           skippedCount: entry.skipped ?? 0,
           searchErrors: entry.sourceErrors ?? 0,
+          sourceExhausted: entry.sourceExhausted ?? false,
+          stopReason: entry.stopReason,
         };
       },
       finish: async (_config, input) => {
@@ -371,4 +373,30 @@ test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenla
   assert.doesNotMatch(retry, /continue-on-error: true/);
   assert.doesNotMatch(retry, /\bsleep\s+[1-9]\d{2,}/i);
   assert.match(monitor, /ontbrekende dagjob wordt veilig klaargezet/i);
+});
+
+
+test("bewezen zoekroute-uitputting onder 400 sluit de dag zonder verdere retries", async () => {
+  const h = createHarness([{ new: 327, sourceExhausted: true, stopReason: "discovery_exhausted" }]);
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.newProductsCollected, 327);
+  assert.equal(result.job.status, "daily_target_partial");
+  assert.equal(result.job.nextRetryAt, null);
+  assert.equal(h.attempts[0].retryReason, "discovery_exhausted");
+  assert.equal(shouldRunDailyImport(result.job, new Date("2026-09-17T15:00:00Z")).run, false);
+});
+
+test("paginaveiligheidsgrens is geen bronuitputting: bewaar expliciete vervolgreden", async () => {
+  const h = createHarness([{ new: 80, stopReason: "page_safety_limit" }]);
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.status, "retry_scheduled");
+  assert.equal(h.attempts[0].retryReason, "page_safety_limit");
+  assert.equal(result.job.nextRetryAt, "2026-09-17T10:00:00.000Z");
+});
+
+test("twee gelijktijdige dagtriggers starten maar één collector", async () => {
+  const h = createHarness([{ new: 400 }]);
+  const results = await Promise.all([runDailyCatalogAttempt(config, logger, h.dependencies), runDailyCatalogAttempt(config, logger, h.dependencies)]);
+  assert.equal(results.filter(x => x.attempted).length, 1);
+  assert.equal(h.attempts.length, 1);
 });

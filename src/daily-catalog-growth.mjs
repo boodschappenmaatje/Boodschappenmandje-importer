@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.mjs";
@@ -109,7 +110,9 @@ function resultCounts(result = {}) {
     unchanged: integer(result.unchangedCount),
     skipped: integer(result.skippedCount),
     invalid: integer(result.invalidCount ?? result.skippedCount),
-    sourceErrors: integer(result.searchErrors),
+    sourceErrors: integer(result.searchErrors) + integer(result.errorCount),
+    existing: integer(result.existingCount), duplicates: integer(result.duplicateCount),
+    total: result.totalUniqueProductsAfter ?? null, stopReason: result.stopReason ?? null,
   };
 }
 
@@ -123,6 +126,8 @@ function errorCounts(error) {
     skipped: integer(metrics.skippedCount),
     invalid: integer(metrics.invalidCount),
     sourceErrors: integer(metrics.sourceErrors || 1),
+    existing: integer(metrics.existingCount), duplicates: integer(metrics.duplicateCount),
+    stopReason: error?.code ?? "technical_failure",
   };
 }
 
@@ -148,7 +153,12 @@ export function formatDailyAttemptSummary({
     `poging=${job.attemptCount}`,
     job.lastAttemptAt ? `gestart=${job.lastAttemptAt}` : null,
     completedAt ? `afgerond=${completedAt.toISOString()}` : null,
+    `doel_nieuw=${job.targetNewProducts}`,
     `kandidaten_bekeken=${counts.candidates}`,
+    `bestaand=${counts.existing ?? 0}`,
+    `duplicaten=${counts.duplicates ?? 0}`,
+    `stopreden=${counts.stopReason ?? retryReason ?? job.status}`,
+    counts.total == null ? null : `totaal_na=${counts.total}`,
     `nieuw=${counts.new}`,
     `bijgewerkt=${counts.updated}`,
     `ongewijzigd=${counts.unchanged}`,
@@ -168,7 +178,12 @@ function safeLogger(secret) {
     ? String(value).split(secret).join("[REDACTED]")
     : String(value);
   return {
-    info: (value) => console.log(redact(value)),
+    info: (value) => {
+      const safe = redact(value); console.log(safe);
+      if (process.env.GITHUB_STEP_SUMMARY && safe.startsWith("Dagelijkse catalogusgroei")) {
+        appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Importresultaat\n\n${safe.split(" | ").join("\n\n")}\n`);
+      }
+    },
     error: (value) => console.error(redact(value)),
   };
 }
@@ -226,6 +241,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
       maxNewProducts: claim.job.remainingTarget,
       maxProducts: Math.min(500, Math.max(config.maxProducts, claim.job.remainingTarget)),
       importTrigger: "schedule",
+      discoveryScanDate: jobDate,
     };
     growthConfig.productTypeSupported = growthConfig.dryRun
       ? true
@@ -287,23 +303,25 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
   );
   const targetReached = cumulative >= claim.job.targetNewProducts;
   const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
-  const nextRetryAt = !targetReached && windowOpen
+  const sourceExhausted = result.sourceExhausted === true && counts.sourceErrors === 0;
+  const nextRetryAt = !targetReached && !sourceExhausted && windowOpen
     ? dailyRetryAt(claim.job.attemptCount, completedAt)
     : null;
   const outcome = targetReached
     ? "succeeded"
-    : (windowOpen ? "succeeded" : "daily_target_partial");
+    : (windowOpen && !sourceExhausted ? "succeeded" : "daily_target_partial");
   const job = await finish(config, {
     jobID: claim.job.id,
     attemptID: claim.attemptId,
     lockToken: claim.lockToken,
     outcome,
     counts,
-    retryReason: targetReached ? null : "daily_target_not_reached",
+    retryReason: targetReached ? null : (sourceExhausted ? "discovery_exhausted" : result.stopReason ?? "daily_target_not_reached"),
     nextRetryAt,
     publicMessage: targetReached
       ? "Dagdoel behaald."
-      : (windowOpen ? publicPauseMessage() : "Dagupdate gedeeltelijk voltooid. De bestaande catalogus blijft beschikbaar."),
+      : (sourceExhausted ? "Beschikbare zoekroutes uitgeput; geen verdere nieuwe geldige kandidaten gevonden."
+        : (windowOpen ? publicPauseMessage() : "Dagupdate onvolledig; veiligheidsgrens of dagvenster bereikt, bronuitputting niet bewezen.")),
     now: completedAt,
   });
   logger.info(formatDailyAttemptSummary({
@@ -311,7 +329,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     counts,
     completedAt,
     nextRetryAt: job.nextRetryAt ? new Date(job.nextRetryAt) : null,
-    retryReason: targetReached ? null : "daily_target_not_reached",
+    retryReason: targetReached ? null : (sourceExhausted ? "discovery_exhausted" : result.stopReason ?? "daily_target_not_reached"),
   }));
   return { attempted: true, reason: job.status, job, result };
 }

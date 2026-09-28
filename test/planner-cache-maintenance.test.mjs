@@ -30,14 +30,15 @@ for (const [filename, jobName, mode] of [
     const fixtures = {
       SUPABASE_URL: config.supabaseURL,
       SUPABASE_SECRET_KEY: config.supabaseSecret,
-      PLANNER_CACHE_BASE_URL: config.plannerCacheBaseURL,
+      PLANNER_CACHE_BASE_URL: "https://boodschappenmaatje-pwa.vercel.app",
       PLANNER_CACHE_ADMIN_TOKEN: config.plannerCacheAdminToken,
       VERCEL_AUTOMATION_BYPASS_SECRET: bypassConfig.plannerCacheAutomationBypassSecret,
     };
     const env = { UPDATE_MODE: mode };
     for (const [key, value] of Object.entries(fixtures)) {
       const source = key === "PLANNER_CACHE_BASE_URL" ? "vars" : "secrets";
-      assert.ok(environment.includes(`${key}: \${{ ${source}.${key} }}`), `${key} must be mapped in ${jobName}`);
+      assert.ok(environment.includes(key === "PLANNER_CACHE_BASE_URL"
+        ? `${key}: ${value}` : `${key}: \${{ ${source}.${key} }}`), `${key} must be mapped in ${jobName}`);
       env[key] = `  ${value}  `;
     }
     const loaded = loadConfig(env);
@@ -52,7 +53,7 @@ for (const [filename, jobName, mode] of [
       const snapshot = { url: String(url), method: options.method, headers: { ...options.headers },
         redirect: options.redirect, body, priceConfirmed: body.productIds?.every((id) => priced.has(id)) };
       requests.push(snapshot);
-      if (url.origin === config.plannerCacheBaseURL) {
+      if (url.origin === fixtures.PLANNER_CACHE_BASE_URL) {
         const attempts = requests.filter((request) => request.body.productIds).length;
         if (attempts === 1) return json({ error: fixtures.VERCEL_AUTOMATION_BYPASS_SECRET }, 503);
         if (attempts === 2) throw new Error(`${fixtures.PLANNER_CACHE_ADMIN_TOKEN} ${fixtures.VERCEL_AUTOMATION_BYPASS_SECRET}`);
@@ -68,7 +69,7 @@ for (const [filename, jobName, mode] of [
     assert.deepEqual(maintenance[0].body, maintenance[1].body);
     assert.deepEqual(maintenance[1].body, maintenance[2].body);
     for (const request of maintenance) {
-      assert.equal(request.url, `${config.plannerCacheBaseURL}/api/internal/planner-readiness/new-products`);
+      assert.equal(request.url, `${fixtures.PLANNER_CACHE_BASE_URL}/api/internal/planner-readiness/new-products`);
       assert.equal(request.method, "POST");
       assert.equal(request.redirect, "manual");
       assert.equal(request.priceConfirmed, true);
@@ -298,4 +299,24 @@ test("authorization errors and redirects are not retried or followed", async () 
     assert.equal(calls, 1);
     assert.deepEqual(result.pendingProductIds, ["one"]);
   }
+});
+
+test('growth counts real insert identities even without planner maintenance configuration', async (t) => {
+  const rows = new Map();
+  rows.set('730331001', { id: 'concurrent-product', sku: '730331001' });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const payload = JSON.parse(options.body)[0];
+    if (url.pathname.endsWith('/product_prices')) return json([payload]);
+    const exists = rows.get(payload.sku);
+    if (options.headers.Prefer?.includes('ignore-duplicates') || options.headers.prefer?.includes('ignore-duplicates')) {
+      if (exists) return json([]);
+      rows.set(payload.sku, payload); return json([payload]);
+    }
+    return json([exists ?? payload]);
+  });
+  const settings = { supabaseURL: config.supabaseURL, supabaseSecret: config.supabaseSecret, updateMode: 'growth' };
+  const result = await upsertProducts(settings, [product('730331000'), product('730331001')]);
+  assert.deepEqual(result.imported.map(row => row.inserted), [true, false]);
+  const repeat = await upsertProducts(settings, [product('730331000')]);
+  assert.equal(repeat.imported[0].inserted, false);
 });

@@ -222,6 +222,10 @@ export function formatCatalogGrowthSummary(result) {
     `bijgewerkt=${result.updatedCount}`,
     `ongewijzigd=${result.unchangedCount}`,
     `overgeslagen=${result.skippedCount}`,
+    `bestaand=${result.existingCount ?? 0}`,
+    `duplicaten=${result.duplicateCount ?? 0}`,
+    `ongeldig=${result.invalidCount ?? result.skippedCount}`,
+    `niet_relevant=${result.irrelevantCount ?? 0}`,
     `fouten=${result.errorCount}`,
     `kandidaten_bekeken=${result.candidatesViewed}`,
     `zoektermen=${result.searchedTerms}`,
@@ -234,26 +238,48 @@ export function formatCatalogGrowthSummary(result) {
   ].join(" | ");
 }
 
-export async function runCatalogGrowth(config, logger = console) {
+export async function runCatalogGrowth(config, logger = console, dependencies = {}) {
+  const services = { fetchExistingProducts, fetchExistingPriceStates, fetchExistingSKUs,
+    fetchCatalogDiscoveryState, saveCatalogDiscoveryState, startCatalogImportRun, finishCatalogImportRun, ...dependencies };
+  const collect = dependencies.collectProducts ?? collectProducts;
+  const persist = dependencies.upsertProducts ?? upsertProducts;
   const startedAt = Date.now();
-  const existingProducts = await fetchExistingProducts(config);
-  const existingPrices = await fetchExistingPriceStates(config);
+  const existingProducts = await services.fetchExistingProducts(config);
+  const existingPrices = await services.fetchExistingPriceStates(config);
   const existingBySKU = new Map(existingProducts.map((product) => [product.sku, product]));
   const existingSKUs = new Set(existingBySKU.keys());
   const totalUniqueProductsBefore = existingSKUs.size;
-  const run = await startCatalogImportRun(config, {
+  const run = await services.startCatalogImportRun(config, {
     trigger: config.importTrigger,
     totalUniqueProductsBefore,
   });
   let stats = {};
   let writeErrors = [];
+  const imported = [];
+  let discoveryState, originalTerms, exhaustedTerms, scanDate;
+  const saveProgress = async () => {
+    if (!config.advanceDiscoveryState || !discoveryState || !stats.lastSearchedTerm) return;
+    const completed = [...new Set([...exhaustedTerms, ...(stats.exhaustedTerms ?? [])])];
+    const index = originalTerms.indexOf(stats.lastSearchedTerm);
+    await services.saveCatalogDiscoveryState(config, { ...discoveryState,
+      termCursor: Math.max(0, index), pageCursor: stats.nextPageCursor ?? 0,
+      lastBatch: config.catalogBatch, lastTerm: stats.lastSearchedTerm, lastStopReason: stats.stopReason,
+      scanDate, exhaustedTerms: completed, ...mergeDiscoveryMetrics(discoveryState, stats.termCoverage),
+      updatedAt: new Date().toISOString(),
+    });
+  };
 
   try {
-    const discoveryState = await fetchCatalogDiscoveryState(config, config.discoveryStateKey);
+    discoveryState = await services.fetchCatalogDiscoveryState(config, config.discoveryStateKey);
+    scanDate = config.discoveryScanDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
+    exhaustedTerms = discoveryState.scanDate === scanDate ? discoveryState.exhaustedTerms ?? [] : [];
     const dynamicTerms = buildDynamicDiscoveryTerms(existingProducts, config.searchTerms);
-    const originalTerms = [...config.searchTerms, ...dynamicTerms];
-    const rotatedTerms = rotateDiscoveryTerms(originalTerms, discoveryState.termCursor);
-    const prioritizedTerms = prioritizeDiscoveryTerms(rotatedTerms, discoveryState);
+    originalTerms = [...new Set([...config.searchTerms, ...dynamicTerms])];
+    const rotatedTerms = rotateDiscoveryTerms(originalTerms, originalTerms.includes(discoveryState.lastTerm)
+      ? originalTerms.indexOf(discoveryState.lastTerm) : discoveryState.termCursor);
+    // A completed route stays completed for this scan day. Yield sorting must
+    // not repeatedly put the same high-yield, now-known routes before unvisited ones.
+    const prioritizedTerms = rotatedTerms.filter((term) => !exhaustedTerms.includes(term));
     const growthConfig = {
       ...config,
       searchTerms: prioritizedTerms,
@@ -266,21 +292,24 @@ export async function runCatalogGrowth(config, logger = console) {
         + `dynamische_termen=${dynamicTerms.length}.`,
     );
 
-    const imported = [];
     const persistBatch = async (batch) => {
-      const result = await upsertProducts(growthConfig, batch);
+      let result;
+      try { result = await persist(growthConfig, batch); }
+      catch (error) { imported.push(...(error.confirmedImports ?? [])); throw error; }
       imported.push(...result.imported);
       writeErrors.push(...result.errors);
+      if (result.errors.length) throw Object.assign(new Error("Productopslag niet volledig bevestigd"), { code: "product_write_failure" });
       logger.info(`Catalogusgroei tussentijds opgeslagen: ${imported.length}.`);
       return {
-        newProducts: result.imported.filter((product) => !existingSKUs.has(product.sku)).length,
+        newProducts: result.imported.filter((product) => product.inserted === true).length,
       };
     };
-    const collected = await collectProducts(growthConfig, logger, {
+    const collected = await collect(growthConfig, logger, {
       existingSKUs,
       onBatch: persistBatch,
       persistBatchSize: 10,
-      initialPageCursor: discoveryState.pageCursor,
+      initialPageCursor: discoveryState.scanDate === scanDate && prioritizedTerms[0] === discoveryState.lastTerm
+        ? discoveryState.pageCursor : 0,
     });
     stats = collected.stats;
     const importedSKUs = new Set(imported.map((product) => product.sku));
@@ -292,20 +321,22 @@ export async function runCatalogGrowth(config, logger = console) {
       stats,
       writeErrors: writeErrors.length,
     });
-    const totalUniqueProductsAfter = (await fetchExistingSKUs(config)).size;
-    const actualGrowth = Math.max(0, totalUniqueProductsAfter - totalUniqueProductsBefore);
+    const totalUniqueProductsAfter = (await services.fetchExistingSKUs(config)).size;
+    const actualGrowth = new Set(imported.filter((row) => row.inserted === true).map((row) => row.sku)).size;
     const searchErrors = stats.searchErrors ?? 0;
     const targetReached = actualGrowth >= config.maxNewProducts;
+    const sourceExhausted = stats.sourceExhausted === true && !searchErrors && !counts.errorCount;
     const growthStatus = targetReached
       ? (searchErrors > 0 || counts.errorCount > 0
         ? "partial_but_growth_target_reached"
         : "growth_target_reached")
-      : "partial_growth_target_not_reached";
+      : (sourceExhausted ? "discovery_exhausted" : "partial_growth_target_not_reached");
     const result = {
       ...counts,
       processedCount: stats.processedProducts ?? counts.processedCount,
       newCount: actualGrowth,
-      status: importRunStatus({
+      sourceExhausted,
+      status: sourceExhausted ? "success" : importRunStatus({
         errorCount: counts.errorCount,
         searchErrors,
         actualGrowth,
@@ -317,7 +348,11 @@ export async function runCatalogGrowth(config, logger = console) {
       totalUniqueProductsBefore,
       totalUniqueProductsAfter,
       actualGrowth,
-      candidatesViewed: stats.uniqueSKUsDiscovered ?? 0,
+      candidatesViewed: stats.candidatesExamined ?? stats.uniqueSKUsDiscovered ?? 0,
+      existingCount: stats.existingCandidatesSkipped ?? 0,
+      duplicateCount: stats.duplicateSKUsSkipped ?? 0,
+      invalidCount: stats.invalidProductsSkipped ?? 0,
+      irrelevantCount: stats.irrelevantCandidatesSkipped ?? 0,
       searchedTerms: stats.searchedTerms ?? 0,
       searchErrors,
       stopReason: stats.stopReason ?? "discovery_exhausted",
@@ -329,40 +364,25 @@ export async function runCatalogGrowth(config, logger = console) {
         !targetReached ? `stopreden=${stats.stopReason ?? "discovery_exhausted"}` : null,
       ].filter(Boolean).join("; ") || null,
     };
-    await finishCatalogImportRun(config, run, result);
+    await services.finishCatalogImportRun(config, run, result);
 
-    if (config.advanceDiscoveryState) {
-      const metrics = mergeDiscoveryMetrics(discoveryState, stats.termCoverage);
-      const lastOriginalIndex = originalTerms.indexOf(stats.lastSearchedTerm);
-      const resumeCurrentTerm = result.stopReason !== "discovery_exhausted"
-        && lastOriginalIndex >= 0;
-      await saveCatalogDiscoveryState(config, {
-        ...discoveryState,
-        termCursor: lastOriginalIndex < 0
-          ? nextDiscoveryCursor(discoveryState.termCursor, stats.searchedTerms ?? 0, originalTerms.length)
-          : (lastOriginalIndex + (resumeCurrentTerm ? 0 : 1)) % originalTerms.length,
-        pageCursor: stats.nextPageCursor ?? 0,
-        lastBatch: config.catalogBatch,
-        lastTerm: stats.lastSearchedTerm,
-        lastStopReason: result.stopReason,
-        ...metrics,
-        updatedAt: new Date().toISOString(),
-      });
-    }
+    await saveProgress();
     logger.info(formatCatalogGrowthSummary(result));
     return result;
   } catch (error) {
-    const totalUniqueProductsAfter = await fetchExistingSKUs(config)
+    stats = error.collectionStats ?? stats;
+    await saveProgress().catch((saveError) => logger.error(`Discovery-checkpoint mislukt: ${saveError.message}`));
+    const totalUniqueProductsAfter = await services.fetchExistingSKUs(config)
       .then((skus) => skus.size)
       .catch(() => totalUniqueProductsBefore);
-    const actualGrowth = Math.max(0, totalUniqueProductsAfter - totalUniqueProductsBefore);
+    const actualGrowth = new Set(imported.filter((row) => row.inserted === true).map((row) => row.sku)).size;
     const failure = catalogImportFailure(error, actualGrowth);
     logger.error(
       `Catalogusbronstatus | status=${failure.sourceStatus ?? "import_error"}`
         + ` | werkelijke_groei=${actualGrowth}`
         + ` | detail=${error instanceof Error ? error.message : "Onbekende importfout"}`,
     );
-    await finishCatalogImportRun(config, run, {
+    await services.finishCatalogImportRun(config, run, {
       status: actualGrowth > 0 ? "partial" : "failed",
       processedCount: stats.processedProducts ?? 0,
       newCount: actualGrowth,
@@ -379,7 +399,10 @@ export async function runCatalogGrowth(config, logger = console) {
       Object.assign(error, {
         actualGrowth,
         catalogAttemptMetrics: {
-          candidatesViewed: stats.uniqueSKUsDiscovered ?? 0,
+          candidatesViewed: stats.candidatesExamined ?? stats.uniqueSKUsDiscovered ?? 0,
+          existingCount: stats.existingCandidatesSkipped ?? 0,
+          duplicateCount: stats.duplicateSKUsSkipped ?? 0,
+          irrelevantCount: stats.irrelevantCandidatesSkipped ?? 0,
           updatedCount: 0,
           unchangedCount: 0,
           skippedCount: stats.invalidProductsSkipped ?? 0,
