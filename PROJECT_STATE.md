@@ -2,6 +2,12 @@
 
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
+## Import/maintenance — minimale main-writergate, 29 september 2026
+- Remote bij voorbereiding: main `31705dd`, Draft PR #31 `735fe9ea`, #32 `1e07751`, #33 `1e2b4fb`; alle ongemerged. De Vercel Production-deployment `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ` draait Ready op main. Geen Production-promotie, merge, productimport, onderhoud of queue-writeback in deze stap.
+- Draft PR #34 `fix/preserve-catalog-maintenance-state` is direct vanaf main gemaakt. Functionele diff uitsluitend `src/supabase.mjs` met de in PR #33 geteste v2/v4/future metadata-read, merge/preserve, `updated_at` compare-and-set en fail-closed acknowledgementconflict; tests `test/importer.test.mjs` en `test/catalog-discovery-state-preservation.test.mjs`. Geen webserverclient/replay/paginering/diagnostiek. CI op de actuele PR-head afzonderlijk controleren.
+- Read-only actuele staat: `daily-catalog-growth` is **v2**, bijgewerkt 29 september 17:30 UTC, cursor term 205/pagina 0, zonder `plannerMaintenance`. Dagjob 29 september: `retry_scheduled`, **4/400** na 2 pogingen, `next_retry_at` 17:50 UTC, lock vrij ten tijde van de meting. Dit is een autonome main-job, niet door deze opdracht gestart. De 290 exact bewezen run-85-ID's blijven uitsluitend historisch vastgelegd in PR #33; de eerdere 10 blijven gescheiden. Huidige per-ID onderhoudsstatus is na v2-overschrijving niet zelfstandig bewezen.
+- **Harde gate:** de geplande GitHub-importer checkt main uit en gebruikt daar nog de v2-full-upsert. Een Vercel Preview/Production-promotie van PR #33 of #34 wijzigt deze Actions-writer niet. Queue-writeback vóór een expliciet goedgekeurde main-merge/release van de minimale writer is onveilig; daarom geen live herstel of batch. Daarna actuele lock/retry/state en nieuwe pending ID's opnieuw read-only controleren, de exact onbevestigde historische subset conditioneel herstellen, pas vervolgens een onderhoudsbatch van maximaal 20 en bij volledig succes de rest. `page_safety_limit=800` blijft afzonderlijk PR #31-werk nadat maintenance stabiel is. ROADMAP onveranderd.
+
 ## Huidige milestone
 **STABILITEIT & KERNFLOWS — AFGEROND / PRODUCTION. Volgende mijlpaal: PRODUCTDATA & RECEPTKWALITEIT — nog niet gestart.**
 
