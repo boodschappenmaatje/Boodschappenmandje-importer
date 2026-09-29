@@ -1363,7 +1363,8 @@ test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compat
         updated_at: "2026-09-16T12:00:00.000Z",
       }]), { status: 200 });
     }
-    storedPayload = JSON.parse(options.body)[0];
+    assert.equal(options.method, "PATCH");
+    storedPayload = JSON.parse(options.body);
     return new Response(JSON.stringify([storedPayload]), { status: 200 });
   };
   try {
@@ -1377,7 +1378,7 @@ test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compat
     globalThis.fetch = originalFetch;
   }
   const persistedMetadata = JSON.parse(storedPayload.last_batch);
-  assert.equal(persistedMetadata.version, 2);
+  assert.equal(persistedMetadata.version, 4);
   assert.equal(persistedMetadata.lastTerm, "pasta");
   assert.equal(persistedMetadata.saturatedUntil.fruit, "2026-09-19T12:00:00.000Z");
 });
