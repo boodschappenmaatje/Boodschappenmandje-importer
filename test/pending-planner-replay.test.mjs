@@ -281,11 +281,49 @@ test("separate workflow can only call the replay CLI and shares import concurren
   assert.match(workflow, /github\.event\.pull_request\.number == 33/);
   assert.match(workflow, /github\.event\.pull_request\.head\.repo\.full_name == github\.repository/);
   assert.match(workflow, /!contains\(github\.event\.changes\.body\.from, '\[pending-replay-acceptance:once\]'\)/);
+  assert.match(workflow, /!contains\(github\.event\.changes\.body\.from, '\[pending-replay-scheduling:once\]'\)/);
+  assert.match(workflow, /format\('\[pending-replay-head:\{0\}\]', github\.event\.pull_request\.head\.sha\)/);
   assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
-  assert.match(workflow, /group: hoogvliet-supabase-update/);
+  assert.match(workflow, /jobs:\s*\n\s*replay:[\s\S]*?concurrency:\s*\n\s*group: hoogvliet-supabase-update/);
+  assert.doesNotMatch(workflow.slice(0, workflow.indexOf("jobs:")), /concurrency:/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /node scripts\/replay-pending-planner-maintenance\.mjs/);
+  const dryStep = workflow.match(/- name: Scheduling only[^\n]*\n([\s\S]*?)(?=\n\s*- uses: actions\/checkout@v4)/)?.[1];
+  assert.ok(dryStep);
+  assert.match(dryStep, /\[pending-replay-scheduling:once\]/);
+  assert.doesNotMatch(dryStep, /secrets\.|node scripts\//);
+  const liveSteps = workflow.slice(workflow.indexOf("- uses: actions/checkout@v4"));
+  assert.equal((liveSteps.match(/if: github\.event_name == 'workflow_dispatch' \|\| contains\(github\.event\.pull_request\.body, '\[pending-replay-acceptance:once\]'\)/g) ?? []).length, 3);
+  assert.equal((workflow.match(/group: hoogvliet-supabase-update/g) ?? []).length, 1);
   assert.doesNotMatch(workflow, /schedule:|npm run import|node src\/importer|daily-catalog-growth|catalog-growth/);
   assert.doesNotMatch(runner + replay, /import\s*\([^)]*(?:catalog-growth|importer)|from\s*["'][^"']*(?:catalog-growth|importer)/);
   assert.match(replay, /REPLAY_BATCH_LIMIT = 20/);
+});
+
+test("scheduling marker is write-free and a stale or removed marker cannot run maintenance", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/replay-pending-planner-maintenance.yml", import.meta.url), "utf8");
+  const sha = "a".repeat(40);
+  const headMarker = `[pending-replay-head:${sha}]`;
+  const liveMarker = "[pending-replay-acceptance:once]";
+  const dryMarker = "[pending-replay-scheduling:once]";
+  const eligible = ({ number = 33, branch = "fix/isolated-planner-maintenance-replay", head = sha,
+    before = "", after = "", repo = "boodschappenmaatje/Boodschappenmandje-importer" }) =>
+    number === 33 && branch === "fix/isolated-planner-maintenance-replay" &&
+    repo === "boodschappenmaatje/Boodschappenmandje-importer" &&
+    after.includes(`[pending-replay-head:${head}]`) &&
+    ((!before.includes(liveMarker) && after.includes(liveMarker) && !after.includes(dryMarker)) ||
+      (!before.includes(dryMarker) && after.includes(dryMarker) && !after.includes(liveMarker)));
+  const dryBody = `${headMarker}\n${dryMarker}`;
+  const liveBody = `${headMarker}\n${liveMarker}`;
+  assert.equal(eligible({ after: dryBody }), true);
+  assert.equal(eligible({ after: liveBody }), true);
+  assert.equal(eligible({ after: headMarker }), false);
+  assert.equal(eligible({ before: dryBody, after: headMarker }), false);
+  assert.equal(eligible({ before: dryBody, after: dryBody + "\ntext" }), false);
+  assert.equal(eligible({ after: liveBody, number: 32 }), false);
+  assert.equal(eligible({ after: liveBody, branch: "main" }), false);
+  assert.equal(eligible({ after: liveBody, head: "b".repeat(40) }), false);
+  assert.equal(eligible({ after: `${liveBody}\n${dryMarker}` }), false);
+  assert.match(workflow, /Scheduling only — no checkout, secrets, or maintenance/);
+  assert.doesNotMatch(workflow, /npm run import|node src\/importer|import:daily/);
 });
