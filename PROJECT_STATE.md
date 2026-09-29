@@ -1,5 +1,14 @@
 # BoodschappenMaatje — Project State
 
+## PR #33 live acceptatiebatch — 29 september 2026
+
+- Remote main `31705dd`, Draft PR #31 `735fe9ea`, Draft PR #32 `1e07751`; Draft PR #33 functionele head `05f746d`, diff tegen main nog steeds acht bestanden zonder importer/discovery/dagjob/PR #32-diagnostiek. Core CI `36547788426` groen (203 root-, 739 webtests, lint, TypeScript, build).
+- Vercel team/projecttoegang hersteld. Vóór validatie was Production Current/Ready op main-deployment `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ` (`31705dd`). Uitsluitend Ready Preview `dpl_2fQ2X6sfoH3ZCfV51tDrBVGGCUxx` (`05f746d`) werd tijdelijk gepromoveerd; Production-build `dpl_6R8R4qWyUewXhd5bKKEeteNcaEng` was daarna Ready en de actieve Production-alias verwees naar exact die branch/commit.
+- Read-only vlak voor replay: duurzame queue 290 `pending_requires_attention`, `notifiedProducts=0`. De tien eerdere onbevestigde producten blijven afzonderlijk en zijn niet geselecteerd.
+- Exact één maintenance-only acceptatiebatch: Actions-run `36555000433`, head `05f746d`. Runneruitkomst: `selected=20`, `offered=20`, `successful=0`, `acknowledged=0`, `pendingBefore=290`, `pendingAfter=290`, `retries=2`, `maintenance-http-failed` met route HTTP 503. `changedMatches=0`, `refreshedReadiness=0`, `catalogStateUpdates=0`. De runner rapporteerde `productInserts=0`, `priceInserts=0`, `dailyJobWrites=0`, `importStarted=false`, `discoveryStarted=false`. De workflow faalde; de serverclientfix is live **niet geaccepteerd**. De precieze oorzaak van deze 503 is uit de veilige runneruitkomst niet bewezen; de historische `cache-unavailable` mag niet zonder routebewijs opnieuw worden aangenomen.
+- De eenmalige PR-body-marker is verwijderd. Zijn verwijdering leverde uitsluitend een overgeslagen run `36555029357` op; geen tweede batch. Na de fout is de exacte oude main-deployment `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ` teruggepromoveerd. De actieve Production-alias bevestigt main `31705dd`, Ready; publieke Home laadt. Read-only na afloop: nog 290 pending en `notifiedProducts=0`. Geen merge, productimport, eerdere-tien-verwerking, full backfill, secret- of environmentwijziging.
+- Volgende stap: eerst de concrete 503 van de echte new-products-flow beoordelen met bestaande veilige runtime-/routegegevens en de minimale fix herstellen en testen. Geen overige pending batch of live validatie zonder nieuwe beoordeling/toestemming. `page_safety_limit=800` blijft een afzonderlijk PR #31-punt.
+
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
 ## Geïsoleerde serverclientfix en pending-replay — 29 september 2026
