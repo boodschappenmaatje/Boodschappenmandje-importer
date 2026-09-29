@@ -284,7 +284,7 @@ test("separate workflow can only call the replay CLI and shares import concurren
   assert.match(workflow, /!contains\(github\.event\.changes\.body\.from, '\[pending-replay-scheduling:once\]'\)/);
   assert.match(workflow, /format\('\[pending-replay-head:\{0\}\]', github\.event\.pull_request\.head\.sha\)/);
   assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/);
-  assert.match(workflow, /jobs:\s*\n\s*replay:[\s\S]*?concurrency:\s*\n\s*group: hoogvliet-supabase-update/);
+  assert.match(workflow, /jobs:\s*\n\s*replay:[\s\S]*?concurrency:\s*\n\s*group: \$\{\{[^\n]*hoogvliet-maintenance-scheduling[^\n]*hoogvliet-supabase-update[^\n]*\}\}/);
   assert.doesNotMatch(workflow.slice(0, workflow.indexOf("jobs:")), /concurrency:/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /node scripts\/replay-pending-planner-maintenance\.mjs/);
@@ -294,7 +294,8 @@ test("separate workflow can only call the replay CLI and shares import concurren
   assert.doesNotMatch(dryStep, /secrets\.|node scripts\//);
   const liveSteps = workflow.slice(workflow.indexOf("- uses: actions/checkout@v4"));
   assert.equal((liveSteps.match(/if: github\.event_name == 'workflow_dispatch' \|\| contains\(github\.event\.pull_request\.body, '\[pending-replay-acceptance:once\]'\)/g) ?? []).length, 3);
-  assert.equal((workflow.match(/group: hoogvliet-supabase-update/g) ?? []).length, 1);
+  assert.equal((workflow.match(/hoogvliet-supabase-update/g) ?? []).length, 1);
+  assert.equal((workflow.match(/hoogvliet-maintenance-scheduling/g) ?? []).length, 1);
   assert.doesNotMatch(workflow, /schedule:|npm run import|node src\/importer|daily-catalog-growth|catalog-growth/);
   assert.doesNotMatch(runner + replay, /import\s*\([^)]*(?:catalog-growth|importer)|from\s*["'][^"']*(?:catalog-growth|importer)/);
   assert.match(replay, /REPLAY_BATCH_LIMIT = 20/);
