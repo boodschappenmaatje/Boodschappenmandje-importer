@@ -2,6 +2,8 @@ name: Replay pending planner maintenance
 
 on:
   workflow_dispatch:
+  pull_request:
+    types: [edited]
 
 permissions:
   contents: read
@@ -12,13 +14,24 @@ concurrency:
 
 jobs:
   replay:
-    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/main'
+    if: >-
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.number == 33 &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.head.ref == 'fix/isolated-planner-maintenance-replay' &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.changes.body.from != null &&
+        !contains(github.event.changes.body.from, '[pending-replay-acceptance:once]') &&
+        contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
