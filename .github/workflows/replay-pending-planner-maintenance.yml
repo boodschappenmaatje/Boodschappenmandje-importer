@@ -1,0 +1,31 @@
+name: Replay pending planner maintenance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-supabase-update
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/isolated-planner-maintenance-replay'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offer one pending maintenance batch (maximum 20)
+        run: node scripts/replay-pending-planner-maintenance.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
