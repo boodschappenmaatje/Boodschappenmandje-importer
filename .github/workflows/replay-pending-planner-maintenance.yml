@@ -8,10 +8,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: hoogvliet-supabase-update
-  cancel-in-progress: false
-
 jobs:
   replay:
     if: >-
@@ -23,19 +19,34 @@ jobs:
         github.event.pull_request.head.ref == 'fix/isolated-planner-maintenance-replay' &&
         github.event.pull_request.base.ref == 'main' &&
         github.event.changes.body.from != null &&
-        !contains(github.event.changes.body.from, '[pending-replay-acceptance:once]') &&
-        contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')))
+        contains(github.event.pull_request.body, format('[pending-replay-head:{0}]', github.event.pull_request.head.sha)) &&
+        ((!contains(github.event.changes.body.from, '[pending-replay-acceptance:once]') &&
+          contains(github.event.pull_request.body, '[pending-replay-acceptance:once]') &&
+          !contains(github.event.pull_request.body, '[pending-replay-scheduling:once]')) ||
+         (!contains(github.event.changes.body.from, '[pending-replay-scheduling:once]') &&
+          contains(github.event.pull_request.body, '[pending-replay-scheduling:once]') &&
+          !contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')))))
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Skipped PR edits never join the import/replay lock or replace a pending live run.
+    concurrency:
+      group: hoogvliet-supabase-update
+      cancel-in-progress: false
     steps:
+      - name: Scheduling only — no checkout, secrets, or maintenance
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.body, '[pending-replay-scheduling:once]')
+        run: "echo 'scheduling-only: no database request, maintenance call, or import'"
       - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')
         with:
           node-version: '22'
       - name: Offer one pending maintenance batch (maximum 20)
+        if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')
         run: node scripts/replay-pending-planner-maintenance.mjs
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
