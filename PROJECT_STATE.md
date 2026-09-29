@@ -2,6 +2,18 @@
 
 > Dit bestand is het actuele technische checkpoint. Controleer bij ontwikkelwerk altijd ook de remote branch en PR; remote Git-status gaat voor verouderde tekst in dit bestand.
 
+## Geïsoleerde serverclientfix en pending-replay — 29 september 2026
+
+- Remote main `31705dd`; Draft PR #31 `735fe9ea` en diagnostische Draft PR #32 `1e07751` blijven ongemerged. Draft PR #33 (`fix/isolated-planner-maintenance-replay`) vertrekt rechtstreeks vanaf main.
+- PR #33 bevat functioneel alleen `apps/web/src/lib/supabase/server.ts`, `src/pending-planner-replay.mjs`, `scripts/replay-pending-planner-maintenance.mjs` en een afzonderlijke maintenance-only Actions-workflow. Drie gerichte testbestanden zijn toegevoegd/gewijzigd. Geen importer-, discovery-, dagjob-, schema- of PR #32-code.
+- De server-only Supabase-client gebruikt geen gebruikerssessie voor onderhoudsqueries, valideert de headerwaarde vroeg en gebruikt `sb_secret_` als API-key zonder deze als Bearer-gebruikerssessie te presenteren. Lokaal bereikt de SELECT de gemockte fetch; de historische Production pre-fetch fout kan daarmee pas na een gecontroleerde live acceptatie definitief als verholpen worden beschouwd.
+- De replay leest uitsluitend de duurzame `plannerMaintenance.pendingProductIds` uit `catalog_discovery_state.last_batch` (versie 4), selecteert hoogstens 20 unieke UUID's en biedt precies die IDs aan de bestaande beveiligde `new-products`-route. Alleen na een volledige bevestiging volgt een conditionele acknowledgement van die IDs. Bij een fout blijven IDs pending; netwerk/503-retries binnen dezelfde run zijn maximaal twee met 1s/2s back-off. Concurrente updates worden opnieuw gelezen zonder onderhoud opnieuw aan te bieden.
+- De aparte workflow heeft alleen `workflow_dispatch`, deelt de importconcurrencygroep en start uitsluitend het replay-CLI. Het CLI importeert geen importer/discovery-module en heeft geen product-/prijs-/dagjobschrijfpaden. Een nieuwe workflow op een featurebranch is mogelijk niet direct via GitHub Actions te dispatchen zolang het workflowbestand niet op de default branch staat; voor live acceptatie moet het veilige uitvoerpad apart worden gecontroleerd. Dit is geen reden om de importerworkflow te gebruiken.
+- De eerdere 10 producten vallen buiten de 290-ID-queue; een afzonderlijke read-only inventarisfunctie biedt alleen statusoriëntatie en schrijft niets. Er is geen automatische opname van deze 10 in de replay.
+- Lokaal: 14/14 gerichte replaytests, 250/250 root importer-/onderhoudstests, root check, 10/10 gerichte webtests, web lint, TypeScript, 818/818 lokale webtests en build groen. Deze lokale werkmap bevat daarnaast andere niet-gepushte historische bestanden; de remote PR #33-diff en CI zijn de bron van waarheid voor de schone main-basis.
+- Geen Production-deployment, live pendingverwerking, acknowledgement, productimport of merge in deze stap. Bekende laatste live stand blijft 290 pending plus 10 afzonderlijk onbevestigd, dag 300/400 en 6.352 unieke Hoogvliet-SKU's; niet opnieuw live geverifieerd.
+- Volgende acceptatie, na expliciete vrijgave: minimale serverclientfix Production-bereikbaar, actuele queue read-only controleren, één maintenance-only batch van maximaal 20 echte pending IDs, acknowledgement en planner/readiness controleren. Alleen bij volledig succes aparte toestemming voor de resterende queue. `page_safety_limit=800` blijft een afzonderlijk PR #31-punt.
+
 ## Huidige milestone
 **STABILITEIT & KERNFLOWS — AFGEROND / PRODUCTION. Volgende mijlpaal: PRODUCTDATA & RECEPTKWALITEIT — nog niet gestart.**
 
