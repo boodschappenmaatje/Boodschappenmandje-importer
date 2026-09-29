@@ -305,6 +305,7 @@ test("separate workflow can only call the replay CLI and shares import concurren
 
 test("one-time branch start is write-free for scheduling and fails closed for stale heads", () => {
   const workflow = readFileSync(new URL("../.github/workflows/replay-pending-planner-maintenance.yml", import.meta.url), "utf8");
+  const ci = readFileSync(new URL("../.github/workflows/core-flows.yml", import.meta.url), "utf8");
   const sha = "a".repeat(40);
   const valid = (ref, actual = sha, pr = 33, branch = "fix/isolated-planner-maintenance-replay") => {
     const dry = ref.match(/^refs\/heads\/maintenance\/replay-schedule\/([0-9a-f]{40})$/);
@@ -322,6 +323,8 @@ test("one-time branch start is write-free for scheduling and fails closed for st
   assert.equal(valid(`refs/heads/maintenance/replay-live/${sha}/290-extra`), false);
   assert.equal(valid(`refs/heads/fix/isolated-planner-maintenance-replay`), false);
   assert.match(workflow, /Scheduling only — no checkout, secrets, or maintenance/);
+  assert.match(ci, /maintenance\/replay-schedule\/\*\*/);
+  assert.doesNotMatch(ci, /maintenance\/replay-live\/\*\*/);
   assert.doesNotMatch(workflow, /pull_request:|workflow_dispatch:|\[pending-replay-acceptance:once\]/);
   assert.doesNotMatch(workflow, /npm run import|node src\/importer|import:daily/);
 });
