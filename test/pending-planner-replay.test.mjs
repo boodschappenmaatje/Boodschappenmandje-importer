@@ -243,6 +243,7 @@ test("separate workflow can only call the replay CLI and shares import concurren
   const runner = readFileSync(new URL("../scripts/replay-pending-planner-maintenance.mjs", import.meta.url), "utf8");
   const replay = readFileSync(new URL("../src/pending-planner-replay.mjs", import.meta.url), "utf8");
   assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow, /group: hoogvliet-supabase-update/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /node scripts\/replay-pending-planner-maintenance\.mjs/);

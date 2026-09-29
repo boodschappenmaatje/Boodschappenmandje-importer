@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   replay:
-    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/isolated-planner-maintenance-replay'
+    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
