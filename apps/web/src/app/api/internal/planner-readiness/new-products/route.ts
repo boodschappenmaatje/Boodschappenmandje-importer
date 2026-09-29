@@ -1,4 +1,4 @@
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseServerClientResult } from "@/lib/supabase/server";
 import { isPlannerCacheAdminRequest } from "@/server/planner-cache-auth";
 import { maintainPlannerForNewProducts, parseNewProductIds } from "@/server/planner-new-products";
 
@@ -17,8 +17,8 @@ export async function POST(request: Request): Promise<Response> {
     ids = null;
   }
   if (!ids) return Response.json({ error: "invalid-request" }, { status: 400 });
-  const client = getSupabaseServerClient();
-  if (!client) return Response.json({ error: "cache-unavailable" }, { status: 503 });
+  const { client, reason } = getSupabaseServerClientResult();
+  if (!client) return Response.json({ error: "cache-unavailable", reason }, { status: 503 });
   try {
     return Response.json(await maintainPlannerForNewProducts(client, ids));
   } catch {
