@@ -14,7 +14,7 @@ const response = (body, status = 200) => new Response(JSON.stringify(body), { st
 
 function fixture(count, options = {}) {
   let pending = Array.from({ length: count }, (_, i) => id(i + 1));
-  let notifiedProducts = 0;
+  let notifiedProducts = options.notifiedProducts ?? 0;
   let timestamp = "2026-09-28T20:00:00.000Z";
   let posts = 0;
   let patches = 0;
@@ -389,4 +389,41 @@ test("replay refuses an unproven product even when the pending count is unchange
     fetcher: f.fetcher, expectedPendingCount: 2, allowedProductIds: [id(1), id(2)],
   });
   assert.equal(r.acknowledged, 2);
+});
+
+test("separate evidence has unique disjoint IDs and never broadens the historical manifest", () => {
+  const historical = JSON.parse(readFileSync(new URL("../data/run85-pending-recovery-20260928.json", import.meta.url))).productIds;
+  const separate = JSON.parse(readFileSync(new URL("../data/separate-pending-recovery-20260929.json", import.meta.url)));
+  assert.deepEqual(separate.map(c => c.productIds.length), [10, 4]);
+  assert.equal(new Set([...historical, ...separate.flatMap(c => c.productIds)]).size, 304);
+  assert.deepEqual(separate.flatMap(c => c.source.map(s => s.workflowRunId)), [36394336293,36556304919,36599119750]);
+});
+
+test("a separately confirmed cohort gate preserves maintenance-only acknowledgement", async () => {
+  for (const [count, previous] of [[10, 290], [4, 300]]) {
+    const f = fixture(count, { notifiedProducts: previous });
+    const r = await replayPendingMaintenance(config, { fetcher: f.fetcher, expectedPendingCount: count,
+      allowedProductCohorts: [{ productIds: Array.from({ length: count }, (_, i) => id(i + 1)), minimumAcknowledged: previous }] });
+    assert.equal(r.acknowledged, count);
+    assert.equal(r.pendingAfter, 0);
+    assert.equal(f.notifiedProducts, previous + count);
+    assertNoCatalogWrites(f);
+  }
+});
+
+test("cohort selection refuses mixed, unknown, premature and ambiguous cohorts before writes", async () => {
+  const cases = [
+    [{ productIds: [id(1)], minimumAcknowledged: 0 }, { productIds: [id(2)], minimumAcknowledged: 0 }],
+    [{ productIds: [id(1), id(3)], minimumAcknowledged: 0 }],
+    [{ productIds: [id(1), id(2)], minimumAcknowledged: 290 }],
+    [{ productIds: [id(1), id(2)], minimumAcknowledged: 0 }, { productIds: [id(1), id(2)], minimumAcknowledged: 0 }],
+    [{ productIds: [id(1), id(2), id(2)], minimumAcknowledged: 0 }],
+  ];
+  for (const allowedProductCohorts of cases) {
+    const f = fixture(2);
+    await assert.rejects(() => replayPendingMaintenance(config, { fetcher: f.fetcher, expectedPendingCount: 2, allowedProductCohorts }),
+      { stage: "pending-ids-outside-single-proven-cohort" });
+    assert.equal(f.posts, 0);
+    assert.equal(f.patches, 0);
+  }
 });

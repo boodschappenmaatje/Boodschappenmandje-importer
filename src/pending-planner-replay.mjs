@@ -177,12 +177,26 @@ async function acknowledgeBatch(settings, selected, initial, fetcher, now) {
 
 export async function replayPendingMaintenance(settings, {
   fetcher = fetch, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), now = () => new Date(),
-  expectedPendingCount, allowedProductIds,
+  expectedPendingCount, allowedProductIds, allowedProductCohorts,
 } = {}) {
   const snapshot = await readPendingSnapshot(settings, fetcher);
   if (expectedPendingCount !== undefined &&
       (!Number.isSafeInteger(expectedPendingCount) || expectedPendingCount < 1 ||
        snapshot.ids.length !== expectedPendingCount)) throw failure("pending-count-mismatch");
+  // A recovery run may contain exactly one independently evidenced cohort.
+  // Select against this same snapshot, before any POST; never combine allowlists.
+  if (allowedProductCohorts !== undefined) {
+    if (!Array.isArray(allowedProductCohorts) || allowedProductIds !== undefined) throw failure("recovery-cohort-invalid");
+    const candidates = allowedProductCohorts.filter(cohort =>
+      Array.isArray(cohort?.productIds) && cohort.productIds.length > 0 &&
+      cohort.productIds.every(id => typeof id === "string" && UUID.test(id)) &&
+      new Set(cohort.productIds).size === cohort.productIds.length &&
+      Number.isSafeInteger(cohort.minimumAcknowledged) && cohort.minimumAcknowledged >= 0 &&
+      snapshot.metadata.plannerMaintenance.notifiedProducts >= cohort.minimumAcknowledged &&
+      snapshot.ids.length > 0 && snapshot.ids.every(id => cohort.productIds.includes(id)));
+    if (candidates.length !== 1) throw failure("pending-ids-outside-single-proven-cohort");
+    allowedProductIds = candidates[0].productIds;
+  }
   if (allowedProductIds !== undefined &&
       (!Array.isArray(allowedProductIds) || allowedProductIds.some(id => typeof id !== "string" || !UUID.test(id)) ||
        new Set(allowedProductIds).size !== allowedProductIds.length ||
