@@ -1,5 +1,11 @@
 # BoodschappenMaatje — Project State
 
+## PR #33 veilige 503-code en acceptatiegate — 29 september 2026
+
+- Draft PR #33 bevat op codehead `d38213d` uitsluitend de bestaande veilige 503-classificatie in de maintenance-replayrunner en gerichte route-/replaytests. De bestaande new-products-route gaf `cache-unavailable` en `new-product-maintenance-failed` al terug; de runner neemt op de definitieve HTTP 503 uitsluitend deze twee toegestane codes over. Onbekende/ruwe foutinhoud wordt niet gerapporteerd. De diff versus main blijft acht bestanden, zonder importer/discovery/dagjob/PR #32-code.
+- Lokale validatie: 252 roottests, 819 webtests, root check, web lint, TypeScript en build groen. CI-run `36557407956` op `d38213d` geslaagd. Vercel Preview `dpl_BMDrPGUWMdYAcdK6keX2r5XnSaSc` is Ready op die codehead. Read-only queue: 290 `pending_requires_attention`, `notifiedProducts=0`; eerdere tien blijven apart.
+- Production is read-only bevestigd op de normale main `31705dd`, deployment `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ`, Ready. De automatische goedkeuringscontrole blokkeerde de tijdelijke promotie van de nieuwe PR #33-deployment omdat deze afwijkt van de eerder expliciet genoemde `05f746d`-deployment. Daarom: geen Production-promotie, geen live batch en geen rollback nodig. Voor precies dit nieuwe artefact is expliciete goedkeuring nodig voordat één maximaal-20-ID acceptatiebatch kan plaatsvinden. Geen tweede batch, geen productimport. `page_safety_limit=800` blijft afzonderlijk.
+
 ## Bestaande 503-runtimegegevens — 29 september 2026
 
 - Read-only Vercel-runtimelogs van tijdelijke Production-build `dpl_6R8R4qWyUewXhd5bKKEeteNcaEng` tonen drie `POST /api/internal/planner-readiness/new-products` met HTTP 503 om `10:21:04.065`, `10:21:05.497` en `10:21:07.582 UTC` (Actions-run `36555000433`). Requestdetails tonen circa 333 ms, 10 ms en 467 ms functie-uitvoering; telkens “No outgoing requests”. Er zijn geen applicatieconsolefouten in deze bestaande logreeks en Vercel's gegroepeerde runtimeerrors bevatten geen cluster voor dit venster.
