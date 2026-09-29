@@ -1,5 +1,13 @@
 # BoodschappenMaatje — Project State
 
+## Bestaande 503-runtimegegevens — 29 september 2026
+
+- Read-only Vercel-runtimelogs van tijdelijke Production-build `dpl_6R8R4qWyUewXhd5bKKEeteNcaEng` tonen drie `POST /api/internal/planner-readiness/new-products` met HTTP 503 om `10:21:04.065`, `10:21:05.497` en `10:21:07.582 UTC` (Actions-run `36555000433`). Requestdetails tonen circa 333 ms, 10 ms en 467 ms functie-uitvoering; telkens “No outgoing requests”. Er zijn geen applicatieconsolefouten in deze bestaande logreeks en Vercel's gegroepeerde runtimeerrors bevatten geen cluster voor dit venster.
+- Supabase-unified logs in `10:20:55–10:21:20 UTC` bevatten één zichtbare REST-edge-request: Actions' directe `GET /rest/v1/catalog_discovery_state` om `10:21:02.948 UTC`, HTTP 200. Geen corresponderende `products`-read van de Production-functie is zichtbaar. Afwezigheid is geen sluitend bewijs dat geen fetch is gestart; Vercel's “No outgoing requests” kan bovendien afhankelijk zijn van fetchinstrumentatie.
+- De bestaande new-products-route heeft twee expliciete 503-paden: `cache-unavailable` als `getSupabaseServerClient()` null oplevert, en `new-product-maintenance-failed` als `maintainPlannerForNewProducts` gooit. De route slikt de technische fout; de replayrunner van `05f746d` registreert alleen HTTP 503 en niet de veilige routefoutcode. Bestaande runtimegegevens bewaren die responsebody niet. Daarom is de exacte oorzaak, inclusief het precieze serverclient-/querypad, **niet bewezen**. Beide paden zijn compatibel met de beschikbare gegevens; een functionele wijziging op basis van één aanname zou onverantwoord zijn.
+- Geen nieuwe Production-request, probe, onderhoudsrun, codefix of deployment. Alleen read-only logs en queue gecontroleerd. Queue blijft 290 `pending_requires_attention`, `notifiedProducts=0`; eerdere 10 blijven apart. Production-alias staat op main `31705dd`, deployment `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ`, Ready. De baseline-CI op vorige PR #33-head `e9b37c4` was groen. `page_safety_limit=800` blijft buiten deze onderhoudsscope.
+- Voor een verantwoorde functionele fix is de ontbrekende veilige routefoutcategorie nodig uit reeds bewaarde gegevens, indien die elders bestaat; anders kan deze historische 503 niet achteraf exact worden toegeschreven. Geen hernieuwde live batch binnen deze opdracht en geen speculatieve fix.
+
 ## PR #33 live acceptatiebatch — 29 september 2026
 
 - Remote main `31705dd`, Draft PR #31 `735fe9ea`, Draft PR #32 `1e07751`; Draft PR #33 functionele head `05f746d`, diff tegen main nog steeds acht bestanden zonder importer/discovery/dagjob/PR #32-diagnostiek. Core CI `36547788426` groen (203 root-, 739 webtests, lint, TypeScript, build).
