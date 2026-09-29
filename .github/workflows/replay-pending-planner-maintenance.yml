@@ -28,9 +28,10 @@ jobs:
           !contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')))))
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Skipped PR edits never join the import/replay lock or replace a pending live run.
+    # A dry run cannot call maintenance and must not wait behind a live import.
+    # Live replay still shares the import lock; skipped PR edits acquire neither.
     concurrency:
-      group: hoogvliet-supabase-update
+      group: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.body, '[pending-replay-scheduling:once]') && 'hoogvliet-maintenance-scheduling' || 'hoogvliet-supabase-update' }}
       cancel-in-progress: false
     steps:
       - name: Scheduling only — no checkout, secrets, or maintenance
