@@ -5,6 +5,17 @@ const DATABASE_ORIGIN = "https://pjcqxufvbkkjehituzxz.supabase.co";
 export const REPLAY_BATCH_LIMIT = 20;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TRANSIENT = new Set([408, 425, 429, 500, 502, 503, 504]);
+const SAFE_MAINTENANCE_ERRORS = new Set(["cache-unavailable", "new-product-maintenance-failed"]);
+
+async function safeMaintenanceErrorCode(response) {
+  if (response?.status !== 503) return null;
+  try {
+    const body = await response.json();
+    return SAFE_MAINTENANCE_ERRORS.has(body?.error) ? body.error : null;
+  } catch {
+    return null;
+  }
+}
 
 function failure(stage, status = null) {
   return Object.assign(new Error(stage), { stage, status });
@@ -118,7 +129,8 @@ async function offerBatch(settings, ids, { fetcher, wait }) {
     }
     const status = response?.status ?? null;
     if (!TRANSIENT.has(status) || attempt === 2) {
-      throw Object.assign(failure("maintenance-http-failed", status), { retries });
+      const code = await safeMaintenanceErrorCode(response);
+      throw Object.assign(failure("maintenance-http-failed", status), { retries, code });
     }
     retries++;
     await wait(1000 * 2 ** attempt);
@@ -185,6 +197,7 @@ export async function replayPendingMaintenance(settings, {
     report.status = report.successful ? "acknowledgement_requires_attention" : "maintenance_requires_attention";
     report.error = { stage: error?.stage ?? "unexpected-maintenance-failure",
       status: Number.isInteger(error?.status) ? error.status : null };
+    if (SAFE_MAINTENANCE_ERRORS.has(error?.code)) report.error.code = error.code;
   }
   return report;
 }
