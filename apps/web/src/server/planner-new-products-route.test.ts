@@ -37,4 +37,16 @@ describe("new-products admin route", () => {
     expect((await POST(request({ productIds: [id] }))).status).toBe(503);
     expect(maintainPlannerForNewProducts).not.toHaveBeenCalled();
   });
+  it("passes an authenticated valid batch to the existing maintenance flow", async () => {
+    vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "fixture-token");
+    const client = {} as NonNullable<ReturnType<typeof getSupabaseServerClient>>;
+    vi.mocked(getSupabaseServerClient).mockReturnValue(client);
+    vi.mocked(maintainPlannerForNewProducts).mockResolvedValue({
+      productCount: 1, changedMatchKeys: [], refreshedReadinessCount: 0, affectedRecipeIds: [],
+    });
+    const response = await POST(request({ productIds: [id, id] }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ productCount: 1 });
+    expect(maintainPlannerForNewProducts).toHaveBeenCalledExactlyOnceWith(client, [id]);
+  });
 });
