@@ -161,6 +161,39 @@ test("transient failure exhausts within the same run, preserving pending IDs", a
   assertNoCatalogWrites(f);
 });
 
+test("the real 503 paths retain only allowlisted route codes and never acknowledge", async () => {
+  for (const code of ["cache-unavailable", "new-product-maintenance-failed"]) {
+    const f = fixture(21, { post: () => response({ error: code, secret: "fixture-must-not-leak",
+      exception: "private database details" }, 503) });
+    const r = await replayPendingMaintenance(config, { fetcher: f.fetcher, wait: f.wait });
+    assert.deepEqual(r.error, { stage: "maintenance-http-failed", status: 503, code });
+    assert.equal(r.selected, 20);
+    assert.equal(r.offered, 20);
+    assert.equal(r.retries, 2);
+    assert.equal(r.successful, 0);
+    assert.equal(r.acknowledged, 0);
+    assert.equal(r.pendingAfter, 21);
+    assert.equal(f.notifiedProducts, 0);
+    assert.equal(f.patches, 0);
+    assert.equal(f.posts, 3);
+    assert.doesNotMatch(JSON.stringify(r), /fixture-must-not-leak|private database details/);
+    assertNoCatalogWrites(f);
+  }
+});
+
+test("an unknown or malformed 503 body cannot enter the maintenance log", async () => {
+  for (const body of [{ error: "secret-value", authorization: "fixture-private" }, "not-json"]) {
+    const f = fixture(1, { post: () => body === "not-json"
+      ? new Response(body, { status: 503 }) : response(body, 503) });
+    const r = await replayPendingMaintenance(config, { fetcher: f.fetcher, wait: f.wait });
+    assert.deepEqual(r.error, { stage: "maintenance-http-failed", status: 503 });
+    assert.equal(r.acknowledged, 0);
+    assert.equal(f.patches, 0);
+    assert.doesNotMatch(JSON.stringify(r), /secret-value|fixture-private|not-json/);
+    assertNoCatalogWrites(f);
+  }
+});
+
 test("an acknowledgement failure is explicit; idempotent re-offer can recover later", async () => {
   const f = fixture(2, { patch: n => n === 1 ? response({}, 503) : undefined });
   const first = await replayPendingMaintenance(config, { fetcher: f.fetcher });
