@@ -54,6 +54,7 @@ function fixture(count, options = {}) {
       return response([{ state_key: "daily-catalog-growth", last_batch: body.last_batch, updated_at: timestamp }]);
     }
     if (pathname === "/rest/v1/products" && init.method === "GET") return response([]);
+    if (pathname === "/rest/v1/ingredient_product_matches" && init.method === "GET") return response([]);
     throw new Error(`Forbidden request ${init.method} ${pathname}`);
   };
   return { fetcher, requests, get pending() { return pending; }, get notifiedProducts() { return notifiedProducts; },
@@ -65,7 +66,8 @@ function assertNoCatalogWrites(f) {
   assert.ok(f.requests.every(request =>
     request.pathname === "/api/internal/planner-readiness/new-products" ? request.method === "POST" :
       request.pathname === "/rest/v1/catalog_discovery_state" ? ["GET", "PATCH"].includes(request.method) :
-        request.pathname === "/rest/v1/products" && request.method === "GET"));
+        ["/rest/v1/products", "/rest/v1/ingredient_product_matches"].includes(request.pathname) &&
+          request.method === "GET"));
   assert.ok(f.requests.filter(request => request.method === "PATCH").every(request => {
     const keys = Object.keys(JSON.parse(request.body));
     return keys.length === 2 && keys.includes("last_batch") && keys.includes("updated_at");
@@ -212,7 +214,7 @@ test("config refuses a different project and unsafe credentials before a request
 test("read-only inventory of the earlier 10 stays separate and never posts", async () => {
   const f = fixture(2);
   const result = await inspectEarlierProducts(config, [id(11), id(12)], f.fetcher);
-  assert.deepEqual(result, { requested: 2, catalogPresent: 0, pendingOverlap: 0,
+  assert.deepEqual(result, { requested: 2, catalogPresent: 0, linkedMatchCount: 0, pendingOverlap: 0,
     maintenanceConfirmed: false, needsFurtherReadinessReview: true, databaseWrites: 0 });
   await assert.rejects(() => inspectEarlierProducts(config, [id(1)], f.fetcher), { stage: "earlier-ids-overlap-pending" });
   assert.equal(f.posts, 0);

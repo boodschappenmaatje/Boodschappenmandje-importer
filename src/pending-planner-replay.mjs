@@ -202,6 +202,17 @@ export async function inspectEarlierProducts(settings, productIds, fetcher = fet
   url.searchParams.set("supermarket", "eq.Hoogvliet");
   const rows = await jsonResponse(fetcher, url, { method: "GET", headers: dbHeaders(settings) }, "earlier-product-read-failed");
   if (!Array.isArray(rows) || rows.some(row => !productIds.includes(row?.id))) throw failure("earlier-product-response-invalid");
+  const matchesURL = new URL("/rest/v1/ingredient_product_matches", settings.database);
+  matchesURL.searchParams.set("select", "product_id,match_key");
+  matchesURL.searchParams.set("product_id", "in.(" + productIds.join(",") + ")");
+  matchesURL.searchParams.set("limit", "1001");
+  const matches = await jsonResponse(fetcher, matchesURL, { method: "GET", headers: dbHeaders(settings) },
+    "earlier-match-read-failed");
+  if (!Array.isArray(matches) || matches.length > 1000 || matches.some(match =>
+    !productIds.includes(match?.product_id) || typeof match.match_key !== "string")) {
+    throw failure("earlier-match-response-invalid");
+  }
   return { requested: productIds.length, catalogPresent: rows.length,
-    pendingOverlap: 0, maintenanceConfirmed: false, needsFurtherReadinessReview: true, databaseWrites: 0 };
+    linkedMatchCount: matches.length, pendingOverlap: 0, maintenanceConfirmed: false,
+    needsFurtherReadinessReview: true, databaseWrites: 0 };
 }
