@@ -296,6 +296,8 @@ test("separate workflow can only call the replay CLI and shares import concurren
   const liveSteps = workflow.slice(workflow.indexOf("- uses: actions/checkout@v4"));
   assert.equal((liveSteps.match(/if: steps\.gate\.outputs\.mode == 'live'/g) ?? []).length, 3);
   assert.match(liveSteps, /REPLAY_EXPECTED_PENDING_COUNT: \$\{\{ steps\.gate\.outputs\.expected_pending_count \}\}/);
+  assert.match(runner, /run85-pending-recovery-20260928\.json/);
+  assert.match(runner, /historical\.productIds\.length !== 290/);
   assert.equal((workflow.match(/hoogvliet-supabase-update/g) ?? []).length, 1);
   assert.equal((workflow.match(/hoogvliet-maintenance-scheduling/g) ?? []).length, 1);
   assert.doesNotMatch(workflow, /schedule:|npm run import|node src\/importer|daily-catalog-growth|catalog-growth/);
@@ -343,4 +345,17 @@ test("expected pending count rejects duplicate or stale live start before offeri
   }), { stage: "pending-count-mismatch" });
   assert.equal(f.posts, 1);
   assert.equal(f.patches, 1);
+});
+
+test("replay refuses an unproven product even when the pending count is unchanged", async () => {
+  const f = fixture(2);
+  await assert.rejects(() => replayPendingMaintenance(config, {
+    fetcher: f.fetcher, expectedPendingCount: 2, allowedProductIds: [id(1), id(3)],
+  }), { stage: "pending-ids-outside-historical-queue" });
+  assert.equal(f.posts, 0);
+  assert.equal(f.patches, 0);
+  const r = await replayPendingMaintenance(config, {
+    fetcher: f.fetcher, expectedPendingCount: 2, allowedProductIds: [id(1), id(2)],
+  });
+  assert.equal(r.acknowledged, 2);
 });
