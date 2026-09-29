@@ -6,14 +6,20 @@ export const REPLAY_BATCH_LIMIT = 20;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TRANSIENT = new Set([408, 425, 429, 500, 502, 503, 504]);
 const SAFE_MAINTENANCE_ERRORS = new Set(["cache-unavailable", "new-product-maintenance-failed"]);
+const SAFE_CLIENT_REASONS = new Set([
+  "supabase-url-missing", "supabase-secret-missing", "supabase-secret-publishable",
+  "supabase-url-invalid", "supabase-secret-header-invalid", "client-construction-failed",
+]);
 
 async function safeMaintenanceErrorCode(response) {
-  if (response?.status !== 503) return null;
+  if (response?.status !== 503) return {};
   try {
     const body = await response.json();
-    return SAFE_MAINTENANCE_ERRORS.has(body?.error) ? body.error : null;
+    if (!SAFE_MAINTENANCE_ERRORS.has(body?.error)) return {};
+    return { code: body.error, ...(body.error === "cache-unavailable" && SAFE_CLIENT_REASONS.has(body.reason)
+      ? { reason: body.reason } : {}) };
   } catch {
-    return null;
+    return {};
   }
 }
 
@@ -129,8 +135,8 @@ async function offerBatch(settings, ids, { fetcher, wait }) {
     }
     const status = response?.status ?? null;
     if (!TRANSIENT.has(status) || attempt === 2) {
-      const code = await safeMaintenanceErrorCode(response);
-      throw Object.assign(failure("maintenance-http-failed", status), { retries, code });
+      const diagnostic = await safeMaintenanceErrorCode(response);
+      throw Object.assign(failure("maintenance-http-failed", status), { retries, ...diagnostic });
     }
     retries++;
     await wait(1000 * 2 ** attempt);
@@ -206,6 +212,7 @@ export async function replayPendingMaintenance(settings, {
     report.error = { stage: error?.stage ?? "unexpected-maintenance-failure",
       status: Number.isInteger(error?.status) ? error.status : null };
     if (SAFE_MAINTENANCE_ERRORS.has(error?.code)) report.error.code = error.code;
+    if (error?.code === "cache-unavailable" && SAFE_CLIENT_REASONS.has(error?.reason)) report.error.reason = error.reason;
   }
   return report;
 }

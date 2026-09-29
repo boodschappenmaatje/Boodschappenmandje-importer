@@ -181,6 +181,37 @@ test("the real 503 paths retain only allowlisted route codes and never acknowled
   }
 });
 
+test("only allowlisted cache reasons survive replay reporting without acknowledgements", async () => {
+  const reasons = ["supabase-url-missing", "supabase-secret-missing", "supabase-secret-publishable",
+    "supabase-url-invalid", "supabase-secret-header-invalid", "client-construction-failed"];
+  for (const reason of reasons) {
+    const f = fixture(290, { post: () => response({ error: "cache-unavailable", reason,
+      exception: "private-fixture" }, 503) });
+    const r = await replayPendingMaintenance(config, { fetcher: f.fetcher, wait: f.wait });
+    assert.deepEqual(r.error, { stage: "maintenance-http-failed", status: 503, code: "cache-unavailable", reason });
+    assert.equal(r.acknowledged, 0);
+    assert.equal(r.pendingAfter, 290);
+    assert.equal(f.notifiedProducts, 0);
+    assert.equal(f.patches, 0);
+    assert.doesNotMatch(JSON.stringify(r), /private-fixture/);
+    assertNoCatalogWrites(f);
+  }
+});
+
+test("untrusted or misplaced reasons cannot enter the maintenance log", async () => {
+  for (const body of [
+    { error: "cache-unavailable", reason: "private-fixture" },
+    { error: "cache-unavailable", reason: { secret: "private-fixture" } },
+    { error: "new-product-maintenance-failed", reason: "supabase-url-missing" },
+  ]) {
+    const f = fixture(1, { post: () => response(body, 503) });
+    const r = await replayPendingMaintenance(config, { fetcher: f.fetcher, wait: f.wait });
+    assert.deepEqual(r.error, { stage: "maintenance-http-failed", status: 503, code: body.error });
+    assert.equal(f.patches, 0);
+    assert.doesNotMatch(JSON.stringify(r), /private-fixture/);
+  }
+});
+
 test("an unknown or malformed 503 body cannot enter the maintenance log", async () => {
   for (const body of [{ error: "secret-value", authorization: "fixture-private" }, "not-json"]) {
     const f = fixture(1, { post: () => body === "not-json"
