@@ -34,8 +34,19 @@ describe("new-products admin route", () => {
   it("reports missing server credential without exposing configuration", async () => {
     vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "fixture-token");
     vi.mocked(getSupabaseServerClient).mockReturnValue(null);
-    expect((await POST(request({ productIds: [id] }))).status).toBe(503);
+    const response = await POST(request({ productIds: [id] }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "cache-unavailable" });
     expect(maintainPlannerForNewProducts).not.toHaveBeenCalled();
+  });
+  it("returns only a safe maintenance failure code for an internal exception", async () => {
+    vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "fixture-token");
+    vi.mocked(getSupabaseServerClient).mockReturnValue({} as NonNullable<ReturnType<typeof getSupabaseServerClient>>);
+    vi.mocked(maintainPlannerForNewProducts).mockRejectedValue(new Error("private fixture with key material"));
+    const response = await POST(request({ productIds: [id] }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "new-product-maintenance-failed", retryable: true });
+    expect(maintainPlannerForNewProducts).toHaveBeenCalledTimes(1);
   });
   it("passes an authenticated valid batch to the existing maintenance flow", async () => {
     vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "fixture-token");
