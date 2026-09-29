@@ -1,55 +1,82 @@
 name: Replay pending planner maintenance
 
 on:
-  workflow_dispatch:
-  pull_request:
-    types: [edited]
+  push:
+    branches:
+      - 'maintenance/replay-schedule/**'
+      - 'maintenance/replay-live/**'
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   replay:
     if: >-
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-       (github.event_name == 'pull_request' &&
-        github.event.pull_request.number == 33 &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        github.event.pull_request.head.ref == 'fix/isolated-planner-maintenance-replay' &&
-        github.event.pull_request.base.ref == 'main' &&
-        github.event.changes.body.from != null &&
-        contains(github.event.pull_request.body, format('[pending-replay-head:{0}]', github.event.pull_request.head.sha)) &&
-        ((!contains(github.event.changes.body.from, '[pending-replay-acceptance:once]') &&
-          contains(github.event.pull_request.body, '[pending-replay-acceptance:once]') &&
-          !contains(github.event.pull_request.body, '[pending-replay-scheduling:once]')) ||
-         (!contains(github.event.changes.body.from, '[pending-replay-scheduling:once]') &&
-          contains(github.event.pull_request.body, '[pending-replay-scheduling:once]') &&
-          !contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')))))
+      github.event_name == 'push' &&
+      github.run_attempt == 1 &&
+      (startsWith(github.ref, 'refs/heads/maintenance/replay-schedule/') ||
+       startsWith(github.ref, 'refs/heads/maintenance/replay-live/'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # A dry run cannot call maintenance and must not wait behind a live import.
-    # Live replay still shares the import lock; skipped PR edits acquire neither.
     concurrency:
-      group: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.body, '[pending-replay-scheduling:once]') && 'hoogvliet-maintenance-scheduling' || 'hoogvliet-supabase-update' }}
+      group: ${{ startsWith(github.ref, 'refs/heads/maintenance/replay-schedule/') && 'hoogvliet-maintenance-scheduling' || 'hoogvliet-supabase-update' }}
       cancel-in-progress: false
     steps:
+      - name: Validate exact PR head and one-time branch
+        id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prefix = 'refs/heads/maintenance/replay-';
+            const ref = context.ref;
+            const sha = context.sha;
+            const schedule = new RegExp('^' + prefix + 'schedule/([0-9a-f]{40})$');
+            const live = new RegExp('^' + prefix + 'live/([0-9a-f]{40})/(\\d{1,3})$');
+            const dry = ref.match(schedule);
+            const active = ref.match(live);
+            if ((!dry && !active) || (dry || active)[1] !== sha) {
+              core.setFailed('replay-ref-or-sha-invalid');
+              return;
+            }
+            const pr = (await github.rest.pulls.get({
+              owner: 'boodschappenmaatje', repo: 'Boodschappenmandje-importer', pull_number: 33,
+            })).data;
+            if (pr.state !== 'open' || !pr.draft ||
+                pr.head.sha !== sha ||
+                pr.head.ref !== 'fix/isolated-planner-maintenance-replay' ||
+                pr.head.repo.full_name !== context.repo.owner + '/' + context.repo.repo ||
+                pr.base.ref !== 'main') {
+              core.setFailed('replay-pr-head-invalid');
+              return;
+            }
+            if (active) {
+              const expected = Number(active[2]);
+              if (!Number.isSafeInteger(expected) || expected < 1 || expected > 290) {
+                core.setFailed('replay-pending-count-invalid');
+                return;
+              }
+              core.setOutput('expected_pending_count', String(expected));
+            }
+            core.setOutput('mode', dry ? 'schedule' : 'live');
       - name: Scheduling only — no checkout, secrets, or maintenance
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.body, '[pending-replay-scheduling:once]')
+        if: steps.gate.outputs.mode == 'schedule'
         run: "echo 'scheduling-only: no database request, maintenance call, or import'"
       - uses: actions/checkout@v4
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')
+        if: steps.gate.outputs.mode == 'live'
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')
+        if: steps.gate.outputs.mode == 'live'
         with:
           node-version: '22'
       - name: Offer one pending maintenance batch (maximum 20)
-        if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.body, '[pending-replay-acceptance:once]')
+        if: steps.gate.outputs.mode == 'live'
         run: node scripts/replay-pending-planner-maintenance.mjs
         env:
+          REPLAY_EXPECTED_PENDING_COUNT: ${{ steps.gate.outputs.expected_pending_count }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
