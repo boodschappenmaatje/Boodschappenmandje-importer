@@ -1,5 +1,12 @@
 # BoodschappenMaatje — Project State
 
+## PR #33 tijdelijke live acceptatie zonder gestarte batch — 29 september 2026
+
+- Expliciet goedgekeurd artifact: Ready Preview `dpl_8yS68meqHTNycESMvnby7dY1pKx2`, head `70ec94e`; CI `36557759825` groen. Vooraf was de publieke Production-alias exact main `31705dd`, `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ`, Ready. Alleen dit goedgekeurde PR #33-artifact werd via Vercel tijdelijk naar Production gepromoveerd; Production-build `dpl_9juZHGj7rvyZuu2ZCPFksBtXTDSE` werd Current/Ready op `70ec94e`.
+- Read-only vóór trigger: 290 unieke pending IDs, `notifiedProducts=0`. De bewaakte PR-body-trigger maakte Actions-runs `36558728045` en later `36559178360`; beide bleven pending zonder job en eindigden als cancelled na het verwijderen van de marker. Geen onderhouds-CLI gestart, geen IDs geselecteerd of aangeboden, geen 503-routeantwoord, geen acknowledgement. De marker is verwijderd; het laatste verwijderings-event `36559581317` was bij dit checkpoint nog pending maar voldoet niet aan de workflowvoorwaarde en mag geen replay-job starten. Deze status moet vóór enige volgende live poging opnieuw worden gecontroleerd.
+- Vanwege de niet startende Actions-job is **geen live acceptatiebatch uitgevoerd** en blijft de serverclientfix live onbevestigd. Er is geen nieuwe diagnostische probe of productimport geweest. De duurzame queue staat na afloop read-only nog op 290 pending en `notifiedProducts=0`; eerdere tien blijven afzonderlijk onaangeraakt.
+- Production is direct teruggepromoveerd naar exact main-deployment `dpl_5koWMKud14LpRTMLZfv87kaFvFXQ`; alias bevestigt main `31705dd`, Ready. Publieke Home-smoke HTTP 200. PR #31/#32/#33 blijven ongemerged. Eerstvolgende stap: Actions-pending/cancellation veilig oplossen en het verwijderings-event afwachten voordat opnieuw één begrensde echte maintenance-batch wordt gepland; geen extra batch in deze opdracht. `page_safety_limit=800` blijft apart.
+
 ## PR #33 veilige 503-code en acceptatiegate — 29 september 2026
 
 - Draft PR #33 bevat op codehead `d38213d` uitsluitend de bestaande veilige 503-classificatie in de maintenance-replayrunner en gerichte route-/replaytests. De bestaande new-products-route gaf `cache-unavailable` en `new-product-maintenance-failed` al terug; de runner neemt op de definitieve HTTP 503 uitsluitend deze twee toegestane codes over. Onbekende/ruwe foutinhoud wordt niet gerapporteerd. De diff versus main blijft acht bestanden, zonder importer/discovery/dagjob/PR #32-code.
