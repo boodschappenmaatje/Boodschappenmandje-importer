@@ -1,0 +1,33 @@
+[
+  {
+    "cohort": "run82-earlier10",
+    "source": [{"workflowRunId":36394336293,"jobId":108837066992,"logTimestampUTC":"2026-09-28T08:01:00.4161920Z"}],
+    "note": "Explicit unconfirmed maintenance IDs in original log. Evidence only; replay reads the current v4 queue, never this file as a work queue.",
+    "productIds": [
+      "7f4bb596-4f5d-4c27-b048-063d17a6379c",
+      "369d7f98-41af-414a-8c77-2ce92a03c5bf",
+      "3f3122cb-213b-42bf-a06f-9d09c5cedb79",
+      "6b0f5f1c-a68e-4187-b8a1-13decb2aef84",
+      "5ee51711-835e-489c-9faa-487cb806cded",
+      "b4946693-a6ef-4b61-9433-3941922c8e82",
+      "eea9d009-062e-4212-b89d-9c3f82f38c19",
+      "78922554-a52f-4397-b416-ea8ea2ba8ef0",
+      "8261d351-b826-4b69-b9c3-08f0abef2030",
+      "a7ed0a8b-6a93-406a-ad6a-6b67efb98c81"
+    ]
+  },
+  {
+    "cohort": "daily-20260929-later4",
+    "source": [
+      {"workflowRunId":36556304919,"jobId":109366166523,"logTimestampUTC":"2026-09-29T11:43:36.2993037Z"},
+      {"workflowRunId":36599119750,"jobId":109511608824,"logTimestampUTC":"2026-09-29T17:29:59.1617458Z"}
+    ],
+    "note": "Explicit unconfirmed maintenance IDs in original logs; creation times match the two daily attempts. Keep separate from run82 and run85.",
+    "productIds": [
+      "e23f8387-bf44-48a4-9794-6d9a7b18d6af",
+      "757d318b-e9f8-4966-8f0b-e3eb3b647cd4",
+      "19f166cb-6e08-41fc-b18d-0ac77923d37a",
+      "c3ebca67-759a-4d52-bfc9-30e0c2c5810e"
+    ]
+  }
+]

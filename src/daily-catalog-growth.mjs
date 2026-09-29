@@ -2,6 +2,7 @@ import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.mjs";
+import { runResumableCatalogGrowth } from "./resumable-catalog-growth.mjs";
 import {
   claimCatalogDailyAttempt,
   fetchCatalogDailyJob,
@@ -104,7 +105,8 @@ export function shouldRunDailyImport(job, now = new Date(), options = {}) {
 
 function resultCounts(result = {}) {
   return {
-    accounting: result.accounting ?? null, stalledTerms: result.stalledTerms ?? [], plannerMaintenance: result.plannerMaintenance ?? null,
+    accounting: result.accounting ?? null, segments: result.segments ?? [],
+    stalledTerms: result.stalledTerms ?? [], plannerMaintenance: result.plannerMaintenance ?? null,
     irrelevant: integer(result.irrelevantCount),
     candidates: integer(result.candidatesViewed),
     new: integer(result.actualGrowth),
@@ -159,6 +161,7 @@ export function formatDailyAttemptSummary({
     completedAt ? `afgerond=${completedAt.toISOString()}` : null,
     `doel_nieuw=${job.targetNewProducts}`,
     `raw_paginahits=${counts.candidates}`,
+    `discovery_segmenten=${counts.segments?.length ?? 0}`,
     counts.accounting ? `kandidaatboekhouding=${JSON.stringify(counts.accounting)}` : null,
     counts.stalledTerms?.length ? `gestalde_termen=${JSON.stringify(counts.stalledTerms)}` : null,
     counts.plannerMaintenance ? `planner_onderhoud=${JSON.stringify(counts.plannerMaintenance)}` : null,
@@ -253,7 +256,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     growthConfig.productTypeSupported = growthConfig.dryRun
       ? true
       : await supportsProductType(growthConfig);
-    result = await runGrowth(growthConfig, logger);
+    result = await runResumableCatalogGrowth(growthConfig, logger, runGrowth);
   } catch (error) {
     const completedAt = dependencies.now?.() ?? new Date();
     const failure = classifyDailyImportError(error);
@@ -311,7 +314,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
   const targetReached = cumulative >= claim.job.targetNewProducts;
   const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
   const sourceExhausted = result.sourceExhausted === true && counts.sourceErrors === 0;
-  const stalledCoverage = result.stopReason === "discovery_incomplete_stalled_terms";
+  const stalledCoverage = ["discovery_incomplete_stalled_terms", "discovery_resume_stalled"].includes(result.stopReason);
   const nextRetryAt = !targetReached && !sourceExhausted && !stalledCoverage && windowOpen && !config.dailySingleAttempt
     ? dailyRetryAt(claim.job.attemptCount, completedAt)
     : null;
@@ -327,7 +330,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     counts,
     retryReason: targetReached ? null : (sourceExhausted ? "discovery_exhausted" : result.stopReason ?? "daily_target_not_reached"),
     nextRetryAt,
-    errorCode: stalledCoverage ? "discovery_incomplete_stalled_terms" : null,
+    errorCode: stalledCoverage ? result.stopReason : null,
     publicMessage: stalledCoverage && !targetReached ? publicAttentionMessage() : targetReached
       ? "Dagdoel behaald."
       : (sourceExhausted ? "Beschikbare zoekroutes uitgeput; geen verdere nieuwe geldige kandidaten gevonden."

@@ -1,24 +1,46 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-let serverClient: SupabaseClient | null | undefined;
+export type SupabaseServerFailureReason =
+  | "supabase-url-missing"
+  | "supabase-secret-missing"
+  | "supabase-secret-publishable"
+  | "supabase-url-invalid"
+  | "supabase-secret-header-invalid"
+  | "client-construction-failed";
 
-function serverSupabaseConfig(): { url: string; secret: string } | null {
+type ServerClientResult =
+  | { client: SupabaseClient; reason: null }
+  | { client: null; reason: SupabaseServerFailureReason };
+type ConfigResult =
+  | { config: { url: string; secret: string }; reason: null }
+  | { config: null; reason: SupabaseServerFailureReason };
+
+let serverClientResult: ServerClientResult | undefined;
+
+function serverSupabaseConfig(): ConfigResult {
   const rawUrl = (
     process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
   )?.trim();
   const secret = process.env.SUPABASE_SECRET_KEY?.trim();
-  if (!rawUrl || !secret || secret.startsWith("sb_publishable_")) return null;
+  if (!rawUrl) return { config: null, reason: "supabase-url-missing" };
+  if (!secret) return { config: null, reason: "supabase-secret-missing" };
+  if (secret.startsWith("sb_publishable_")) return { config: null, reason: "supabase-secret-publishable" };
 
+  let parsed: URL;
   try {
-    const parsed = new URL(rawUrl);
-    if (parsed.protocol !== "https:") return null;
+    parsed = new URL(rawUrl);
+    if (parsed.protocol !== "https:") return { config: null, reason: "supabase-url-invalid" };
+  } catch {
+    return { config: null, reason: "supabase-url-invalid" };
+  }
+  try {
     // Headers rejects embedded control characters only when a request starts.
     // Fail closed while configuring the client, before any maintenance begins.
     new Headers({ apikey: secret });
-    return { url: parsed.origin, secret };
   } catch {
-    return null;
+    return { config: null, reason: "supabase-secret-header-invalid" };
   }
+  return { config: { url: parsed.origin, secret }, reason: null };
 }
 
 function createServerClient(config: { url: string; secret: string }, requestFetch: typeof fetch): SupabaseClient {
@@ -47,13 +69,21 @@ function createServerClient(config: { url: string; secret: string }, requestFetc
 
 /** Server-only by placement: this module is imported exclusively by Route Handlers. */
 export function getSupabaseServerClient(): SupabaseClient | null {
-  if (serverClient !== undefined) return serverClient;
-  const config = serverSupabaseConfig();
-  if (!config) {
-    serverClient = null;
-    return serverClient;
-  }
-  serverClient = createServerClient(config, globalThis.fetch);
-  return serverClient;
+  return getSupabaseServerClientResult().client;
 }
 
+/** Safe diagnostic for authenticated server routes; never includes config or exceptions. */
+export function getSupabaseServerClientResult(): ServerClientResult {
+  if (serverClientResult !== undefined) return serverClientResult;
+  const { config, reason } = serverSupabaseConfig();
+  if (!config) {
+    serverClientResult = { client: null, reason };
+  } else {
+    try {
+      serverClientResult = { client: createServerClient(config, globalThis.fetch), reason: null };
+    } catch {
+      serverClientResult = { client: null, reason: "client-construction-failed" };
+    }
+  }
+  return serverClientResult;
+}

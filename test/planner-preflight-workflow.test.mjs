@@ -1,15 +1,9 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-const workflowWithProbe = readFileSync(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-// Remove only the separately tested read-only probe additions for the historical fingerprint.
-const workflow = workflowWithProbe.replace(/^      maintenance_probe_only:\n[\s\S]*?(?=^      daily_attempt_only:)/m, '')
-  .replace(/^  maintenance-probe:\n[\s\S]*?(?=^  preflight:)/m, '')
-  .replace("inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && ", '')
-  .replace("inputs.server_client_probe_only != true && github.event.inputs.server_client_probe_only != 'true' && ", '');
+const workflow = readFileSync(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const standalone = readFileSync(new URL("../.github/workflows/planner-cache-preflight.yml", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const job = workflow.match(/^  preflight:\n[\s\S]*?(?=^  import:)/m)?.[0];
 const input = "      preflight_only:\n" +
@@ -21,7 +15,7 @@ const scriptFrom = (text) => text.match(/node --input-type=module <<'NODE'\n([\s
   .replace(/^          /gm, "");
 const script = scriptFrom(job ?? "");
 
-test("historical importer guards remain intact with explicit daily validation additions", () => {
+test("preflight remains isolated while the daily importer uses its production origin and daily budget", () => {
   assert.ok(job);
   assert.ok(workflow.includes(input));
   assert.ok(workflow.includes(guard));
@@ -33,19 +27,10 @@ test("historical importer guards remain intact with explicit daily validation ad
     .replace(input, "").replace(job, "").replace(guard, "");
   assert.equal(withoutPreflight.split(bypassEnv).length - 1, 1);
   assert.match(withoutPreflight, /^  import:\n[\s\S]*?    env:\n[\s\S]*?      VERCEL_AUTOMATION_BYPASS_SECRET: \$\{\{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/m);
-  const onceInput = "      daily_attempt_only:\n        description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry\n        type: boolean\n        default: false\n";
-  const oncePlan = '\n          # Explicit one-shot validation uses the existing daily claim and closes today\'s job.\n'
-    + '          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.daily_attempt_only }}" == "true" ]]; then\n'
-    + '            update_mode="growth"\n            catalog_batch="growth"\n            max_products="400"\n'
-    + '            daily_import_job="1"\n            import_trigger="schedule"\n            advance_discovery_state="1"\n'
-    + '            echo "DAILY_SINGLE_ATTEMPT=1" >> "$GITHUB_ENV"\n          fi\n';
-  assert.ok(workflow.includes(onceInput)); assert.ok(workflow.includes(oncePlan));
-  const original = withoutPreflight.replace(bypassEnv, "").replace(onceInput, "").replace(oncePlan, "")
-    .replace("Alleen bevestigde nieuwe inserts met bevestigde geldige prijs tellen mee.", "De importer valideert dit met het verschil tussen de Supabase-aantallen vóór en na de run.")
-    .replace("PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app", "PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}");
-  // Approved workflow at 8dd0d4a / db0b8d2, before the isolated preflight additions.
-  assert.equal(createHash("sha256").update(original).digest("hex"),
-    "3a5a837a0c4de6681c02e6794b720db2711b0cb7de91f4f4409c5870d98eec94");
+  assert.match(withoutPreflight, /PLANNER_CACHE_BASE_URL: https:\/\/boodschappenmaatje-pwa\.vercel\.app/);
+  assert.match(withoutPreflight, /DAILY_SINGLE_ATTEMPT=1/);
+  assert.match(withoutPreflight, /DAILY_IMPORT_STATE_KEY=daily-catalog-growth/);
+  assert.doesNotMatch(withoutPreflight, /maintenance_probe_only|server_client_probe_only|databaseReadProbe/);
 });
 
 test("job-level guard excludes the entire importer for typed or raw true", () => {

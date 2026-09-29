@@ -1,3 +1,5 @@
+> Historisch onderzoeksrapport. Actuele status: PROJECT_STATE.md. Serverconfig en 304 onderhoudsmeldingen zijn op 29 september hersteld via PR #33; PR #32 is gesloten. PR #31 bevat nu uitsluitend importer/discovery/dagflow en bijbehorende tests. Oude probe-/geen-merge-instructies hieronder zijn auditgeschiedenis, geen actuele werkinstructie.
+
 # Actions en dagelijkse Hoogvliet-groei — 28 september 2026
 
 ## Remote uitgangspunt en bewijs

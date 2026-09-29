@@ -3,7 +3,9 @@ name: Stability & core flows
 on:
   pull_request:
   push:
-    branches: [main]
+    branches:
+      - main
+      - 'maintenance/replay-schedule/**'
 
 permissions:
   contents: read

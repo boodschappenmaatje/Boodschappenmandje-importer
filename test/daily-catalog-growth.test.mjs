@@ -27,6 +27,7 @@ const config = {
   dailyImportStateKey: "daily-catalog-growth-test",
   dailyTargetNewProducts: 400,
   dailyEndHour: 23,
+  growthMaxRuntimeMs: 105 * 60_000,
 };
 
 function createHarness(growthSequence, {
@@ -87,6 +88,7 @@ function createHarness(growthSequence, {
           searchErrors: entry.sourceErrors ?? 0,
           sourceExhausted: entry.sourceExhausted ?? false,
           stopReason: entry.stopReason,
+          resumeCheckpoint: entry.resumeCheckpoint,
         };
       },
       finish: async (_config, input) => {
@@ -387,10 +389,10 @@ test("bewezen zoekroute-uitputting onder 400 sluit de dag zonder verdere retries
 });
 
 test("paginaveiligheidsgrens is geen bronuitputting: bewaar expliciete vervolgreden", async () => {
-  const h = createHarness([{ new: 80, stopReason: "page_safety_limit" }]);
+  const h = createHarness(Array.from({ length: 8 }, (_, i) => ({ new: 10, stopReason: "page_safety_limit", resumeCheckpoint: { term: "rijst", page: (i + 1) * 800 } })));
   const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
   assert.equal(result.job.status, "retry_scheduled");
-  assert.equal(h.attempts[0].retryReason, "page_safety_limit");
+  assert.equal(h.attempts[0].retryReason, "attempt_safety_limit");
   assert.equal(result.job.nextRetryAt, "2026-09-17T10:00:00.000Z");
 });
 
@@ -402,7 +404,7 @@ test("twee gelijktijdige dagtriggers starten maar één collector", async () => 
 });
 
 test('eenmalige dagpoging respecteert restant en sluit zonder vervolgretry', async () => {
-  const h = createHarness([{ new: 7, stopReason: 'page_safety_limit' }], { initialNew: 390 });
+  const h = createHarness([{ new: 7, stopReason: 'runtime_safety_limit' }], { initialNew: 390 });
   const run = h.dependencies.runGrowth;
   h.dependencies.runGrowth = async c => { assert.equal(c.maxNewProducts, 10); return run(c); };
   const result = await runDailyCatalogAttempt({ ...config, dailySingleAttempt: true }, logger, h.dependencies);

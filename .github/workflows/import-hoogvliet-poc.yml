@@ -3,14 +3,6 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
-      maintenance_probe_only:
-        description: Alleen Production-auth met lege ID-lijsten controleren; geen databasewrites of import
-        type: boolean
-        default: false
-      server_client_probe_only:
-        description: Alleen Production-serverclient en een bewezen lege profielquery controleren; geen writes of import
-        type: boolean
-        default: false
       daily_attempt_only:
         description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry
         type: boolean
@@ -94,94 +86,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  maintenance-probe:
-    permissions: {}
-    if: github.event_name == 'workflow_dispatch' && inputs.maintenance_probe_only == true && inputs.server_client_probe_only != true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/daily-catalog-retry-schedule' && inputs.daily_attempt_only != true && inputs.falafel_e2e_only != true && inputs.preflight_only != true && inputs.e2e_test_sku == ''
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - name: Read-only Production maintenance authentication probe
-        shell: bash
-        env:
-          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          // Both production routes reject an empty list BEFORE creating a DB client.
-          const token = process.env.PLANNER_CACHE_ADMIN_TOKEN?.trim();
-          if (!token) throw new Error('missing-planner-admin-token');
-          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-          let failed = false;
-          for (const [route, key] of [['new-products', 'productIds'], ['mix-refresh', 'recipeIds']]) {
-            let status = null, code = 'network-or-timeout';
-            try {
-              const response = await fetch(`https://boodschappenmaatje-pwa.vercel.app/api/internal/planner-readiness/${route}`, {
-                method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(20000),
-                headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json',
-                  ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) },
-                body: JSON.stringify({ [key]: [] }),
-              });
-              status = response.status;
-              const body = await response.json().catch(() => null);
-              code = ['invalid-request', 'unauthorized'].includes(body?.error) ? body.error : 'unexpected-response';
-            } catch { /* Never print raw exceptions, bodies, headers or tokens. */ }
-            const verified = status === 400 && code === 'invalid-request';
-            console.log(JSON.stringify({ route, status, code, authenticated: verified, databaseWrites: 0 }));
-            if (!verified) failed = true;
-          }
-          if (failed) process.exitCode = 1;
-          NODE
-
-  server-client-probe:
-    permissions: {}
-    if: github.event_name == 'workflow_dispatch' && inputs.server_client_probe_only == true && inputs.maintenance_probe_only != true && inputs.daily_attempt_only != true && inputs.falafel_e2e_only != true && inputs.preflight_only != true && inputs.e2e_test_sku == '' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/daily-catalog-retry-schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - name: Check Production database read without writes
-        shell: bash
-        env:
-          PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          const origin = 'https://boodschappenmaatje-pwa.vercel.app';
-          const token = process.env.PLANNER_CACHE_ADMIN_TOKEN?.trim();
-          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-          if (!token) throw new Error('probe-admin-token-missing');
-          const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json',
-            ...(bypass ? { 'x-vercel-protection-bypass': bypass } : {}) };
-          let response, body;
-          try {
-            response = await fetch(`${origin}/api/internal/planner-readiness/repair`, {
-              method: 'POST', headers, body: JSON.stringify({ databaseReadProbe: 'v1' }),
-              redirect: 'manual', signal: AbortSignal.timeout(20000),
-            });
-            body = await response.json().catch(() => null);
-          } catch { throw new Error('production-db-probe-network-or-timeout'); }
-          const code = ['database-read-ok', 'database-http-auth-failed', 'database-http-permission-failed',
-            'database-http-not-found', 'database-http-server-error', 'database-http-other-failed',
-            'database-sdk-status-zero', 'database-query-exception', 'database-sdk-query-failed', 'database-unexpected-response',
-            'database-client-unavailable']
-            .includes(body?.code) ? body.code : 'unexpected-response';
-          const upstreamStatus = Number.isInteger(body?.upstreamStatus) &&
-            body.upstreamStatus >= 100 && body.upstreamStatus <= 599 ? body.upstreamStatus : null;
-          const responseStatus = body?.responseReceived === true && Number.isInteger(body?.responseStatus) &&
-            body.responseStatus >= 100 && body.responseStatus <= 599 ? body.responseStatus : null;
-          const ok = response.status === 200 && code === 'database-read-ok' &&
-            body?.authenticated === true && body?.serverClientAvailable === true &&
-            body?.databaseReadSuccess === true && body?.databaseWrites === 0;
-          console.log(JSON.stringify({ status: response.status, code, upstreamStatus,
-            authenticated: body?.authenticated === true,
-            serverClientAvailable: body?.serverClientAvailable === true,
-            databaseReadSuccess: body?.databaseReadSuccess === true, databaseWrites: body?.databaseWrites === 0 ? 0 : null,
-            fetchCalled: body?.fetchCalled === true, responseReceived: body?.responseReceived === true,
-            responseStatus }));
-          if (!ok) process.exitCode = 1;
-          NODE
-
   preflight:
     permissions: {}
     if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
@@ -305,7 +209,7 @@ jobs:
 
   import:
     # Fail closed for both typed boolean and raw workflow_dispatch input.
-    if: ${{ inputs.maintenance_probe_only != true && github.event.inputs.maintenance_probe_only != 'true' && inputs.server_client_probe_only != true && github.event.inputs.server_client_probe_only != 'true' && inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
+    if: ${{ inputs.preflight_only != true && github.event.inputs.preflight_only != 'true' && inputs.falafel_e2e_only != true && github.event.inputs.falafel_e2e_only != 'true' && inputs.e2e_test_sku == '' && (github.event.inputs.e2e_test_sku == '' || github.event.inputs.e2e_test_sku == null) }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 

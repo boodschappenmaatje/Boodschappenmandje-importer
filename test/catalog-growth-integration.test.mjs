@@ -94,3 +94,32 @@ test('a stalled term from an earlier same-day window cannot disappear into globa
   assert.equal(result.stalledTerms.length, 1);
   assert.equal(h.saved.at(-1).lastAttemptReport.stalledTerms.length, 1);
 });
+
+test('real v4 CAS writer accepts only the IDs confirmed by the maintenance callback', async t => {
+  const { fetchCatalogDiscoveryState, saveCatalogDiscoveryState } = await import('../src/supabase.mjs');
+  const id = '00000000-0000-4000-8000-000000000001';
+  let row = { state_key: 'fixture', term_cursor: 0, page_cursor: 0, updated_at: '2026-09-29T12:00:00Z',
+    last_batch: JSON.stringify({ version: 4, future: 'preserved', plannerMaintenance: {
+      pendingProductIds: [], notifiedProducts: 304, status: 'confirmed', failures: [] } }) };
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url.pathname, '/rest/v1/catalog_discovery_state');
+    if (options.method === 'PATCH') {
+      assert.equal(url.searchParams.get('updated_at'), 'eq.' + row.updated_at);
+      row = JSON.parse(options.body);
+    } else assert.equal(options.method, 'GET');
+    return new Response(JSON.stringify([row]), { status: 200 });
+  });
+  const h = harness({ fetchCatalogDiscoveryState, saveCatalogDiscoveryState,
+    upsertProducts: async (_c, products, lifecycle) => {
+      await lifecycle.onMaintenancePending([id]);
+      assert.deepEqual(JSON.parse(row.last_batch).plannerMaintenance.pendingProductIds, [id]);
+      await lifecycle.onMaintenanceResult({ notifiedProducts: 1, pendingProductIds: [], failures: [] }, [id]);
+      return { imported: products.map((p, i) => ({ ...p, inserted: i !== 0 })), errors: [] };
+    },
+  });
+  await runCatalogGrowth({ ...config, supabaseURL: 'https://fixture.supabase.co', supabaseSecret: 'sb_secret_fixture' }, logger, h.dependencies);
+  const state = JSON.parse(row.last_batch);
+  assert.equal(state.version, 4); assert.equal(state.future, 'preserved');
+  assert.equal(state.plannerMaintenance.notifiedProducts, 305);
+  assert.deepEqual(state.plannerMaintenance.pendingProductIds, []);
+});

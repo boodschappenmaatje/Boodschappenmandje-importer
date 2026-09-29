@@ -258,10 +258,10 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
   const imported = [];
   let discoveryState, originalTerms, exhaustedTerms, scanDate;
   let previousStalls = [], plannerMaintenance = { status: "not_required", pendingProductIds: [], notifiedProducts: 0, failures: [] };
-  const maintenanceCheckpoint = async (state) => {
+  const maintenanceCheckpoint = async (state, acknowledgedProductIds = []) => {
     plannerMaintenance = state;
     discoveryState = { ...discoveryState, plannerMaintenance, updatedAt: new Date().toISOString() };
-    await services.saveCatalogDiscoveryState(config, discoveryState);
+    await services.saveCatalogDiscoveryState(config, discoveryState, { acknowledgedProductIds });
   };
   const report = () => ({ accounting: stats.accounting ?? null,
     stalledTerms: [...previousStalls, ...(stats.stalledTerms ?? [])], plannerMaintenance,
@@ -315,10 +315,12 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
           const pendingProductIds = [...new Set([
             ...plannerMaintenance.pendingProductIds.filter(id => !ids.includes(id)), ...maintenance.pendingProductIds,
           ])];
+          const acknowledged = ids.filter(id => !maintenance.pendingProductIds.includes(id));
+          if (acknowledged.length !== maintenance.notifiedProducts) throw new Error("Ongeldige onderhoudsbevestiging");
           await maintenanceCheckpoint({ status: pendingProductIds.length ? "pending_requires_attention" : "confirmed",
             pendingProductIds, notifiedProducts: plannerMaintenance.notifiedProducts + maintenance.notifiedProducts,
             failures: [...plannerMaintenance.failures, ...maintenance.failures],
-          });
+          }, acknowledged);
         },
       }); }
       catch (error) { imported.push(...(error.confirmedImports ?? [])); throw error; }
@@ -387,6 +389,11 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
       searchedTerms: stats.searchedTerms ?? 0,
       searchErrors,
       stopReason: stats.stopReason ?? "discovery_exhausted",
+      resumeCheckpoint: {
+        term: stats.lastSearchedTerm, page: stats.nextPageCursor ?? 0,
+        exhaustedTerms: [...new Set([...exhaustedTerms, ...(stats.exhaustedTerms ?? [])])],
+        stalledTerms: report().stalledTerms.map(entry => entry.term),
+      },
       durationSeconds: (Date.now() - startedAt) / 1000,
       errorSummary: [
         growthStatus,

@@ -1363,7 +1363,8 @@ test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compat
         updated_at: "2026-09-16T12:00:00.000Z",
       }]), { status: 200 });
     }
-    storedPayload = JSON.parse(options.body)[0];
+    assert.equal(options.method, "PATCH");
+    storedPayload = JSON.parse(options.body);
     return new Response(JSON.stringify([storedPayload]), { status: 200 });
   };
   try {
@@ -1526,7 +1527,7 @@ test('discovery reads v3 live checkpoints and round-trips v4 accounting/stalls/m
     version: 3, scanDate: '2026-09-28', lastTerm: 'fruit', exhaustedTerms: ['groente', 'groenten'],
   }) };
   t.mock.method(globalThis, 'fetch', async (_url, options) => {
-    if (options.method !== 'GET') row = JSON.parse(options.body)[0];
+    if (options.method !== 'GET') { assert.equal(options.method, 'PATCH'); row = JSON.parse(options.body); }
     return new Response(JSON.stringify([row]), { status: 200 });
   });
   const settings = { supabaseURL: 'https://fixture.supabase.co', supabaseSecret: 'fixture' };
