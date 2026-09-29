@@ -171,8 +171,12 @@ async function acknowledgeBatch(settings, selected, initial, fetcher, now) {
 
 export async function replayPendingMaintenance(settings, {
   fetcher = fetch, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), now = () => new Date(),
+  expectedPendingCount,
 } = {}) {
   const snapshot = await readPendingSnapshot(settings, fetcher);
+  if (expectedPendingCount !== undefined &&
+      (!Number.isSafeInteger(expectedPendingCount) || expectedPendingCount < 1 ||
+       snapshot.ids.length !== expectedPendingCount)) throw failure("pending-count-mismatch");
   const selected = snapshot.ids.slice(0, REPLAY_BATCH_LIMIT);
   const report = { selected: selected.length, offered: 0, successful: 0, acknowledged: 0,
     pendingBefore: snapshot.ids.length, pendingAfter: snapshot.ids.length, retries: 0,
