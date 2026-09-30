@@ -1,14 +1,16 @@
 # BoodschappenMaatje — Project State
 
-## Actueel — importer- en maintenancehoofdstuk afgerond — 30 september 2026
+## Actueel — herstel gereleased; operationele eindverificatie deels open — 30 september 2026
 
 ### Release
 
 - **Functionele mainrelease:** PR #31 is na groene CI en live acceptatie gemerged als `e6ab4199bd868a651f84fd5bb03a99855515d12f`.
-- **Production:** Vercel-deployment `dpl_3Sk5Y5RHftvEu7pq4sc91Tk1cAtu` is een automatische Production-target build van exact deze maincommit, `READY`, zonder aliasfout. Publieke Home, Menu (`/week-voorbereiden`), Lijst en Budget zijn na release read-only gesmoked.
+- **Actuele main-head:** `3370bf8216922813b0691ab5580cdd09b0c79233` (documentatie na functionele merge).
+- **Production:** `dpl_Gm67iaa1TZ7T757H2Ht2pHDdjGRZ`, Production-target van exact deze main-head, `READY`, gekoppeld aan `boodschappenmaatje-pwa.vercel.app`, zonder aliasfout. Home, Menu (`/week-voorbereiden`), Lijst en Budget zijn op 30 september opnieuw read-only geopend en renderen correct. Dit is navigatie-/laadsmoke, geen nieuwe schrijf- of fysieke iPhone-acceptatie.
 - **Rollback:** de vorige gezonde mainrelease was `dfa3d7773eb070de457ad2a9ac379acd9840f123` op `dpl_HK3GSecBCEvtcDmchGBdFqcJ251y`.
 - **PR-status:** PR #33 is gemerged; PR #31 is gemerged; PR #32 is als superseded/diagnostic-only gesloten zonder merge. Geen diagnostische PR #32-code is gereleased.
-- **Volgende productstap:** Productdata & receptkwaliteit. Deze feature is nog niet gestart.
+- **Volgende afzonderlijke opdracht:** VERBETERING HOOGVLIET-PRODUCTDEKKING, binnen de bredere roadmap Productdata & receptkwaliteit. Niet gestart.
+- **Afrondingsstatus:** de functionele herstelrelease en maintenance zijn afgerond. Een volledige automatische cyclus na de release is nog niet live bevestigd; onderstaande operationele controle blijft open. Deze documentatiecorrectie staat op een aparte reviewbranch: geen merge of Production-deployment in deze controle.
 
 ### Maintenance en serverclient
 
@@ -25,15 +27,15 @@
 - Alleen nieuwe, unieke, geldige, positief geprijsde en succesvol bevestigde product+prijs-inserts tellen mee.
 - Duplicaten, bestaande producten, filterhits, ongeldige items en items zonder positieve prijs tellen niet mee.
 - Een segment-/runtime-safety-limit levert een hervatbare status op en geldt nooit als bronuitputting. Een ambigue stall blijft fail-closed en stopt alleen de betrokken route.
-- Een identieke herhaalde SKU-pagina (`repeated_sku_set`) is een bewezen lokaal route-einde: die route wordt uitgeput gemarkeerd zonder bronfout. Oude checkpoints met deze reden worden veilig naar `exhaustedTerms` gemigreerd.
+- Een identieke herhaalde SKU-pagina (`repeated_sku_set`) wordt door de huidige strategie als lokaal route-einde geclassificeerd: die route wordt uitgeput gemarkeerd zonder bronfout. Dit bewijst niet dat elders in het Hoogvliet-assortiment geen producten bestaan. Oude checkpoints met deze reden worden veilig naar `exhaustedTerms` gemigreerd.
 - Dagbudget, cursor, dedupe, locks, retries en acknowledgements blijven veilig over segmenten en dezelfde dag heen; een nieuwe dag krijgt een eigen maximaal-400-budget.
 
 ### Live acceptatie — 30 september 2026
 
 - **Eerste run:** Actions `36667726775`, op de toenmalige PR #31-head. De run scande 18.286 ruwe hits en schreef niets. Accounting: existing 8651, duplicates 2459, irrelevant 7112, new 0. Vier deterministische `repeated_sku_set` route-einden werden ten onrechte als stalls/bronfouten geclassificeerd, waardoor `discovery_incomplete_stalled_terms` ontstond.
 - **Structurele fix:** `growth-collector.mjs` behandelt `repeated_sku_set` als lokaal route-einde; `catalog-growth.mjs` migreert overeenkomstige opgeslagen checkpoints naar uitgeputte routes. Ambigue stalls blijven fail-closed. Exact geteste PR-head: `875ac98a667585b0cbbcf980c1e471328c913333`.
-- **Gecorrigeerde acceptatie:** Actions `36671598645` eindigde succesvol met `discovery_exhausted`. Alle **598** routes waren aantoonbaar uitgeput, `searchErrors=0`, `stalledTerms=[]`, nieuwe producten 0.
-- De dagjob eindigde `daily_target_partial` met `collected=0`, `remaining=400`, `next_retry_at=null`, geen lock en geen lopende poging. Minder dan 400 is hier correct omdat echte bronuitputting is bewezen; dit was geen `page_safety_limit` of faux exhaustion.
+- **Gecorrigeerde acceptatie:** Actions `36671598645` eindigde succesvol met `discovery_exhausted`. De huidige discovery-state markeerde **598 geconfigureerde zoekroutes** als uitgeput, `searchErrors=0`, `stalledTerms=[]`, nieuwe producten 0. Dit resultaat geldt binnen de huidige zoekstrategie; het bewijst geen volledige Hoogvliet-dekking.
+- De dagjob eindigde `daily_target_partial` met `collected=0`, `remaining=400`, `next_retry_at=null`, geen lock en geen lopende poging. Dit is het ontworpen eindresultaat bij uitputting volgens de huidige zoekstrategie; de stopreden was geen `page_safety_limit`. Het is geen bewijs dat dagelijks 400 nieuwe producten gevonden kunnen worden, noch onafhankelijk bewijs van uitputting van het volledige assortiment.
 - Producten/prijzen bleven **6359/6359**; op 30 september waren er 0 product- en 0 prijsinserts. De mislukte eerste poging en alle audit/accounting zijn behouden; er is geen dagreset of auditverwijdering uitgevoerd.
 - Maintenance bleef tijdens en na de import gezond: v4, `pending=0`, `notifiedProducts=304`.
 
@@ -44,8 +46,39 @@
 - Web: 756/756 tests, lint, TypeScript en Next.js Production-build groen.
 - PR-head-CI: `Stability & core flows` run `36671219719` groen; Vercel-check groen.
 - Live acceptatierun `36671598645` groen.
+- Actuele main-CI `Stability & core flows`, run `36672086621`, volledig geslaagd: importerfixtures/seedchecks, webtests, lint, TypeScript en build. Deze controle wijzigt uitsluitend documentatie; functionele tests zijn niet onnodig opnieuw gedraaid.
 - Geen full backfill, destructieve databasehandeling, productreset, tijdspoof of tweede ongecontroleerde import uitgevoerd.
 
-## Eerstvolgende roadmapstap
+## Read-only releasecontrole — 30 september 2026, circa 09:12 Europe/Amsterdam
 
-**Productdata & receptkwaliteit**: productmatching, receptprofielen, verpakkingsinformatie, readiness en Data Health systematisch verbeteren. Eerst de scope concretiseren; nog geen nieuwe feature bouwen in dit checkpoint.
+### Database en integriteit
+
+- 6359 producten, alle beschikbaar; 6359 prijsregels.
+- 0 dubbele combinaties supermarkt/SKU, 0 null/niet-positieve prijzen, 0 producten zonder positieve prijs, 0 verweesde prijsregels.
+- Vandaag 0 nieuwe producten en 0 vandaag bijgewerkte prijsregels. Deze integriteitschecks bewijzen referentiële/prijsvaliditeit, niet semantische kwaliteit of actuele winkelprijzen.
+- Maintenance-state v4: `confirmed`, `pendingProductIds=[]`, `notifiedProducts=304`, `failures=[]`; geen nieuwe acknowledgements nodig.
+- Dagjob 2026-09-30: `daily_target_partial`, 0/400, 2 historische pogingen, `next_retry_at=null`, `lock_expires_at=null`. Geen lopende import of poging.
+- De historische dagjob van 29 september blijft bewaard; geen reset, queuewrite, databasewijziging of nieuwe import uitgevoerd.
+
+### Automatische planning en retries
+
+- Primaire workflow: cron 04:00 en 05:00 UTC, met Europe/Amsterdam-uurcontrole op 06:00. Alleen de passende zomertijd-/wintertijdtrigger voert de dagelijkse flow uit.
+- Werkvenster 06:00–23:00 Nederlandse tijd. Back-off 120/180/240 minuten; DB-claim 130 minuten. Gedeelde Actions-concurrency `hoogvliet-supabase-update`, zonder annuleren van een lopende run.
+- Retryworkflow: 08:17/13:17/18:17 UTC (zomertijd 10:17/15:17/20:17; wintertijd 09:17/14:17/19:17). Eerst schrijfvrije due-check; alleen bij een verschuldigde poging worden dependencies en importer gestart.
+- Geen retry bij gehaald dagdoel, afgesloten `daily_target_partial`, benodigde aandacht, actieve claim, nog niet verschuldigde poging of gesloten dagvenster. Hervatbare safety-budgetstops blijven onderscheiden van discovery-uitputting.
+- Monitor: 06:30 en 07:30 UTC met Nederlandse uurcontrole op 08:00; bedoeld voor 08:30 lokaal.
+- Overige bestaande planning: dagelijks prijsshard om 02:17 UTC (1 van 7, max 100) en zondag cataloguscontrole om 03:43 UTC (max 180). In deze controle niets gestart.
+- Laatste waargenomen automatische retry: run `36650165488`, 30 september 02:24 lokaal, groen; due-check geslaagd, importer en installatie terecht overgeslagen. Deze run was vóór de huidige release.
+- Laatste zichtbare standalone monitor: run `36580601377`, 29 september, groen; de monitorworkflow is ingeschakeld.
+- **Nog open:** tijdens deze controle was geen standalone monitorrun van 30 september 08:30 en geen nieuwe volledige automatische dagcyclus na de release zichtbaar. Oorzaak/tijdigheid is hiermee niet vastgesteld. De huidige schema's en eerdere groene runs zijn geen bewijs van tijdige uitvoering na deze release. Geen workflow handmatig gestart om dit te verhullen.
+- Geen aangetroffen code-/CI-/Productionblokkade. Operationele eindbevestiging vereist nog het resultaat van de normale geplande cyclus, inclusief due-check en monitoring; dit staat los van productdekking.
+
+## Eerstvolgende afzonderlijke ontwikkelopdracht
+
+**VERBETERING HOOGVLIET-PRODUCTDEKKING**
+
+Onderzoek aanvullende categorieën, zoekmethoden, productpagina's en andere toegestane methoden om geldige nieuwe producten te ontdekken. Maak zichtbaar welke delen van het assortiment de huidige 598 routes wel/niet dekken en toets route-eindesignalen tegen werkelijke dekking.
+
+Doel blijft **maximaal 400 daadwerkelijk nieuwe, unieke, geldige en positief geprijsde bevestigde inserts per dag wanneer voldoende geldige kandidaten beschikbaar zijn**. De acceptatie met nul inserts bewijst deze dagelijkse groei niet. Behoud dagbudget, dedupe, cursors, bounded retries, concurrency en de gezonde maintenanceketen.
+
+Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase blijft Productdata & receptkwaliteit. `DESIGN.md` blijft ongewijzigd.
