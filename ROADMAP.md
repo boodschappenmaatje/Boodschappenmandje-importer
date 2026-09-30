@@ -35,7 +35,7 @@ Belangrijke productprincipes:
 | PWA 14 | Afgerond / Production | Eigen recepten, compact detail, dynamische Vrije keuze, actuele prijzen, budget en lijstsync |
 | PR #28 — verpakkingen/lijst/budget | Afgerond / Production | Compacte lijst, recept ⇄ lijst, veilige trash, prijsfallback, handmatige override en harde automatische maaltijdgrens |
 | PR #29 — Stabiliteit & kernflows | Afgerond / Production | Kernflow-integraties, centrale hoeveelheidspresentatie en actieve CI-releasegate |
-| Importer & maintenanceherstel | Afgerond / Production | Veilige queue-replay, v4/CAS-writer en begrensde hervatbare dagelijkse catalogusgroei |
+| Importer & maintenanceherstel | Functioneel gereleased; automatische eindverificatie open | Veilige queue-replay, v4/CAS-writer en begrensde hervatbare importer; dagelijkse groei niet bewezen |
 
 ## Afgeronde release — PR #28
 PR #28 is na geslaagde fysieke iPhone-hertest gemerged naar `main` (`d7a234df5ac24ab6fec558413ff2c73649071584`) en in Production uitgerold. Gerichte Production-smoke geslaagd. De verpakkingen-, lijst- en budgetronde is afgerond: compacte inklapbare lijst, oorsprong, directe veilige prullenmand, recept ⇄ lijst-sync, productvervanging, prijsfallback en handmatige bevestiging boven het maaltijdbudget. De automatische planner behoudt de harde grens. Volledige regressie: 687 webtests, 189 importerfixtures, lint, TypeScript en build groen. Echte assortimentsdatablokkades blijven als datawerk apart gedocumenteerd.
@@ -76,13 +76,23 @@ PR #28 leverde de noodzakelijke tweerichtingssync; deze funderingsstap consolide
 
 **Status:** het stabiliteits- en bewakingsdeel is afgerond in PR #29. De centrale contribution/state-logica en bijbehorende kernflows worden op toekomstige PR's automatisch gecontroleerd.
 
-## Afgerond / Production: IMPORTER & MAINTENANCEHERSTEL
+## Functioneel gereleased: IMPORTER & MAINTENANCEHERSTEL
 
 PR #33 heeft de serverclient en veilige maintenance-replay gereleased; de historische 290, de eerdere 10 en de latere 4 producten zijn afzonderlijk bevestigd. De v4/CAS-statewriter beschermt queue- en acknowledgementvelden. Eindstand: `pending=0`, `notifiedProducts=304`.
 
-PR #31 heeft de dagelijkse Hoogvliet-discovery begrensd en hervatbaar gemaakt: 800 pagina's per segment, maximaal 8 segmenten, één gedeeld runtimebudget en maximaal het resterende dagdoel tot 400 bevestigde nieuwe, unieke, geldige en positief geprijsde producten. Een safety-limit is hervatbaar en wordt niet als bronuitputting gemeld; een gestalde route stopt niet andere routes. De live acceptatie op 30 september 2026 bewees echte bronuitputting over alle 598 routes, zonder bronfouten, stalls of onverwachte writes.
+PR #31 heeft de dagelijkse Hoogvliet-discovery begrensd en hervatbaar gemaakt: 800 pagina's per segment, maximaal 8 segmenten, één gedeeld runtimebudget en maximaal het resterende dagdoel tot 400 bevestigde nieuwe, unieke, geldige en positief geprijsde producten. Een safety-limit is hervatbaar en wordt niet als bronuitputting gemeld; een gestalde route stopt niet andere routes. De live acceptatie op 30 september 2026 eindigde met `discovery_exhausted`: 598 geconfigureerde routes waren volgens de huidige strategie uitgeput, zonder bronfouten, stalls of onverwachte writes; er waren nul nieuwe producten. Dit bewijst geen volledige Hoogvliet-dekking en geen dagelijkse groei van 400 producten.
 
-## Actief / volgende: PRODUCTDATA & RECEPTKWALITEIT
+Releasecontrole 30 september: main `3370bf8`, Production Current/Ready, Home/Menu/Lijst/Budget-smoke en main-CI groen. Catalogus 6359 producten/6359 prijsregels; gecontroleerde duplicaat-, referentie- en positieve-prijsinvarianten zonder afwijkingen. Functioneel herstel en maintenance zijn afgerond. Operationeel blijft een volledige automatische cyclus na de release open. Twee eerdere monitorruns op 29 september stonden als `success` terwijl de monitorstap door een tijdpoort op de vertraagde uitvoertijd was overgeslagen; dit is een bewezen workflowfout. Op 30 september was de verwachte run om circa 09:35 lokaal nog niet zichtbaar; de oorzaak van die ontbrekende trigger is niet bewezen. Een gerichte correctie van de geplande workflow volgt in een afzonderlijke PR, zonder een nieuwe import te starten. Details en bewijslimieten staan in `PROJECT_STATE.md`.
+
+## Eerstvolgende afzonderlijke opdracht: VERBETERING HOOGVLIET-PRODUCTDEKKING
+
+**Status: vastgelegd, nog niet gestart.**
+
+Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en andere toegestane discoverymethoden. Breng de dekking en beperkingen van de huidige routes in kaart en verifieer route-eindesignalen; nul resultaten uit de huidige zoekstrategie betekenen niet dat elders geen geldige producten beschikbaar zijn.
+
+Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. Uitvoering volgt als aparte opdracht; in deze releasecontrole is niets uitgebreid of geïmporteerd.
+
+## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
 
 Omvat:
@@ -96,7 +106,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is de eerstvolgende stap, maar is nog **niet gestart**.
+Deze mijlpaal is nog **niet gestart**. De eerstvolgende afzonderlijke opdracht daarbinnen is **Verbetering Hoogvliet-productdekking**, zoals hierboven afgebakend.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
