@@ -1,5 +1,11 @@
 # BoodschappenMaatje — Project State
 
+## Home Optie C — definitieve headertekst, laatste iPhone-controle — 30 september 2026
+
+- Fysieke iPhone-feedback keurt het Home-design, de projectbrede heldere blauwe huisstijl, mascotte en functionaliteit goed. Alleen de Home-headertekst verandert: `Hoi!` → `Goed geregeld.`; bij een volledig voorbereide week `Je week staat klaar.` → `Je maaltijden en boodschappen op een rij.` De bestaande lege-weektekst blijft `Wat eten we deze week?`.
+- Bestaande Draft PR #30 `feature/home-option-c` hervat vanaf `b84fef09fec852ca9b220fc6b64046dce388c786` op main `7e35035a02996ef403546eb3878e706e93f8da3c`. Alleen de direct betrokken koptypografie/hoogte is compact aangepast voor de langere tekst; geen andere Home- of schermwijziging. PR #37 blijft onaangeraakt.
+- Gericht Home-testresultaat, lint, TypeScript, build, CI en de exacte nieuwe Preview staan na verificatie hieronder in de PR. Nog geen fysieke controle van de definitieve woorden: **KLAAR VOOR LAATSTE FYSIEKE IPHONE-CONTROLE**; geen merge of Production-release. DESIGN.md blijft ongewijzigd.
+
 ## Actueel — projectbreed icoonblauw, fysieke hertest open — 30 september 2026
 
 - Fysieke feedback: Home-design en alle bestaande functies zijn door gebruiker goedgekeurd. Nieuwe opdracht is uitsluitend het consequent doorvoeren van hetzelfde icoonblauw naar de overige PWA-schermen; layouts blijven behouden.

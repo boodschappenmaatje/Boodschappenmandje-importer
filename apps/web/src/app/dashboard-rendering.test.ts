@@ -60,6 +60,8 @@ describe("dashboard rendering", () => {
   it("toont de mockup-home met veilige lege week zonder technische migratietekst", () => {
     const html = renderWithList(createElement(HomePage));
 
+    expect(html).toContain("Goed geregeld.");
+    expect(html).toContain("Wat eten we deze week?");
     expect(html).toContain("Je week");
     expect(html).toContain("Weekbudget");
     expect(html).toContain("Nog geen gerechten gekozen");

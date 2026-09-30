@@ -58,7 +58,7 @@ export function HomeDashboard() {
   const mealCount = preparation?.days.filter(day => day.recipe && !day.freeChoice).length ?? 0;
   return <div className="home-c" aria-busy={loading}>
     <section className="home-c-hero" aria-labelledby="home-c-title">
-      <h1 id="home-c-title"><span className="home-c-hello">Hoi!</span><span>{ready ? "Je week staat klaar." : "Wat eten we deze week?"}</span></h1>
+      <h1 id="home-c-title"><span className="home-c-hello">Goed geregeld.</span><span>{ready ? "Je maaltijden en boodschappen op een rij." : "Wat eten we deze week?"}</span></h1>
       <div className="home-c-character" aria-hidden="true">
         <Image className="home-c-mascot" src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
       </div>
