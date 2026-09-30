@@ -60,12 +60,16 @@ describe("dashboard rendering", () => {
   it("toont de mockup-home met veilige lege week zonder technische migratietekst", () => {
     const html = renderWithList(createElement(HomePage));
 
-    expect(html).toContain("Jouw week");
-    expect(html).toContain("Deze week");
+    expect(html).toContain("Slim kopen.");
+    expect(html).toContain("Lekker eten.");
+    expect(html).not.toContain("Goed geregeld.");
+    expect(html).not.toContain("Wat eten we deze week?");
+    expect(html).toContain("Je week");
+    expect(html).toContain("Weekbudget");
     expect(html).toContain("Nog geen gerechten gekozen");
-    expect(html).toContain("Verder met mijn lijst");
+    expect(html).toContain("Naar je boodschappenlijst");
     expect(html).toContain('href="/budget"');
-    expect(html).toContain("Bekijk weekbudget");
+    expect(html).toContain("Bekijk je weekbudget");
     expect(html).toContain('aria-label="Bekijk je weekbudget"');
     expect(html).toContain('href="/week-voorbereiden"');
     expect(html).not.toContain("PWA-fundament");
@@ -82,7 +86,7 @@ describe("dashboard rendering", () => {
   it("toont echte actieve-lijstinformatie in de compacte Home-snelkoppeling", () => {
     const html = renderWithList(createElement(HomePage), true);
 
-    expect(html).toContain("Verder met mijn lijst");
+    expect(html).toContain("Naar je boodschappenlijst");
     expect(html).toContain("1 product");
     expect(html).toContain("€ 0,00 bekend");
   });

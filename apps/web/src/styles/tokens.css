@@ -1,19 +1,28 @@
 :root {
-  /* Official palette. PWA chrome mirrors primary/background in config/app.ts. */
-  --color-primary: #4F86C6;
-  --color-primary-action: #3E77B7;
-  --color-primary-dark: #2E5E9E;
-  --color-primary-strong: var(--color-primary-dark);
-  --color-steel: #B8D0EC;
-  --color-primary-soft: #EAF2FC;
+  /* Proposed app-wide icon palette; physical acceptance pending.
+     Samples from the official 1254×1254 JPEG: (1100,600), (1100,340),
+     (620,100), (650,1190), (340,1080). PWA chrome mirrors config/app.ts. */
+  --brand-blue: #1D87F7;
+  --brand-sky: #278EF7;
+  --brand-glow: #62BFFC;
+  --brand-deep: #034ECD;
+  --brand-ink: #0448B3;
+  --color-primary: var(--brand-blue);
+  /* Primary/deep mix 55:45; white text >= 4.5:1. Tints mix primary with white:
+     steel 40%, soft 13%, background 7%, border 24%. */
+  --color-primary-action: #116DE4;
+  --color-primary-dark: var(--brand-deep);
+  --color-primary-strong: var(--brand-ink);
+  --color-steel: #A5CFFC;
+  --color-primary-soft: #E2EFFE;
   --color-secondary-soft: #F6FAFF;
-  --color-background: #F6FAFF;
+  --color-background: #EFF7FE;
   --color-surface: #ffffff;
-  --color-text: #20354F;
-  --color-muted: #50657F;
+  --color-text: #0D2546;
+  --color-muted: #526B87;
   --color-on-primary: #FFFFFF;
-  --color-border: #D7E3F1;
-  --color-border-strong: #7E9BBE;
+  --color-border: #C9E2FD;
+  --color-border-strong: var(--brand-sky);
   --color-success: #22C55E;
   --color-success-text: #176543;
   --color-success-soft: #EAFBF0;
@@ -25,8 +34,8 @@
   --color-danger: #A03543;
   --color-danger-soft: #FCEEF0;
   --color-focus: var(--color-primary-dark);
-  --color-focus-soft: rgba(79, 134, 198, 0.18);
-  --color-overlay: rgba(32, 53, 79, 0.38);
+  --color-focus-soft: rgba(29, 135, 247, 0.18);
+  --color-overlay: rgba(13, 37, 70, 0.38);
   --color-surface-glass: rgba(255, 255, 255, 0.96);
   --color-inverse-highlight: rgba(255, 255, 255, 0.12);
   --color-track: var(--color-border);
@@ -40,12 +49,12 @@
   --color-mascot-mouth: #ED6780;
   --color-mascot-cheek: #F28BA0;
   --surface-highlight: linear-gradient(145deg, var(--color-surface), var(--color-secondary-soft));
-  --shadow-card: 0 6px 20px rgba(46, 94, 158, 0.07), inset 0 1px 0 var(--color-surface);
-  --shadow-small: 0 3px 10px rgba(46, 94, 158, 0.06);
-  --shadow-action: 0 4px 12px rgba(46, 94, 158, 0.18), inset 0 1px 0 var(--color-inverse-highlight);
-  --shadow-navigation: 0 -4px 18px rgba(46, 94, 158, 0.08);
-  --shadow-overlay: 0 -12px 40px rgba(32, 53, 79, 0.18);
-  --shadow-toast: 0 10px 28px rgba(32, 53, 79, 0.22);
+  --shadow-card: 0 6px 20px rgba(3, 78, 205, 0.07), inset 0 1px 0 var(--color-surface);
+  --shadow-small: 0 3px 10px rgba(3, 78, 205, 0.06);
+  --shadow-action: 0 4px 12px rgba(3, 78, 205, 0.18), inset 0 1px 0 var(--color-inverse-highlight);
+  --shadow-navigation: 0 -4px 18px rgba(3, 78, 205, 0.08);
+  --shadow-overlay: 0 -12px 40px rgba(13, 37, 70, 0.18);
+  --shadow-toast: 0 10px 28px rgba(13, 37, 70, 0.22);
   --radius-compact: 8px;
   --radius-small: 12px;
   --radius-medium: 16px;
@@ -58,4 +67,20 @@
   --icon-medium: 24px;
   --content-width: 760px;
   --bottom-nav-height: 76px;
+}
+
+/* Physically approved Home keeps its appearance using the central brand. */
+:root {
+  --home-c-blue: var(--brand-blue);
+  --home-c-sky: var(--brand-sky);
+  --home-c-glow: var(--brand-glow);
+  --home-c-deep: var(--brand-deep);
+  --home-c-blue-ink: var(--brand-ink);
+  --home-c-action: color-mix(in srgb, var(--home-c-blue) 55%, var(--home-c-deep));
+  --home-c-background: color-mix(in srgb, var(--home-c-blue) 7%, white);
+  --home-c-soft: color-mix(in srgb, var(--home-c-blue) 13%, white);
+  --home-c-ink: var(--color-text);
+  --home-c-muted: var(--color-muted);
+  --home-c-track: #E7EBF0;
+  --home-c-shadow: color-mix(in srgb, var(--home-c-deep) 13%, transparent);
 }
