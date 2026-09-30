@@ -212,6 +212,10 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
     const context = normalize(`${product.name} ${product.category}`);
     if (/baby|peuter|dreumes|bonbebe|\bmaanden\b/.test(context)) return false;
     if (required === "appel" && /moes|compote|conserven|gedroogd|sap/.test(context)) return false;
+    // A recipe asking for whole tomatoes cannot use peeled/canned tomatoes.
+    // A positive price or a count of tins must not make them edible pieces.
+    if (required === "tomaten" && ingredient.defaultUnit === "piece" &&
+        /\b(?:gepelde|blik|conserven|potgroente|tomatenblokjes|tomatenstukjes)\b/.test(context)) return false;
     // Fresh vegetables used in these package recipes are not cooked preserves.
     if (/^(kastanjechampignons|champignons|wortel|wortels)$/.test(required) &&
         /conserven|potgroente|blikgroente/.test(context)) return false;
