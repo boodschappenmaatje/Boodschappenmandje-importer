@@ -79,7 +79,7 @@ test('durable maintenance scope precedes notification and remains visible after 
   assert.equal(result.plannerMaintenance.failures[0].status, 401);
 });
 
-test('a stalled term from an earlier same-day window cannot disappear into global exhaustion', async () => {
+test('a repeated-page term from an earlier same-day window migrates to proven exhaustion', async () => {
   const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture', termCursor: 0,
     scanDate: config.discoveryScanDate, stalledTerms: [{ term: 'rijst', page: 2, reason: 'repeated_sku_set' }] }),
     collectProducts: async settings => {
@@ -89,10 +89,12 @@ test('a stalled term from an earlier same-day window cannot disappear into globa
     },
   });
   const result = await runCatalogGrowth(config, logger, h.dependencies);
-  assert.equal(result.sourceExhausted, false);
-  assert.equal(result.stopReason, 'discovery_incomplete_stalled_terms');
-  assert.equal(result.stalledTerms.length, 1);
-  assert.equal(h.saved.at(-1).lastAttemptReport.stalledTerms.length, 1);
+  assert.equal(result.stopReason, 'discovery_exhausted');
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.searchErrors, 0);
+  assert.equal(result.stalledTerms.length, 0);
+  assert.ok(h.saved.at(-1).exhaustedTerms.includes('rijst'));
+  assert.equal(h.saved.at(-1).lastAttemptReport.stalledTerms.length, 0);
 });
 
 test('real v4 CAS writer accepts only the IDs confirmed by the maintenance callback', async t => {
