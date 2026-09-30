@@ -283,7 +283,13 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
     discoveryState = await services.fetchCatalogDiscoveryState(config, config.discoveryStateKey);
     scanDate = config.discoveryScanDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
     exhaustedTerms = discoveryState.scanDate === scanDate ? discoveryState.exhaustedTerms ?? [] : [];
-    previousStalls = discoveryState.scanDate === scanDate ? discoveryState.stalledTerms ?? [] : [];
+    const storedStalls = discoveryState.scanDate === scanDate ? discoveryState.stalledTerms ?? [] : [];
+    // Older checkpoints recorded deterministic repeated-page loops as source
+    // errors. Migrate those entries in memory to completed routes so an already
+    // covered scan day can finish without rescanning or losing its audit trail.
+    const provenRouteEnds = storedStalls.filter(entry => entry?.reason === "repeated_sku_set");
+    exhaustedTerms = [...new Set([...exhaustedTerms, ...provenRouteEnds.map(entry => entry.term)])];
+    previousStalls = storedStalls.filter(entry => entry?.reason !== "repeated_sku_set");
     plannerMaintenance = discoveryState.plannerMaintenance ?? plannerMaintenance;
     const dynamicTerms = buildDynamicDiscoveryTerms(existingProducts, config.searchTerms);
     originalTerms = [...new Set([...config.searchTerms, ...dynamicTerms])];
