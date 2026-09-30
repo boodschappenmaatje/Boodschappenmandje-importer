@@ -6,6 +6,7 @@ import {
   MEAL_MIX_PROFILES,
   enrichIngredientsForMealMixes,
   inferMealMixBrand,
+  mealMixSupplementAliases,
   mealMixProfileForRecipe,
 } from "@/services/week-preparation/meal-mix-profiles";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
@@ -129,26 +130,31 @@ describe("merkgebonden maaltijdmixprofielen", () => {
   it("houdt verse tomaten per stuk geblokkeerd zonder stukaantal en verwerpt blik als automatische match", () => {
     const ingredient: RecipeIngredientDefinition = {
       id: "tomaten", sourceKey: "mix-supplement-tomaten", name: "tomaten",
-      normalizedName: "tomaten", aliases: ["tomaten"], category: "Groente", defaultUnit: "piece",
+      normalizedName: "tomaten", aliases: ["tomaten", ...mealMixSupplementAliases("tomaten")],
+      category: "Groente", defaultUnit: "piece",
     };
     const canned = product({ id: "canned", sku: "733141000", name: "Mutti Gepelde tomaten",
       category: "Conserven/Groente", productType: "Groente", packageText: "400 gram", weightGrams: 400 });
-    const fresh = product({ id: "fresh", sku: "070476000", name: "Cherry tomaten",
+    const small = product({ id: "small", sku: "070476000", name: "Cherry tomaten",
       category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
-      packageText: "250 gram", weightGrams: 250,
-      currentPrice: { productId: "fresh", price: 0.98, oldPrice: null, isOffer: false,
+      packageText: "250 gram", weightGrams: 250 });
+    const fresh = product({ id: "fresh", sku: "060936000", name: "Trostomaten",
+      category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
+      packageText: "500 gram", weightGrams: 500,
+      currentPrice: { productId: "fresh", price: 2.29, oldPrice: null, isOffer: false,
         offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
     expect(isReliableIngredientMatch(ingredient, canned)).toBe(false);
     expect(isReliableIngredientMatch(ingredient, { ...canned, packageText: "1 stuk" })).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, small)).toBe(false);
     expect(isReliableIngredientMatch(ingredient, fresh)).toBe(true);
-    expect(selectIngredientProduct(ingredient, [canned, fresh], null, "piece", 2)?.id).toBe("fresh");
+    expect(selectIngredientProduct(ingredient, [canned, small, fresh], null, "piece", 2)?.id).toBe("fresh");
     for (let people = 1; people <= 10; people += 1) {
       const needed = requirement(people, "piece");
       const matched = applyProductToRequirement(needed, fresh);
       expect(matched.packageCapacity).toBeNull();
       expect(matched.purchaseQuantity).toBeNull();
       expect(matched.packageCalculationMissing).toBe(true);
-      expect(matched.price?.amountCents).toBe(98);
+      expect(matched.price?.amountCents).toBe(229);
     }
     // An explicit package choice remains a user-controlled choice, not an automatic conversion.
     expect(applyManualProductToRequirement(requirement(2, "piece"), canned, 2)).toMatchObject({
