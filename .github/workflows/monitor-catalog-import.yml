@@ -3,10 +3,9 @@ name: Dagelijkse Hoogvliet catalogusbewaking
 on:
   workflow_dispatch:
   schedule:
-    # Dagelijks 08:30 Nederlandse tijd. Twee UTC-momenten plus een lokale
-    # Europe/Amsterdam-poort houden dit correct over CET/CEST-wisselingen.
-    - cron: "30 6 * * *"
-    - cron: "30 7 * * *"
+    # Dagelijks 08:30 Nederlandse tijd, onafhankelijk van GitHub-startvertraging.
+    - cron: "30 8 * * *"
+      timezone: "Europe/Amsterdam"
 
 permissions:
   contents: read
@@ -30,41 +29,23 @@ jobs:
       DAILY_NEW_PRODUCT_TARGET: "400"
 
     steps:
-      - name: Bewakingsmoment bepalen
-        shell: bash
-        run: |
-          set -euo pipefail
-          run_monitor="1"
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            local_hour="$(TZ=Europe/Amsterdam date +%H)"
-            if [[ "$local_hour" != "08" ]]; then
-              run_monitor="0"
-              echo "DST-poort: deze UTC-run is lokaal ${local_hour}:30 en wordt veilig overgeslagen."
-            fi
-          fi
-          echo "RUN_MONITOR=$run_monitor" >> "$GITHUB_ENV"
-
       - name: Repository ophalen
-        if: env.RUN_MONITOR == '1'
         uses: actions/checkout@v4
 
       - name: Node.js instellen
-        if: env.RUN_MONITOR == '1'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
 
       - name: Dependencies installeren
-        if: env.RUN_MONITOR == '1'
         run: npm ci
 
       - name: Dagelijkse import controleren
-        if: env.RUN_MONITOR == '1'
         run: npm run monitor:catalog
 
       - name: Bewakingsuitleg
-        if: always() && env.RUN_MONITOR == '1'
+        if: always()
         run: |
           {
             echo '## Dagelijkse catalogusbewaking'

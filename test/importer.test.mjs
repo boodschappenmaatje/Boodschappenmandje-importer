@@ -1266,10 +1266,8 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /cron: "17 2 \* \* \*"/);
   assert.match(workflow, /cron: "43 3 \* \* 0"/);
-  assert.match(workflow, /cron: "0 4 \* \* \*"/);
-  assert.match(workflow, /cron: "0 5 \* \* \*"/);
-  assert.match(workflow, /TZ=Europe\/Amsterdam date \+%H/);
-  assert.match(workflow, /local_hour.*!= "06"/s);
+  assert.match(workflow, /cron: "7 6 \* \* \*"\n      timezone: "Europe\/Amsterdam"/);
+  assert.doesNotMatch(workflow, /local_hour|TZ=Europe\/Amsterdam date \+%H/);
   assert.match(workflow, /group: hoogvliet-supabase-update/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
@@ -1291,13 +1289,11 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.doesNotMatch(workflow, /continue-on-error:\s*true/);
 });
 
-test("dagelijkse bewakingsworkflow controleert de 06:00-run DST-veilig na afloop", async () => {
+test("dagelijkse bewakingsworkflow controleert een vertraagde 06:07-run DST-veilig", async () => {
   const workflow = await readFile(new URL("../.github/workflows/monitor-catalog-import.yml", import.meta.url), "utf8");
   assert.match(workflow, /workflow_dispatch:/);
-  assert.match(workflow, /cron: "30 6 \* \* \*"/);
-  assert.match(workflow, /cron: "30 7 \* \* \*"/);
-  assert.match(workflow, /TZ=Europe\/Amsterdam date \+%H/);
-  assert.match(workflow, /local_hour.*!= "08"/s);
+  assert.match(workflow, /cron: "30 8 \* \* \*"\n      timezone: "Europe\/Amsterdam"/);
+  assert.doesNotMatch(workflow, /RUN_MONITOR|local_hour|TZ=Europe\/Amsterdam date \+%H/);
   assert.match(workflow, /npm run monitor:catalog/);
   assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
   assert.match(workflow, /CATALOG_MONITOR_GROWTH_TARGET: "400"/);
