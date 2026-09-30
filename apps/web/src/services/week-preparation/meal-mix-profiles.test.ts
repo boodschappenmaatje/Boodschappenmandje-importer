@@ -11,6 +11,7 @@ import {
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
   applyProductToRequirement,
+  applyManualProductToRequirement,
   combinedProductPurchaseQuantity,
   isReliableIngredientMatch,
   productPackageCapacity,
@@ -124,6 +125,35 @@ describe("merkgebonden maaltijdmixprofielen", () => {
     ] as const;
     for (const [ingredient, name, category] of cases) expect(isReliableIngredientMatch(ingredient, product({ id: name, sku: name, name, category }))).toBe(false);
     expect(productPackageCapacity(product({ id: "onions", sku: "onions", name: "Rode uien net 3 stuks", packageText: "1 stuk" }), "piece")).toBe(3);
+  });
+  it("houdt verse tomaten per stuk geblokkeerd zonder stukaantal en verwerpt blik als automatische match", () => {
+    const ingredient: RecipeIngredientDefinition = {
+      id: "tomaten", sourceKey: "mix-supplement-tomaten", name: "tomaten",
+      normalizedName: "tomaten", aliases: ["tomaten"], category: "Groente", defaultUnit: "piece",
+    };
+    const canned = product({ id: "canned", sku: "733141000", name: "Mutti Gepelde tomaten",
+      category: "Conserven/Groente", productType: "Groente", packageText: "400 gram", weightGrams: 400 });
+    const fresh = product({ id: "fresh", sku: "070476000", name: "Cherry tomaten",
+      category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
+      packageText: "250 gram", weightGrams: 250,
+      currentPrice: { productId: "fresh", price: 0.98, oldPrice: null, isOffer: false,
+        offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
+    expect(isReliableIngredientMatch(ingredient, canned)).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, { ...canned, packageText: "1 stuk" })).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, fresh)).toBe(true);
+    expect(selectIngredientProduct(ingredient, [canned, fresh], null, "piece", 2)?.id).toBe("fresh");
+    for (let people = 1; people <= 10; people += 1) {
+      const needed = requirement(people, "piece");
+      const matched = applyProductToRequirement(needed, fresh);
+      expect(matched.packageCapacity).toBeNull();
+      expect(matched.purchaseQuantity).toBeNull();
+      expect(matched.packageCalculationMissing).toBe(true);
+      expect(matched.price?.amountCents).toBe(98);
+    }
+    // An explicit package choice remains a user-controlled choice, not an automatic conversion.
+    expect(applyManualProductToRequirement(requirement(2, "piece"), canned, 2)).toMatchObject({
+      quantityIsPackageCount: true, purchaseQuantity: 2, packageCapacity: 1,
+    });
   });
   it("bevat acht Knorr- en twee Honig-profielen met gevalideerde bron", () => {
     expect(MEAL_MIX_PROFILES).toHaveLength(10);
