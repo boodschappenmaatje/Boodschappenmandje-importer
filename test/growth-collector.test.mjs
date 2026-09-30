@@ -97,7 +97,7 @@ test('temporary navigation failure uses bounded backoff and then continues', asy
   assert.deepEqual(delays, [350, 700]); assert.equal(result.stats.persistedNewProducts, 10);
 });
 
-test('permanent errors fail globally but repeated pages mark only their term incomplete', async () => {
+test('permanent errors fail globally but repeated pages prove only their route exhausted', async () => {
   const h = harness([]);
   await assert.rejects(collectGrowthCandidates(config, { ...h.options, findCandidates: async () => {
     throw Object.assign(new Error('Forbidden'), { status: 403 });
@@ -105,8 +105,9 @@ test('permanent errors fail globally but repeated pages mark only their term inc
   const repeated = await collectGrowthCandidates(config, { ...h.options, findCandidates: async () => ({
     candidates: [], pagesFetched: 2, nextPage: 0, sourceExhausted: true, repeatedPageStopped: true,
   }) });
-  assert.equal(repeated.stats.sourceExhausted, false);
-  assert.equal(repeated.stats.stopReason, 'discovery_incomplete_stalled_terms');
+  assert.equal(repeated.stats.sourceExhausted, true);
+  assert.equal(repeated.stats.stopReason, 'discovery_exhausted');
+  assert.equal(repeated.stats.searchErrors, 0);
 });
 
 test('explicit one-based source page count advances zero-based URL pages exactly once', async () => {
@@ -144,7 +145,9 @@ test('fruit stalls, groente continues beyond page 20, and confirmed inserts alon
   assert.equal(inserted.size, 400);
   assert.deepEqual(calls.filter(([term]) => term === 'fruit'), [['fruit', 0], ['fruit', 1]]);
   assert.ok(calls.some(([term, page]) => term === 'groente' && page > 20));
-  assert.deepEqual(result.stats.stalledTerms, [{ term: 'fruit', page: 1, reason: 'repeated_sku_set' }]);
+  assert.deepEqual(result.stats.stalledTerms, []);
+  assert.deepEqual(result.stats.exhaustedTerms, ['fruit']);
+  assert.equal(result.stats.searchErrors, 0);
   assert.equal(result.stats.sourceExhausted, false);
   assert.equal(result.stats.stopReason, 'growth_target_reached');
   assert.equal(result.stats.accounting.balanced, true);
@@ -171,6 +174,20 @@ test('a stalled route followed by genuinely exhausted routes never proves global
   assert.equal(result.stats.sourceExhausted, false);
   assert.equal(result.stats.stopReason, 'discovery_incomplete_stalled_terms');
   assert.deepEqual(result.stats.exhaustedTerms, ['groenten']);
+  assert.equal(result.stats.accounting.balanced, true);
+});
+
+test('a repeated SKU route is a proven local end and can complete global exhaustion', async () => {
+  const result = await collectGrowthCandidates({ ...config, searchTerms: ['fruit', 'groenten'] }, {
+    findCandidates: async term => ({ candidates: [], pagesFetched: 1, nextPage: 0,
+      sourceExhausted: term !== 'fruit', stallReason: term === 'fruit' ? 'repeated_sku_set' : null }),
+    validateCandidate: async row => row,
+  });
+  assert.equal(result.stats.sourceExhausted, true);
+  assert.equal(result.stats.stopReason, 'discovery_exhausted');
+  assert.equal(result.stats.searchErrors, 0);
+  assert.deepEqual(result.stats.exhaustedTerms, ['fruit', 'groenten']);
+  assert.deepEqual(result.stats.stalledTerms, []);
   assert.equal(result.stats.accounting.balanced, true);
 });
 
