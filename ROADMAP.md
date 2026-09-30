@@ -88,6 +88,14 @@ Releasecontrole 30 september: main `3370bf8`, Production Current/Ready, Home/Men
 
 **Status: in uitvoering — Draft/Preview, niet gereleased.**
 
+Live-acceptatiecontrole 30 september: PR #37 blijft Draft. CI/Preview en integriteit zijn groen, maar de databaseclaim weigert een nieuwe poging op de vandaag reeds afgesloten `daily_target_partial`-dagjob. Geen import, reset, merge of Production-release. Acceptatie vereist een werkelijk claimbare dagjob zonder conflict met de automatische cyclus; de mijlpaal is niet afgerond.
+
+### Broncompatibiliteit bij aangekondigde websitewissel
+
+Hoogvliet bevestigt op [Nieuwe website](https://www.hoogvliet.com/nieuwe-website) **5 oktober** met tijdelijke sluiting; de op 30 september 2026 gelezen pagina noemt geen jaartal. Huidige Intershop-zoekroutes, categorie 999999-1700, paginametadata en productdetail met positieve prijs werken nog. Nieuwe URL-/paginering-/prijscontracten zijn niet gepubliceerd of bewezen.
+
+Vervolg bij de feitelijke omschakeling: openbare zoek- en categorieredirects, categorie-identiteit, paginanummers, totalen en route-eindesignalen toetsen; SKU/product-URL/verpakking en reguliere/aanbiedingsprijs op detailpagina's verifiëren. Tijdelijke sluiting of incompatibiliteit is een bronfout, geen assortimentuitputting of aanleiding voor fictieve prijzen. Behoud data/cursors/dagbudget/claims/maintenance; wijzig alleen bewezen incompatibele adapters met fixtures en schrijfvrije tests vóór live gebruik. Geen speculatieve migratie nu gebouwd.
+
 Schrijfvrij onderzoek op 30 september bewijst een spatiecoderingfout en onvoldoende categorieroutes. De featurebranch corrigeert URL-codering en voegt 20 openbare categorieroutes toe; een steekproef levert 59 ontbrekende kandidaten, waarvan 15 detailgevalideerd. Geen live groei geaccepteerd; details en veiligheidsgrenzen staan in PROJECT_STATE.md en `docs/hoogvliet-product-coverage.md`.
 
 Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en andere toegestane discoverymethoden. Breng de dekking en beperkingen van de huidige routes in kaart en verifieer route-eindesignalen; nul resultaten uit de huidige zoekstrategie betekenen niet dat elders geen geldige producten beschikbaar zijn.
@@ -396,4 +404,3 @@ Geen merge of Production-actie zonder expliciete toestemming wanneer de opdracht
 - `DESIGN.md` bevat vaste visuele/UX-regels.
 - Bij conflict tussen documentatie en actuele code/remote PR: eerst remote toestand vaststellen en daarna documentatie corrigeren.
 - Als een roadmaponderdeel wordt gebouwd, maak de scope concreet voordat implementatie start.
-
