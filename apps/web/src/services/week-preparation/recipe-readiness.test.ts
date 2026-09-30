@@ -154,7 +154,7 @@ function matchingRepository(products: Product[]): CatalogRepository {
 }
 
 describe("Recipe Readiness Gate", () => {
-  it.each([1, 4, 10])("blokkeert %i-persoonsmix met verse tomaten zonder bekend stukaantal", async (people) => {
+  it.each(Array.from({ length: 10 }, (_, index) => index + 1))("blokkeert %i-persoonsmix met verse tomaten zonder bekend stukaantal", async (people) => {
     const tomato: RecipeIngredientDefinition = {
       id: "mix-tomato", sourceKey: "mix-supplement-tomaten", name: "tomaten",
       normalizedName: "tomaten", defaultUnit: "piece", category: "Groente", aliases: ["tomaten"],
