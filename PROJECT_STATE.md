@@ -10,7 +10,7 @@
 - **Rollback:** de vorige gezonde mainrelease was `dfa3d7773eb070de457ad2a9ac379acd9840f123` op `dpl_HK3GSecBCEvtcDmchGBdFqcJ251y`.
 - **PR-status:** PR #33 is gemerged; PR #31 is gemerged; PR #32 is als superseded/diagnostic-only gesloten zonder merge. Geen diagnostische PR #32-code is gereleased.
 - **Volgende afzonderlijke opdracht:** VERBETERING HOOGVLIET-PRODUCTDEKKING, binnen de bredere roadmap Productdata & receptkwaliteit. Niet gestart.
-- **Afrondingsstatus:** de functionele herstelrelease en maintenance zijn afgerond. Een volledige automatische cyclus na de release is nog niet live bevestigd; onderstaande operationele controle blijft open. Deze documentatiecorrectie staat op een aparte reviewbranch: geen merge of Production-deployment in deze controle.
+- **Afrondingsstatus:** de functionele herstelrelease en maintenance zijn afgerond. De automatische planning is nog niet end-to-end bevestigd: de monitorpoort kan door vertraagde GitHub-starten de daadwerkelijke controle overslaan. De gerichte workflowcorrectie volgt afzonderlijk; geen productimport is in deze controle gestart.
 
 ### Maintenance en serverclient
 
@@ -69,9 +69,9 @@
 - Monitor: 06:30 en 07:30 UTC met Nederlandse uurcontrole op 08:00; bedoeld voor 08:30 lokaal.
 - Overige bestaande planning: dagelijks prijsshard om 02:17 UTC (1 van 7, max 100) en zondag cataloguscontrole om 03:43 UTC (max 180). In deze controle niets gestart.
 - Laatste waargenomen automatische retry: run `36650165488`, 30 september 02:24 lokaal, groen; due-check geslaagd, importer en installatie terecht overgeslagen. Deze run was vóór de huidige release.
-- Laatste zichtbare standalone monitor: run `36580601377`, 29 september, groen; de monitorworkflow is ingeschakeld.
-- **Nog open:** tijdens deze controle was geen standalone monitorrun van 30 september 08:30 en geen nieuwe volledige automatische dagcyclus na de release zichtbaar. Oorzaak/tijdigheid is hiermee niet vastgesteld. De huidige schema's en eerdere groene runs zijn geen bewijs van tijdige uitvoering na deze release. Geen workflow handmatig gestart om dit te verhullen.
-- Geen aangetroffen code-/CI-/Productionblokkade. Operationele eindbevestiging vereist nog het resultaat van de normale geplande cyclus, inclusief due-check en monitoring; dit staat los van productdekking.
+- Laatste zichtbare standalone monitorruns: `36573258853` (29 september 15:11 lokaal) en `36580601377` (16:10 lokaal). Beide Actions-runs kregen de status `success`, maar checkout, installatie en `Dagelijkse import controleren` werden overgeslagen. De log van de eerste toont expliciet `DST-poort: deze UTC-run is lokaal 15:30 en wordt veilig overgeslagen.` De workflow is ingeschakeld.
+- **Bewezen workflowfout:** de lokale-uurpoort gebruikt de werkelijke starttijd (`TZ=Europe/Amsterdam date +%H`) in plaats van het geplande tijdstip. Een door GitHub vertraagde monitorrun wordt daardoor als `success` afgesloten zonder de catalogus te controleren. De primaire dagworkflow heeft dezelfde kwetsbare uurpoort. GitHub documenteert dat geplande runs vertraagd of zelfs niet aangemaakt kunnen worden; de precieze reden waarom op 30 september om circa 09:35 lokaal nog geen monitor- of automatische importrun zichtbaar was, is niet vastgesteld.
+- **Nog open:** na release geen volledig bewezen automatische cyclus. De workflowfout vraagt een gerichte aparte PR met tijdzonegebonden cron zonder uitvoertijdpoort, CI en latere geplande live verificatie. Deze status is onafhankelijk van de aparte productdekkingsopdracht. Geen workflow handmatig gestart of productimport uitgevoerd.
 
 ## Eerstvolgende afzonderlijke ontwikkelopdracht
 
