@@ -110,7 +110,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is nog **niet gestart**. De eerstvolgende afzonderlijke opdracht daarbinnen is **Verbetering Hoogvliet-productdekking**, zoals hierboven afgebakend.
+Deze fase is **gestart** met afgebakende receptdatacontroles: Fix 1 tomaten in afzonderlijke Draft PR #38 en Fix 2 betrouwbare aanvullende Honig/Knorr-productmatches in Draft PR #39. Beide zijn nog niet gereleased; de fase is niet afgerond. De Hoogvliet-productdekking loopt onafhankelijk in Draft PR #37. Onbetrouwbare eenheden blijven geblokkeerd.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
