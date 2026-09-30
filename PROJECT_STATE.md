@@ -1,5 +1,12 @@
 # BoodschappenMaatje — Project State
 
+## Actueel — Fix 3 Knorr kebab / pita-verpakkingsbewijs — 30 september 2026
+
+- Vanaf main `b202d19f874d0ace293c6ef76c57529b6e3e79eb` onderzoekt de aparte Draft-branch `feature/knorr-kebab-pita-packaging-evidence` uitsluitend de pita-massablokkade. PR #37, #38 en #39 zijn Draft, ongemerged en onaangeraakt. De PR-head/CI/Preview worden na push vastgesteld.
+- De [exacte Knorr-mix SKU 730051000](https://www.hoogvliet.com/product/knorr-maaltijdmix-kebab) vraagt aantoonbaar **400 g pitabroodjes** per vierpersoonsbasis. Hoogvliet noemt voor [SKU 675984000](https://www.hoogvliet.com/product/g-apos-woon-pita-broodjes) alleen 10 stuks en voor [SKU 675985000](https://www.hoogvliet.com/product/g-apos-woon-maaltijd-pita-s) alleen 5 stuks; hun catalogusgewicht is null, de opgeslagen prijzen zijn positief (€0,79/€0,85). Gelijknamige externe 500 g/400 g-vermeldingen hebben geen bewezen EAN-/SKU-identiteit met precies de Hoogvliet-verpakkingen. De officiële productfoto's en HTML bieden geen betrouwbaar nettogewicht of EAN-link. [Bron- en beslisaudit](docs/knorr-kebab-pita-packaging-evidence-20260930.md).
+- **Beslissing:** geen gramgewicht, conversie of fictieve kost toevoegen. De actuele persistente cache blijft voor Knorr kebab bij personen 1–10 NOT_READY met `pitabroodjes:no_catalog_product`. De ongemergede PR #39 vindt via zijn gerichte pita-alias de producten, maar houdt terecht `package_unknown`; Fix 3 hangt dus voor herkenning van PR #39 af, zonder die code over te nemen. Alleen een geverifieerde nettomassa met identiteitskoppeling kan deze afzonderlijke blokkade later opheffen.
+- Twee gerichte regressies voor de exacte SKU's testen bij personen 1–10 dat 5/10 stuks ondanks een positieve prijs geen gramcapaciteit, automatische hele-pakhoeveelheid of complete gerechtkosten opleveren. Lokaal: root 275/275, seed/syntaxcheck, web 758/758, lint, TypeScript en productiebuild groen. Geen applicatiecode, database, cache, importer, maintenance, Production of design gewijzigd. ROADMAP-status verandert niet; volgende afgebakende kandidaat is het halve-rookworst-verpakkingsbewijs voor Honig erwtensoep.
+
 ## Actueel — definitieve designrelease — 30 september 2026
 
 - De gebruiker keurde Home Optie C, het projectbrede heldere iconenblauw en de definitieve tweeregelige Home-slogan `Slim kopen.` / `Lekker eten.` fysiek goed. PR #30 is na conflictvrije diff, 791 webtests, lint, TypeScript, build, 275 importerregressietests en groene CI `36760308853` gemerged als **`2e327dc9cf3b1598d2122245dfa14a46fe123742`**.

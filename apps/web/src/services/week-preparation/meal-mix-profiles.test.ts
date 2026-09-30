@@ -304,6 +304,51 @@ describe("merkgebonden maaltijdmixprofielen", () => {
     expect(productPackageCapacity(multipack, "g")).toBe(400);
   });
 
+  it.each([
+    ["675984000", "G'woon Pita broodjes", "10 stuk", 0.79],
+    ["675985000", "G'woon Maaltijd pita`s", "5 stuk", 0.85],
+  ])("leidt voor pita-SKU %s nooit grammen af uit een stukaantal", (sku, name, packageText, price) => {
+    const pita = product({
+      id: sku,
+      sku,
+      name,
+      brand: "G'woon",
+      category: "Brood/Thuis afbakken/Afbakbroodjes",
+      productType: "Broodjes",
+      packageText,
+      weightGrams: null,
+      currentPrice: {
+        productId: sku,
+        price,
+        oldPrice: null,
+        isOffer: false,
+        offerText: null,
+        validFrom: null,
+        validUntil: null,
+        fetchedAt: NOW,
+        updatedAt: NOW,
+      },
+    });
+
+    expect(productPackageCapacity(pita, "g")).toBeNull();
+    for (let people = 1; people <= 10; people += 1) {
+      const selected = applyProductToRequirement(requirement(100 * people, "g"), pita);
+      expect(selected.product?.sku).toBe(sku);
+      expect(selected.price?.amountCents).toBe(Math.round(price * 100));
+      expect(selected).toMatchObject({
+        requiredQuantity: 100 * people,
+        packageCapacity: null,
+        purchaseQuantity: null,
+        packageCalculationMissing: true,
+      });
+      expect(calculateDishCostSummary(0, [selected])).toEqual({
+        knownCostCents: 0,
+        missingProductCount: 1,
+        complete: false,
+      });
+    }
+  });
+
   it("rekent twee canonieke regels voor hetzelfde echte product als één gezamenlijke behoefte", () => {
     const pack = product({
       id: "shared-beef",
