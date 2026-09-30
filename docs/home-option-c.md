@@ -1,3 +1,29 @@
+## Actuele mockupacceptatie — 30 september 2026
+
+Functionele head: `3d77f962784370d6b11c44114d6d9cc659eb0963`. Oudere hieronder beschreven metallic/speech-bubble-stijl is door de nieuwe goedgekeurde mockup vervangen.
+
+- Helderblauwe Home-palette uit het bestaande originele app-icoon: #1D87F7, #278EF7, #62BFFC, #034ECD, #0448B3. Andere schermen en officiële app-iconen blijven onveranderd.
+- Witte budgetkaart met afzonderlijke week- en maaltijdregel; compacte horizontale weekkaarten; primaire boodschappenlijstknop; drie informatiekaarten met echte appgegevens.
+- Lokale controles: 790 webtests, 275 importerfixtures, syntax/seedchecks, lint, TypeScript en build groen. CI 36702091114 groen; finale CSS-CI 36702753471 volledig groen.
+- Preview: https://boodschappenmaatje-pwa-git-feature-ho-02f3d4-dennisverkaik-4661.vercel.app/ ; deployment dpl_4xcf4KSUPWWZE3o8bWTohc7Gd9Zh READY, Preview-target.
+- Echte browserflow gecontroleerd: vijf dagen, vier gerechten, vrije keuze dag vijf, dag twee opent juiste receptdetail, lijst- en budgettotalen gelijk, cold reload behoudt opgeslagen gegevens. Geen databasewrites/import.
+- Screenshots hieronder tonen echte Preview-data uit normale browserlokale voorbereiding, geen vaste voorbeeldinhoud. De inhoudkolom is 430 px; deze browsercontrole vervangt geen fysieke iPhone-test.
+
+![Actuele echte Home Preview](screenshots/home-option-c-preview.jpg)
+
+![Horizontale slider en onderste informatie](screenshots/home-option-c-week-slider.jpg)
+
+### Nog te accepteren op fysieke iPhone
+
+1. Open de Preview in Safari; controleer helderblauw, mascotte, kaartverhoudingen en tekst.
+2. Swipe door alle weekdagen en open een gerecht: juiste Menu-dag/recept. Controleer ook vrije keuze en een lege week indien beschikbaar.
+3. Open Lijst en Budget; bedragen, geplande maaltijden en opgeslagen keuzes moeten gelijk blijven na teruggaan/herladen.
+4. Controleer smalle/korte schermweergave, safe areas, onderste vijf tabs, scrollen en bereikbaarheid van de hoofdknop.
+
+Bewuste mockupverschillen: geen niet-functionele notificatiebel; aparte maaltijdgrens behouden; echte namen/foto's/personen/prijzen en instellingen. Lange namen vragen soms meer regels; de Home is scrollbaar op korte schermen. Geen merge of Production-release vóór expliciete fysieke goedkeuring; DESIGN.md nog niet projectbreed aanpassen.
+
+---
+
 # Home Optie C — implementatie en acceptatie
 
 ## Bron en scope
