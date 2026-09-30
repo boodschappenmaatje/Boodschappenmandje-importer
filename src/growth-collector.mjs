@@ -65,7 +65,16 @@ export async function collectGrowthCandidates(config, {
   };
   const stall = (term, page, reason, coverage) => {
     const entry = { term, page, reason };
-    stats.stalledTerms.push(entry); stats.searchErrors++; coverage.errors++;
+    // A repeated SKU set proves that this resolved route no longer advances:
+    // fetching more pages would only replay already-accounted products. Treat
+    // that route as locally exhausted, while keeping the diagnostic log. Other
+    // ambiguous stalls remain fail-closed and may not prove global exhaustion.
+    if (reason === 'repeated_sku_set') {
+      coverage.sourceExhausted = true;
+      stats.exhaustedTerms.push(term);
+    } else {
+      stats.stalledTerms.push(entry); stats.searchErrors++; coverage.errors++;
+    }
     stats.nextPageCursor = 0; onTermStall(entry);
   };
   const finalize = () => { stats.accounting = candidateAccounting(stats); return { products, stats }; };
