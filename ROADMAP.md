@@ -35,6 +35,7 @@ Belangrijke productprincipes:
 | PWA 14 | Afgerond / Production | Eigen recepten, compact detail, dynamische Vrije keuze, actuele prijzen, budget en lijstsync |
 | PR #28 — verpakkingen/lijst/budget | Afgerond / Production | Compacte lijst, recept ⇄ lijst, veilige trash, prijsfallback, handmatige override en harde automatische maaltijdgrens |
 | PR #29 — Stabiliteit & kernflows | Afgerond / Production | Kernflow-integraties, centrale hoeveelheidspresentatie en actieve CI-releasegate |
+| Importer & maintenanceherstel | Afgerond / Production | Veilige queue-replay, v4/CAS-writer en begrensde hervatbare dagelijkse catalogusgroei |
 
 ## Afgeronde release — PR #28
 PR #28 is na geslaagde fysieke iPhone-hertest gemerged naar `main` (`d7a234df5ac24ab6fec558413ff2c73649071584`) en in Production uitgerold. Gerichte Production-smoke geslaagd. De verpakkingen-, lijst- en budgetronde is afgerond: compacte inklapbare lijst, oorsprong, directe veilige prullenmand, recept ⇄ lijst-sync, productvervanging, prijsfallback en handmatige bevestiging boven het maaltijdbudget. De automatische planner behoudt de harde grens. Volledige regressie: 687 webtests, 189 importerfixtures, lint, TypeScript en build groen. Echte assortimentsdatablokkades blijven als datawerk apart gedocumenteerd.
@@ -74,6 +75,12 @@ Eisen:
 PR #28 leverde de noodzakelijke tweerichtingssync; deze funderingsstap consolideert en bewaakt het model daarna structureel.
 
 **Status:** het stabiliteits- en bewakingsdeel is afgerond in PR #29. De centrale contribution/state-logica en bijbehorende kernflows worden op toekomstige PR's automatisch gecontroleerd.
+
+## Afgerond / Production: IMPORTER & MAINTENANCEHERSTEL
+
+PR #33 heeft de serverclient en veilige maintenance-replay gereleased; de historische 290, de eerdere 10 en de latere 4 producten zijn afzonderlijk bevestigd. De v4/CAS-statewriter beschermt queue- en acknowledgementvelden. Eindstand: `pending=0`, `notifiedProducts=304`.
+
+PR #31 heeft de dagelijkse Hoogvliet-discovery begrensd en hervatbaar gemaakt: 800 pagina's per segment, maximaal 8 segmenten, één gedeeld runtimebudget en maximaal het resterende dagdoel tot 400 bevestigde nieuwe, unieke, geldige en positief geprijsde producten. Een safety-limit is hervatbaar en wordt niet als bronuitputting gemeld; een gestalde route stopt niet andere routes. De live acceptatie op 30 september 2026 bewees echte bronuitputting over alle 598 routes, zonder bronfouten, stalls of onverwachte writes.
 
 ## Actief / volgende: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
