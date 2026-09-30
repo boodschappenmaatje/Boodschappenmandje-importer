@@ -4,7 +4,7 @@ Dit document bevat de productroadmap. `PROJECT_STATE.md` bepaalt waar de ontwikk
 
 ## Visuele tussenstap — Home Optie C
 
-Draft PR #30 volgt de op 30 september goedgekeurde Home-mockup met helder blauw uit het officiële app-icoon. Layoutwijziging blijft Home-scoped; bestaande slider/dagnavigatie en budget-/lijstlogica behouden. Geen wijziging aan importer-PR #37. Preview en fysieke iPhone-acceptatie vereist vóór merge; DESIGN.md blijft tot fysieke goedkeuring ongewijzigd. Dit markeert geen release of afronding van Productdata & receptkwaliteit.
+Afgerond en fysiek goedgekeurd op 30 september: PR #30 bracht Home Optie C, de horizontale dag-/gerechtslider, de projectbrede heldere huisstijl uit het officiële icoon en de tweeregelige slogan “Slim kopen. Lekker eten.” naar main en Production. Bestaande budget-/lijstlogica behouden; importer-PR #37 onaangeraakt. Dit markeert geen afronding van Productdata & receptkwaliteit.
 
 ## Productvisie
 BoodschappenMaatje is de boodschappenlijst die steeds beter weet wat je nodig hebt: een persoonlijke boodschappenassistent die de week voorbereidt, helpt binnen budget te blijven en steeds meer terugkerend werk uit handen neemt.

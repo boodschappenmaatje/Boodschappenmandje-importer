@@ -1,5 +1,11 @@
 # BoodschappenMaatje — Project State
 
+## Actueel — definitieve designrelease — 30 september 2026
+
+- De gebruiker keurde Home Optie C, het projectbrede heldere iconenblauw en de definitieve tweeregelige Home-slogan `Slim kopen.` / `Lekker eten.` fysiek goed. PR #30 is na conflictvrije diff, 791 webtests, lint, TypeScript, build, 275 importerregressietests en groene CI `36760308853` gemerged als **`2e327dc9cf3b1598d2122245dfa14a46fe123742`**.
+- Vercel Production-build **`dpl_7owhtFUCLC2i3PTPATMK7r72JVsN`** van deze mergecommit werd `READY` en de Production-alias `boodschappenmaatje-pwa.vercel.app` wees ernaar. De publieke Home toont de exacte slogan zonder kleine ondertitel. Home, Menu, Lijst, Budget, Meer en Vrije keuze zijn read-only via de echte Production-navigatie geopend en renderen zonder fout. In de schone browser was geen opgeslagen week: de Home-slider toonde correct zijn lege staat; de gevulde slider en dagdoorklik waren op de identieke functionele Preview-code eerder getest en fysiek goedgekeurd, maar niet opnieuw met Productiedata gegenereerd.
+- Definitieve kleuren en slogan staan nu in DESIGN.md; ROADMAP.md markeert de visuele tussenstap afgerond. Alleen documentatie werd na de functionele merge vastgelegd, zodat een daaropvolgende inhoudelijk identieke Production-build mogelijk is. PR #37, importer, database, maintenance, prijzen, gebruikersgegevens en dagplanning bleven ongemoeid; geen productimport gestart.
+
 ## Home Optie C — definitieve slogan ter fysieke eindcontrole — 30 september 2026
 
 - Na de fysieke iPhone-feedback vervangt de definitief gekozen Home-slogan beide eerdere headerteksten: twee grote witte regels, `Slim kopen.` en `Lekker eten.`. De kleinere contextafhankelijke ondertitel vervalt volledig. Deze tekst geldt ongeacht of de week al volledig is voorbereid.

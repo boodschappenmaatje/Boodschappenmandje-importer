@@ -18,13 +18,24 @@ De app moet eruitzien als een behulpzame consumentenapp, niet als een technisch 
 
 | Rol | Kleur |
 |---|---|
-| Primary metallic blue | `#4A7399` |
-| Dark metallic blue | `#385D7C` |
-| Steel blue | `#AFC3D4` |
-| Light background | `#F2F6F9` |
-| Accent / success green | `#36B37E` |
+| Primair helder iconenblauw | `#1D87F7` |
+| Helder blauw voor verloop | `#278EF7` |
+| Lichtblauwe gloed | `#62BFFC` |
+| Diepblauw | `#034ECD` |
+| Donkerblauwe tekst/accenten | `#0448B3` |
+| Lichte achtergrond | `#EFF7FE` |
+| Succesgroen | `#22C55E` |
 
-Gebruik semantische statuskleuren zorgvuldig. Introduceer niet willekeurig nieuwe merkkleuren als bestaande tokens voldoen.
+Deze uit het officiële app-icoon afgeleide kleuren zijn fysiek goedgekeurd en gelden projectbreed. Gebruik de centrale `--brand-*` en semantische CSS-tokens; de actievariant `#116DE4` bewaakt contrast voor witte knoptekst. Groen voor succes en rood voor fout/verwijderen behouden hun betekenis. Introduceer niet willekeurig nieuwe merkkleuren als bestaande tokens voldoen.
+
+## Definitieve Home-slogan
+
+De blauwe Home-header toont exact twee grote witte regels naast de officiële mascotte:
+
+> Slim kopen.  
+> Lekker eten.
+
+Er staat geen kleine ondertitel onder de slogan. Andere schermen nemen de huisstijl over zonder hun goedgekeurde indeling te veranderen.
 
 ## Logo en app-icoon
 Het officiële concept blijft:
