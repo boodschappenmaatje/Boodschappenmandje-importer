@@ -635,7 +635,9 @@ describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
     const data = generated(); data.days = [data.days[0]]; data.numberOfDays = 1;
     data.days[0].customDish = { name: "Eigen pasta", servings: 4, targetServings: 2, ingredients: [] };
     const html = render(createElement(HomePage), data);
-    expect(html).toContain("Je maaltijden en boodschappen op een rij.");
+    expect(html).toContain("Slim kopen.");
+    expect(html).toContain("Lekker eten.");
+    expect(html).not.toContain("Je maaltijden en boodschappen op een rij.");
     expect(html).toContain("2 personen");
     expect(html).toContain("Bekijk je week");
   });

@@ -1,5 +1,11 @@
 # BoodschappenMaatje — Project State
 
+## Home Optie C — definitieve slogan ter fysieke eindcontrole — 30 september 2026
+
+- Na de fysieke iPhone-feedback vervangt de definitief gekozen Home-slogan beide eerdere headerteksten: twee grote witte regels, `Slim kopen.` en `Lekker eten.`. De kleinere contextafhankelijke ondertitel vervalt volledig. Deze tekst geldt ongeacht of de week al volledig is voorbereid.
+- Bestaande Draft PR #30 `feature/home-option-c` hervat vanaf `64ed8676092e647f8002aeb5cf8db71a4019cef8`; alleen de twee headerregels, direct benodigde typografische maat voor smalle schermen en tekstverwachtingen in Home-tests veranderen. De blauwe stijl, mascotte, overige componenten en functies blijven gelijk. PR #37 en main onaangeroerd.
+- Status: laatste fysieke iPhone-controle van de actuele Preview nog open; geen merge of Production-deploy. De voorafgaande headertekst hieronder is historisch checkpoint, niet de huidige kop. DESIGN.md is niet aangepast; de definitieve slogan staat hier en in de code.
+
 ## Home Optie C — definitieve headertekst, laatste iPhone-controle — 30 september 2026
 
 - Fysieke iPhone-feedback keurt het Home-design, de projectbrede heldere blauwe huisstijl, mascotte en functionaliteit goed. Alleen de Home-headertekst verandert: `Hoi!` → `Goed geregeld.`; bij een volledig voorbereide week `Je week staat klaar.` → `Je maaltijden en boodschappen op een rij.` De bestaande lege-weektekst blijft `Wat eten we deze week?`.

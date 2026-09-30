@@ -14,7 +14,7 @@ body:has(.home-c) { background: var(--home-c-background); }
 .home-c-hero::before { content: ""; position: absolute; z-index: -1; width: 75%; height: 170px; right: 0; top: 20px; border-radius: 60% 45% 0 0; transform: rotate(-9deg); background: linear-gradient(145deg, color-mix(in srgb, var(--home-c-glow) 65%, transparent), transparent); }
 .home-c-hero h1 { z-index: 1; margin: 0; line-height: 1.2; font-size: clamp(1.19rem, 5.4cqi, 1.45rem); font-weight: 750; letter-spacing: -.035em; }
 .home-c-hero h1 > span { display: block; }
-.home-c-hero .home-c-hello { font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; font-size: clamp(1.8rem, 8cqi, 2.2rem); line-height: 1.06; letter-spacing: -.035em; margin-bottom: 2px; }
+.home-c-hero .home-c-hello { font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; font-size: clamp(1.38rem, 6cqi, 1.9rem); line-height: 1.06; letter-spacing: -.035em; white-space: nowrap; margin-bottom: 2px; }
 .home-c-character { position: relative; align-self: stretch; min-width: 0; }
 .home-c-mascot { position: absolute; z-index: 2; width: 105%; max-width: 205px; height: auto; right: -4px; top: -12px; filter: drop-shadow(0 6px 5px var(--home-c-shadow)); pointer-events: none; }
 .home-c-budget { position: relative; display: grid; gap: 8px; padding: 13px 15px 11px; border-radius: 20px; background: white; color: var(--home-c-ink); box-shadow: 0 7px 20px var(--home-c-shadow); }
