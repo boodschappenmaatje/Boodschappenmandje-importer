@@ -110,7 +110,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is nog **niet gestart**. De eerstvolgende afzonderlijke opdracht daarbinnen is **Verbetering Hoogvliet-productdekking**, zoals hierboven afgebakend.
+Deze mijlpaal is **gestart met een afgebakende Fix 1** voor tomaten per stuk in Honig/Knorr-mixen. Het brononderzoek en een gerichte automatische matchcorrectie staan als Draft op `feature/tomato-packaging-evidence`. Vijf exacte mixrecepten blijven `NOT_READY`: de mixbron noemt tomaten per stuk, maar de relevante Hoogvliet-verpakkingen geven uitsluitend gram zonder vast stukaantal. Er is geen massa-eis voor diezelfde mixen en dus geen betrouwbare conversie of extra READY-recept. Productdekking in Draft PR #37 blijft een afzonderlijke, onafhankelijke werkstroom. Zie `docs/tomato-packaging-evidence-20260930.md`.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
