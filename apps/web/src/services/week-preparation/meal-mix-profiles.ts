@@ -318,6 +318,7 @@ export function mealMixSupplementAliases(name: string): string[] {
     "hollandse bruine bonen": ["bruine bonen"],
     "gezeefde tomaten": ["tomato gezeefd"],
     "mais blik": ["maiskorrels", "crispy mais"],
+    "tomaten": ["trostomaten"],
     "wortels": ["worteltjes", "winterpeen"],
     "wortel": ["worteltjes", "winterpeen"],
     "spinazie diepvries": ["spinazie fijn gehakt", "spinazie grof gehakt"],
