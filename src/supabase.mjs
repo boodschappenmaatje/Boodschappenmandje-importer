@@ -147,7 +147,7 @@ async function waitBeforeRetry(attempt) {
   await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
 }
 
-async function postJSONToURL(url, phase, secret, payload, prefer, query = {}) {
+async function postJSONToURL(url, phase, secret, payload, prefer, query = {}, method = "POST") {
   const host = url.host;
   for (const [name, value] of Object.entries(query)) url.searchParams.set(name, value);
   const body = JSON.stringify(payload);
@@ -159,7 +159,7 @@ async function postJSONToURL(url, phase, secret, payload, prefer, query = {}) {
     let responseBody;
     try {
       response = await fetch(url, {
-        method: "POST",
+        method,
         headers: requestHeaders(secret, prefer),
         body,
         redirect: "manual",
@@ -223,6 +223,10 @@ async function postJSONToURL(url, phase, secret, payload, prefer, query = {}) {
 
 async function postJSON(baseValue, table, secret, payload, prefer, query) {
   return postJSONToURL(restURL(baseValue, table), table, secret, payload, prefer, query);
+}
+
+async function patchJSON(baseValue, table, secret, payload, prefer, query) {
+  return postJSONToURL(restURL(baseValue, table), table, secret, payload, prefer, query, "PATCH");
 }
 
 async function postRPC(baseValue, functionName, secret, payload) {
@@ -688,6 +692,36 @@ export async function finishCatalogDailyAttempt(config, {
   return job;
 }
 
+function parseDiscoveryMetadata(raw) {
+  if (typeof raw !== "string" || !raw.startsWith("{")) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      && Number.isSafeInteger(parsed.version) && parsed.version >= 2 ? parsed : {};
+  } catch { return {}; }
+}
+
+function mergePlannerMaintenance(current, incoming, acknowledgedProductIds = []) {
+  if (acknowledgedProductIds.length && (!current || !incoming)) {
+    throw new Error("Onderhoudsbevestiging vereist een bestaande pendingstatus.");
+  }
+  if (incoming == null) return current ?? null;
+  if (!current) return incoming;
+  const currentIds = current.pendingProductIds;
+  const incomingIds = incoming.pendingProductIds;
+  if (!Array.isArray(currentIds) || !Array.isArray(incomingIds) ||
+      !Number.isSafeInteger(current.notifiedProducts) ||
+      !Array.isArray(acknowledgedProductIds) || new Set(acknowledgedProductIds).size !== acknowledgedProductIds.length ||
+      acknowledgedProductIds.some(id => !currentIds.includes(id) || incomingIds.includes(id)) ||
+      incoming.notifiedProducts !== current.notifiedProducts + acknowledgedProductIds.length) {
+    throw new Error("Gelijktijdige planneronderhoudsstatus vereist afzonderlijke beoordeling.");
+  }
+  const pendingProductIds = [...new Set([...currentIds.filter(id => !acknowledgedProductIds.includes(id)), ...incomingIds])];
+  if (pendingProductIds.length > 400) throw new Error("Planneronderhoudswachtrij overschrijdt de veiligheidsgrens.");
+  return { ...current, ...incoming, notifiedProducts: incoming.notifiedProducts,
+    pendingProductIds, status: pendingProductIds.length ? "pending_requires_attention" : "confirmed" };
+}
+
 export async function fetchCatalogDiscoveryState(config, stateKey) {
   const rows = await getJSON(
     config.supabaseURL,
@@ -698,13 +732,7 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     0,
   );
   const row = rows[0];
-  let metadata = {};
-  if (typeof row?.last_batch === "string" && row.last_batch.startsWith("{")) {
-    try {
-      const parsed = JSON.parse(row.last_batch);
-      if (parsed?.version === 2) metadata = parsed;
-    } catch {}
-  }
+  const metadata = parseDiscoveryMetadata(row?.last_batch);
   return row ? {
     stateKey: row.state_key,
     termCursor: boundedCount(row.term_cursor),
@@ -713,6 +741,11 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     lastTerm: metadata.lastTerm ?? null,
     lastStopReason: metadata.lastStopReason ?? null,
     termStats: metadata.termStats ?? {},
+    scanDate: metadata.scanDate ?? null,
+    exhaustedTerms: metadata.exhaustedTerms ?? [],
+    stalledTerms: metadata.stalledTerms ?? [],
+    lastAttemptReport: metadata.lastAttemptReport ?? null,
+    plannerMaintenance: metadata.plannerMaintenance ?? null,
     saturatedUntil: metadata.saturatedUntil ?? {},
     updatedAt: row.updated_at ?? null,
   } : {
@@ -723,39 +756,59 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     lastTerm: null,
     lastStopReason: null,
     termStats: {},
+    scanDate: null,
+    exhaustedTerms: [],
+    stalledTerms: [],
+    lastAttemptReport: null,
+    plannerMaintenance: null,
     saturatedUntil: {},
     updatedAt: null,
   };
 }
 
-export async function saveCatalogDiscoveryState(config, state) {
-  const lastBatch = JSON.stringify({
-    version: 2,
-    batch: state.lastBatch ?? null,
-    lastTerm: state.lastTerm ?? null,
-    lastStopReason: state.lastStopReason ?? null,
-    termStats: state.termStats ?? {},
-    saturatedUntil: state.saturatedUntil ?? {},
-  });
-  const payload = {
-    state_key: state.stateKey,
-    term_cursor: boundedCount(state.termCursor),
-    page_cursor: boundedCount(state.pageCursor),
-    last_batch: lastBatch,
-    updated_at: state.updatedAt ?? new Date().toISOString(),
-  };
-  const rows = await postJSON(
-    config.supabaseURL,
-    "catalog_discovery_state",
-    config.supabaseSecret,
-    [payload],
-    "resolution=merge-duplicates,return=representation",
-    { on_conflict: "state_key", select: "state_key,term_cursor,page_cursor,last_batch,updated_at" },
-  );
-  if (!Array.isArray(rows) || rows[0]?.state_key !== state.stateKey) {
-    throw new Error("Supabase bevestigde de discovery-state niet.");
+export async function saveCatalogDiscoveryState(config, state, { acknowledgedProductIds = [] } = {}) {
+  const select = "state_key,term_cursor,page_cursor,last_batch,updated_at";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const currentRows = await getJSON(config.supabaseURL, "catalog_discovery_state", config.supabaseSecret,
+      { select, state_key: `eq.${state.stateKey}` }, 0, 0);
+    if (!Array.isArray(currentRows) || currentRows.length > 1) throw new Error("Ongeldige discovery-state-response.");
+    const current = currentRows[0];
+    const metadata = parseDiscoveryMetadata(current?.last_batch);
+    if (current && current.last_batch && !Object.keys(metadata).length) {
+      throw new Error("Discovery-state bevat onbekende metadata; overschrijven geweigerd.");
+    }
+    const plannerMaintenance = mergePlannerMaintenance(metadata.plannerMaintenance, state.plannerMaintenance, acknowledgedProductIds);
+    const lastBatch = JSON.stringify({ ...metadata,
+      version: Math.max(4, metadata.version ?? 2),
+      batch: state.lastBatch ?? metadata.batch ?? null,
+      lastTerm: state.lastTerm ?? metadata.lastTerm ?? null,
+      lastStopReason: state.lastStopReason ?? metadata.lastStopReason ?? null,
+      termStats: state.termStats ?? metadata.termStats ?? {},
+      saturatedUntil: state.saturatedUntil ?? metadata.saturatedUntil ?? {},
+      scanDate: state.scanDate ?? metadata.scanDate ?? null,
+      exhaustedTerms: state.exhaustedTerms ?? metadata.exhaustedTerms ?? [],
+      stalledTerms: state.stalledTerms ?? metadata.stalledTerms ?? [],
+      lastAttemptReport: state.lastAttemptReport ?? metadata.lastAttemptReport ?? null,
+      plannerMaintenance,
+    });
+    const updatedAt = new Date(Math.max(Date.now(), Date.parse(current?.updated_at ?? "") + 1 || 0)).toISOString();
+    const payload = { state_key: state.stateKey, term_cursor: boundedCount(state.termCursor),
+      page_cursor: boundedCount(state.pageCursor), last_batch: lastBatch, updated_at: updatedAt };
+    const rows = current ? await patchJSON(config.supabaseURL, "catalog_discovery_state", config.supabaseSecret,
+      payload, "return=representation",
+      { state_key: `eq.${state.stateKey}`, updated_at: `eq.${current.updated_at}`, select })
+      : await postJSON(config.supabaseURL, "catalog_discovery_state", config.supabaseSecret,
+        [payload], "resolution=ignore-duplicates,return=representation", { on_conflict: "state_key", select });
+    if (!Array.isArray(rows) || rows.length > 1) throw new Error("Ongeldige discovery-statebevestiging.");
+    if (rows[0]) {
+      if (rows[0].state_key !== state.stateKey || rows[0].last_batch !== lastBatch) {
+        throw new Error("Supabase bevestigde de discovery-state niet.");
+      }
+      return rows[0];
+    }
+    // A concurrent writer won. Re-read its latest metadata, then preserve it.
   }
-  return rows[0];
+  throw new Error("Discovery-state is gelijktijdig gewijzigd; geen verouderde overschrijving uitgevoerd.");
 }
 
 function productPayload(product, includeProductType = true) {
@@ -845,7 +898,7 @@ function pricePayload(productID, product) {
   };
 }
 
-export async function upsertProducts(config, products) {
+export async function upsertProducts(config, products, lifecycle = {}) {
   // Explicit configuration keeps the existing importer unchanged until activation.
   // Validate it before any writes; the API token never reaches Supabase/browser code.
   const maintenance = config.updateMode === "prices" || config.updateMode === "classify"
@@ -868,8 +921,8 @@ export async function upsertProducts(config, products) {
         continue;
       }
       try {
-        const insertionId = maintenance ? randomUUID() : null;
-        const inserted = maintenance ? await postJSON(
+        const insertionId = maintenance || config.updateMode === "growth" ? randomUUID() : null;
+        const inserted = insertionId ? await postJSON(
           config.supabaseURL,
           "products",
           config.supabaseSecret,
@@ -904,8 +957,9 @@ export async function upsertProducts(config, products) {
         if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
           throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
         }
-        imported.push({ sku: product.sku, name: product.name, price: product.price });
-        if (maintenance && stored.id === insertionId) newProductIds.push(stored.id);
+        imported.push({ sku: product.sku, name: product.name, price: product.price,
+          ...(insertionId ? { inserted: stored.id === insertionId } : {}) });
+        if (insertionId && stored.id === insertionId) newProductIds.push(stored.id);
       } catch (error) {
         const structural = error instanceof SupabaseRequestError
           && (error.kind === "network" || error.kind === "dns" || error.kind === "tls"
@@ -914,19 +968,26 @@ export async function upsertProducts(config, products) {
             || error.status === 401 || error.status === 403 || error.status === 404
             || error.status === 408 || error.status === 425 || error.status === 429
             || (error.status ?? 0) >= 500);
-        if (structural) throw error;
+        if (structural) { error.confirmedImports = [...imported]; throw error; }
         errors.push({ sku: product.sku, message: error instanceof Error ? error.message : "onbekende fout" });
       }
     }
   } finally {
     // A later structural import failure must not lose notifications for earlier
     // successfully confirmed product/price pairs in this batch.
-    if (maintenance && newProductIds.length > 0) {
-      const result = maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
-      if (result.pendingProductIds.length > 0) {
-        // Successful catalog writes remain successful. Preserve exact replay scope,
-        // never include response bodies, URLs, tokens or a global refresh instruction.
-        console.warn(`Planner-cacheonderhoud nog niet bevestigd; gerichte herhaling nodig voor product-ID's: ${result.pendingProductIds.join(",")}`);
+    if (newProductIds.length > 0) {
+      try {
+        // Persist replay scope before making an external request. A failed acknowledgement
+        // save leaves the durable pending scope intact for idempotent recovery.
+        await lifecycle.onMaintenancePending?.(newProductIds);
+        maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
+        await lifecycle.onMaintenanceResult?.(maintenanceResult, newProductIds);
+      } catch (error) {
+        error.confirmedImports = [...imported];
+        throw error;
+      }
+      if (maintenanceResult.pendingProductIds.length > 0) {
+        console.warn(`Planner-cacheonderhoud: ${JSON.stringify(maintenanceResult)}`);
       }
     }
   }

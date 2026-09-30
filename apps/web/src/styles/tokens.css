@@ -60,20 +60,20 @@
   --bottom-nav-height: 76px;
 }
 
-/* Reference C: Home accents; accepted shared tokens remain unchanged. */
+/* Home candidate palette, sampled from the unchanged official original JPEG.
+   Primary (1100,600), sky (1100,340), glow (620,100), deep (650,1190),
+   ink (340,1080). Other screens retain the approved shared palette above. */
 :root {
-  --home-c-background: #E7F4FC;
+  --home-c-blue: #1D87F7;
+  --home-c-sky: #278EF7;
+  --home-c-glow: #62BFFC;
+  --home-c-deep: #034ECD;
+  --home-c-blue-ink: #0448B3;
+  --home-c-action: color-mix(in srgb, var(--home-c-blue) 55%, var(--home-c-deep));
+  --home-c-background: color-mix(in srgb, var(--home-c-blue) 7%, white);
+  --home-c-soft: color-mix(in srgb, var(--home-c-blue) 13%, white);
   --home-c-ink: #0D2546;
-  --home-c-halo: #D7EDFA;
-  --home-c-card-top: #427DAC;
-  --home-c-card-bottom: #285984;
-  --home-c-cta: #183F68;
-  --home-c-bubble: #3579AE;
-  --home-c-green: #0DBE83;
-  --home-c-green-light: #49E3A4;
-  --home-c-track: #204E75;
-  --home-c-row: rgba(255, 255, 255, .025);
-  --home-c-line: rgba(255, 255, 255, .15);
-  --home-c-shadow: rgba(21, 59, 91, .19);
-  --home-c-over: #FFC976;
+  --home-c-muted: #526B87;
+  --home-c-track: #E7EBF0;
+  --home-c-shadow: color-mix(in srgb, var(--home-c-deep) 13%, transparent);
 }

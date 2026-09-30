@@ -114,7 +114,7 @@ export function evaluateDailyCatalogMonitor(job, {
     return {
       ok: true,
       state: "daily_target_partial",
-      message: `Dagupdate gedeeltelijk voltooid: ${collected}/${target} nieuwe producten toegevoegd.`,
+      message: `Dagupdate gedeeltelijk voltooid: ${collected}/${target} nieuwe producten toegevoegd. ${job.lastPublicMessage ?? "Bronuitputting niet bewezen."}`,
       job,
     };
   }

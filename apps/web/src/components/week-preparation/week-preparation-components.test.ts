@@ -486,7 +486,7 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     const html = render(createElement(HomePage), draft());
     expect(html).toContain("Bekijk je weekbudget");
     expect(html).toContain("€ 24,63");
-    expect(html).toContain("Pak je lijst erbij");
+    expect(html).toContain("Naar je boodschappenlijst");
     expect(html).toContain('href="/lijst"');
   });
 
@@ -558,6 +558,28 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
 
 
 describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
+  it("geeft de mockup-snelkaarten echte product- en maaltijdtotalen met bestaande routes", () => {
+    const data = generated(); // One real recipe, five free choices; one separate list product.
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain('aria-label="1 product op je lijst"');
+    const facts = html.slice(html.indexOf('class="home-c-facts"'), html.indexOf('class="home-c-week"'));
+    expect(facts.match(/class="home-c-fact"/g)).toHaveLength(3);
+    expect(facts).toContain('<strong>1</strong><small>maaltijd gepland</small>');
+    for (const route of ["/lijst", "/week-voorbereiden", "/budget"]) expect(facts).toContain(`href="${route}"`);
+    expect(facts).toContain("€ 66,39"); // Existing budget calculation, not mockup's €60.
+    expect(html).toMatch(/class="home-c-list" href="\/lijst"[\s\S]*?Naar je boodschappenlijst/);
+    expect(html.match(/data-planned="true"/g)).toHaveLength(1);
+    expect(html.match(/data-planned="false"/g)).toHaveLength(5);
+  });
+
+  it("toont onbekende weekruimte in de informatiekaart wanneer de lijst onvolledig geprijsd is", () => {
+    const html = render(createElement(HomePage), generated(), list(null));
+    const facts = html.slice(html.indexOf('class="home-c-facts"'), html.indexOf('class="home-c-week"'));
+    expect(facts).toContain("Nog onbekend");
+    expect(facts).not.toContain("€ 66,39");
+    expect(html).toContain("Er ontbreken prijzen");
+  });
+
   it("toont week- en maaltijdbudget apart en gebruikt bestaande verpakkingskosten", () => {
     const html = render(createElement(HomePage), generated());
     expect(html).toContain("€ 33,61"); // 24.63 losse lijst + 8.98 maaltijd

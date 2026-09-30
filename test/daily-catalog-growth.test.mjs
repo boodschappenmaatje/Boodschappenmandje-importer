@@ -7,6 +7,7 @@ import {
   classifyDailyImportError,
   dailyRetryAt,
   dailyRetryDelayMinutes,
+  inspectDailyCatalogAttempt,
   isDailyImportWindowOpen,
   runDailyCatalogAttempt,
   shouldRunDailyImport,
@@ -26,6 +27,7 @@ const config = {
   dailyImportStateKey: "daily-catalog-growth-test",
   dailyTargetNewProducts: 400,
   dailyEndHour: 23,
+  growthMaxRuntimeMs: 105 * 60_000,
 };
 
 function createHarness(growthSequence, {
@@ -84,6 +86,9 @@ function createHarness(growthSequence, {
           unchangedCount: entry.unchanged ?? 0,
           skippedCount: entry.skipped ?? 0,
           searchErrors: entry.sourceErrors ?? 0,
+          sourceExhausted: entry.sourceExhausted ?? false,
+          stopReason: entry.stopReason,
+          resumeCheckpoint: entry.resumeCheckpoint,
         };
       },
       finish: async (_config, input) => {
@@ -168,19 +173,57 @@ test("tijdelijke bronuitval bewaart gedeeltelijke groei en plant een retry", asy
     catalogAttemptMetrics: { candidatesViewed: 240, sourceErrors: 3 },
   });
   const harness = createHarness([sourceError]);
-  const result = await runDailyCatalogAttempt(config, logger, harness.dependencies);
-  assert.equal(result.job.newProductsCollected, 137);
-  assert.equal(result.job.status, "retry_scheduled");
+  await assert.rejects(runDailyCatalogAttempt(config, logger, harness.dependencies), /Bron tijdelijk/);
+  assert.equal(harness.state.newProductsCollected, 137);
+  assert.equal(harness.state.status, "retry_scheduled");
   assert.equal(harness.attempts[0].outcome, "retryable_failure");
   assert.equal(harness.attempts[0].retryReason, "source_unavailable");
 });
 
-test("back-off gebruikt 10, 20, 40 en daarna 60 minuten", () => {
-  assert.deepEqual([1, 2, 3, 4, 9].map(dailyRetryDelayMinutes), [10, 20, 40, 60, 60]);
+test("een inspectiefout is geen normale skip", async () => {
+  await assert.rejects(
+    inspectDailyCatalogAttempt(config, new Date("2026-09-17T13:17:00Z"), {
+      fetchJob: async () => { throw new Error("Dagstatus onbereikbaar"); },
+    }),
+    /Dagstatus onbereikbaar/,
+  );
+});
+
+test("back-off wacht minstens twee uur en groeit gecontroleerd tot vier uur", () => {
+  assert.deepEqual([1, 2, 3, 4, 9].map(dailyRetryDelayMinutes), [120, 180, 240, 240, 240]);
   assert.equal(
     dailyRetryAt(2, new Date("2026-09-17T08:00:00Z")).toISOString(),
-    "2026-09-17T08:20:00.000Z",
+    "2026-09-17T11:00:00.000Z",
   );
+});
+
+test("inspecteren houdt target, cooldown en actieve lange poging als normale skips", async () => {
+  const now = new Date("2026-09-17T13:17:00Z");
+  const base = { newProductsCollected: 61, targetNewProducts: 400, status: "retry_scheduled" };
+  async function decision(job) {
+    return inspectDailyCatalogAttempt(config, now, { fetchJob: async () => job });
+  }
+  assert.equal((await decision({ ...base, newProductsCollected: 400 })).reason, "target_reached");
+  assert.equal((await decision({ ...base, nextRetryAt: "2026-09-17T14:00:00Z" })).reason, "retry_not_due");
+  assert.equal((await decision({ ...base, status: "running" })).reason, "attempt_running");
+  assert.deepEqual(
+    { run: (await decision({ ...base, nextRetryAt: "2026-09-17T13:00:00Z" })).run },
+    { run: true },
+  );
+});
+
+test("nieuwe Amsterdamse dag start eigen job, oude onvolledige dag blokkeert niet", async () => {
+  const now = new Date("2026-09-18T07:17:00Z");
+  const requested = [];
+  const result = await inspectDailyCatalogAttempt(config, now, {
+    fetchJob: async (_config, query) => {
+      requested.push(query.jobDate);
+      return null;
+    },
+  });
+  assert.deepEqual(requested, ["2026-09-18"]);
+  assert.equal(result.reason, "daily_job_missing");
+  assert.equal(result.run, true);
 });
 
 test("een lopende attempt en een dubbele retrytrigger worden geweigerd", () => {
@@ -315,7 +358,7 @@ test("daily job-RPC's gebruiken typed claims en locktokens", async () => {
   assert.equal(requests[1].body.p_lock_token, "lock-1");
 });
 
-test("Actions gebruikt één concurrencygroep, korte schedulerchecks en geen urenlange sleep", async () => {
+test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenlange sleep", async () => {
   const [initial, retry, monitor] = await Promise.all([
     readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8"),
     readFile(new URL("../.github/workflows/retry-daily-catalog-import.yml", import.meta.url), "utf8"),
@@ -323,9 +366,70 @@ test("Actions gebruikt één concurrencygroep, korte schedulerchecks en geen ure
   ]);
   assert.match(initial, /npm run import:daily/);
   assert.match(initial, /group: hoogvliet-supabase-update/);
-  assert.match(retry, /cron: "\*\/10 4-21 \* \* \*"/);
+  assert.match(retry, /cron: "17 8,13,18 \* \* \*"/);
+  assert.doesNotMatch(retry, /\*\/10/);
   assert.match(retry, /npm run --silent inspect:daily/);
   assert.match(retry, /group: hoogvliet-supabase-update/);
+  assert.match(retry, /cancel-in-progress: false/);
+  assert.match(retry, /if: steps\.due\.outputs\.run_attempt == '1'/);
+  assert.doesNotMatch(retry, /continue-on-error: true/);
   assert.doesNotMatch(retry, /\bsleep\s+[1-9]\d{2,}/i);
   assert.match(monitor, /ontbrekende dagjob wordt veilig klaargezet/i);
+});
+
+
+test("bewezen zoekroute-uitputting onder 400 sluit de dag zonder verdere retries", async () => {
+  const h = createHarness([{ new: 327, sourceExhausted: true, stopReason: "discovery_exhausted" }]);
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.newProductsCollected, 327);
+  assert.equal(result.job.status, "daily_target_partial");
+  assert.equal(result.job.nextRetryAt, null);
+  assert.equal(h.attempts[0].retryReason, "discovery_exhausted");
+  assert.equal(shouldRunDailyImport(result.job, new Date("2026-09-17T15:00:00Z")).run, false);
+});
+
+test("paginaveiligheidsgrens is geen bronuitputting: bewaar expliciete vervolgreden", async () => {
+  const h = createHarness(Array.from({ length: 8 }, (_, i) => ({ new: 10, stopReason: "page_safety_limit", resumeCheckpoint: { term: "rijst", page: (i + 1) * 800 } })));
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.status, "retry_scheduled");
+  assert.equal(h.attempts[0].retryReason, "attempt_safety_limit");
+  assert.equal(result.job.nextRetryAt, "2026-09-17T10:00:00.000Z");
+});
+
+test("twee gelijktijdige dagtriggers starten maar één collector", async () => {
+  const h = createHarness([{ new: 400 }]);
+  const results = await Promise.all([runDailyCatalogAttempt(config, logger, h.dependencies), runDailyCatalogAttempt(config, logger, h.dependencies)]);
+  assert.equal(results.filter(x => x.attempted).length, 1);
+  assert.equal(h.attempts.length, 1);
+});
+
+test('eenmalige dagpoging respecteert restant en sluit zonder vervolgretry', async () => {
+  const h = createHarness([{ new: 7, stopReason: 'runtime_safety_limit' }], { initialNew: 390 });
+  const run = h.dependencies.runGrowth;
+  h.dependencies.runGrowth = async c => { assert.equal(c.maxNewProducts, 10); return run(c); };
+  const result = await runDailyCatalogAttempt({ ...config, dailySingleAttempt: true }, logger, h.dependencies);
+  assert.equal(result.job.newProductsCollected, 397);
+  assert.equal(result.job.status, 'daily_target_partial');
+  assert.equal(result.job.nextRetryAt, null);
+  assert.equal(h.attempts.length, 1);
+  assert.equal(shouldRunDailyImport(result.job, new Date('2026-09-17T10:00:00Z')).run, false);
+});
+
+test('eenmalige dagpoging plant ook na tijdelijke storing geen vervolgrun', async () => {
+  const error = Object.assign(new Error('tijdelijke bronuitval'), { code: 'source_unavailable' });
+  const h = createHarness([error]);
+  await assert.rejects(runDailyCatalogAttempt({ ...config, dailySingleAttempt: true }, logger, h.dependencies), error);
+  assert.equal(h.state.status, 'daily_target_partial');
+  assert.equal(h.state.nextRetryAt, null);
+  assert.equal(h.attempts.length, 1);
+});
+
+test('all usable routes visited with a stalled term ends in attention without an automatic retry', async () => {
+  const h = createHarness([{ new: 10, sourceErrors: 1, sourceExhausted: false,
+    stopReason: 'discovery_incomplete_stalled_terms' }]);
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.status, 'failed_requires_attention');
+  assert.equal(result.job.nextRetryAt, null);
+  assert.equal(result.job.remainingTarget, 390);
+  assert.equal(h.attempts[0].errorCode, 'discovery_incomplete_stalled_terms');
 });

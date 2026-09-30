@@ -1,3 +1,4 @@
+import { collectGrowthCandidates } from "./growth-collector.mjs";
 import { chromium } from "playwright";
 import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 
@@ -153,7 +154,7 @@ async function readSourcePageEvidence(page, expectedSelector = null) {
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
       hasExpectedContent: Boolean(selector && document.querySelector(selector)),
-      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|niets gevonden|0 resultaten/.test(text),
+      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 resultaten/.test(text),
       hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
@@ -175,7 +176,8 @@ export async function waitForSourceContent(page, expectedSelector, options = {})
       const text = (document.body?.innerText ?? "").toLowerCase();
       return Boolean(document.querySelector(selector))
         || /captcha|verify you are human|controleer of je een mens bent/.test(text)
-        || /access denied|toegang geweigerd|forbidden/.test(text);
+        || /access denied|toegang geweigerd|forbidden/.test(text)
+        || /geen resultaten gevonden|niks kunnen vinden/.test(text);
     },
     expectedSelector,
     { timeout },
@@ -240,10 +242,60 @@ async function extractSearchCandidates(page) {
   });
 }
 
+export function searchPaginationEvidence({ currentPage, totalPages, totalProducts, candidateCount, explicitEmpty = false }) {
+  if ((totalProducts === 0 || explicitEmpty) && candidateCount === 0) return { sourceExhausted: true, nextPage: 0 };
+  if (!Number.isInteger(currentPage) || currentPage < 1 || !Number.isInteger(totalPages)
+    || totalPages < currentPage || !Number.isInteger(totalProducts) || totalProducts < candidateCount
+    || candidateCount < 1) throw new SourceUnavailableError("Zoekresultaten missen betrouwbare pagineringmetadata.");
+  return { sourceExhausted: currentPage === totalPages, nextPage: currentPage, currentPage };
+}
+
+async function searchPageResult(page, options) {
+  const candidates = await extractSearchCandidates(page);
+  if (!options.requirePaginationEvidence) return candidates;
+  const evidence = await page.evaluate(() => {
+    const root = document.querySelector('#product-search-result');
+    const positive = value => /^\d+$/.test(value ?? '') ? Number(value) : null;
+    const total = root?.querySelector('.pagination-total')?.textContent?.match(/^\s*([\d.]+)\s+Producten\s*$/i);
+    return {
+      currentPage: positive(root?.querySelector('.storePageNo')?.getAttribute('data-page-number')),
+      totalPages: positive(root?.querySelector('#nrofpages')?.getAttribute('data-page-number')),
+      totalProducts: total ? Number(total[1].replaceAll('.', '')) : null,
+      explicitEmpty: /geen resultaten gevonden|niks kunnen vinden/i.test(document.querySelector('[role="main"]')?.textContent ?? ""),
+    };
+  });
+  return { candidates, ...searchPaginationEvidence({ ...evidence, candidateCount: candidates.length }) };
+}
+
+export function resolvedSearchPageURL(resolvedURL, pageNumber) {
+  const url = new URL(resolvedURL);
+  if (url.origin !== BASE_URL || url.pathname !== SEARCH_PATH || url.username || url.password) {
+    throw new SourceUnavailableError("Zoekredirect verlaat het vertrouwde zoekendpoint.");
+  }
+  url.searchParams.set("PageNumber", String(pageNumber));
+  return url.href;
+}
+
+export async function navigateSearchPage(page, term, pageNumber = 0, options = {}) {
+  const routes = options.resolvedRoutes;
+  const knownRoute = routes?.get(term);
+  await page.goto(knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
+  if (routes) {
+    // A term such as fruit redirects to a category and resets PageNumber=0.
+    // Keep the resolved category, sorting and page size for all subsequent windows.
+    const resolved = resolvedSearchPageURL(page.url(), pageNumber);
+    routes.set(term, resolved);
+    if (new URL(page.url()).searchParams.get("PageNumber") !== String(pageNumber)) {
+      await page.goto(resolved, { waitUntil: "domcontentloaded", timeout: 35_000 });
+    }
+  }
+  return page.url();
+}
+
 async function searchOnce(page, term, pageNumber = 0, options = {}) {
-  await page.goto(searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await navigateSearchPage(page, term, pageNumber, options);
   await waitForSourceContent(page, ".product-tile", options);
-  return extractSearchCandidates(page);
+  return searchPageResult(page, options);
 }
 
 async function searchUsingVisibleForm(page, term, options = {}) {
@@ -259,7 +311,7 @@ async function searchUsingVisibleForm(page, term, options = {}) {
   await input.press("Enter");
   await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
   await waitForSourceContent(page, ".product-tile", options);
-  return extractSearchCandidates(page);
+  return searchPageResult(page, options);
 }
 
 export function nextEmptySourceSearchCount(previousCount, rawCandidateCount) {
@@ -309,7 +361,10 @@ function normalizeCandidate(candidate) {
 export async function collectCandidatePages(fetchPage, term, maxPages, options = {}) {
   const candidates = [];
   const seenSKUs = new Set();
-  const seenPageSignatures = new Set();
+  const seenPageSignatures = options.seenPageSignatures ?? new Set();
+  let invalidCandidates = 0;
+  let repeatedPageCandidates = 0;
+  let stallReason = null;
   let rawCandidates = 0;
   let irrelevantCandidates = 0;
   let duplicateCandidates = 0;
@@ -321,35 +376,47 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
   let lastPageNumber = startPage;
   let firstPageAliasSkipped = false;
 
+  const snapshot = () => ({ candidates, pagesFetched, rawCandidates, irrelevantCandidates,
+    duplicateCandidates, invalidCandidates, repeatedPageCandidates, repeatedPageStopped,
+    firstPageAliasSkipped, sourceExhausted, stallReason, stallPage: stallReason ? lastPageNumber : null,
+    nextPage: sourceExhausted ? 0 : lastPageNumber + 1 });
+  try {
   for (let pageOffset = 0; pageOffset < maxPages; pageOffset += 1) {
-    const pageNumber = startPage + pageOffset;
-    const pageCandidates = await fetchPage(pageNumber);
+    if (options.shouldStop?.()) break;
+    const pageNumber = pageOffset === 0 ? startPage : lastPageNumber + 1;
+    const pageResult = await fetchPage(pageNumber);
+    const pageCandidates = Array.isArray(pageResult) ? pageResult : pageResult?.candidates;
     pagesFetched += 1;
     lastPageNumber = pageNumber;
     if (!Array.isArray(pageCandidates) || pageCandidates.length === 0) {
-      sourceExhausted = true;
+      sourceExhausted = Array.isArray(pageResult) || pageResult?.sourceExhausted === true;
+      if (!sourceExhausted) stallReason = "empty_page_without_end";
       break;
     }
     rawCandidates += pageCandidates.length;
 
-    const signature = pageCandidates.map((candidate) => candidate?.sku ?? "-").join("|");
+    // SKU-set equality also detects reordering and cycles A -> B -> A.
+    const signature = [...new Set(pageCandidates.map(candidate => candidate?.sku
+      || JSON.stringify([candidate?.name, candidate?.sourceURL])))].sort().join("|");
     if (seenPageSignatures.has(signature)) {
+      repeatedPageCandidates += pageCandidates.length;
       // Sommige Intershop-varianten behandelen PageNumber=0 en 1 allebei als
       // de eerste pagina. Probeer dan één keer pagina 2 voordat discovery de
       // term als werkelijk herhaald/uitgeput markeert.
-      if (startPage === 0 && pageNumber === 1 && !firstPageAliasSkipped) {
+      if (Array.isArray(pageResult) && startPage === 0 && pageNumber === 1 && !firstPageAliasSkipped) {
         firstPageAliasSkipped = true;
         continue;
       }
       repeatedPageStopped = true;
-      sourceExhausted = true;
+      stallReason = "repeated_sku_set";
+      sourceExhausted = false;
       break;
     }
     seenPageSignatures.add(signature);
 
     for (const rawCandidate of pageCandidates) {
       const candidate = normalizeCandidate(rawCandidate);
-      if (!candidate) continue;
+      if (!candidate) { invalidCandidates += 1; continue; }
       if (!isRelevantCandidate(candidate, term)) {
         irrelevantCandidates += 1;
         continue;
@@ -361,19 +428,21 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
       seenSKUs.add(candidate.sku);
       candidates.push(candidate);
     }
+    if (!Array.isArray(pageResult)) {
+      if (pageResult.sourceExhausted) { sourceExhausted = true; break; }
+      if (!Number.isInteger(pageResult.nextPage) || pageResult.nextPage <= pageNumber) {
+        stallReason = "cursor_not_advancing";
+        break;
+      }
+      lastPageNumber = pageResult.nextPage - 1;
+    }
   }
 
-  return {
-    candidates,
-    pagesFetched,
-    rawCandidates,
-    irrelevantCandidates,
-    duplicateCandidates,
-    repeatedPageStopped,
-    firstPageAliasSkipped,
-    sourceExhausted,
-    nextPage: sourceExhausted ? 0 : lastPageNumber + 1,
-  };
+  } catch (error) {
+    error.pageCollection = snapshot();
+    throw error;
+  }
+  return snapshot();
 }
 
 export function isTransientNavigationError(error) {
@@ -401,7 +470,7 @@ async function findCandidates(page, term, maxPages, options = {}) {
   return collectCandidatePages(async (pageNumber) => {
     return withTransientNavigationRetry(async () => {
       let candidates = await searchOnce(page, term, pageNumber, options);
-      if (pageNumber === 0 && candidates.length === 0) {
+      if (pageNumber === 0 && !options.requirePaginationEvidence && candidates.length === 0) {
         candidates = await searchUsingVisibleForm(page, term, options);
       }
       return candidates;
@@ -410,7 +479,7 @@ async function findCandidates(page, term, maxPages, options = {}) {
       onRetry: options.onRetry,
       wait: async (delayMs) => page.waitForTimeout(delayMs),
     });
-  }, term, maxPages, { startPage: options.startPage ?? 0 });
+  }, term, maxPages, { startPage: options.startPage ?? 0, seenPageSignatures: options.seenPageSignatures, shouldStop: options.shouldStop });
 }
 
 async function extractProductDetails(page) {
@@ -816,6 +885,25 @@ export async function collectProducts(config, logger = console, options = {}) {
       },
     });
     await acceptCookiesIfShown(searchPage);
+
+    if (growthMode) {
+      const resolvedRoutes = new Map();
+      return await collectGrowthCandidates(config, {
+        existingSKUs, initialPageCursor, onBatch, persistBatchSize,
+        onTermStall: entry => logger.info(`Zoekterm gestald; overige routes gaan door: ${JSON.stringify(entry)}`),
+        findCandidates: (term, pages, cursor) => {
+          logger.info(`Zoeken: ${term} | vanaf_pagina=${cursor.startPage}`);
+          return findCandidates(searchPage, term, pages, {
+            ...cursor, resolvedRoutes, navigationRetries: config.navigationRetries, requirePaginationEvidence: true,
+          });
+        },
+        validateCandidate: (candidate, diagnostics) => withTransientNavigationRetry(
+          () => validateCandidate(detailPage, candidate, diagnostics), {
+            maxRetries: config.navigationRetries,
+            wait: (ms) => detailPage.waitForTimeout(ms),
+          }),
+      });
+    }
 
     for (const term of config.searchTerms) {
       stats.stopReason = growthMode

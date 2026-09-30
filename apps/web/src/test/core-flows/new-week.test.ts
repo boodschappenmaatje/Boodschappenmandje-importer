@@ -131,9 +131,9 @@ it("blank Home → settings → generated Menu → linked list → Budget/Free c
   expect(container.querySelector(".home-c-budget")?.textContent).toContain("7,16");
   expect(container.querySelector(".home-c-budget")?.textContent).toContain("5,37");
   expect(container.querySelector(".home-c-remaining")?.textContent).toContain("92,84");
-  expect(container.querySelector(".home-c-list")?.textContent).toContain("2 producten");
+  expect(container.querySelector(".home-c-fact")?.getAttribute("aria-label")).toBe("2 producten op je lijst");
   expect(container.querySelector(".home-c-meal")?.textContent).toContain("Groentepasta");
-  await click("Pak je lijst erbij2 producten", "a");
+  await click("Naar je boodschappenlijst", "a");
   expect(router.path).toBe("/lijst");
   await click("Home", "nav[aria-label='Hoofdnavigatie'] a");
   await click("Bekijk je week", "a");
@@ -178,7 +178,7 @@ it.each([1, 3, 5, 7])("Home %i dagen → exacte Menu-dag opent ingrediënten en 
   router.path = "/"; await refresh();
   const cards = [...container.querySelectorAll<HTMLAnchorElement>(".home-c-day-card")];
   expect(cards).toHaveLength(count);
-  expect(cards.map(card => card.querySelector(".home-c-day-label")!.textContent)).toEqual(["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"].slice(0, count));
+  expect(cards.map(card => card.querySelector(".home-c-day-label .home-c-sr-only")!.textContent)).toEqual(["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"].slice(0, count));
   cards.forEach((card, index) => {
     expect(card.textContent).toContain(`Groentepasta ${index + 1}`);
     expect(card.textContent).toContain("4 personen · €\u00a03,58");

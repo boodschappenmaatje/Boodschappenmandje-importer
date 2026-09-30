@@ -30,14 +30,15 @@ for (const [filename, jobName, mode] of [
     const fixtures = {
       SUPABASE_URL: config.supabaseURL,
       SUPABASE_SECRET_KEY: config.supabaseSecret,
-      PLANNER_CACHE_BASE_URL: config.plannerCacheBaseURL,
+      PLANNER_CACHE_BASE_URL: "https://boodschappenmaatje-pwa.vercel.app",
       PLANNER_CACHE_ADMIN_TOKEN: config.plannerCacheAdminToken,
       VERCEL_AUTOMATION_BYPASS_SECRET: bypassConfig.plannerCacheAutomationBypassSecret,
     };
     const env = { UPDATE_MODE: mode };
     for (const [key, value] of Object.entries(fixtures)) {
       const source = key === "PLANNER_CACHE_BASE_URL" ? "vars" : "secrets";
-      assert.ok(environment.includes(`${key}: \${{ ${source}.${key} }}`), `${key} must be mapped in ${jobName}`);
+      assert.ok(environment.includes(key === "PLANNER_CACHE_BASE_URL"
+        ? `${key}: ${value}` : `${key}: \${{ ${source}.${key} }}`), `${key} must be mapped in ${jobName}`);
       env[key] = `  ${value}  `;
     }
     const loaded = loadConfig(env);
@@ -52,10 +53,10 @@ for (const [filename, jobName, mode] of [
       const snapshot = { url: String(url), method: options.method, headers: { ...options.headers },
         redirect: options.redirect, body, priceConfirmed: body.productIds?.every((id) => priced.has(id)) };
       requests.push(snapshot);
-      if (url.origin === config.plannerCacheBaseURL) {
+      if (url.origin === fixtures.PLANNER_CACHE_BASE_URL) {
         const attempts = requests.filter((request) => request.body.productIds).length;
         if (attempts === 1) return json({ error: fixtures.VERCEL_AUTOMATION_BYPASS_SECRET }, 503);
-        if (attempts === 2) throw new Error(`${fixtures.PLANNER_CACHE_ADMIN_TOKEN} ${fixtures.VERCEL_AUTOMATION_BYPASS_SECRET}`);
+        if (attempts === 2) throw Object.assign(new Error(`${fixtures.PLANNER_CACHE_ADMIN_TOKEN} ${fixtures.VERCEL_AUTOMATION_BYPASS_SECRET}`), { code: "ECONNRESET" });
         return acknowledgement(body.productIds);
       }
       if (url.pathname.endsWith("/product_prices")) priced.add(body[0].product_id);
@@ -68,7 +69,7 @@ for (const [filename, jobName, mode] of [
     assert.deepEqual(maintenance[0].body, maintenance[1].body);
     assert.deepEqual(maintenance[1].body, maintenance[2].body);
     for (const request of maintenance) {
-      assert.equal(request.url, `${config.plannerCacheBaseURL}/api/internal/planner-readiness/new-products`);
+      assert.equal(request.url, `${fixtures.PLANNER_CACHE_BASE_URL}/api/internal/planner-readiness/new-products`);
       assert.equal(request.method, "POST");
       assert.equal(request.redirect, "manual");
       assert.equal(request.priceConfirmed, true);
@@ -87,7 +88,7 @@ for (const [filename, jobName, mode] of [
     assert.equal(new Set(maintenance.slice(2).flatMap((request) => request.body.productIds)).size, 41);
     assert.equal(result.imported.length, 41);
     assert.equal(result.duplicateSKUsSkipped, 1);
-    assert.deepEqual(result.plannerMaintenance, { notifiedProducts: 41, pendingProductIds: [] });
+    assert.deepEqual(result.plannerMaintenance, { notifiedProducts: 41, pendingProductIds: [], status: "confirmed", failures: [] });
     for (const secret of [config.supabaseSecret, config.plannerCacheAdminToken, bypassConfig.plannerCacheAutomationBypassSecret]) {
       assert.equal(JSON.stringify({ output, result }).includes(secret), false);
     }
@@ -236,7 +237,7 @@ test("maintenance outage preserves successful imports and exposes only exact ret
   t.mock.method(globalThis, "fetch", async (url, options) => {
     if (url.pathname.endsWith("new-products")) {
       notifyCalls += 1;
-      throw new Error(`${config.plannerCacheAdminToken} ${bypassConfig.plannerCacheAutomationBypassSecret}`);
+      throw Object.assign(new Error(`${config.plannerCacheAdminToken} ${bypassConfig.plannerCacheAutomationBypassSecret}`), { code: "ECONNRESET" });
     }
     return json(JSON.parse(options.body));
   });
@@ -298,4 +299,68 @@ test("authorization errors and redirects are not retried or followed", async () 
     assert.equal(calls, 1);
     assert.deepEqual(result.pendingProductIds, ["one"]);
   }
+});
+
+test('growth counts real insert identities even without planner maintenance configuration', async (t) => {
+  const rows = new Map();
+  rows.set('730331001', { id: 'concurrent-product', sku: '730331001' });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const payload = JSON.parse(options.body)[0];
+    if (url.pathname.endsWith('/product_prices')) return json([payload]);
+    const exists = rows.get(payload.sku);
+    if (options.headers.Prefer?.includes('ignore-duplicates') || options.headers.prefer?.includes('ignore-duplicates')) {
+      if (exists) return json([]);
+      rows.set(payload.sku, payload); return json([payload]);
+    }
+    return json([exists ?? payload]);
+  });
+  const settings = { supabaseURL: config.supabaseURL, supabaseSecret: config.supabaseSecret, updateMode: 'growth' };
+  const result = await upsertProducts(settings, [product('730331000'), product('730331001')]);
+  assert.deepEqual(result.imported.map(row => row.inserted), [true, false]);
+  const repeat = await upsertProducts(settings, [product('730331000')]);
+  assert.equal(repeat.imported[0].inserted, false);
+});
+
+test('notification backoff is bounded, exposes HTTP failure and never retains arbitrary response text', async () => {
+  const delays = []; let calls = 0;
+  const result = await notifyPlannerOfNewProducts(plannerMaintenanceSettings(config), ['one'], async () => {
+    calls++; return json({ error: 'new-product-maintenance-failed', secret: config.plannerCacheAdminToken }, 503);
+  }, { wait: async ms => delays.push(ms) });
+  assert.equal(calls, 3); assert.deepEqual(delays, [1000, 2000]);
+  assert.equal(result.status, 'pending_requires_attention');
+  assert.equal(result.failures[0].status, 503);
+  assert.equal(result.failures[0].code, 'new-product-maintenance-failed');
+  assert.equal(JSON.stringify(result).includes(config.plannerCacheAdminToken), false);
+});
+
+test('queue persistence failure prevents notification and preserves confirmed insert identities', async t => {
+  let notificationCalls = 0;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.pathname.endsWith('new-products')) notificationCalls++;
+    return json(JSON.parse(options.body));
+  });
+  await assert.rejects(upsertProducts(config, [product()], {
+    onMaintenancePending: async () => { throw new Error('checkpoint unavailable'); },
+  }), error => error.message === 'checkpoint unavailable' && error.confirmedImports.length === 1 && error.confirmedImports[0].inserted);
+  assert.equal(notificationCalls, 0);
+});
+
+test('real insert persists pending scope before HTTP and records an exact acknowledgement afterwards', async t => {
+  const events = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    const body = JSON.parse(options.body);
+    if (url.pathname.endsWith('new-products')) {
+      events.push('notify'); return acknowledgement(body.productIds);
+    }
+    events.push(url.pathname.endsWith('/product_prices') ? 'price' : 'product');
+    return json(body);
+  });
+  const result = await upsertProducts(config, [product()], {
+    onMaintenancePending: async ids => { assert.equal(ids.length, 1); events.push('persist-pending'); },
+    onMaintenanceResult: async (status, ids) => {
+      assert.equal(ids.length, 1); assert.equal(status.status, 'confirmed'); events.push('persist-ack');
+    },
+  });
+  assert.deepEqual(events, ['product', 'price', 'persist-pending', 'notify', 'persist-ack']);
+  assert.equal(result.plannerMaintenance.status, 'confirmed');
 });

@@ -2,9 +2,11 @@ name: Hoogvliet dagelijkse catalogusretry
 
 on:
   schedule:
-    # Elke tien minuten binnen het ruimste UTC-venster. De applicatielaag
-    # beslist in Europe/Amsterdam of de job werkelijk verschuldigd is.
-    - cron: "*/10 4-21 * * *"
+    # Drie kansen na de primaire import om 06:00 en bewaking om 08:30 NL.
+    # 08:17/13:17/18:17 UTC = 10:17/15:17/20:17 CEST of
+    # 09:17/14:17/19:17 CET. Minstens vijf uur tussen retries; de
+    # persistente dagstatus beslist of er werkelijk een attempt nodig is.
+    - cron: "17 8,13,18 * * *"
 
 permissions:
   contents: read
@@ -20,7 +22,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+      PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
       PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       HEADLESS: "1"
