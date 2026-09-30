@@ -1,6 +1,20 @@
 # BoodschappenMaatje — Project State
 
-## Actueel — herstel gereleased; operationele eindverificatie deels open — 30 september 2026
+## Actuele ontwikkeling — Hoogvliet-productdekking — 30 september 2026
+
+- **Branch:** `feature/hoogvliet-product-coverage`, vanaf main `7e35035a02996ef403546eb3878e706e93f8da3c`; uitsluitend Draft/Preview. Geen merge of Production-release in deze opdracht.
+- **Production:** main `7e35035`, deployment `dpl_BVSJr2Gc4Co4rYcFzPfzHBTbmo4m`, READY met normale Production-alias. De eerder gereleasete importplanning 06:07 en monitor 08:30 Europe/Amsterdam blijven onafhankelijk op main; natuurlijke cyclus van 1 oktober nog afzonderlijk te bevestigen.
+- **Bewezen oorzaken:** de 598 routes bestonden uit 148 vaste woorden en 450 dynamische merken; het merkenplafond verdrong categorieën/letters. Bovendien gaf Intershop `Just+O` 25 koffiecupresultaten, terwijl exact dezelfde zoekopdracht met `Just%20O` 21 resultaten inclusief 4 juiste merkproducten gaf. Drie daarvan ontbraken in de catalogus. Details: `docs/hoogvliet-product-coverage.md`.
+- **Implementatie:** correcte `%20`-codering op eerste/vervolgpagina's; 20 expliciete openbare categorie-ID's buiten het dynamische plafond; routecontrole vóór categorielidmaatschap; metadata-paginering; categorieherhaling blijft fail-closed stall. Bestaande keywordfilter, productdetailvalidatie, daglimiet 400, bounded hervatting, claims/retries, v4/CAS en maintenance blijven behouden. Geen state-reset.
+- **Schrijfvrije meting:**21 resultaatpagina's (20 eerste categoriepagina's + één tweede pagina), 336 tiles/334 unieke SKU's, 275 bestaand/59 ontbrekend. Alle 59 hebben een positieve listingprijs en productidentiteit; 15 daarnaast individueel op detailpagina gevalideerd. De overige 44 moeten vóór insert nog de normale detailvalidatie doorlopen. Dit is geen bewijs van 400 dagelijkse nieuwe producten.
+- **Catalogusvergelijking:**6359 productregels totaal; 6356 echte `Hoogvliet`-regels en 3 reeds bestaande lowercase `hoogvliet` TEST-* regels. Niets gewijzigd. Maintenance v4 bleef 0 pending/304 bevestigd.
+- **Tests:**286 roottests, importerfixtures/syntax/seedchecks, 756 webtests, lint, TypeScript en lokale Production-build groen. 11 gerichte nieuwe regressies inclusief same-day resume zonder maintenanceverlies. CI/Preview worden op de exacte Draft-head gecontroleerd voordat deze acceptatiegereed heet.
+- **Geen live import:** uitsluitend publieke bronreads, read-only SQL en lokale mocks/fixtures. Geen workflow-dispatch, databasewrite, acknowledgement, config-/secretwijziging of handmatige Production-deployment.
+- **Acceptatie:** na groene PR-CI/Preview een afzonderlijk goedgekeurde begrensde live acceptatie met actueel resterend dagbudget en vrije locks. Niet naast de natuurlijke automatische cyclus starten. Geen specifieke iPhone-test: geen zichtbare appwijziging.
+- **Bronafhankelijkheid:** Hoogvliet kondigt op `/nieuwe-website` een platformwissel op 5 oktober aan (zonder jaartal op de pagina); de huidige Intershop-contracten zijn op 30 september getoetst. Bij een daadwerkelijke bronwissel opnieuw broncompatibiliteit vaststellen.
+
+
+## Production-checkpoint — herstel gereleased; operationele eindverificatie deels open — 30 september 2026
 
 ### Release
 
@@ -9,7 +23,7 @@
 - **Production-release PR #36:** `dpl_5aDkTgLHigPZuFn1nndf6DH6BT3q`, Production-target van mergecommit `93435b3`, `READY` en zonder aliasfout. Home, Menu (`/week-voorbereiden`), Lijst en Budget zijn na de merge read-only geopend en renderen correct. Een later documentatiecheckpoint kan automatisch een nieuwere, inhoudelijk identieke Vercel-build opleveren; controleer voor actuele Current altijd de Production-alias. Dit is navigatie-/laadsmoke, geen schrijf- of fysieke iPhone-acceptatie.
 - **Rollback:** de vorige gezonde mainrelease was `dfa3d7773eb070de457ad2a9ac379acd9840f123` op `dpl_HK3GSecBCEvtcDmchGBdFqcJ251y`.
 - **PR-status:** PR #33 is gemerged; PR #31 is gemerged; PR #32 is als superseded/diagnostic-only gesloten zonder merge. Geen diagnostische PR #32-code is gereleased.
-- **Volgende afzonderlijke opdracht:** VERBETERING HOOGVLIET-PRODUCTDEKKING, binnen de bredere roadmap Productdata & receptkwaliteit. Niet gestart.
+- **Volgende afzonderlijke opdracht:** VERBETERING HOOGVLIET-PRODUCTDEKKING, binnen de bredere roadmap Productdata & receptkwaliteit. In uitvoering op bovenstaande Draft-branch; niet gereleased.
 - **Afrondingsstatus:** functionele herstelrelease en maintenance afgerond; documentatie-PR #35 is gemerged. Automatische planning is nog niet end-to-end bevestigd. De bewezen uitvoertijdpoortfout is in PR #36 gecorrigeerd met één tijdzonegebonden trigger per workflow en zonder startuurpoort. De configuratie, PR-head-CI `36688714761`, main-CI `36689014992` en Production-smoke zijn groen. De primaire dagelijkse import en standalone monitor zijn na de merge nog niet natuurlijk uitgevoerd; een vertraagde automatische prijsshard is afzonderlijk geslaagd. Er is geen handmatige productimport gestart.
 
 ### Maintenance en serverclient
@@ -81,7 +95,7 @@ Onderzoek aanvullende categorieën, zoekmethoden, productpagina's en andere toeg
 
 Doel blijft **maximaal 400 daadwerkelijk nieuwe, unieke, geldige en positief geprijsde bevestigde inserts per dag wanneer voldoende geldige kandidaten beschikbaar zijn**. De acceptatie met nul inserts bewijst deze dagelijkse groei niet. Behoud dagbudget, dedupe, cursors, bounded retries, concurrency en de gezonde maintenanceketen.
 
-Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase blijft Productdata & receptkwaliteit. `DESIGN.md` blijft ongewijzigd.
+Deze opdracht is inmiddels in uitvoering op bovenstaande Draft-branch. De bredere roadmapfase blijft Productdata & receptkwaliteit. `DESIGN.md` blijft ongewijzigd.
 
 ### Workflowcorrectie — PR #36 (releasecontrole 30 september 2026)
 
@@ -90,3 +104,4 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 - Workflowfix CI op de volledige PR-head `db1264ee142db1ff47b1603e1b83e71481d1bae9`: Actions `36686741289` groen, inclusief importerfixtures/seedchecks, webtests, lint, TypeScript en Production-build; Vercel Preview-check groen. De functionele head `0e6ff5c` had eveneens 275 roottests en 756 webtests groen. Dit bewijst de code/configuratie, niet een geplande live run.
 - PR #36 is conflictvrij met schone diff en groene CI gemerged als `93435b3`. De main-CI `36689014992` en Production-build `dpl_5aDkTgLHigPZuFn1nndf6DH6BT3q` zijn geslaagd; Home/Menu/Lijst/Budget renderen. Op 30 september waren de verwachte automatische primaire en monitortriggers vóór de release niet zichtbaar; hun precieze afwezigheidsreden is niet bewezen. De eerstvolgende geplande primaire run is 1 oktober om 06:07 Europe/Amsterdam, monitor om 08:30; GitHub kan vertragen of een trigger missen. Een volledige primaire dagimport-/monitorcyclus na de release is nog niet waargenomen. De vertraagde automatische prijsshard `36689990758` startte om 10:29 lokaal, voltooide prijsbatch 3/7: 100 gecontroleerd en geschreven, 17 gewijzigd, 83 ongewijzigd, 0 fout. De catalogus bleef 6359 producten/6359 prijzen, 0 nieuwe producten, 100 vandaag bijgewerkte prijsregels; maintenance v4 bleef 0 pending/304 bevestigd. Dit is geen bewijs voor dagelijkse productgroei of de nieuwe monitorplanning. Geen dubbele of handmatige import gestart.
 - Read-only DB-check na merge: 6359 producten, 6359 prijzen, vandaag 0 nieuwe; dagjob `daily_target_partial` 0/400, 2 eerdere pogingen, geen actieve lock of retry; 0 lopende imports of daily attempts. Discovery-state v4, maintenance `confirmed`, 0 pending, `notifiedProducts=304`.
+

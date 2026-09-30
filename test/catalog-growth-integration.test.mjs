@@ -97,6 +97,29 @@ test('a repeated-page term from an earlier same-day window migrates to proven ex
   assert.equal(h.saved.at(-1).lastAttemptReport.stalledTerms.length, 0);
 });
 
+test('new category route remains eligible after same-day keyword exhaustion without resetting maintenance', async () => {
+  const route = 'category:999999-1700';
+  const maintenance = { status: 'confirmed', pendingProductIds: [], notifiedProducts: 304, failures: [] };
+  const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture',
+    scanDate: config.discoveryScanDate, lastTerm: 'pasta', pageCursor: 0,
+    exhaustedTerms: ['rijst', 'pasta'], plannerMaintenance: maintenance }),
+    collectProducts: async (settings, _logger, options) => {
+      assert.ok(settings.searchTerms.includes(route));
+      assert.equal(settings.searchTerms.includes('pasta'), false);
+      assert.equal(settings.searchTerms.includes('rijst'), false);
+      assert.equal(options.initialPageCursor, 0);
+      return { products: [], stats: { stopReason: 'page_safety_limit', lastSearchedTerm: route,
+        nextPageCursor: 8, exhaustedTerms: [], termCoverage: {} } };
+    },
+  });
+  const result = await runCatalogGrowth({ ...config, searchTerms: [route, ...config.searchTerms] }, logger, h.dependencies);
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(h.saved.at(-1).lastTerm, route);
+  assert.equal(h.saved.at(-1).pageCursor, 8);
+  assert.deepEqual(h.saved.at(-1).plannerMaintenance, maintenance);
+  assert.ok(h.saved.at(-1).exhaustedTerms.includes('pasta'));
+});
+
 test('real v4 CAS writer accepts only the IDs confirmed by the maintenance callback', async t => {
   const { fetchCatalogDiscoveryState, saveCatalogDiscoveryState } = await import('../src/supabase.mjs');
   const id = '00000000-0000-4000-8000-000000000001';

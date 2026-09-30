@@ -1,0 +1,291 @@
+{
+  "observedDate": "2026-09-30",
+  "method": "Read-only public category/search pages and individual product detail pages; all 15 SKUs absent from the same-day Hoogvliet DB snapshot.",
+  "products": [
+    {
+      "sku": "731484000",
+      "name": "Beray Tarwebloem",
+      "brand": "Beray",
+      "category": "Bewuste voeding/Superfoods/Granen en melen",
+      "packageText": "1 kilo",
+      "sourceURL": "https://www.hoogvliet.com/product/beray-tarwebloem",
+      "displayedPrice": 1.69,
+      "detail": {
+        "sku": "731484000",
+        "name": "Beray Tarwebloem",
+        "packageText": "1 kilo",
+        "displayPrice": 1.69,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": "gratis bezorging bij €12.50",
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "726080000",
+      "name": "WeCare Meal replacement drink vanille",
+      "brand": "WeCare",
+      "category": "Bewuste voeding/Koolhydraatarm, afslanken, dieet/Dranken, shakes",
+      "packageText": "236 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/wecare-meal-replacement-drink-vanille1",
+      "displayedPrice": 2.77,
+      "detail": {
+        "sku": "726080000",
+        "name": "WeCare Meal replacement drink vanille",
+        "packageText": "236 milliliter",
+        "displayPrice": 2.77,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "726276000",
+      "name": "Xxl nutrition Crunchy bar stracciatella",
+      "brand": "Xxl nutrition",
+      "category": "Bewuste voeding/Sportvoeding/Na het sporten",
+      "packageText": "60 gram",
+      "sourceURL": "https://www.hoogvliet.com/product/xxl-nutrition-crunchy-bar-stracciatella",
+      "displayedPrice": 2.59,
+      "detail": {
+        "sku": "726276000",
+        "name": "Xxl nutrition Crunchy bar stracciatella",
+        "packageText": "60 gram",
+        "displayPrice": 2.59,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "726278000",
+      "name": "Xxl nutrition Crunchy bar salted caramel",
+      "brand": "Xxl nutrition",
+      "category": "Bewuste voeding/Sportvoeding/Na het sporten",
+      "packageText": "60 gram",
+      "sourceURL": "https://www.hoogvliet.com/product/xxl-nutrition-crunchy-bar-salted-caramel",
+      "displayedPrice": 2.59,
+      "detail": {
+        "sku": "726278000",
+        "name": "Xxl nutrition Crunchy bar salted caramel",
+        "packageText": "60 gram",
+        "displayPrice": 2.59,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "726096000",
+      "name": "WeCare Lower carb bar fudge caramel",
+      "brand": "WeCare",
+      "category": "Bewuste voeding/Sportvoeding/Voor het sporten",
+      "packageText": "60 gram",
+      "sourceURL": "https://www.hoogvliet.com/product/wecare-lower-carb-bar-fudge-caramel",
+      "displayedPrice": 3.59,
+      "detail": {
+        "sku": "726096000",
+        "name": "WeCare Lower carb bar fudge caramel",
+        "packageText": "60 gram",
+        "displayPrice": 3.59,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "726277000",
+      "name": "Xxl nutrition Crunchy bar cookies cream",
+      "brand": "Xxl nutrition",
+      "category": "Bewuste voeding/Sportvoeding/Na het sporten",
+      "packageText": "60 gram",
+      "sourceURL": "https://www.hoogvliet.com/product/xxl-nutrition-crunchy-bar-cookies-cream",
+      "displayedPrice": 2.49,
+      "detail": {
+        "sku": "726277000",
+        "name": "Xxl nutrition Crunchy bar cookies cream",
+        "packageText": "60 gram",
+        "displayPrice": 2.49,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "730803000",
+      "name": "Body&fit Ripped pre workout fruit punch",
+      "brand": "Body&fit",
+      "category": "Bewuste voeding/Sportvoeding/Voor het sporten",
+      "packageText": "225 gram",
+      "sourceURL": "https://www.hoogvliet.com/product/body-amp-fit-ripped-pre-workout-fruit-punch",
+      "displayedPrice": 19.99,
+      "detail": {
+        "sku": "730803000",
+        "name": "Body&fit Ripped pre workout fruit punch",
+        "packageText": "225 gram",
+        "displayPrice": 19.99,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "718878000",
+      "name": "Qualino Pruimen rte",
+      "brand": "Qualino",
+      "category": "Aardappelen, groente, fruit/Fruit/Noten, gedroogd fruit",
+      "packageText": "500 gram",
+      "sourceURL": "https://www.hoogvliet.com/product/qualino-pruimen-rte",
+      "displayedPrice": 5.98,
+      "detail": {
+        "sku": "718878000",
+        "name": "Qualino Pruimen rte",
+        "packageText": "500 gram",
+        "displayPrice": 5.98,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "665002000",
+      "name": "Heineken Premium Pilsener Bier Fles Krat",
+      "brand": "Heineken",
+      "category": "Bier, wijn, alcoholvrij/Bier/Pilsener",
+      "packageText": "7.2 liter",
+      "sourceURL": "https://www.hoogvliet.com/product/heineken-premium-pilsener-bier-fles-krat",
+      "displayedPrice": 18.95,
+      "detail": {
+        "sku": "665002000",
+        "name": "Heineken Premium Pilsener Bier Fles Krat",
+        "packageText": "7.2 liter",
+        "displayPrice": 18.95,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "723948000",
+      "name": "Export Bier",
+      "brand": "Export",
+      "category": "Bier, wijn, alcoholvrij/Bier/Pilsener",
+      "packageText": "500 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/export-bier1",
+      "displayedPrice": 0.66,
+      "detail": {
+        "sku": "723948000",
+        "name": "Export Bier",
+        "packageText": "500 milliliter",
+        "displayPrice": 0.66,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "719631000",
+      "name": "Gulpener Pilsener gladiator",
+      "brand": "Gulpener",
+      "category": "Bier, wijn, alcoholvrij/Bier/Speciaalbier",
+      "packageText": "500 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/gulpener-pilsener-gladiator",
+      "displayedPrice": 1.56,
+      "detail": {
+        "sku": "719631000",
+        "name": "Gulpener Pilsener gladiator",
+        "packageText": "500 milliliter",
+        "displayPrice": 1.56,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "730056000",
+      "name": "Palm regal Rum cola",
+      "brand": "Palm regal",
+      "category": "Bier, wijn, alcoholvrij/Mixdranken, aperitieven/Mixdranken, aperitieven",
+      "packageText": "250 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/palm-regal-rum-cola",
+      "displayedPrice": 1.29,
+      "detail": {
+        "sku": "730056000",
+        "name": "Palm regal Rum cola",
+        "packageText": "250 milliliter",
+        "displayPrice": 1.29,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "669039000",
+      "name": "Just O White wine alcoholfree",
+      "brand": "Just O",
+      "category": "Bier, wijn, alcoholvrij/Wijn, aperitieven/Witte wijn",
+      "packageText": "750 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/just-o-white-wine-alcoholfree",
+      "displayedPrice": 3.99,
+      "detail": {
+        "sku": "669039000",
+        "name": "Just O White wine alcoholfree",
+        "packageText": "750 milliliter",
+        "displayPrice": 3.99,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "674063000",
+      "name": "Just O Rose wine alcoholfree",
+      "brand": "Just O",
+      "category": "Alles voor de barbecue/Bier, wijn en mixdranken/Wijn",
+      "packageText": "750 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/just-o-rose-wine-alcoholfree",
+      "displayedPrice": 3.99,
+      "detail": {
+        "sku": "674063000",
+        "name": "Just O Rose wine alcoholfree",
+        "packageText": "750 milliliter",
+        "displayPrice": 3.99,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    },
+    {
+      "sku": "669038000",
+      "name": "Just O Red wine alcoholfree",
+      "brand": "Just O",
+      "category": "Bier, wijn, alcoholvrij/Wijn, aperitieven/Rode wijn",
+      "packageText": "750 milliliter",
+      "sourceURL": "https://www.hoogvliet.com/product/just-o-red-wine-alcoholfree",
+      "displayedPrice": 3.99,
+      "detail": {
+        "sku": "669038000",
+        "name": "Just O Red wine alcoholfree",
+        "packageText": "750 milliliter",
+        "displayPrice": 3.99,
+        "regularPrice": null,
+        "offerPrice": null,
+        "promotionText": null,
+        "offerPeriod": null
+      }
+    }
+  ]
+}

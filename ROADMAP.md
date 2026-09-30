@@ -86,11 +86,13 @@ Releasecontrole 30 september: main `3370bf8`, Production Current/Ready, Home/Men
 
 ## Eerstvolgende afzonderlijke opdracht: VERBETERING HOOGVLIET-PRODUCTDEKKING
 
-**Status: vastgelegd, nog niet gestart.**
+**Status: in uitvoering — Draft/Preview, niet gereleased.**
+
+Schrijfvrij onderzoek op 30 september bewijst een spatiecoderingfout en onvoldoende categorieroutes. De featurebranch corrigeert URL-codering en voegt 20 openbare categorieroutes toe; een steekproef levert 59 ontbrekende kandidaten, waarvan 15 detailgevalideerd. Geen live groei geaccepteerd; details en veiligheidsgrenzen staan in PROJECT_STATE.md en `docs/hoogvliet-product-coverage.md`.
 
 Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en andere toegestane discoverymethoden. Breng de dekking en beperkingen van de huidige routes in kaart en verifieer route-eindesignalen; nul resultaten uit de huidige zoekstrategie betekenen niet dat elders geen geldige producten beschikbaar zijn.
 
-Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. Uitvoering volgt als aparte opdracht; in deze releasecontrole is niets uitgebreid of geïmporteerd.
+Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. Uitvoering vindt plaats op de afzonderlijke branch `feature/hoogvliet-product-coverage`; main/planning blijven ongewijzigd en er is geen productimport uitgevoerd.
 
 ## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
@@ -106,7 +108,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is nog **niet gestart**. De eerstvolgende afzonderlijke opdracht daarbinnen is **Verbetering Hoogvliet-productdekking**, zoals hierboven afgebakend.
+Deze mijlpaal is **gestart met het afzonderlijke productdekkingsonderzoek**. De overige onderdelen zijn nog niet gestart; de hierboven afgebakende verbetering blijft Draft tot acceptatie en release.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
@@ -394,3 +396,4 @@ Geen merge of Production-actie zonder expliciete toestemming wanneer de opdracht
 - `DESIGN.md` bevat vaste visuele/UX-regels.
 - Bij conflict tussen documentatie en actuele code/remote PR: eerst remote toestand vaststellen en daarna documentatie corrigeren.
 - Als een roadmaponderdeel wordt gebouwd, maak de scope concreet voordat implementatie start.
+

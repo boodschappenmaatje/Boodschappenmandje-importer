@@ -1,3 +1,5 @@
+import { HOOGVLIET_CATEGORIES } from "./discovery-routes.mjs";
+
 export const catalogBatches = {
   core: Object.freeze([
     "gehakt", "rundergehakt", "kip", "kipfilet", "varkensvlees", "worst",
@@ -34,9 +36,10 @@ export const catalogBatches = {
   growth: Object.freeze([]),
 };
 
-// De groeibatch gebruikt dezelfde bewezen zoektermen. Duplicaten worden één
-// keer verwijderd; de persistente cursor roteert de startpositie per run.
+// Category routes have their own persistent cursor keys, outside the capped
+// dynamic keyword pool. Explicit keyword overrides retain their old scope.
 catalogBatches.growth = Object.freeze([
+  ...HOOGVLIET_CATEGORIES.map(route => route.key),
   ...new Set([
     ...catalogBatches.core,
     ...catalogBatches.fresh,

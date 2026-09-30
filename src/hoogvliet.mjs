@@ -1,4 +1,5 @@
 import { collectGrowthCandidates } from "./growth-collector.mjs";
+import { categoryDiscoveryRoute } from "./discovery-routes.mjs";
 import { chromium } from "playwright";
 import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 
@@ -121,18 +122,28 @@ function absoluteURL(value) {
 
 const SEARCH_PAGE_SIZE = 40;
 
+// Intershop's search treats '+' differently from the visible form's '%20'.
+// URLSearchParams also recodes existing %20 when changing only PageNumber.
+function sourceSearchURL(url) {
+  return url.href.replaceAll("+", "%20");
+}
+
 export function searchURL(term, pageNumber = 0) {
+  const category = categoryDiscoveryRoute(term);
+  if (String(term).startsWith("category:") && !category) {
+    throw new SourceUnavailableError("Onbekende categorieroute.");
+  }
   const url = new URL(SEARCH_PATH, BASE_URL);
   url.searchParams.set("PageNumber", String(pageNumber));
-  url.searchParams.set("PageSize", String(SEARCH_PAGE_SIZE));
+  url.searchParams.set("PageSize", String(category ? 16 : SEARCH_PAGE_SIZE));
   url.searchParams.set("SelectedSearchResult", "SFProductSearch");
-  url.searchParams.set("SearchTerm", term);
+  url.searchParams.set("SearchTerm", category ? "" : term);
   url.searchParams.set("SelectedItem", "");
-  url.searchParams.set("SortingOption", "");
-  url.searchParams.set("CategoryName", "");
-  url.searchParams.set("CategoryTitle", "");
+  url.searchParams.set("SortingOption", category ? "Relevantie" : "");
+  url.searchParams.set("CategoryName", category?.id ?? "");
+  url.searchParams.set("CategoryTitle", category ? `Producten--${category.title}` : "");
   url.searchParams.set("SearchTermKey", "");
-  return url.href;
+  return sourceSearchURL(url);
 }
 
 export function classifySourcePageEvidence(evidence = {}) {
@@ -242,11 +253,14 @@ async function extractSearchCandidates(page) {
   });
 }
 
-export function searchPaginationEvidence({ currentPage, totalPages, totalProducts, candidateCount, explicitEmpty = false }) {
+export function searchPaginationEvidence({ currentPage, totalPages, totalProducts, candidateCount, explicitEmpty = false, requestedPage }) {
   if ((totalProducts === 0 || explicitEmpty) && candidateCount === 0) return { sourceExhausted: true, nextPage: 0 };
   if (!Number.isInteger(currentPage) || currentPage < 1 || !Number.isInteger(totalPages)
     || totalPages < currentPage || !Number.isInteger(totalProducts) || totalProducts < candidateCount
     || candidateCount < 1) throw new SourceUnavailableError("Zoekresultaten missen betrouwbare pagineringmetadata.");
+  if (requestedPage !== undefined && currentPage !== requestedPage + 1) {
+    throw new SourceUnavailableError("Categoriepagina komt niet overeen met de gevraagde cursor.");
+  }
   return { sourceExhausted: currentPage === totalPages, nextPage: currentPage, currentPage };
 }
 
@@ -264,7 +278,8 @@ async function searchPageResult(page, options) {
       explicitEmpty: /geen resultaten gevonden|niks kunnen vinden/i.test(document.querySelector('[role="main"]')?.textContent ?? ""),
     };
   });
-  return { candidates, ...searchPaginationEvidence({ ...evidence, candidateCount: candidates.length }) };
+  return { candidates, ...searchPaginationEvidence({ ...evidence, candidateCount: candidates.length,
+    requestedPage: options.requestedCategoryPage }) };
 }
 
 export function resolvedSearchPageURL(resolvedURL, pageNumber) {
@@ -273,13 +288,22 @@ export function resolvedSearchPageURL(resolvedURL, pageNumber) {
     throw new SourceUnavailableError("Zoekredirect verlaat het vertrouwde zoekendpoint.");
   }
   url.searchParams.set("PageNumber", String(pageNumber));
-  return url.href;
+  return sourceSearchURL(url);
+}
+
+export function verifyCategorySearchRoute(resolvedURL, category) {
+  const url = new URL(resolvedSearchPageURL(resolvedURL, 0));
+  if (url.searchParams.get("CategoryName") !== category.id || url.searchParams.get("SearchTerm")) {
+    throw new SourceUnavailableError("Categoriezoekopdracht verliest de gevraagde broncategorie.");
+  }
 }
 
 export async function navigateSearchPage(page, term, pageNumber = 0, options = {}) {
   const routes = options.resolvedRoutes;
   const knownRoute = routes?.get(term);
   await page.goto(knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
+  const category = categoryDiscoveryRoute(term);
+  if (category) verifyCategorySearchRoute(page.url(), category);
   if (routes) {
     // A term such as fruit redirects to a category and resets PageNumber=0.
     // Keep the resolved category, sorting and page size for all subsequent windows.
@@ -287,6 +311,7 @@ export async function navigateSearchPage(page, term, pageNumber = 0, options = {
     routes.set(term, resolved);
     if (new URL(page.url()).searchParams.get("PageNumber") !== String(pageNumber)) {
       await page.goto(resolved, { waitUntil: "domcontentloaded", timeout: 35_000 });
+      if (category) verifyCategorySearchRoute(page.url(), category);
     }
   }
   return page.url();
@@ -295,7 +320,8 @@ export async function navigateSearchPage(page, term, pageNumber = 0, options = {
 async function searchOnce(page, term, pageNumber = 0, options = {}) {
   await navigateSearchPage(page, term, pageNumber, options);
   await waitForSourceContent(page, ".product-tile", options);
-  return searchPageResult(page, options);
+  return searchPageResult(page, { ...options,
+    requestedCategoryPage: categoryDiscoveryRoute(term) ? pageNumber : undefined });
 }
 
 async function searchUsingVisibleForm(page, term, options = {}) {
@@ -408,7 +434,9 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
         continue;
       }
       repeatedPageStopped = true;
-      stallReason = "repeated_sku_set";
+      // With an explicit category, repeated tiles before the declared final
+      // page are a pagination failure, never evidence of category exhaustion.
+      stallReason = categoryDiscoveryRoute(term) ? "repeated_category_page" : "repeated_sku_set";
       sourceExhausted = false;
       break;
     }
@@ -417,7 +445,7 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
     for (const rawCandidate of pageCandidates) {
       const candidate = normalizeCandidate(rawCandidate);
       if (!candidate) { invalidCandidates += 1; continue; }
-      if (!isRelevantCandidate(candidate, term)) {
+      if (!categoryDiscoveryRoute(term) && !isRelevantCandidate(candidate, term)) {
         irrelevantCandidates += 1;
         continue;
       }
@@ -524,7 +552,7 @@ export function resolvedProductTypeForRefresh(product, existingProductType, sear
     : UNKNOWN_PRODUCT_TYPE;
 }
 
-async function validateCandidate(page, candidate, diagnostics = null) {
+export async function validateCandidate(page, candidate, diagnostics = null) {
   const fail = (reason) => {
     if (diagnostics) diagnostics.reason = reason;
     return null;
