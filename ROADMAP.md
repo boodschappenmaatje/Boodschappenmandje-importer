@@ -262,6 +262,18 @@ Vóór publieke lancering expliciet maken:
 - huidige technische werkwijze blijft voor deze roadmapstap ongewijzigd: geen migratie van afbeeldingen en geen wijziging aan de scraper uitsluitend vanwege deze transparantie-/positioneringsstap;
 - uitleg blijft vriendelijk en compact, niet juridisch/technisch op hoofdschermen.
 
+## Subtiele haptische feedback bij bediening (onderzoek + optionele UX-polish)
+
+**Status: later; niet onderdeel van de huidige PR #30-acceptatie.** Plan na afronding van de huidige visuele huisstijl, vóór de brede gebruikstest/launch-polish.
+
+Doel: waar technisch ondersteund een subtiel voelbaar tikje geven bij belangrijke acties, bijvoorbeeld producten afvinken, verpakkingsaantallen met −/+ aanpassen, gerechten kiezen en eventueel tabnavigatie. Behoud de bestaande werking, snelheid en toegankelijkheid.
+
+- **Eerst haalbaarheid op een fysieke iPhone testen in de geïnstalleerde PWA.** iOS Safari/PWA ondersteunt geen algemene betrouwbare JavaScript-trilling zoals Androids Vibration API; eventuele WebKit-interactiegebonden haptische mogelijkheden zijn platform-/versieafhankelijk en mogen niet als gegarandeerde functionaliteit worden aangenomen.
+- Maak eerst een kleine geïsoleerde proef met één bestaande knop, zonder semantische of toegankelijkheidsregressie of verborgen vervanging door een misleidende schakelaar.
+- Alleen bij bewezen ondersteuning veilig uitbreiden naar relevante acties; laat gebruikers haptiek uitschakelen als er een werkende implementatie komt.
+- Op niet-ondersteunde apparaten blijft bediening volledig bruikbaar met normale visuele feedback. Geen trillingsbelofte in de UI zonder echte ondersteuning.
+- Geen native wrapper of grootschalige platformwijziging uitsluitend voor deze wens zonder afzonderlijke beslissing.
+
 ## Gebruikstest & launch-polish
 Voor accounts/Plus en publieke uitrol:
 - volledige fysieke iPhone-flow testen;
