@@ -124,3 +124,25 @@ test("an absent row uses insert-only creation; malformed metadata fails closed",
     /onbekende metadata/);
   assert.equal(bad.requests.filter(x => x.method !== "GET").length, 0);
 });
+
+test("explicit successful IDs acknowledge once through CAS while preserving unrelated pending IDs", async () => {
+  const f = database({ version: 4, futureField: { safe: true }, plannerMaintenance: pending([id(1), id(2)]) });
+  await saveCatalogDiscoveryState(config, { stateKey: base.state_key, plannerMaintenance: {
+    ...pending([]), notifiedProducts: 1 } }, { acknowledgedProductIds: [id(1)] });
+  assert.deepEqual(f.metadata.plannerMaintenance.pendingProductIds, [id(2)]);
+  assert.equal(f.metadata.plannerMaintenance.notifiedProducts, 1);
+  assert.deepEqual(f.metadata.futureField, { safe: true });
+  await assert.rejects(saveCatalogDiscoveryState(config, { stateKey: base.state_key, plannerMaintenance: {
+    ...pending([]), notifiedProducts: 2 } }, { acknowledgedProductIds: [id(1)] }), /Gelijktijdige/);
+  assert.equal(f.metadata.plannerMaintenance.notifiedProducts, 1);
+});
+
+test("generic writes cannot acknowledge; explicit acknowledgement rejects unknown, duplicate or still-pending IDs", async () => {
+  for (const ids of [undefined, [id(3)], [id(1), id(1)]]) {
+    const f = database({ version: 4, plannerMaintenance: pending([id(1), id(2)]) });
+    await assert.rejects(saveCatalogDiscoveryState(config, { stateKey: base.state_key, plannerMaintenance: {
+      ...pending([id(2)]), notifiedProducts: 1 } }, ids ? { acknowledgedProductIds: ids } : {}), /Gelijktijdige/);
+    assert.equal(f.requests.filter(x => x.method === "PATCH").length, 0);
+    globalThis.fetch = originalFetch; originalFetch = null;
+  }
+});

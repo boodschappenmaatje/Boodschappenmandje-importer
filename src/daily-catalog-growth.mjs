@@ -1,6 +1,8 @@
+import { appendFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.mjs";
+import { runResumableCatalogGrowth } from "./resumable-catalog-growth.mjs";
 import {
   claimCatalogDailyAttempt,
   fetchCatalogDailyJob,
@@ -58,10 +60,9 @@ export function isDailyImportWindowOpen(now = new Date(), {
 
 export function dailyRetryDelayMinutes(attemptNumber) {
   const attempt = Math.max(1, Math.trunc(Number(attemptNumber) || 1));
-  if (attempt === 1) return 10;
-  if (attempt === 2) return 20;
-  if (attempt === 3) return 40;
-  return 60;
+  if (attempt === 1) return 120;
+  if (attempt === 2) return 180;
+  return 240;
 }
 
 export function dailyRetryAt(attemptNumber, now = new Date()) {
@@ -104,19 +105,26 @@ export function shouldRunDailyImport(job, now = new Date(), options = {}) {
 
 function resultCounts(result = {}) {
   return {
+    accounting: result.accounting ?? null, segments: result.segments ?? [],
+    stalledTerms: result.stalledTerms ?? [], plannerMaintenance: result.plannerMaintenance ?? null,
+    irrelevant: integer(result.irrelevantCount),
     candidates: integer(result.candidatesViewed),
     new: integer(result.actualGrowth),
     updated: integer(result.updatedCount),
     unchanged: integer(result.unchangedCount),
     skipped: integer(result.skippedCount),
     invalid: integer(result.invalidCount ?? result.skippedCount),
-    sourceErrors: integer(result.searchErrors),
+    sourceErrors: integer(result.searchErrors) + integer(result.errorCount),
+    existing: integer(result.existingCount), duplicates: integer(result.duplicateCount),
+    total: result.totalUniqueProductsAfter ?? null, stopReason: result.stopReason ?? null,
   };
 }
 
 function errorCounts(error) {
   const metrics = error?.catalogAttemptMetrics ?? {};
   return {
+    accounting: metrics.accounting ?? null, stalledTerms: metrics.stalledTerms ?? [], plannerMaintenance: metrics.plannerMaintenance ?? null,
+    irrelevant: integer(metrics.irrelevantCount), total: metrics.totalUniqueProductsAfter ?? null,
     candidates: integer(metrics.candidatesViewed),
     new: integer(error?.actualGrowth),
     updated: integer(metrics.updatedCount),
@@ -124,6 +132,8 @@ function errorCounts(error) {
     skipped: integer(metrics.skippedCount),
     invalid: integer(metrics.invalidCount),
     sourceErrors: integer(metrics.sourceErrors || 1),
+    existing: integer(metrics.existingCount), duplicates: integer(metrics.duplicateCount),
+    stopReason: error?.code ?? "technical_failure",
   };
 }
 
@@ -149,7 +159,16 @@ export function formatDailyAttemptSummary({
     `poging=${job.attemptCount}`,
     job.lastAttemptAt ? `gestart=${job.lastAttemptAt}` : null,
     completedAt ? `afgerond=${completedAt.toISOString()}` : null,
-    `kandidaten_bekeken=${counts.candidates}`,
+    `doel_nieuw=${job.targetNewProducts}`,
+    `raw_paginahits=${counts.candidates}`,
+    `discovery_segmenten=${counts.segments?.length ?? 0}`,
+    counts.accounting ? `kandidaatboekhouding=${JSON.stringify(counts.accounting)}` : null,
+    counts.stalledTerms?.length ? `gestalde_termen=${JSON.stringify(counts.stalledTerms)}` : null,
+    counts.plannerMaintenance ? `planner_onderhoud=${JSON.stringify(counts.plannerMaintenance)}` : null,
+    `bestaand=${counts.existing ?? 0}`,
+    `duplicaten=${counts.duplicates ?? 0}`,
+    `stopreden=${counts.stopReason ?? retryReason ?? job.status}`,
+    counts.total == null ? null : `totaal_na=${counts.total}`,
     `nieuw=${counts.new}`,
     `bijgewerkt=${counts.updated}`,
     `ongewijzigd=${counts.unchanged}`,
@@ -169,7 +188,12 @@ function safeLogger(secret) {
     ? String(value).split(secret).join("[REDACTED]")
     : String(value);
   return {
-    info: (value) => console.log(redact(value)),
+    info: (value) => {
+      const safe = redact(value); console.log(safe);
+      if (process.env.GITHUB_STEP_SUMMARY && safe.startsWith("Dagelijkse catalogusgroei")) {
+        appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n### Importresultaat\n\n${safe.split(" | ").join("\n\n")}\n`);
+      }
+    },
     error: (value) => console.error(redact(value)),
   };
 }
@@ -227,11 +251,12 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
       maxNewProducts: claim.job.remainingTarget,
       maxProducts: Math.min(500, Math.max(config.maxProducts, claim.job.remainingTarget)),
       importTrigger: "schedule",
+      discoveryScanDate: jobDate,
     };
     growthConfig.productTypeSupported = growthConfig.dryRun
       ? true
       : await supportsProductType(growthConfig);
-    result = await runGrowth(growthConfig, logger);
+    result = await runResumableCatalogGrowth(growthConfig, logger, runGrowth);
   } catch (error) {
     const completedAt = dependencies.now?.() ?? new Date();
     const failure = classifyDailyImportError(error);
@@ -242,7 +267,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     );
     const targetReached = cumulative >= claim.job.targetNewProducts;
     const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
-    const retryable = failure.retryable && windowOpen && !targetReached;
+    const retryable = failure.retryable && windowOpen && !targetReached && !config.dailySingleAttempt;
     const outcome = targetReached
       ? "succeeded"
       : (retryable
@@ -264,7 +289,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
       publicMessage: retryable
         ? publicPauseMessage()
         : (failure.retryable
-          ? "Dagupdate gedeeltelijk voltooid. De bestaande catalogus blijft beschikbaar."
+          ? (config.dailySingleAttempt ? "Eenmalige poging afgerond; verdere imports wachten op beoordeling." : "Dagupdate gedeeltelijk voltooid. De bestaande catalogus blijft beschikbaar.")
           : publicAttentionMessage()),
       now: completedAt,
     });
@@ -275,8 +300,9 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
       nextRetryAt: job.nextRetryAt ? new Date(job.nextRetryAt) : null,
       retryReason: retryable ? failure.code : null,
     }));
-    if (!failure.retryable) throw error;
-    return { attempted: true, reason: job.status, job, error };
+    // De dagstate is al veilig vastgelegd, zodat de volgende retry kan
+    // doorgaan. Een echte bron-/importfout blijft een zichtbare Actions-fout.
+    throw error;
   }
 
   const completedAt = dependencies.now?.() ?? new Date();
@@ -287,23 +313,29 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
   );
   const targetReached = cumulative >= claim.job.targetNewProducts;
   const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
-  const nextRetryAt = !targetReached && windowOpen
+  const sourceExhausted = result.sourceExhausted === true && counts.sourceErrors === 0;
+  const stalledCoverage = ["discovery_incomplete_stalled_terms", "discovery_resume_stalled"].includes(result.stopReason);
+  const nextRetryAt = !targetReached && !sourceExhausted && !stalledCoverage && windowOpen && !config.dailySingleAttempt
     ? dailyRetryAt(claim.job.attemptCount, completedAt)
     : null;
   const outcome = targetReached
     ? "succeeded"
-    : (windowOpen ? "succeeded" : "daily_target_partial");
+    : (stalledCoverage ? "non_retryable_failure"
+      : (windowOpen && !sourceExhausted && !config.dailySingleAttempt ? "succeeded" : "daily_target_partial"));
   const job = await finish(config, {
     jobID: claim.job.id,
     attemptID: claim.attemptId,
     lockToken: claim.lockToken,
     outcome,
     counts,
-    retryReason: targetReached ? null : "daily_target_not_reached",
+    retryReason: targetReached ? null : (sourceExhausted ? "discovery_exhausted" : result.stopReason ?? "daily_target_not_reached"),
     nextRetryAt,
-    publicMessage: targetReached
+    errorCode: stalledCoverage ? result.stopReason : null,
+    publicMessage: stalledCoverage && !targetReached ? publicAttentionMessage() : targetReached
       ? "Dagdoel behaald."
-      : (windowOpen ? publicPauseMessage() : "Dagupdate gedeeltelijk voltooid. De bestaande catalogus blijft beschikbaar."),
+      : (sourceExhausted ? "Beschikbare zoekroutes uitgeput; geen verdere nieuwe geldige kandidaten gevonden."
+        : (config.dailySingleAttempt ? "Eenmalige poging afgerond; verdere imports wachten op beoordeling. Bronuitputting niet bewezen."
+          : (windowOpen ? publicPauseMessage() : "Dagupdate onvolledig; veiligheidsgrens of dagvenster bereikt, bronuitputting niet bewezen."))),
     now: completedAt,
   });
   logger.info(formatDailyAttemptSummary({
@@ -311,7 +343,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     counts,
     completedAt,
     nextRetryAt: job.nextRetryAt ? new Date(job.nextRetryAt) : null,
-    retryReason: targetReached ? null : "daily_target_not_reached",
+    retryReason: targetReached ? null : (sourceExhausted ? "discovery_exhausted" : result.stopReason ?? "daily_target_not_reached"),
   }));
   return { attempted: true, reason: job.status, job, result };
 }

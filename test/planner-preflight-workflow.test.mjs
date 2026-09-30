@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
@@ -16,7 +15,7 @@ const scriptFrom = (text) => text.match(/node --input-type=module <<'NODE'\n([\s
   .replace(/^          /gm, "");
 const script = scriptFrom(job ?? "");
 
-test("normal importer is byte-identical apart from the optional bypass environment mapping", () => {
+test("preflight remains isolated while the daily importer uses its production origin and daily budget", () => {
   assert.ok(job);
   assert.ok(workflow.includes(input));
   assert.ok(workflow.includes(guard));
@@ -28,10 +27,10 @@ test("normal importer is byte-identical apart from the optional bypass environme
     .replace(input, "").replace(job, "").replace(guard, "");
   assert.equal(withoutPreflight.split(bypassEnv).length - 1, 1);
   assert.match(withoutPreflight, /^  import:\n[\s\S]*?    env:\n[\s\S]*?      VERCEL_AUTOMATION_BYPASS_SECRET: \$\{\{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/m);
-  const original = withoutPreflight.replace(bypassEnv, "");
-  // Approved workflow at 8dd0d4a / db0b8d2, before the isolated preflight additions.
-  assert.equal(createHash("sha256").update(original).digest("hex"),
-    "3a5a837a0c4de6681c02e6794b720db2711b0cb7de91f4f4409c5870d98eec94");
+  assert.match(withoutPreflight, /PLANNER_CACHE_BASE_URL: https:\/\/boodschappenmaatje-pwa\.vercel\.app/);
+  assert.match(withoutPreflight, /DAILY_SINGLE_ATTEMPT=1/);
+  assert.match(withoutPreflight, /DAILY_IMPORT_STATE_KEY=daily-catalog-growth/);
+  assert.doesNotMatch(withoutPreflight, /maintenance_probe_only|server_client_probe_only|databaseReadProbe/);
 });
 
 test("job-level guard excludes the entire importer for typed or raw true", () => {

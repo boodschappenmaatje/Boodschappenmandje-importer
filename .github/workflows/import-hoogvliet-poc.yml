@@ -3,6 +3,10 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
+      daily_attempt_only:
+        description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry
+        type: boolean
+        default: false
       falafel_e2e_only:
         description: Alleen de expliciet goedgekeurde falafel-E2E; normale importer overslaan
         type: boolean
@@ -212,7 +216,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      PLANNER_CACHE_BASE_URL: ${{ vars.PLANNER_CACHE_BASE_URL }}
+      PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
       PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       HEADLESS: "1"
@@ -284,6 +288,17 @@ jobs:
             if [[ "$update_mode" == "growth" ]]; then
               catalog_batch="growth"
             fi
+          fi
+
+          # Explicit one-shot validation uses the existing daily claim and closes today's job.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.daily_attempt_only }}" == "true" ]]; then
+            update_mode="growth"
+            catalog_batch="growth"
+            max_products="400"
+            daily_import_job="1"
+            import_trigger="schedule"
+            advance_discovery_state="1"
+            echo "DAILY_SINGLE_ATTEMPT=1" >> "$GITHUB_ENV"
           fi
 
           if [[ "$update_mode" == "prices" ]]; then
@@ -401,7 +416,7 @@ jobs:
           {
             echo '## Catalogusgroei'
             echo "Doel: ${MAX_NEW_PRODUCTS} daadwerkelijk nieuwe unieke producten."
-            echo 'De importer valideert dit met het verschil tussen de Supabase-aantallen vóór en na de run.'
+            echo 'Alleen bevestigde nieuwe inserts met bevestigde geldige prijs tellen mee.'
             echo 'Bestaande en bijgewerkte SKU’s tellen niet mee voor dit groeidoel.'
             if [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
               echo 'Dit is één attempt binnen de persistente dagjob; gedeeltelijke groei blijft bewaard.'

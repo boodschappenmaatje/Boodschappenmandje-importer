@@ -701,19 +701,24 @@ function parseDiscoveryMetadata(raw) {
   } catch { return {}; }
 }
 
-function mergePlannerMaintenance(current, incoming) {
+function mergePlannerMaintenance(current, incoming, acknowledgedProductIds = []) {
+  if (acknowledgedProductIds.length && (!current || !incoming)) {
+    throw new Error("Onderhoudsbevestiging vereist een bestaande pendingstatus.");
+  }
   if (incoming == null) return current ?? null;
   if (!current) return incoming;
   const currentIds = current.pendingProductIds;
   const incomingIds = incoming.pendingProductIds;
   if (!Array.isArray(currentIds) || !Array.isArray(incomingIds) ||
       !Number.isSafeInteger(current.notifiedProducts) ||
-      incoming.notifiedProducts !== current.notifiedProducts) {
+      !Array.isArray(acknowledgedProductIds) || new Set(acknowledgedProductIds).size !== acknowledgedProductIds.length ||
+      acknowledgedProductIds.some(id => !currentIds.includes(id) || incomingIds.includes(id)) ||
+      incoming.notifiedProducts !== current.notifiedProducts + acknowledgedProductIds.length) {
     throw new Error("Gelijktijdige planneronderhoudsstatus vereist afzonderlijke beoordeling.");
   }
-  const pendingProductIds = [...new Set([...currentIds, ...incomingIds])];
+  const pendingProductIds = [...new Set([...currentIds.filter(id => !acknowledgedProductIds.includes(id)), ...incomingIds])];
   if (pendingProductIds.length > 400) throw new Error("Planneronderhoudswachtrij overschrijdt de veiligheidsgrens.");
-  return { ...current, ...incoming, notifiedProducts: current.notifiedProducts,
+  return { ...current, ...incoming, notifiedProducts: incoming.notifiedProducts,
     pendingProductIds, status: pendingProductIds.length ? "pending_requires_attention" : "confirmed" };
 }
 
@@ -761,7 +766,7 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
   };
 }
 
-export async function saveCatalogDiscoveryState(config, state) {
+export async function saveCatalogDiscoveryState(config, state, { acknowledgedProductIds = [] } = {}) {
   const select = "state_key,term_cursor,page_cursor,last_batch,updated_at";
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const currentRows = await getJSON(config.supabaseURL, "catalog_discovery_state", config.supabaseSecret,
@@ -772,7 +777,7 @@ export async function saveCatalogDiscoveryState(config, state) {
     if (current && current.last_batch && !Object.keys(metadata).length) {
       throw new Error("Discovery-state bevat onbekende metadata; overschrijven geweigerd.");
     }
-    const plannerMaintenance = mergePlannerMaintenance(metadata.plannerMaintenance, state.plannerMaintenance);
+    const plannerMaintenance = mergePlannerMaintenance(metadata.plannerMaintenance, state.plannerMaintenance, acknowledgedProductIds);
     const lastBatch = JSON.stringify({ ...metadata,
       version: Math.max(4, metadata.version ?? 2),
       batch: state.lastBatch ?? metadata.batch ?? null,
@@ -893,7 +898,7 @@ function pricePayload(productID, product) {
   };
 }
 
-export async function upsertProducts(config, products) {
+export async function upsertProducts(config, products, lifecycle = {}) {
   // Explicit configuration keeps the existing importer unchanged until activation.
   // Validate it before any writes; the API token never reaches Supabase/browser code.
   const maintenance = config.updateMode === "prices" || config.updateMode === "classify"
@@ -916,8 +921,8 @@ export async function upsertProducts(config, products) {
         continue;
       }
       try {
-        const insertionId = maintenance ? randomUUID() : null;
-        const inserted = maintenance ? await postJSON(
+        const insertionId = maintenance || config.updateMode === "growth" ? randomUUID() : null;
+        const inserted = insertionId ? await postJSON(
           config.supabaseURL,
           "products",
           config.supabaseSecret,
@@ -952,8 +957,9 @@ export async function upsertProducts(config, products) {
         if (storedPrice?.product_id !== stored.id || Number(storedPrice.price) !== product.price) {
           throw new Error(`Prijscontrole mislukte voor SKU ${product.sku}.`);
         }
-        imported.push({ sku: product.sku, name: product.name, price: product.price });
-        if (maintenance && stored.id === insertionId) newProductIds.push(stored.id);
+        imported.push({ sku: product.sku, name: product.name, price: product.price,
+          ...(insertionId ? { inserted: stored.id === insertionId } : {}) });
+        if (insertionId && stored.id === insertionId) newProductIds.push(stored.id);
       } catch (error) {
         const structural = error instanceof SupabaseRequestError
           && (error.kind === "network" || error.kind === "dns" || error.kind === "tls"
@@ -962,19 +968,26 @@ export async function upsertProducts(config, products) {
             || error.status === 401 || error.status === 403 || error.status === 404
             || error.status === 408 || error.status === 425 || error.status === 429
             || (error.status ?? 0) >= 500);
-        if (structural) throw error;
+        if (structural) { error.confirmedImports = [...imported]; throw error; }
         errors.push({ sku: product.sku, message: error instanceof Error ? error.message : "onbekende fout" });
       }
     }
   } finally {
     // A later structural import failure must not lose notifications for earlier
     // successfully confirmed product/price pairs in this batch.
-    if (maintenance && newProductIds.length > 0) {
-      const result = maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
-      if (result.pendingProductIds.length > 0) {
-        // Successful catalog writes remain successful. Preserve exact replay scope,
-        // never include response bodies, URLs, tokens or a global refresh instruction.
-        console.warn(`Planner-cacheonderhoud nog niet bevestigd; gerichte herhaling nodig voor product-ID's: ${result.pendingProductIds.join(",")}`);
+    if (newProductIds.length > 0) {
+      try {
+        // Persist replay scope before making an external request. A failed acknowledgement
+        // save leaves the durable pending scope intact for idempotent recovery.
+        await lifecycle.onMaintenancePending?.(newProductIds);
+        maintenanceResult = await notifyPlannerOfNewProducts(maintenance, newProductIds);
+        await lifecycle.onMaintenanceResult?.(maintenanceResult, newProductIds);
+      } catch (error) {
+        error.confirmedImports = [...imported];
+        throw error;
+      }
+      if (maintenanceResult.pendingProductIds.length > 0) {
+        console.warn(`Planner-cacheonderhoud: ${JSON.stringify(maintenanceResult)}`);
       }
     }
   }

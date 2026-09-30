@@ -1379,6 +1379,7 @@ test("discovery-state bewaart cursor, termyield en tijdelijke verzadiging compat
   }
   const persistedMetadata = JSON.parse(storedPayload.last_batch);
   assert.equal(persistedMetadata.version, 4);
+  assert.deepEqual(persistedMetadata.exhaustedTerms, []);
   assert.equal(persistedMetadata.lastTerm, "pasta");
   assert.equal(persistedMetadata.saturatedUntil.fruit, "2026-09-19T12:00:00.000Z");
 });
@@ -1509,4 +1510,34 @@ test("Supabase-migratie voegt alleen de optionele producttype-kolom en index toe
   assert.match(migration, /add column if not exists product_type text/i);
   assert.match(migration, /products_supermarket_product_type_idx/i);
   assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from/i);
+});
+
+test('live-observed Hoogvliet pagination metadata distinguishes last page from missing markup', async () => {
+  const { searchPaginationEvidence } = await import('../src/hoogvliet.mjs');
+  assert.deepEqual(searchPaginationEvidence({ currentPage: 1, totalPages: 2, totalProducts: 31, candidateCount: 16 }),
+    { sourceExhausted: false, nextPage: 1, currentPage: 1 });
+  assert.equal(searchPaginationEvidence({ currentPage: 2, totalPages: 2, totalProducts: 31, candidateCount: 15 }).sourceExhausted, true);
+  assert.equal(searchPaginationEvidence({ totalProducts: 0, candidateCount: 0 }).sourceExhausted, true);
+  assert.equal(searchPaginationEvidence({ explicitEmpty: true, candidateCount: 0 }).sourceExhausted, true);
+  assert.throws(() => searchPaginationEvidence({ currentPage: null, totalPages: null, totalProducts: null, candidateCount: 0 }), /metadata/);
+});
+
+test('discovery reads v3 live checkpoints and round-trips v4 accounting/stalls/maintenance', async t => {
+  let row = { state_key: 'fixture', term_cursor: 94, page_cursor: 2, last_batch: JSON.stringify({
+    version: 3, scanDate: '2026-09-28', lastTerm: 'fruit', exhaustedTerms: ['groente', 'groenten'],
+  }) };
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    if (options.method !== 'GET') { assert.equal(options.method, 'PATCH'); row = JSON.parse(options.body); }
+    return new Response(JSON.stringify([row]), { status: 200 });
+  });
+  const settings = { supabaseURL: 'https://fixture.supabase.co', supabaseSecret: 'fixture' };
+  const old = await fetchCatalogDiscoveryState(settings, 'fixture');
+  assert.equal(old.lastTerm, 'fruit'); assert.equal(old.scanDate, '2026-09-28');
+  assert.deepEqual(old.exhaustedTerms, ['groente', 'groenten']);
+  const fields = { stalledTerms: [{ term: 'fruit', page: 2, reason: 'repeated_sku_set' }],
+    lastAttemptReport: { accounting: { rawPageHits: 9, accounted: 9, balanced: true } },
+    plannerMaintenance: { status: 'pending_requires_attention', pendingProductIds: ['fixture-id'] } };
+  await saveCatalogDiscoveryState(settings, { ...old, ...fields });
+  const restored = await fetchCatalogDiscoveryState(settings, 'fixture');
+  for (const key of Object.keys(fields)) assert.deepEqual(restored[key], fields[key]);
 });

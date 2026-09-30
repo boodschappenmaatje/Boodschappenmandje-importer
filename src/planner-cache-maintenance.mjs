@@ -1,3 +1,4 @@
+import { maintenanceRequest, maintenanceError, maintenanceDiagnostic } from "./maintenance-http.mjs";
 const PATH = "/api/internal/planner-readiness/new-products";
 
 export function plannerMaintenanceSettings(config) {
@@ -14,41 +15,29 @@ export function plannerMaintenanceSettings(config) {
 }
 
 /** Only after product AND price confirmation; never rolls back a successful import. */
-export async function notifyPlannerOfNewProducts(settings, productIds, fetcher = fetch) {
-  const ids = [...new Set(productIds)];
-  const pendingProductIds = [];
+export async function notifyPlannerOfNewProducts(settings, productIds, fetcher = fetch, dependencies = {}) {
+  const ids = [...new Set(productIds)], pendingProductIds = [], failures = [];
   let notifiedProducts = 0;
   for (let offset = 0; offset < ids.length; offset += 20) {
     const batch = ids.slice(offset, offset + 20);
-    let confirmed = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        const response = await fetcher(settings.url, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${settings.token}`,
-            "content-type": "application/json",
-            ...(settings.automationBypassSecret
-              ? { "x-vercel-protection-bypass": settings.automationBypassSecret } : {}),
-          },
-          body: JSON.stringify({ productIds: batch }),
-          redirect: "manual",
-          signal: AbortSignal.timeout(65_000),
-        });
-        if (response.ok) {
-          const result = await response.json();
-          confirmed = result.productCount === batch.length && Array.isArray(result.changedMatchKeys) &&
-            Array.isArray(result.affectedRecipeIds) && Number.isInteger(result.refreshedReadinessCount);
-          if (confirmed) break;
-        }
-        // Do not follow redirects with credentials or retry authorization errors.
-        if (response.status >= 300 && response.status < 500 && response.status !== 429) break;
-      } catch {
-        // Never log exception text: network errors may contain credentials or URLs.
+    try {
+      if (!settings) throw maintenanceError("planner-maintenance-not-configured");
+      const response = await maintenanceRequest(settings.url, {
+        method: "POST", headers: {
+          authorization: `Bearer ${settings.token}`, "content-type": "application/json",
+          ...(settings.automationBypassSecret ? { "x-vercel-protection-bypass": settings.automationBypassSecret } : {}),
+        }, body: JSON.stringify({ productIds: batch }),
+      }, { stage: "new-product-cache-refresh", fetcher, timeoutMs: 65000, ...dependencies });
+      const result = await response.json().catch(() => null);
+      if (result?.productCount !== batch.length || !Array.isArray(result.changedMatchKeys)
+        || !Array.isArray(result.affectedRecipeIds) || !Number.isInteger(result.refreshedReadinessCount)) {
+        throw maintenanceError("invalid-new-product-cache-response");
       }
+      notifiedProducts += batch.length;
+    } catch (error) {
+      pendingProductIds.push(...batch);
+      failures.push(JSON.parse(maintenanceDiagnostic(error)));
     }
-    if (confirmed) notifiedProducts += batch.length;
-    else pendingProductIds.push(...batch);
   }
-  return { notifiedProducts, pendingProductIds };
+  return { notifiedProducts, pendingProductIds, status: pendingProductIds.length ? "pending_requires_attention" : "confirmed", failures };
 }

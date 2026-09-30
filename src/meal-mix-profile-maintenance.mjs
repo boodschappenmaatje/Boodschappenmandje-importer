@@ -1,3 +1,4 @@
+import { maintenanceRequest, maintenanceDiagnostic, mealMixRefreshSettings, refreshMealMixRecipes } from "./maintenance-http.mjs";
 import { chromium } from "playwright";
 import { pathToFileURL } from "node:url";
 import { restURL, requestHeaders } from "./supabase.mjs";
@@ -37,9 +38,8 @@ export function mealMixApi(config, fetcher = fetch) {
   return async (table, query, { method = "GET", body, prefer = "return=representation" } = {}) => {
     const url = restURL(config.supabaseURL, table);
     url.search = new URLSearchParams(query).toString();
-    const response = await fetcher(url, { method, headers: requestHeaders(config.supabaseSecretKey, prefer),
-      body: body === undefined ? undefined : JSON.stringify(body), redirect: "manual", signal: AbortSignal.timeout(25000) });
-    if (!response.ok) throw Error(`meal-mix-database-${response.status}`);
+    const response = await maintenanceRequest(url, { method, headers: requestHeaders(config.supabaseSecretKey, prefer),
+      body: body === undefined ? undefined : JSON.stringify(body) }, { fetcher, stage: `meal-mix-database-${table.replaceAll("_", "-")}` });
     return response.status === 204 ? [] : response.json();
   };
 }
@@ -125,20 +125,12 @@ export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 1
 }
 
 async function main() {
+  const settings = mealMixRefreshSettings(process.env);
   const api = mealMixApi({ supabaseURL: process.env.SUPABASE_URL, supabaseSecretKey: process.env.SUPABASE_SECRET_KEY });
-  const base = new URL(process.env.PLANNER_CACHE_BASE_URL);
-  if (base.protocol !== "https:" || base.username || base.password) throw Error("invalid-planner-origin");
+  console.log(`Maaltijdmixonderhoud endpoint: ${settings.url.origin}${settings.url.pathname}`);
   const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, headless: true });
   try {
-    const refreshRecipes = async (recipeIds) => {
-        const response = await fetch(new URL("/api/internal/planner-readiness/mix-refresh", base), {
-          method: "POST", redirect: "manual", signal: AbortSignal.timeout(120000),
-          headers: { "content-type": "application/json", authorization: `Bearer ${process.env.PLANNER_CACHE_ADMIN_TOKEN}`,
-            ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET ? { "x-vercel-protection-bypass": process.env.VERCEL_AUTOMATION_BYPASS_SECRET } : {}) },
-          body: JSON.stringify({ recipeIds }),
-        });
-        if (!response.ok) throw Error("meal-mix-cache-refresh-failed");
-      };
+    const refreshRecipes = (recipeIds) => refreshMealMixRecipes(settings, recipeIds);
     const limit = 100;
     const results = await maintainMealMixProfiles({ api, limit, refreshRecipes,
       readSource: async (product) => { const page = await browser.newPage(); try { return await readMealMixSource(page, product); } finally { await page.close(); } },
@@ -149,5 +141,5 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(() => { console.error("Maaltijdmixonderhoud mislukt; de wachtrij en bronstatus blijven controleerbaar."); process.exitCode = 1; });
+  main().catch((error) => { console.error(`Maaltijdmixonderhoud mislukt: ${maintenanceDiagnostic(error)}`); process.exitCode = 1; });
 }
