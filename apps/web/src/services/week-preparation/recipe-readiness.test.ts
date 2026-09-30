@@ -11,6 +11,7 @@ import {
   evaluateRecipeReadiness,
   readyRecipeIds,
 } from "@/services/week-preparation/recipe-readiness";
+import { mealMixSupplementAliases } from "@/services/week-preparation/meal-mix-profiles";
 import type {
   RecipeCatalog,
   RecipeIngredientDefinition,
@@ -154,6 +155,40 @@ function matchingRepository(products: Product[]): CatalogRepository {
 }
 
 describe("Recipe Readiness Gate", () => {
+  it.each(Array.from({ length: 10 }, (_, index) => index + 1))("herkent hacheevlees uit echte stoofriblap voor %i personen", async (people) => {
+    const ingredient: RecipeIngredientDefinition = { id: "hachee", sourceKey: "mix-supplement-hacheevlees",
+      name: "hacheevlees", normalizedName: "hacheevlees", defaultUnit: "g", category: "Vlees",
+      aliases: ["hacheevlees", ...mealMixSupplementAliases("hacheevlees")] };
+    const relation = { ...RELATION, ingredientId: ingredient.id, unit: "g" as const, amountPerPerson: 125 };
+    const riblappen = product({ id: "riblappen", sku: "733659000", name: "Hoogvliet Riblappen",
+      productType: "Varkensvlees", category: "Vlees, vis, vegetarisch/Rund-en varkensvlees/Stoofvlees",
+      packageText: "Ca. 700 gram", weightGrams: 700,
+      currentPrice: { productId: "riblappen", price: 14.34, oldPrice: null, isOffer: false,
+        offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
+    const gate = await evaluateRecipeReadiness([RECIPE], people,
+      catalog([ingredient], [relation]), matchingRepository([riblappen]));
+    expect(gate.recipes[0]).toMatchObject({ ready: true, problemCount: 0 });
+    expect(gate.recipes[0].ingredients[0]).toMatchObject({ sku: "733659000",
+      requiredQuantity: people * 125, reliableProductMatch: true, priceKnown: true, packageCalculable: true });
+  });
+
+  it.each(Array.from({ length: 10 }, (_, index) => index + 1))("houdt pita in stuks NOT_READY voor een eis van %i × 100 gram", async (people) => {
+    const ingredient: RecipeIngredientDefinition = { id: "pita", sourceKey: "mix-supplement-pitabroodjes",
+      name: "pitabroodjes", normalizedName: "pitabroodjes", defaultUnit: "g", category: "Brood",
+      aliases: ["pitabroodjes", ...mealMixSupplementAliases("pitabroodjes")] };
+    const relation = { ...RELATION, ingredientId: ingredient.id, unit: "g" as const, amountPerPerson: 100 };
+    const pita = product({ id: "pita", sku: "675984000", name: "G'woon Pita broodjes",
+      category: "Brood/Thuis afbakken/Afbakbroodjes", productType: "Broodjes", packageText: "10 stuk",
+      weightGrams: null, currentPrice: { productId: "pita", price: 0.79, oldPrice: null,
+        isOffer: false, offerText: null, validFrom: null, validUntil: null,
+        fetchedAt: NOW, updatedAt: NOW } });
+    const gate = await evaluateRecipeReadiness([RECIPE], people,
+      catalog([ingredient], [relation]), matchingRepository([pita]));
+    expect(gate.recipes[0]).toMatchObject({ ready: false, problemCount: 1 });
+    expect(gate.recipes[0].ingredients[0]).toMatchObject({ sku: "675984000",
+      requiredQuantity: people * 100, priceKnown: true, packageCalculable: false,
+      reason: "package_unknown" });
+  });
   it("markeert een recept pas READY als alle verplichte controles slagen", async () => {
     const realProduct = product({ id: "product-beef", sku: "871000001", name: "Hoogvliet rundergehakt" });
     const gate = await evaluateRecipeReadiness(

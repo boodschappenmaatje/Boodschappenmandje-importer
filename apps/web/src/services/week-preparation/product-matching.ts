@@ -212,6 +212,11 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
     const context = normalize(`${product.name} ${product.category}`);
     if (/baby|peuter|dreumes|bonbebe|\bmaanden\b/.test(context)) return false;
     if (required === "appel" && /moes|compote|conserven|gedroogd|sap/.test(context)) return false;
+    // Hoogvliet identifies its Riblappen as raw 100% beef for stewing even
+    // though the catalog productType is misclassified. Do not extend that
+    // source-specific equivalence to processed meat or unrelated riblappen.
+    if (required === "hacheevlees" && name === "hoogvliet riblappen" &&
+        (product.sku !== "733659000" || !normalize(product.category).endsWith("stoofvlees"))) return false;
     // Fresh vegetables used in these package recipes are not cooked preserves.
     if (/^(kastanjechampignons|champignons|wortel|wortels)$/.test(required) &&
         /conserven|potgroente|blikgroente/.test(context)) return false;
