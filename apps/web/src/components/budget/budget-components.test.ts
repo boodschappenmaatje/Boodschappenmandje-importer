@@ -95,7 +95,7 @@ describe("PWA 9 budgetweergaven", () => {
     const html = render(createElement(HomePage), activeList(10));
     expect(html).toContain("weekbudget");
     expect(html).toContain("gepland");
-    expect(html).toContain("over voor deze week");
+    expect(html).toContain(">over<");
     expect(html).toContain("€ 100,00");
     expect(html).toContain("€ 90,00");
     expect(html).toContain('href="/budget"');
@@ -143,8 +143,8 @@ describe("PWA 9 budgetweergaven", () => {
   it("toont een concrete rustige waarschuwing boven budget", () => {
     const html = render(createElement(HomePage), activeList(120));
     expect(html).toContain("boven budget");
-    expect(html).toContain("Je zit € 20,00 boven je budget");
-    expect(html).toContain('data-tone="danger"');
+    expect(html).toContain("€ 20,00");
+    expect(html).toContain('data-over="true"');
   });
 
   it("behoudt compacte layoutregels voor 375, 390 en 430 pixels", () => {

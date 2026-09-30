@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import HomePage from "@/app/page";
-import PrepareWeekPage from "@/app/week-voorbereiden/page";
+import { WeekPreparationView as PrepareWeekPage } from "./WeekPreparationView";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -327,6 +327,7 @@ function render(
   component: ReturnType<typeof createElement>,
   preparation: WeekPreparation | null,
   activeList: ActiveShoppingList = list(),
+  settings: BudgetSettings = SETTINGS,
 ): string {
   return renderToStaticMarkup(
     createElement(
@@ -334,7 +335,7 @@ function render(
       { initialList: activeList },
       createElement(
         BudgetProvider,
-        { initialSettings: SETTINGS },
+        { initialSettings: settings },
         createElement(
           WeekPreparationProvider,
           { initialPreparation: preparation },
@@ -475,29 +476,29 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(emptyHtml).toContain("Nog geen gerechten gekozen");
     expect(emptyHtml).toContain("Maak mijn week");
     expect(draftHtml).toContain("4 personen");
-    expect(draftHtml).toContain("0 maaltijden");
+    expect(draftHtml).toContain("Weekinstellingen");
     expect(draftHtml).toContain("Maak mijn week");
-    expect(readyHtml).toContain("Jouw week");
-    expect(readyHtml).toContain("Bekijk week");
+    expect(readyHtml).toContain("Je week");
+    expect(readyHtml).toContain("Maak mijn week");
   });
 
   it("behoudt Budget en boodschappenlijst op Home naast de weekkaarten", () => {
     const html = render(createElement(HomePage), draft());
-    expect(html).toContain("Bekijk weekbudget");
+    expect(html).toContain("Bekijk je weekbudget");
     expect(html).toContain("€ 24,63");
-    expect(html).toContain("Verder met mijn lijst");
+    expect(html).toContain("Naar je boodschappenlijst");
     expect(html).toContain('href="/lijst"');
   });
 
-  it("toont gegenereerde gerechten als horizontale dagkaarten met echte prijs en eigen gerechtfoto", () => {
+  it("toont het eerste gerecht compact met echte prijs en bijbehorende gerechtfoto", () => {
     const html = render(createElement(HomePage), generated());
-    expect(html).toContain("meal-day-scroller");
+    expect(html).toContain("home-c-meal");
     expect(html).toContain("Spaghetti bolognese");
     expect(html).toContain("€ 8,98");
     expect(html).toContain("pasta-spaghetti-bolognese.webp");
     expect(html).toContain('data-image-source="recipe"');
     expect(html).not.toContain("rundergehakt.webp&quot; class=\"meal-day-image");
-    expect(html).toContain("Maak mijn week");
+    expect(html).toContain("Bekijk je week");
   });
 
   it("gebruikt op weekkaart en gerechtdetail dezelfde nette fallback bij een niet-gevalideerde foto", () => {
@@ -552,5 +553,160 @@ describe("PWA 10 weekvoorbereidingsweergaven", () => {
     expect(css).toContain("grid-template-columns: 44px 32px 44px");
     expect(css).toContain("height: 47px");
     expect(css).toContain("@media (max-width: 360px)");
+  });
+});
+
+
+describe("Home Optie C — echte gegevens en veilige afwijkende staten", () => {
+  it("geeft de mockup-snelkaarten echte product- en maaltijdtotalen met bestaande routes", () => {
+    const data = generated(); // One real recipe, five free choices; one separate list product.
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain('aria-label="1 product op je lijst"');
+    const facts = html.slice(html.indexOf('class="home-c-facts"'), html.indexOf('class="home-c-week"'));
+    expect(facts.match(/class="home-c-fact"/g)).toHaveLength(3);
+    expect(facts).toContain('<strong>1</strong><small>maaltijd gepland</small>');
+    for (const route of ["/lijst", "/week-voorbereiden", "/budget"]) expect(facts).toContain(`href="${route}"`);
+    expect(facts).toContain("€ 66,39"); // Existing budget calculation, not mockup's €60.
+    expect(html).toMatch(/class="home-c-list" href="\/lijst"[\s\S]*?Naar je boodschappenlijst/);
+    expect(html.match(/data-planned="true"/g)).toHaveLength(1);
+    expect(html.match(/data-planned="false"/g)).toHaveLength(5);
+  });
+
+  it("toont onbekende weekruimte in de informatiekaart wanneer de lijst onvolledig geprijsd is", () => {
+    const html = render(createElement(HomePage), generated(), list(null));
+    const facts = html.slice(html.indexOf('class="home-c-facts"'), html.indexOf('class="home-c-week"'));
+    expect(facts).toContain("Nog onbekend");
+    expect(facts).not.toContain("€ 66,39");
+    expect(html).toContain("Er ontbreken prijzen");
+  });
+
+  it("toont week- en maaltijdbudget apart en gebruikt bestaande verpakkingskosten", () => {
+    const html = render(createElement(HomePage), generated());
+    expect(html).toContain("€ 33,61"); // 24.63 losse lijst + 8.98 maaltijd
+    expect(html).toContain("€ 66,39");
+    expect(html).toContain("€ 50,00"); // maaltijdgrens, geen weekgrens
+    expect(html).toContain('aria-label="Week: gepland budget"');
+    expect(html).toContain('aria-label="Maaltijden: gepland budget"');
+    expect(html).toContain('aria-valuenow="33.61"');
+    expect(html).toContain('aria-valuenow="17.96"');
+    expect(html).not.toContain("52,79");
+    expect(html).toContain("1 product");
+  });
+
+  it("meldt onvolledige prijzen zonder fictief resterend bedrag of gerechtprijs", () => {
+    const data = generated();
+    data.ingredients[0].price = null;
+    data.generation = { ...data.generation!, isMealBudgetComplete: false, mealPlanKnownCostCents: 0 };
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain("Nog onbekend");
+    expect(html).toContain("Prijs nog onbekend");
+    expect(html).toContain("Er ontbreken prijzen");
+    expect(html).toContain("€ 0,00 bekend");
+    expect(html).not.toContain("€ 66,39");
+  });
+
+  it("begrensde balken en tekst blijven correct bij handmatige overschrijding", () => {
+    const data = generated(); data.mealBudgetCents = 500;
+    const html = render(createElement(HomePage), data, list(120));
+    expect(html).toContain("€ 28,98");
+    expect(html).toContain("boven budget");
+    expect(html).toContain("€ 3,98 boven maaltijdbudget");
+    expect(html.match(/aria-valuenow="100"/g)).toHaveLength(2);
+    expect(html.match(/data-over="true"/g)).toHaveLength(3);
+  });
+
+  it("toont ook vrije plaatsen en lange gerechten met actuele personen", () => {
+    const data = generated();
+    const dish = { ...data.days[0], dayIndex: 1, recipe: { ...data.days[0].recipe!, name: "Romige volkoren groentepasta met geroosterde courgette en champignons" } };
+    data.days = [{ ...data.days[1], dayIndex: 0 }, dish];
+    data.ingredients[0].usedIn[0].dayIndex = 1;
+    data.numberOfPeople = 10;
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain(dish.recipe.name);
+    expect(html).toContain("10 personen");
+    expect(html).toContain("€ 8,98");
+    expect(html).not.toContain("Eerst op je menu");
+    expect(html).toContain("Vrije keuze");
+    expect(html).toContain("Dinsdag");
+    expect(html).not.toContain("Vanavond");
+  });
+
+  it("presenteert een volledig gegenereerde week en echte eigen-receptpersonen", () => {
+    const data = generated(); data.days = [data.days[0]]; data.numberOfDays = 1;
+    data.days[0].customDish = { name: "Eigen pasta", servings: 4, targetServings: 2, ingredients: [] };
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain("Slim kopen.");
+    expect(html).toContain("Lekker eten.");
+    expect(html).not.toContain("Je maaltijden en boodschappen op een rij.");
+    expect(html).toContain("2 personen");
+    expect(html).toContain("Bekijk je week");
+  });
+
+  it("houdt een lege gegenereerde week bruikbaar zonder fictief gerecht", () => {
+    const data = generated(); data.days = data.days.slice(1); data.ingredients = [];
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain("Vrije keuze");
+    expect(html).toContain("Kies een maaltijd");
+    expect(html).not.toContain("Spaghetti bolognese");
+    expect(html).toContain("Bekijk je week");
+    expect(html).toContain('href="/lijst"');
+    expect(html).toContain("week-reset-button");
+  });
+
+  it.each([1, 2, 4, 10])("toont %i personen zonder vaste voorbeeldwaarden", people => {
+    const data = generated(); data.numberOfPeople = people;
+    const html = render(createElement(HomePage), data);
+    expect(html).toContain(`${people} ${people === 1 ? "persoon" : "personen"} ·`);
+  });
+
+  it("ondersteunt duizenden euro's en houdt de maaltijdgrens afzonderlijk", () => {
+    const data = generated(); data.budgetCents = 100000; data.mealBudgetCents = 70000;
+    const html = render(createElement(HomePage), data, list(), { ...SETTINGS, budgetCents: 100000 });
+    expect(html).toContain("€ 1.000,00");
+    expect(html).toContain("€ 966,39");
+    expect(html).toContain("€ 700,00");
+  });
+});
+
+ describe("Home weekslider — opgeslagen dagen, geen tweede dagmodel", () => {
+  it.each([1, 3, 5, 7])("toont precies %i kaarten met dag, foto, personen, prijs en directe route", count => {
+    const data = generated();
+    const first = data.days[0];
+    data.numberOfDays = count;
+    data.days = Array.from({ length: count }, (_, dayIndex) => ({ ...first, dayIndex }));
+    data.ingredients[0].usedIn = data.days.map(day => ({ ...data.ingredients[0].usedIn[0], dayIndex: day.dayIndex }));
+    const html = render(createElement(HomePage), data);
+    const cards = [...html.matchAll(/<a class="home-c-day-card"[\s\S]*?<\/a>/g)].map(match => match[0]);
+    expect(cards).toHaveLength(count);
+    cards.forEach((card, index) => {
+      expect(card).toContain(["Maandag", "Dinsdag", "Woensdag", "Donderdag", "Vrijdag", "Zaterdag", "Zondag"][index]);
+      expect(card).toContain(`href="/week-voorbereiden?day=${index}"`);
+      expect(card).toContain("Spaghetti bolognese");
+      expect(card).toContain("pasta-spaghetti-bolognese.webp");
+      expect(card).toContain("4 personen · € 8,98");
+    });
+    expect(html).not.toContain("Eerst op je menu");
+    expect(html.indexOf("home-c-budget")).toBeLessThan(html.indexOf("home-c-week-slider"));
+    expect(html.indexOf("home-c-week-slider")).toBeLessThan(html.indexOf("home-c-list"));
+  });
+
+  it("bewaart exacte opgeslagen volgorde, lege dag en Vrije keuze zonder fictieve prijs/foto", () => {
+    const data = generated();
+    data.days = [data.days[4], { ...data.days[0], dayIndex: 2, recipe: null, recipeId: null }, data.days[0]];
+    const html = render(createElement(HomePage), data);
+    const cards = [...html.matchAll(/<a class="home-c-day-card"[\s\S]*?<\/a>/g)].map(match => match[0]);
+    expect(cards).toHaveLength(3);
+    expect(cards[0]).toContain('href="/vrije-keuze?day=4"');
+    expect(cards[0]).toContain("Vrijdag");
+    expect(cards[0]).toContain("Vrije keuze");
+    expect(cards[1]).toContain('href="/week-voorbereiden?day=2"');
+    expect(cards[1]).toContain("Woensdag");
+    expect(cards[1]).toContain("Nog geen maaltijd");
+    for (const card of cards.slice(0, 2)) {
+      expect(card).toContain("Kies een maaltijd");
+      expect(card).toContain('data-image-source="placeholder"');
+      expect(card).not.toContain("€");
+    }
+    expect(cards[2]).toContain("Maandag");
   });
 });

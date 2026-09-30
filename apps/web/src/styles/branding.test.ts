@@ -25,12 +25,22 @@ function contrast(a: string, b: string) {
   return (Math.max(light, dark) + 0.05) / (Math.min(light, dark) + 0.05);
 }
 
-describe("classic logo blue visual contract", () => {
+describe("official icon blue visual contract", () => {
   it("uses all five approved brand colours centrally", () => {
-    expect(value("--color-primary")).toBe("#4F86C6");
-    expect(value("--color-primary-dark")).toBe("#2E5E9E");
-    expect(value("--color-border")).toBe("#D7E3F1");
-    expect(value("--color-background")).toBe("#F6FAFF");
+    expect(value("--color-primary")).toBe("#1D87F7");
+    expect(value("--color-primary-dark")).toBe("#034ECD");
+    expect(value("--color-border")).toBe("#C9E2FD");
+    expect(value("--color-background")).toBe("#EFF7FE");
+    expect(value("--color-success")).toBe("#22C55E");
+  });
+
+  it("shares Home colours across the app and preserves semantic statuses", () => {
+    for (const [home, shared] of [["blue", "brand-blue"], ["sky", "brand-sky"],
+      ["glow", "brand-glow"], ["deep", "brand-deep"], ["blue-ink", "brand-ink"]]) {
+      expect(values.get(`--home-c-${home}`)).toBe(`var(--${shared})`);
+    }
+    expect(`${tokens}\n${css}`).not.toMatch(/#(?:4f86c6|3e77b7|2e5e9e|b8d0ec|4a7399|385d7c|afc3d4)\b/i);
+    expect(value("--color-danger")).toBe("#A03543");
     expect(value("--color-success")).toBe("#22C55E");
   });
 
@@ -48,7 +58,7 @@ describe("classic logo blue visual contract", () => {
   });
 
   it("resolves every semantic colour, shadow and radius reference", () => {
-    for (const match of `${css}\n${tokens}`.matchAll(/var\((--(?:color|shadow|radius|surface)-[\w-]+)/g)) {
+    for (const match of `${css}\n${tokens}`.matchAll(/var\((--(?:brand|color|shadow|radius|surface|home-c)-[\w-]+)/g)) {
       expect(values.has(match[1]), match[1]).toBe(true);
     }
   });
