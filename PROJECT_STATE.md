@@ -5,12 +5,12 @@
 ### Release
 
 - **Functionele mainrelease:** PR #31 is na groene CI en live acceptatie gemerged als `e6ab4199bd868a651f84fd5bb03a99855515d12f`.
-- **Actuele main-head:** `3370bf8216922813b0691ab5580cdd09b0c79233` (documentatie na functionele merge).
-- **Production:** `dpl_Gm67iaa1TZ7T757H2Ht2pHDdjGRZ`, Production-target van exact deze main-head, `READY`, gekoppeld aan `boodschappenmaatje-pwa.vercel.app`, zonder aliasfout. Home, Menu (`/week-voorbereiden`), Lijst en Budget zijn op 30 september opnieuw read-only geopend en renderen correct. Dit is navigatie-/laadsmoke, geen nieuwe schrijf- of fysieke iPhone-acceptatie.
+- **Geverifieerde main-head na documentatiemerge #35:** `bfa116253dd696d4035f27e058a81e31389b6768`. Functionele PR #31-merge: `e6ab4199bd868a651f84fd5bb03a99855515d12f`.
+- **Production:** na documentatiemerge #35 `dpl_HVqUajqGfrNnrZ4FFJKQgZ5ATUqJ`, Production-target van main `bfa1162`, `READY`, gekoppeld aan `boodschappenmaatje-pwa.vercel.app`, zonder aliasfout. Home, Menu (`/week-voorbereiden`), Lijst en Budget zijn op 30 september opnieuw read-only geopend en renderen correct. Dit is navigatie-/laadsmoke, geen nieuwe schrijf- of fysieke iPhone-acceptatie.
 - **Rollback:** de vorige gezonde mainrelease was `dfa3d7773eb070de457ad2a9ac379acd9840f123` op `dpl_HK3GSecBCEvtcDmchGBdFqcJ251y`.
 - **PR-status:** PR #33 is gemerged; PR #31 is gemerged; PR #32 is als superseded/diagnostic-only gesloten zonder merge. Geen diagnostische PR #32-code is gereleased.
 - **Volgende afzonderlijke opdracht:** VERBETERING HOOGVLIET-PRODUCTDEKKING, binnen de bredere roadmap Productdata & receptkwaliteit. Niet gestart.
-- **Afrondingsstatus:** de functionele herstelrelease en maintenance zijn afgerond. De automatische planning is nog niet end-to-end bevestigd: de monitorpoort kan door vertraagde GitHub-starten de daadwerkelijke controle overslaan. De gerichte workflowcorrectie volgt afzonderlijk; geen productimport is in deze controle gestart.
+- **Afrondingsstatus:** functionele herstelrelease en maintenance afgerond; documentatie-PR #35 is gemerged. Automatische planning is nog niet end-to-end bevestigd. De bewezen uitvoertijdpoortfout wordt gericht hersteld op `fix/scheduled-workflow-timezone-gates` (aparte Draft PR, niet gereleased); geen productimport is in deze controle gestart.
 
 ### Maintenance en serverclient
 
@@ -71,7 +71,7 @@
 - Laatste waargenomen automatische retry: run `36650165488`, 30 september 02:24 lokaal, groen; due-check geslaagd, importer en installatie terecht overgeslagen. Deze run was vóór de huidige release.
 - Laatste zichtbare standalone monitorruns: `36573258853` (29 september 15:11 lokaal) en `36580601377` (16:10 lokaal). Beide Actions-runs kregen de status `success`, maar checkout, installatie en `Dagelijkse import controleren` werden overgeslagen. De log van de eerste toont expliciet `DST-poort: deze UTC-run is lokaal 15:30 en wordt veilig overgeslagen.` De workflow is ingeschakeld.
 - **Bewezen workflowfout:** de lokale-uurpoort gebruikt de werkelijke starttijd (`TZ=Europe/Amsterdam date +%H`) in plaats van het geplande tijdstip. Een door GitHub vertraagde monitorrun wordt daardoor als `success` afgesloten zonder de catalogus te controleren. De primaire dagworkflow heeft dezelfde kwetsbare uurpoort. GitHub documenteert dat geplande runs vertraagd of zelfs niet aangemaakt kunnen worden; de precieze reden waarom op 30 september om circa 09:35 lokaal nog geen monitor- of automatische importrun zichtbaar was, is niet vastgesteld.
-- **Nog open:** na release geen volledig bewezen automatische cyclus. De workflowfout vraagt een gerichte aparte PR met tijdzonegebonden cron zonder uitvoertijdpoort, CI en latere geplande live verificatie. Deze status is onafhankelijk van de aparte productdekkingsopdracht. Geen workflow handmatig gestart of productimport uitgevoerd.
+- **Nog open:** na release geen volledig bewezen automatische cyclus. De gerichte aparte workflow-PR gebruikt één `Europe/Amsterdam` cron per dagflow (06:07, buiten GitHubs drukke hele-uurgrens) en monitor (08:30), zonder uitvoertijdpoort; prijs- en weekruns blijven UTC. CI en een volgende geplande echte run moeten dit nog bevestigen. Een niet aangemaakte GitHub-schedule kan deze code niet zelf herstellen. Deze status staat los van productdekking. Geen workflow handmatig gestart of productimport uitgevoerd.
 
 ## Eerstvolgende afzonderlijke ontwikkelopdracht
 
@@ -82,3 +82,9 @@ Onderzoek aanvullende categorieën, zoekmethoden, productpagina's en andere toeg
 Doel blijft **maximaal 400 daadwerkelijk nieuwe, unieke, geldige en positief geprijsde bevestigde inserts per dag wanneer voldoende geldige kandidaten beschikbaar zijn**. De acceptatie met nul inserts bewijst deze dagelijkse groei niet. Behoud dagbudget, dedupe, cursors, bounded retries, concurrency en de gezonde maintenanceketen.
 
 Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase blijft Productdata & receptkwaliteit. `DESIGN.md` blijft ongewijzigd.
+
+### Checkpoint workflowcorrectie (nog niet op main)
+
+- De twee geplande monitorruns op 29 september hadden `success`, maar sloegen de daadwerkelijke monitorstap over; in de log van `36573258853` staat de lokale-uurpoort met een start om 15:30. GitHub kan geplande runs vertragen of laten vervallen.
+- De aparte branch corrigeert de bestaande primaire dag- en monitorworkflows met GitHub's gedocumenteerde tijdzonecron. Eén cron per Nederlandse dag voorkomt een dubbele DST-trigger; de databaseclaim en het resterende 400-dagbudget blijven ongewijzigd. Gerichte configuratieregressie is toegevoegd.
+- Nog geen bewijs dat GitHub de 30-september-trigger überhaupt heeft aangemaakt; geen alternatieve import gestart. Draft PR blijft ongemerged totdat expliciet toegestane release en volledige checks zijn afgerond.
