@@ -8,7 +8,8 @@ const monitor = readFileSync(new URL('../.github/workflows/monitor-catalog-impor
 test('daily growth keeps a primary Dutch-time trigger plus a guarded recovery trigger', () => {
   assert.ok(primary.includes('- cron: "7 6 * * *"\n      timezone: "Europe/Amsterdam"'));
   assert.ok(primary.includes('- cron: "23 7 * * *"\n      timezone: "Europe/Amsterdam"'));
-  assert.equal(primary.match(/- cron: "(?:7 6|23 7) \\* \\* \\*"/g)?.length, 2);
+  assert.equal(primary.split('- cron: "7 6 * * *"').length - 1, 1);
+  assert.equal(primary.split('- cron: "23 7 * * *"').length - 1, 1);
   assert.ok(!primary.includes('- cron: "0 4 * * *"'));
   assert.ok(!primary.includes('- cron: "0 5 * * *"'));
   assert.ok(!primary.includes('local_hour='));
