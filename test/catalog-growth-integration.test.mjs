@@ -4,6 +4,20 @@ import { runCatalogGrowth } from '../src/catalog-growth.mjs';
 const logger = { info() {}, error() {} };
 const config = { maxNewProducts: 400, searchTerms: ['rijst', 'pasta'], advanceDiscoveryState: true,
   discoveryScanDate: '2026-09-28', discoveryStateKey: 'fixture', catalogBatch: 'growth' };
+test('homepage challenge preserves exact stored cursor, route ends and maintenance without product writes', async () => {
+  const state = { stateKey: 'fixture', termCursor: 1, pageCursor: 12, lastTerm: 'pasta',
+    scanDate: config.discoveryScanDate, exhaustedTerms: ['rijst'],
+    plannerMaintenance: { status: 'confirmed', notifiedProducts: 404, pendingProductIds: [], failures: [] } };
+  const h = harness({ fetchCatalogDiscoveryState: async () => state,
+    upsertProducts: async () => assert.fail('no product write after challenge'),
+    collectProducts: async () => { throw Object.assign(new Error('source blocked'), { code: 'source_challenge' }); } });
+  await assert.rejects(runCatalogGrowth(config, logger, h.dependencies), /source blocked/);
+  const saved = h.saved.at(-1);
+  assert.equal(saved.pageCursor, 12); assert.equal(saved.lastTerm, 'pasta');
+  assert.equal(saved.termCursor, 1); assert.deepEqual(saved.exhaustedTerms, ['rijst']);
+  assert.deepEqual(saved.plannerMaintenance, state.plannerMaintenance);
+  assert.equal(saved.lastStopReason, 'source_challenge'); assert.equal(h.finished[0].newCount, 0);
+});
 function harness(overrides = {}) {
   const saved = [], finished = [];
   return { saved, finished, dependencies: {

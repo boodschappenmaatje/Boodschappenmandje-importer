@@ -8,6 +8,35 @@ const SEARCH_PATH = "/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParam
 const NORMAL_SOURCE_READY_TIMEOUT_MS = 12_000;
 const SECURITY_CHECK_READY_TIMEOUT_MS = 45_000;
 
+// One shared serial navigation budget for listing and detail pages. Browser
+// subresources remain normal; no identity/header changes or challenge handling.
+export function createSourcePacer({ delayMs = 2000, now = Date.now,
+  wait = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  let last = null;
+  return async () => {
+    if (last !== null) await wait(Math.max(0, delayMs - (now() - last)));
+    last = now();
+  };
+}
+const sourcePacers = new WeakMap();
+async function sourceGoto(page, url, options) {
+  await sourcePacers.get(page)?.();
+  return page.goto(url, options);
+}
+
+export async function verifyNormalSourceAccess(config) {
+  const browser = await chromium.launch({ headless: config.headless });
+  try {
+    const context = await browser.newContext({ locale: 'nl-NL', timezoneId: 'Europe/Amsterdam' });
+    const page = await context.newPage();
+    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 35_000 });
+    await waitForSourceContent(page, "input[name='SearchTerm']", { normalTimeoutMs: 5000 });
+    if (!(await readSourcePageEvidence(page, "input[name='SearchTerm']")).hasExpectedContent) {
+      throw new SourceUnavailableError('Normale openbare startpagina niet beschikbaar.');
+    }
+  } finally { await browser.close(); }
+}
+
 export class SourceBlockedError extends Error {
   constructor(message) {
     super(message);
@@ -301,7 +330,7 @@ export function verifyCategorySearchRoute(resolvedURL, category) {
 export async function navigateSearchPage(page, term, pageNumber = 0, options = {}) {
   const routes = options.resolvedRoutes;
   const knownRoute = routes?.get(term);
-  await page.goto(knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await sourceGoto(page, knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
   const category = categoryDiscoveryRoute(term);
   if (category) verifyCategorySearchRoute(page.url(), category);
   if (routes) {
@@ -310,7 +339,7 @@ export async function navigateSearchPage(page, term, pageNumber = 0, options = {
     const resolved = resolvedSearchPageURL(page.url(), pageNumber);
     routes.set(term, resolved);
     if (new URL(page.url()).searchParams.get("PageNumber") !== String(pageNumber)) {
-      await page.goto(resolved, { waitUntil: "domcontentloaded", timeout: 35_000 });
+      await sourceGoto(page, resolved, { waitUntil: "domcontentloaded", timeout: 35_000 });
       if (category) verifyCategorySearchRoute(page.url(), category);
     }
   }
@@ -474,6 +503,7 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
 }
 
 export function isTransientNavigationError(error) {
+  if (error?.code === 'source_challenge') return false;
   const value = `${error?.name ?? ""} ${error?.code ?? ""} ${error?.message ?? ""}`.toUpperCase();
   return /ERR_ABORTED|TIMEOUT|TIMEDOUT|NAVIGATION.*FAILED|FRAME.*DETACHED|CONNECTION.*RESET/.test(value);
 }
@@ -557,7 +587,7 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     if (diagnostics) diagnostics.reason = reason;
     return null;
   };
-  await page.goto(candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await sourceGoto(page, candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 });
   await waitForSourceContent(page, ".product-details");
   const details = await extractProductDetails(page);
   if (!details) return fail("notFound");
@@ -837,6 +867,9 @@ export async function collectProducts(config, logger = console, options = {}) {
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const searchPage = await context.newPage();
   const detailPage = await context.newPage();
+  const pace = createSourcePacer();
+  sourcePacers.set(searchPage, pace);
+  sourcePacers.set(detailPage, pace);
   const chosen = [];
   const pendingPersistence = [];
   const attemptedSKUs = new Set();
@@ -895,7 +928,7 @@ export async function collectProducts(config, logger = console, options = {}) {
 
   try {
     await withTransientNavigationRetry(
-      () => searchPage.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+      () => sourceGoto(searchPage, BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
       {
         maxRetries: config.navigationRetries,
         onRetry: (error, attempt) => {

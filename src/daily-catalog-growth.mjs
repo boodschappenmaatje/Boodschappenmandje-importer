@@ -4,12 +4,16 @@ import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.mjs";
 import { runResumableCatalogGrowth } from "./resumable-catalog-growth.mjs";
 import { inspectAcceptanceSnapshot, verifyDailyAcceptance } from "./daily-acceptance-gate.mjs";
+import { sourceChallengeRetryAt, challengeRecoveryDecision } from './source-challenge-policy.mjs';
+import { verifyNormalSourceAccess } from './hoogvliet.mjs';
 import {
   claimCatalogDailyAttempt,
   fetchCatalogDailyJob,
   finishCatalogDailyAttempt,
   hasProductTypeColumn,
   fetchCatalogAcceptanceSnapshot,
+  fetchCatalogDailyAttempts,
+  requeueSourceChallenge,
 } from "./supabase.mjs";
 
 export const DAILY_IMPORT_TIMEZONE = "Europe/Amsterdam";
@@ -245,12 +249,16 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
   );
 
   let result;
+  let priorChallenges = null;
   let acceptanceEvidence = null;
   const acceptance = config.dailyAcceptanceGate === true;
   const acceptancePhase = config.dailyAcceptancePhase ?? "A";
   const attemptLimit = acceptance && acceptancePhase === "A"
     ? Math.min(100, claim.job.remainingTarget) : claim.job.remainingTarget;
   try {
+    const history = await (dependencies.fetchAttempts ?? fetchCatalogDailyAttempts)(config, claim.job.id);
+    priorChallenges = history.filter(row => row.error_code === 'source_challenge').length;
+    if (priorChallenges > 3) throw Object.assign(new Error('Source challenge retrygrens bereikt.'), { code: 'source_challenge_retry_limit' });
     const snapshot = dependencies.acceptanceSnapshot ?? fetchCatalogAcceptanceSnapshot;
     const before = acceptance ? await snapshot(config) : null;
     if (acceptance) {
@@ -298,14 +306,19 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     );
     const targetReached = cumulative >= claim.job.targetNewProducts;
     const windowOpen = isDailyImportWindowOpen(completedAt, { endHour: config.dailyEndHour });
-    const retryable = failure.retryable && windowOpen && !targetReached && !config.dailySingleAttempt;
+    const challengeRetry = failure.code === 'source_challenge' && priorChallenges !== null
+      ? sourceChallengeRetryAt(priorChallenges + 1, completedAt.toISOString()) : null;
+    const challengeCanRetry = challengeRetry && isDailyImportWindowOpen(challengeRetry, { endHour: config.dailyEndHour })
+      && amsterdamDateKey(challengeRetry) === jobDate;
+    const retryable = failure.retryable && windowOpen && !targetReached
+      && (failure.code === 'source_challenge' ? Boolean(challengeCanRetry) : !config.dailySingleAttempt);
     const outcome = targetReached
       ? "succeeded"
       : (retryable
         ? "retryable_failure"
         : (failure.retryable ? "daily_target_partial" : "non_retryable_failure"));
     const nextRetryAt = retryable
-      ? dailyRetryAt(claim.job.attemptCount, completedAt)
+      ? (challengeRetry ?? dailyRetryAt(claim.job.attemptCount, completedAt))
       : null;
     const job = await finish(config, {
       jobID: claim.job.id,
@@ -411,7 +424,41 @@ export async function mainDailyCatalogGrowth(env = process.env) {
   }
   if (config.dryRun) throw new Error("De dagelijkse catalogusjob ondersteunt geen DRY_RUN.");
   const logger = safeLogger(config.supabaseSecret);
+  if (config.resumeSourceChallenge) return resumeSourceChallenge(config, logger);
   return config.dailyAcceptanceGate ? runDailyAcceptance(config, logger) : runDailyCatalogAttempt(config, logger);
+}
+
+export async function resumeSourceChallenge(config, logger = console, dependencies = {}) {
+  const now = dependencies.now?.() ?? new Date();
+  const job = await (dependencies.fetchJob ?? fetchCatalogDailyJob)(config, {
+    stateKey: config.dailyImportStateKey, jobDate: amsterdamDateKey(now),
+  });
+  if (!job) throw new Error('source_challenge_resume_requires_existing_day');
+  const attempts = await (dependencies.fetchAttempts ?? fetchCatalogDailyAttempts)(config, job.id);
+  if (job.status === 'daily_target_partial') {
+    const decision = challengeRecoveryDecision(job, attempts, now);
+    if (!decision.allowed) throw new Error(decision.reason);
+  } else {
+    if (attempts.at(-1)?.error_code !== 'source_challenge'
+        || !shouldRunDailyImport(job, now, { endHour: config.dailyEndHour }).run) {
+      throw new Error('source_challenge_resume_not_due');
+    }
+    const retryAt = sourceChallengeRetryAt(attempts.filter(row => row.error_code === 'source_challenge').length,
+      attempts.at(-1).completed_at);
+    if (!retryAt || now < retryAt) throw new Error('source_challenge_resume_not_due');
+  }
+  const snapshot = await (dependencies.acceptanceSnapshot ?? fetchCatalogAcceptanceSnapshot)(config);
+  const evidence = inspectAcceptanceSnapshot(snapshot, job.jobDate);
+  if (job.targetNewProducts !== 400 || evidence.today !== job.newProductsCollected) {
+    throw new Error('source_challenge_resume_accounting_mismatch');
+  }
+  // A single ordinary request, no retries/alternate route or challenge solving.
+  await (dependencies.verifySource ?? verifyNormalSourceAccess)(config);
+  if (job.status === 'daily_target_partial') {
+    await (dependencies.requeue ?? requeueSourceChallenge)(config, job, attempts, dependencies.now?.() ?? new Date());
+  }
+  return runDailyCatalogAttempt({ ...config, dailyAcceptanceGate: true, dailyAcceptancePhase: 'B',
+    acceptanceExpectedJobID: job.id, acceptanceExpectedCollected: job.newProductsCollected }, logger, dependencies);
 }
 
 async function cli() {

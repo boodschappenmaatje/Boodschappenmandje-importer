@@ -2,6 +2,7 @@ import { setDefaultResultOrder } from "node:dns";
 import { randomUUID } from "node:crypto";
 import { UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 import { notifyPlannerOfNewProducts, plannerMaintenanceSettings } from "./planner-cache-maintenance.mjs";
+import { challengeRecoveryDecision } from './source-challenge-policy.mjs';
 
 const REQUEST_TIMEOUT_MS = 25_000;
 const MAX_ATTEMPTS = 3;
@@ -619,6 +620,36 @@ export async function fetchCatalogDailyJob(config, {
     0,
     0,
   );
+  return dailyJobFromRow(rows[0]);
+}
+
+export async function fetchCatalogDailyAttempts(config, jobID) {
+  const rows = await getJSON(config.supabaseURL, 'catalog_daily_attempts', config.supabaseSecret, {
+    select: 'attempt_number,status,error_code,completed_at,cumulative_new_after,remaining_target_after',
+    daily_job_id: `eq.${jobID}`, order: 'attempt_number.asc',
+  }, 0, 99);
+  if (rows.length >= 100) throw new Error('Dagpogingen overschrijden veilige inspectiegrens.');
+  return rows;
+}
+
+// Repair only a legacy one-shot challenge closure, never reset day accounting.
+// The terminal row cannot be claimed by the normal RPC. Compare every relevant
+// revision field before reopening it; the subsequent normal RPC still arbitrates
+// ownership. A zero-row CAS is a hard conflict, not permission to force a claim.
+export async function requeueSourceChallenge(config, job, attempts, now) {
+  const decision = challengeRecoveryDecision(job, attempts, now);
+  if (!decision.allowed) throw new Error(decision.reason);
+  const rows = await patchJSON(config.supabaseURL, 'catalog_daily_jobs', config.supabaseSecret,
+    { status: 'retry_scheduled', next_retry_at: decision.retryAt.toISOString(), completed_at: null,
+      updated_at: now.toISOString(), last_public_message: 'Bronpauze verstreken; hervatting via normale dagclaim.' },
+    'return=representation', {
+      id: `eq.${job.id}`, state_key: `eq.${job.stateKey}`, job_date: `eq.${job.jobDate}`,
+      status: 'eq.daily_target_partial', attempt_count: `eq.${job.attemptCount}`,
+      new_products_collected: `eq.${job.newProductsCollected}`, target_new_products: 'eq.400',
+      lock_token: 'is.null', lock_expires_at: 'is.null', next_retry_at: 'is.null',
+      updated_at: `eq.${job.updatedAt}`,
+    });
+  if (rows.length !== 1) throw new Error('source_challenge_recovery_claim_conflict');
   return dailyJobFromRow(rows[0]);
 }
 

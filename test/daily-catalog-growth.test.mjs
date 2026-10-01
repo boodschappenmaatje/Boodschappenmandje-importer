@@ -30,6 +30,27 @@ const config = {
   growthMaxRuntimeMs: 105 * 60_000,
 };
 
+test('challenge after 100 preserves remaining, releases via finish and schedules bounded 15/30/60 cooldowns', async () => {
+  for (const [previous, minutes] of [[0,15], [1,30], [2,60], [3,null]]) {
+    const error = Object.assign(new Error('source challenge'), { code: 'source_challenge', actualGrowth: 0 });
+    const h = createHarness([error], { initialNew: 100 });
+    h.dependencies.fetchAttempts = async () => Array.from({ length: previous }, () => ({ error_code: 'source_challenge' }));
+    await assert.rejects(runDailyCatalogAttempt({ ...config, dailySingleAttempt: true }, logger, h.dependencies), error);
+    assert.equal(h.state.newProductsCollected, 100); assert.equal(h.state.remainingTarget, 300);
+    assert.equal(h.attempts.length, 1); assert.ok(h.attempts[0].lockToken);
+    assert.equal(h.state.status, minutes ? 'retry_scheduled' : 'daily_target_partial');
+    assert.equal(h.state.nextRetryAt, minutes ? new Date(Date.parse('2026-09-17T08:00Z') + minutes * 60000).toISOString() : null);
+  }
+});
+
+test('challenge recovery attempt receives only remaining 300 and cannot budget an additional 400', async () => {
+  const h = createHarness([{ new: 300 }], { initialNew: 100 });
+  const run = h.dependencies.runGrowth;
+  h.dependencies.runGrowth = async c => { assert.equal(c.maxNewProducts, 300); return run(c); };
+  const result = await runDailyCatalogAttempt(config, logger, h.dependencies);
+  assert.equal(result.job.newProductsCollected, 400); assert.equal(result.job.remainingTarget, 0);
+});
+
 function createHarness(growthSequence, {
   initialNew = 0,
   target = 400,
@@ -61,6 +82,7 @@ function createHarness(growthSequence, {
     dependencies: {
       now: () => times[timeIndex++] ?? new Date("2026-09-17T08:00:00.000Z"),
       hasProductTypeColumn: async () => true,
+      fetchAttempts: async () => [],
       claim: async () => {
         if (state.status === "running") {
           return { claimed: false, reason: "attempt_running", job: { ...state } };

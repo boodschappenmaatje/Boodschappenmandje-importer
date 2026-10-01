@@ -3,6 +3,10 @@ name: Hoogvliet import proof of concept
 on:
   workflow_dispatch:
     inputs:
+      resume_source_challenge:
+        description: Alleen bewezen source_challenge hervatten na cooldown; dagbudget en normale claim blijven verplicht
+        type: boolean
+        default: false
       daily_attempt_only:
         description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry
         type: boolean
@@ -282,6 +286,13 @@ jobs:
           fi
 
           # The 100 gate is daily-accounted, never a separate unaccounted test import.
+          if [[ "${{ inputs.resume_source_challenge }}" == "true" ]]; then
+            if [[ "${{ inputs.daily_attempt_only }}" != "true" || "${{ inputs.growth_limit }}" != "400" ]]; then
+              echo "Challengehervatting vereist daily_attempt_only en remaining-budget 400" >&2
+              exit 1
+            fi
+            echo "RESUME_SOURCE_CHALLENGE=1" >> "$GITHUB_ENV"
+          fi
           if [[ "${{ inputs.growth_limit }}" == "100" && "${{ inputs.daily_attempt_only }}" != "true" ]]; then
             echo "100 vereist daily_attempt_only" >&2
             exit 1

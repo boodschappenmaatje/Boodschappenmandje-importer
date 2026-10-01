@@ -59,6 +59,7 @@ function harness({ first = 100, initial = 0, badMaintenance = false, denied = fa
   return { state, limits, finishes, dependencies: {
     now: () => new Date("2026-10-01T08:00:00Z"),
     hasProductTypeColumn: async () => true,
+      fetchAttempts: async () => [],
     claim: async (_c, input) => {
       assert.equal(input.targetNewProducts, 400);
       if (denied) return { claimed: false, reason: "attempt_running", job: state };

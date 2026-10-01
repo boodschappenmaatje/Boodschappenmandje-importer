@@ -88,6 +88,11 @@ function nonNegativeInteger(value, fallback) {
 }
 
 export function loadConfig(env = process.env) {
+  const resumeSourceChallenge = env.RESUME_SOURCE_CHALLENGE === '1';
+  if (resumeSourceChallenge && (env.DAILY_SINGLE_ATTEMPT !== '1' || env.DAILY_NEW_PRODUCT_TARGET !== '400'
+      || env.UPDATE_MODE !== 'growth' || env.DAILY_ACCEPTANCE_GATE)) {
+    throw new Error('Challengehervatting vereist een dagelijkse restantpoging, zonder nieuwe 100-gate.');
+  }
   const acceptance = env.DAILY_ACCEPTANCE_GATE ?? "";
   if (acceptance && acceptance !== "100") throw new Error("DAILY_ACCEPTANCE_GATE moet leeg of 100 zijn.");
   if (acceptance && (env.DAILY_SINGLE_ATTEMPT !== "1" || env.DAILY_NEW_PRODUCT_TARGET !== "400" || env.UPDATE_MODE !== "growth")) {
@@ -195,6 +200,7 @@ export function loadConfig(env = process.env) {
       .replace(/[^a-z0-9_-]/gi, "-")
       .slice(0, 80) || "daily-catalog-growth",
     dailySingleAttempt: env.DAILY_SINGLE_ATTEMPT === "1",
+    resumeSourceChallenge,
     dailyAcceptanceGate: acceptance === "100",
     dailyTargetNewProducts: Math.min(
       positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
