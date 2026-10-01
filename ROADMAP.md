@@ -39,7 +39,7 @@ Belangrijke productprincipes:
 | PWA 14 | Afgerond / Production | Eigen recepten, compact detail, dynamische Vrije keuze, actuele prijzen, budget en lijstsync |
 | PR #28 — verpakkingen/lijst/budget | Afgerond / Production | Compacte lijst, recept ⇄ lijst, veilige trash, prijsfallback, handmatige override en harde automatische maaltijdgrens |
 | PR #29 — Stabiliteit & kernflows | Afgerond / Production | Kernflow-integraties, centrale hoeveelheidspresentatie en actieve CI-releasegate |
-| Importer & maintenanceherstel | Functioneel gereleased; automatische eindverificatie open | Veilige queue-replay, v4/CAS-writer en begrensde hervatbare importer; dagelijkse groei niet bewezen |
+| Importer & maintenanceherstel | Afgerond / Production | Veilige queue-replay, v4/CAS-writer, productdekking en begrensde source_challenge-hervatting; 400/400 live geaccepteerd op 1 oktober |
 | PR #37 — Hoogvliet-productdekking | Afgerond / Production | 400/400 live geaccepteerd; veilige source_challenge-checkpoints/backoff/pacing; catalogus 6759/6759 |
 
 ## Afgeronde release — PR #28
@@ -106,6 +106,12 @@ Schrijfvrij onderzoek op 30 september bewijst een spatiecoderingfout en onvoldoe
 Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en andere toegestane discoverymethoden. Breng de dekking en beperkingen van de huidige routes in kaart en verifieer route-eindesignalen; nul resultaten uit de huidige zoekstrategie betekenen niet dat elders geen geldige producten beschikbaar zijn.
 
 Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. De productdekkingswijziging is via `feature/hoogvliet-product-coverage` en PR #37 naar main/Production gebracht. De dagelijkse acceptatie is bij400 hard gestopt; op 1 oktober geen extra import, reset of retry uitvoeren. De nog onbewezen 06:07-/08:30-schedulewerking blijft een afzonderlijke operationele verificatie en blokkeert de afgeronde productdekkingsrelease niet.
+
+## Afgerond / Production: HOOGVLIET-PRODUCTDEKKING — PR #37
+
+PR #37 is op 1 oktober 2026 gemerged als `40f340681f116193f265891716f72082eaa65718` en succesvol naar Vercel Production uitgerold. De live dagacceptatie leverde **400/400** nieuwe, unieke producten met **400 positieve prijsregels**; catalogus **6759/6759**, maintenance `notifiedProducts=704`, pending 0, failures 0 en geen integriteitsafwijkingen. De structurele source_challenge-afhandeling bewaart checkpoints en dagbudget, gebruikt bronvriendelijke seriële pacing en begrensde 15/30/60-minutenbackoff zonder beveiligingsomzeiling. Production-smoke voor Home, Menu, Lijst, Budget, Meer en Vrije keuze is groen.
+
+De automatische 06:07-primary en 08:30-monitor blijven als afzonderlijke operationele verificatie open omdat hun natuurlijke GitHub schedule-triggers op 1 oktober niet zijn aangemaakt; dit verandert de afgeronde productdekking/release niet.
 
 ## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
