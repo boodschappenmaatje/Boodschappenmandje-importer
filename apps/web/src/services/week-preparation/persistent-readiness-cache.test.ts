@@ -5,6 +5,8 @@ import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import {
   PLANNER_MATCHER_VERSION,
   PLANNER_READINESS_EVALUATOR_VERSION,
+  matcherVersionForSourceKey,
+  readinessVersionForMatchKeys,
   SupabasePersistentRecipeReadinessRepository,
   resolveRecipeReadiness,
   type PersistentProductMatchRow,
@@ -218,6 +220,16 @@ function persistent(
 }
 
 describe("persistente Recipe Readiness fast path", () => {
+  it("veroudert alleen matches en receptsnapshots met gewijzigde maaltijdmixsupplementen", () => {
+    for (const sourceKey of ["mix-supplement-hacheevlees", "mix-supplement-tomaten", "mix-supplement-pitabroodjes"]) {
+      expect(matcherVersionForSourceKey(sourceKey)).toBe(PLANNER_MATCHER_VERSION + 1);
+      expect(readinessVersionForMatchKeys([`meal-mix-ingredient:${sourceKey}:piece:ingredient:generic`]))
+        .toBe(PLANNER_READINESS_EVALUATOR_VERSION + 1);
+    }
+    expect(matcherVersionForSourceKey("mix-supplement-kipfilet")).toBe(PLANNER_MATCHER_VERSION);
+    expect(readinessVersionForMatchKeys(["meal-mix-ingredient:mix-supplement-kipfilet:g:ingredient:generic"]))
+      .toBe(PLANNER_READINESS_EVALUATOR_VERSION);
+  });
   it("start readiness- en matchbatches onafhankelijk en parallel", async () => {
     type Result = { data: unknown[]; error: null };
     const pending: Array<{
@@ -278,6 +290,26 @@ describe("persistente Recipe Readiness fast path", () => {
     expect(resolution).toMatchObject({ persistentHitCount: 1, fallbackCount: 0 });
     expect(resolution.gate.recipes[0].ready).toBe(true);
     expect(counters).toEqual({ searches: 0, batches: 1 });
+  });
+
+  it("herberekent een oude mixsnapshot op Preview maar behoudt een ongewijzigd READY-recept", async () => {
+    const source = catalog(["affected", "stable"]);
+    source.ingredients[0] = { ...source.ingredients[0], sourceKey: "mix-supplement-hacheevlees" };
+    const affected = product("affected");
+    const stable = product("stable");
+    const oldMatch = { ...matchRow("affected", affected), ingredient_source_key: "mix-supplement-hacheevlees" };
+    const cache = persistent(
+      [readinessRow(source.recipes[0], source.ingredients[0], affected),
+        readinessRow(source.recipes[1], source.ingredients[1], stable)],
+      [oldMatch, matchRow("stable", stable)],
+    );
+    const counters = { searches: 0, batches: 0 };
+    const result = await resolveRecipeReadiness(
+      source.recipes, 4, source, repository([affected, stable], counters), cache, NOW,
+    );
+    expect(result).toMatchObject({ persistentHitCount: 1, fallbackCount: 1 });
+    expect(result.gate.recipes.every((item) => item.ready)).toBe(true);
+    expect(cache.requestRefresh).toHaveBeenCalledWith(["affected"], 4);
   });
 
   it("zoekt bij een gerichte fallback niet opnieuw naar een reeds geldige persistente productmatch", async () => {

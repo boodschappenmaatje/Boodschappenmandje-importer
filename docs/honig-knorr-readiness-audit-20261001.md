@@ -1,6 +1,6 @@
 # Honig/Knorr-readiness, 1 oktober 2026
 
-Schrijfvrije Supabase-controle van `meal_mix_profiles` gekoppeld aan `recipe_readiness_cache` bij vier personen. De productiecache is niet herschreven. Alle genoemde SKU's en prijzen komen uit de actuele catalogus (6759 producten en 6759 positieve prijsregels). De codewijziging op de Previewbranch maakt alleen een bewezen juiste hachee-match mogelijk en corrigeert een onjuiste tomatenmatch; live aantallen veranderen pas na een normale release en gerichte veilige rematch.
+Schrijfvrije Supabase-controle van `meal_mix_profiles` gekoppeld aan `recipe_readiness_cache` bij vier personen. De productiecache is niet herschreven. Alle genoemde SKU's en prijzen komen uit de actuele catalogus (6759 producten en 6759 positieve prijsregels). De codewijziging op de Previewbranch maakt alleen een bewezen juiste hachee-match mogelijk en corrigeert een onjuiste tomatenmatch. Een gerichte cacheversie voor de drie gewijzigde supplementkeys zorgt dat de Preview oude persistente resultaten schrijfvrij herberekent; live aantallen veranderen pas na een normale release en gerichte veilige rematch.
 
 | Merk | READY live | NOT_READY live | NO_RECIPE |
 | --- | ---: | ---: | ---: |

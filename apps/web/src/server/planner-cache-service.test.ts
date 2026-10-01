@@ -59,6 +59,22 @@ describe("planner-cache automatisch onderhoud", () => {
     )).toBe(true);
   });
 
+  it("herberekent alleen oude Honig/Knorr-snapshots met gewijzigde matcherregels", () => {
+    const changedKey = "meal-mix-ingredient:mix-supplement-hacheevlees:g:ingredient:generic";
+    const rows = PLANNER_MAINTENANCE_PEOPLE_COUNTS.flatMap((people) => [
+      { ...currentRow("hachee", people), dependency_match_keys: [changedKey] },
+      { ...currentRow("unrelated", people), dependency_match_keys: ["other:g:ingredient:generic"] },
+    ]);
+    const targets = planPlannerReadinessMaintenance(
+      ["hachee", "unrelated"], rows, PLANNER_MAINTENANCE_PEOPLE_COUNTS, NOW,
+    );
+    expect(targets).toHaveLength(10);
+    expect(targets.every((target) => target.recipeIds.join() === "hachee")).toBe(true);
+    expect(planPlannerReadinessMaintenance(["hachee"], rows.map((row) =>
+      row.recipe_id === "hachee" ? { ...row, evaluator_version: PLANNER_READINESS_EVALUATOR_VERSION + 1 } : row,
+    ), PLANNER_MAINTENANCE_PEOPLE_COUNTS, NOW)).toEqual([]);
+  });
+
   it("herbouwt voor één gewijzigd recept alleen de eigen stale varianten", () => {
     const rows = PLANNER_MAINTENANCE_PEOPLE_COUNTS.flatMap((people) => [
       currentRow("untouched", people),
