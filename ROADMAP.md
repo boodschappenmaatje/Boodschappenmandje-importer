@@ -121,7 +121,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze fase is **actief**. Het afzonderlijke Hoogvliet-productdekkingsonderzoek is afgerond en gereleased via PR #37; de overige onderdelen van Productdata & receptkwaliteit vormen nu de eerstvolgende actieve productfase. De huidige Honig/Knorr-NOT_READY-subfase staat in Draft voor Preview/iPhone-acceptatie op PR #39, met de bewezen correcties uit #38/#40 geconsolideerd. De resterende 13 live NOT_READY-profielen hebben gedocumenteerde data- of eenheidsblokkades; de live cache blijft ongewijzigd tot veilige release/rematch. Na deze subfase volgt direct de 1 Honig + 14 Knorr NO_RECIPE-profielen, zonder ze in de huidige fix mee te bouwen.
+Deze fase is **actief**. Het afzonderlijke Hoogvliet-productdekkingsonderzoek is afgerond en gereleased via PR #37; de overige onderdelen van Productdata & receptkwaliteit vormen nu de eerstvolgende actieve productfase. De huidige Honig/Knorr-NOT_READY-subfase staat in Draft voor Preview/iPhone-acceptatie op PR #39, met de bewezen correcties uit #38/#40 geconsolideerd. Van de 13 live NOT_READY-profielen hebben 12 gedocumenteerde data- of eenheidsblokkades; de hachee-codecorrectie wacht op release en gerichte veilige rematch. De live cache blijft ongewijzigd tot die release/rematch. Na deze subfase volgt direct de 1 Honig + 14 Knorr NO_RECIPE-profielen, zonder ze in de huidige fix mee te bouwen.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
