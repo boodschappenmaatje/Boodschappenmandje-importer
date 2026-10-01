@@ -107,12 +107,6 @@ Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en a
 
 Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. De productdekkingswijziging is via `feature/hoogvliet-product-coverage` en PR #37 naar main/Production gebracht. De dagelijkse acceptatie is bij400 hard gestopt; op 1 oktober geen extra import, reset of retry uitvoeren. De nog onbewezen 06:07-/08:30-schedulewerking blijft een afzonderlijke operationele verificatie en blokkeert de afgeronde productdekkingsrelease niet.
 
-## Afgerond / Production: HOOGVLIET-PRODUCTDEKKING — PR #37
-
-PR #37 is op 1 oktober 2026 gemerged als `40f340681f116193f265891716f72082eaa65718` en succesvol naar Vercel Production uitgerold. De live dagacceptatie leverde **400/400** nieuwe, unieke producten met **400 positieve prijsregels**; catalogus **6759/6759**, maintenance `notifiedProducts=704`, pending 0, failures 0 en geen integriteitsafwijkingen. De structurele source_challenge-afhandeling bewaart checkpoints en dagbudget, gebruikt bronvriendelijke seriële pacing en begrensde 15/30/60-minutenbackoff zonder beveiligingsomzeiling. Production-smoke voor Home, Menu, Lijst, Budget, Meer en Vrije keuze is groen.
-
-De automatische 06:07-primary en 08:30-monitor blijven als afzonderlijke operationele verificatie open omdat hun natuurlijke GitHub schedule-triggers op 1 oktober niet zijn aangemaakt; dit verandert de afgeronde productdekking/release niet.
-
 ## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
 
