@@ -12,6 +12,7 @@ import {
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
   applyProductToRequirement,
+  applyManualProductToRequirement,
   combinedProductPurchaseQuantity,
   isReliableIngredientMatch,
   productPackageCapacity,
@@ -125,6 +126,40 @@ describe("merkgebonden maaltijdmixprofielen", () => {
     ] as const;
     for (const [ingredient, name, category] of cases) expect(isReliableIngredientMatch(ingredient, product({ id: name, sku: name, name, category }))).toBe(false);
     expect(productPackageCapacity(product({ id: "onions", sku: "onions", name: "Rode uien net 3 stuks", packageText: "1 stuk" }), "piece")).toBe(3);
+  });
+  it("houdt verse tomaten per stuk geblokkeerd zonder stukaantal en verwerpt blik als automatische match", () => {
+    const ingredient: RecipeIngredientDefinition = {
+      id: "tomaten", sourceKey: "mix-supplement-tomaten", name: "tomaten",
+      normalizedName: "tomaten", aliases: ["tomaten", ...mealMixSupplementAliases("tomaten")],
+      category: "Groente", defaultUnit: "piece",
+    };
+    const canned = product({ id: "canned", sku: "733141000", name: "Mutti Gepelde tomaten",
+      category: "Conserven/Groente", productType: "Groente", packageText: "400 gram", weightGrams: 400 });
+    const small = product({ id: "small", sku: "070476000", name: "Cherry tomaten",
+      category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
+      packageText: "250 gram", weightGrams: 250 });
+    const fresh = product({ id: "fresh", sku: "060936000", name: "Trostomaten",
+      category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
+      packageText: "500 gram", weightGrams: 500,
+      currentPrice: { productId: "fresh", price: 2.29, oldPrice: null, isOffer: false,
+        offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
+    expect(isReliableIngredientMatch(ingredient, canned)).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, { ...canned, packageText: "1 stuk" })).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, small)).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, fresh)).toBe(true);
+    expect(selectIngredientProduct(ingredient, [canned, small, fresh], null, "piece", 2)?.id).toBe("fresh");
+    for (let people = 1; people <= 10; people += 1) {
+      const needed = requirement(people, "piece");
+      const matched = applyProductToRequirement(needed, fresh);
+      expect(matched.packageCapacity).toBeNull();
+      expect(matched.purchaseQuantity).toBeNull();
+      expect(matched.packageCalculationMissing).toBe(true);
+      expect(matched.price?.amountCents).toBe(229);
+    }
+    // An explicit package choice remains a user-controlled choice, not an automatic conversion.
+    expect(applyManualProductToRequirement(requirement(2, "piece"), canned, 2)).toMatchObject({
+      quantityIsPackageCount: true, purchaseQuantity: 2, packageCapacity: 1,
+    });
   });
   it("herkent uitsluitend de bewezen rauwe runderriblap als hacheevlees", () => {
     const ingredient: RecipeIngredientDefinition = { id: "hacheevlees", sourceKey: "mix-supplement-hacheevlees",
@@ -366,6 +401,51 @@ describe("merkgebonden maaltijdmixprofielen", () => {
     })).purchaseQuantity).toBe(1);
     expect(productPackageCapacity(pieces, "g")).toBeNull();
     expect(productPackageCapacity(multipack, "g")).toBe(400);
+  });
+
+  it.each([
+    ["675984000", "G'woon Pita broodjes", "10 stuk", 0.79],
+    ["675985000", "G'woon Maaltijd pita`s", "5 stuk", 0.85],
+  ])("leidt voor pita-SKU %s nooit grammen af uit een stukaantal", (sku, name, packageText, price) => {
+    const pita = product({
+      id: sku,
+      sku,
+      name,
+      brand: "G'woon",
+      category: "Brood/Thuis afbakken/Afbakbroodjes",
+      productType: "Broodjes",
+      packageText,
+      weightGrams: null,
+      currentPrice: {
+        productId: sku,
+        price,
+        oldPrice: null,
+        isOffer: false,
+        offerText: null,
+        validFrom: null,
+        validUntil: null,
+        fetchedAt: NOW,
+        updatedAt: NOW,
+      },
+    });
+
+    expect(productPackageCapacity(pita, "g")).toBeNull();
+    for (let people = 1; people <= 10; people += 1) {
+      const selected = applyProductToRequirement(requirement(100 * people, "g"), pita);
+      expect(selected.product?.sku).toBe(sku);
+      expect(selected.price?.amountCents).toBe(Math.round(price * 100));
+      expect(selected).toMatchObject({
+        requiredQuantity: 100 * people,
+        packageCapacity: null,
+        purchaseQuantity: null,
+        packageCalculationMissing: true,
+      });
+      expect(calculateDishCostSummary(0, [selected])).toEqual({
+        knownCostCents: 0,
+        missingProductCount: 1,
+        complete: false,
+      });
+    }
   });
 
   it("rekent twee canonieke regels voor hetzelfde echte product als één gezamenlijke behoefte", () => {

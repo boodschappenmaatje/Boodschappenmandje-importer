@@ -212,6 +212,9 @@ function requiredIngredientPropertiesMatch(ingredient: RecipeIngredientDefinitio
     const context = normalize(`${product.name} ${product.category}`);
     if (/baby|peuter|dreumes|bonbebe|\bmaanden\b/.test(context)) return false;
     if (required === "appel" && /moes|compote|conserven|gedroogd|sap/.test(context)) return false;
+    // Whole tomatoes in pieces cannot be supplied by canned or small snack tomatoes.
+    if (required === "tomaten" && ingredient.defaultUnit === "piece" &&
+        /\b(?:gepelde|blik|conserven|potgroente|tomatenblokjes|tomatenstukjes|cherry|cherrytomaten|snack|snoep)\b/.test(context)) return false;
     // Hoogvliet identifies its Riblappen as raw 100% beef for stewing even
     // though the catalog productType is misclassified. Do not extend that
     // source-specific equivalence to processed meat or unrelated riblappen.

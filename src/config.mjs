@@ -1,3 +1,5 @@
+import { HOOGVLIET_CATEGORIES } from "./discovery-routes.mjs";
+
 export const catalogBatches = {
   core: Object.freeze([
     "gehakt", "rundergehakt", "kip", "kipfilet", "varkensvlees", "worst",
@@ -34,9 +36,10 @@ export const catalogBatches = {
   growth: Object.freeze([]),
 };
 
-// De groeibatch gebruikt dezelfde bewezen zoektermen. Duplicaten worden één
-// keer verwijderd; de persistente cursor roteert de startpositie per run.
+// Category routes have their own persistent cursor keys, outside the capped
+// dynamic keyword pool. Explicit keyword overrides retain their old scope.
 catalogBatches.growth = Object.freeze([
+  ...HOOGVLIET_CATEGORIES.map(route => route.key),
   ...new Set([
     ...catalogBatches.core,
     ...catalogBatches.fresh,
@@ -85,6 +88,16 @@ function nonNegativeInteger(value, fallback) {
 }
 
 export function loadConfig(env = process.env) {
+  const resumeSourceChallenge = env.RESUME_SOURCE_CHALLENGE === '1';
+  if (resumeSourceChallenge && (env.DAILY_SINGLE_ATTEMPT !== '1' || env.DAILY_NEW_PRODUCT_TARGET !== '400'
+      || env.UPDATE_MODE !== 'growth' || env.DAILY_ACCEPTANCE_GATE)) {
+    throw new Error('Challengehervatting vereist een dagelijkse restantpoging, zonder nieuwe 100-gate.');
+  }
+  const acceptance = env.DAILY_ACCEPTANCE_GATE ?? "";
+  if (acceptance && acceptance !== "100") throw new Error("DAILY_ACCEPTANCE_GATE moet leeg of 100 zijn.");
+  if (acceptance && (env.DAILY_SINGLE_ATTEMPT !== "1" || env.DAILY_NEW_PRODUCT_TARGET !== "400" || env.UPDATE_MODE !== "growth")) {
+    throw new Error("De 100-gate vereist een expliciete dagelijkse growth-acceptatie met dagdoel 400.");
+  }
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
   const updateMode = (env.UPDATE_MODE ?? DEFAULT_UPDATE_MODE).trim().toLowerCase();
   if (!UPDATE_MODES.has(updateMode)) {
@@ -187,6 +200,8 @@ export function loadConfig(env = process.env) {
       .replace(/[^a-z0-9_-]/gi, "-")
       .slice(0, 80) || "daily-catalog-growth",
     dailySingleAttempt: env.DAILY_SINGLE_ATTEMPT === "1",
+    resumeSourceChallenge,
+    dailyAcceptanceGate: acceptance === "100",
     dailyTargetNewProducts: Math.min(
       positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
       SAFE_NEW_PRODUCT_LIMIT,

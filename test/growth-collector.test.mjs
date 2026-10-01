@@ -6,6 +6,25 @@ const config = { updateMode: 'growth', maxNewProducts: 400, maxPerTerm: 40,
   searchTerms: ['rijst'], growthMaxTotalPages: 800, growthMaxPagesPerTerm: 2,
   growthMaxCandidates: 6000, growthMaxRuntimeMs: 3600000 };
 const item = (i) => ({ sku: String(100000000 + i), name: `Rijst ${i}`, sourceURL: `https://www.hoogvliet.com/product/rijst-${i}` });
+test('detail challenge discards pending unwritten batch and resumes same window without duplicate writes', async () => {
+  const rows = Array.from({ length: 30 }, (_, i) => item(i));
+  const h = harness(rows);
+  let validated = 0, captured;
+  h.options.validateCandidate = async row => {
+    if (++validated === 15) throw Object.assign(new Error('challenge'), { code: 'source_challenge' });
+    return row;
+  };
+  await assert.rejects(collectGrowthCandidates({ ...config, maxNewProducts: 30 }, h.options), error => {
+    captured = error.collectionStats; return error.code === 'source_challenge';
+  });
+  assert.equal(h.inserted.size, 10); assert.deepEqual(h.batches, [10]);
+  assert.equal(captured.nextPageCursor, 0); assert.equal(captured.lastSearchedTerm, 'rijst');
+  assert.equal(captured.accounting.balanced, true);
+  h.options.validateCandidate = async row => row;
+  h.options.existingSKUs = new Set(h.inserted);
+  const result = await collectGrowthCandidates({ ...config, maxNewProducts: 20 }, h.options);
+  assert.equal(h.inserted.size, 30); assert.equal(result.stats.persistedNewProducts, 20);
+});
 function harness(rows, options = {}) {
   const inserted = new Set(), calls = [], batches = [];
   const existingSKUs = options.existingSKUs ?? new Set();

@@ -189,6 +189,29 @@ describe("Recipe Readiness Gate", () => {
       requiredQuantity: people * 100, priceKnown: true, packageCalculable: false,
       reason: "package_unknown" });
   });
+  it.each(Array.from({ length: 10 }, (_, index) => index + 1))("blokkeert %i-persoonsmix met verse tomaten zonder bekend stukaantal", async (people) => {
+    const tomato: RecipeIngredientDefinition = {
+      id: "mix-tomato", sourceKey: "mix-supplement-tomaten", name: "tomaten",
+      normalizedName: "tomaten", defaultUnit: "piece", category: "Groente", aliases: ["tomaten", "trostomaten"],
+    };
+    const canned = product({ id: "canned", sku: "733141000", name: "Mutti Gepelde tomaten",
+      category: "Internationale keuken, pasta, rijst/Italiaanse keuken/Tomatenbasis",
+      productType: "Pasta", packageText: "400 gram", weightGrams: 400 });
+    const small = product({ id: "small", sku: "070476000", name: "Cherry tomaten",
+      category: "Aardappelen, groente, fruit/Groente/Tomaat, paprika",
+      productType: "Aardappelen", packageText: "250 gram", weightGrams: 250 });
+    const fresh = product({ id: "fresh", sku: "060936000", name: "Trostomaten",
+      category: "Aardappelen, groente, fruit/Groente/Tomaat, paprika",
+      productType: "Aardappelen", packageText: "500 gram", weightGrams: 500 });
+    const relation = { ...RELATION, ingredientId: tomato.id, unit: "piece" as const, amountPerPerson: 1 };
+    const gate = await evaluateRecipeReadiness([RECIPE], people,
+      catalog([tomato], [relation]), repository(() => [canned, small, fresh]));
+    expect(gate.recipes[0]).toMatchObject({ ready: false, problemCount: 1 });
+    expect(gate.recipes[0].ingredients[0]).toMatchObject({
+      sku: "060936000", requiredQuantity: people, priceKnown: true,
+      packageCalculable: false, reason: "package_unknown", origin: "catalogCoverage",
+    });
+  });
   it("markeert een recept pas READY als alle verplichte controles slagen", async () => {
     const realProduct = product({ id: "product-beef", sku: "871000001", name: "Hoogvliet rundergehakt" });
     const gate = await evaluateRecipeReadiness(
