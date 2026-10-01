@@ -42,12 +42,13 @@ on:
           - pantry
           - growth
       growth_limit:
-        description: Veilige limiet voor catalogusgroei (test eerst met 10)
+        description: 100 vereist daily_attempt_only; eerst 100 + integriteitsgate, uitsluitend groen daarna resterend dagbudget
         required: true
         default: "10"
         type: choice
         options:
           - "10"
+          - "100"
           - "400"
       advance_discovery_state:
         description: Discovery-cursor na deze run doorschuiven
@@ -280,7 +281,12 @@ jobs:
             fi
           fi
 
-          # Explicit one-shot validation uses the existing daily claim and closes today's job.
+          # The 100 gate is daily-accounted, never a separate unaccounted test import.
+          if [[ "${{ inputs.growth_limit }}" == "100" && "${{ inputs.daily_attempt_only }}" != "true" ]]; then
+            echo "100 vereist daily_attempt_only" >&2
+            exit 1
+          fi
+          # Explicit one-shot validation uses the existing daily claim.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.daily_attempt_only }}" == "true" ]]; then
             update_mode="growth"
             catalog_batch="growth"
@@ -289,6 +295,9 @@ jobs:
             import_trigger="schedule"
             advance_discovery_state="1"
             echo "DAILY_SINGLE_ATTEMPT=1" >> "$GITHUB_ENV"
+            if [[ "${{ inputs.growth_limit }}" == "100" ]]; then
+              echo "DAILY_ACCEPTANCE_GATE=100" >> "$GITHUB_ENV"
+            fi
           fi
 
           if [[ "$update_mode" == "prices" ]]; then

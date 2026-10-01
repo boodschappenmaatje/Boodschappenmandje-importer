@@ -416,6 +416,26 @@ export async function fetchExistingPriceStates(config) {
   throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-prijzen.");
 }
 
+// Read-only, bounded evidence for the explicitly requested staged acceptance.
+// Read raw rows so duplicate/orphan prices cannot disappear in a Map.
+export async function fetchCatalogAcceptanceSnapshot(config) {
+  async function allRows(table, select, order) {
+    const result = [];
+    for (let offset = 0; offset < 20_000; offset += 1000) {
+      const rows = await getJSON(config.supabaseURL, table, config.supabaseSecret,
+        { select, order }, offset, offset + 999);
+      if (!Array.isArray(rows)) throw new Error("Ongeldige acceptance-snapshot.");
+      result.push(...rows);
+      if (rows.length < 1000) return result;
+    }
+    throw new Error("Acceptance-snapshot overschrijdt leesbudget.");
+  }
+  const products = await allRows("products", "id,supermarket,sku,name,source_url,created_at", "id.asc");
+  const prices = await allRows("product_prices", "product_id,price,fetched_at", "product_id.asc");
+  const state = await fetchCatalogDiscoveryState(config, config.discoveryStateKey);
+  return { products, prices, maintenance: state.plannerMaintenance };
+}
+
 export async function hasProductTypeColumn(config) {
   try {
     await getJSON(

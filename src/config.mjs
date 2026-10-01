@@ -88,6 +88,11 @@ function nonNegativeInteger(value, fallback) {
 }
 
 export function loadConfig(env = process.env) {
+  const acceptance = env.DAILY_ACCEPTANCE_GATE ?? "";
+  if (acceptance && acceptance !== "100") throw new Error("DAILY_ACCEPTANCE_GATE moet leeg of 100 zijn.");
+  if (acceptance && (env.DAILY_SINGLE_ATTEMPT !== "1" || env.DAILY_NEW_PRODUCT_TARGET !== "400" || env.UPDATE_MODE !== "growth")) {
+    throw new Error("De 100-gate vereist een expliciete dagelijkse growth-acceptatie met dagdoel 400.");
+  }
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
   const updateMode = (env.UPDATE_MODE ?? DEFAULT_UPDATE_MODE).trim().toLowerCase();
   if (!UPDATE_MODES.has(updateMode)) {
@@ -190,6 +195,7 @@ export function loadConfig(env = process.env) {
       .replace(/[^a-z0-9_-]/gi, "-")
       .slice(0, 80) || "daily-catalog-growth",
     dailySingleAttempt: env.DAILY_SINGLE_ATTEMPT === "1",
+    dailyAcceptanceGate: acceptance === "100",
     dailyTargetNewProducts: Math.min(
       positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
       SAFE_NEW_PRODUCT_LIMIT,
