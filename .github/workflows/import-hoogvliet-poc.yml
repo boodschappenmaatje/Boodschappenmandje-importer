@@ -73,6 +73,10 @@ on:
     # GitHub plant dit direct in Europe/Amsterdam, ook over DST-wisselingen.
     - cron: "7 6 * * *"
       timezone: "Europe/Amsterdam"
+    # Veilige recovery om 07:23 NL. GitHub schedule-events kunnen incidenteel
+    # vertragen of uitvallen; dezelfde daily claim + concurrency voorkomt dubbel werk.
+    - cron: "23 7 * * *"
+      timezone: "Europe/Amsterdam"
     # Dagelijks 02:17 UTC: één van zeven vaste prijsdeelbatches.
     - cron: "17 2 * * *"
     # Zondag 03:43 UTC: één catalogusbatch; core/fresh/world/pantry rouleren.
@@ -243,7 +247,7 @@ jobs:
           discovery_state_key="daily-catalog-growth"
 
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            if [[ "${{ github.event.schedule }}" == "7 6 * * *" ]]; then
+            if [[ "${{ github.event.schedule }}" == "7 6 * * *" || "${{ github.event.schedule }}" == "23 7 * * *" ]]; then
               update_mode="growth"
               catalog_batch="growth"
               price_shard="0"
