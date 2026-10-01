@@ -271,8 +271,9 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
     const completed = [...new Set([...exhaustedTerms, ...(stats.exhaustedTerms ?? [])])];
     const index = originalTerms.indexOf(stats.lastSearchedTerm);
     await services.saveCatalogDiscoveryState(config, { ...discoveryState,
-      termCursor: index < 0 ? discoveryState.termCursor : index, pageCursor: stats.nextPageCursor ?? 0,
-      lastBatch: config.catalogBatch, lastTerm: stats.lastSearchedTerm, lastStopReason: stats.stopReason,
+      termCursor: index < 0 ? discoveryState.termCursor : index,
+      pageCursor: stats.lastSearchedTerm ? stats.nextPageCursor ?? 0 : discoveryState.pageCursor,
+      lastBatch: config.catalogBatch, lastTerm: stats.lastSearchedTerm ?? discoveryState.lastTerm, lastStopReason: stats.stopReason,
       scanDate, exhaustedTerms: completed, stalledTerms: report().stalledTerms,
       lastAttemptReport: report(), plannerMaintenance, ...mergeDiscoveryMetrics(discoveryState, stats.termCoverage),
       updatedAt: new Date().toISOString(),
@@ -416,6 +417,7 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
     return result;
   } catch (error) {
     stats = error.collectionStats ?? stats;
+    stats.stopReason = error.code ?? stats.stopReason;
     logger.info(`Discovery-verantwoording: ${JSON.stringify(report())}`);
     await saveProgress().catch((saveError) => logger.error(`Discovery-checkpoint mislukt: ${saveError.message}`));
     const totalUniqueProductsAfter = await services.fetchExistingSKUs(config)

@@ -90,11 +90,21 @@ Releasecontrole 30 september: main `3370bf8`, Production Current/Ready, Home/Men
 
 ## Eerstvolgende afzonderlijke opdracht: VERBETERING HOOGVLIET-PRODUCTDEKKING
 
-**Status: vastgelegd, nog niet gestart.**
+**Status: in uitvoering — Draft/Preview, niet gereleased.**
+
+Live acceptatie **1 oktober 2026 geslaagd: 400/400** nieuwe, unieke, positief geprijsde en bevestigde producten. Eerst100, daarna een veilige stop op `source_challenge`, vervolgens na structurele checkpoint/backoff/pacing-fix één normale hervatting met300. Catalogus6759 producten/6759 prijzen, pending0/notified704, geen integriteitsafwijkingen. Action36841876717 op functionele head8988a3b is geslaagd. PR #37 blijft expliciet Draft en is niet gereleased; geen merge/Production-deployment. Automatische06:07-/08:30-triggerwerking blijft afzonderlijk onbewezen. Dit dagresultaat bewijst geen structurele dagelijkse beschikbaarheid van400 nieuwe producten.
+
+### Broncompatibiliteit bij aangekondigde websitewissel
+
+Hoogvliet bevestigt op [Nieuwe website](https://www.hoogvliet.com/nieuwe-website) **5 oktober** met tijdelijke sluiting; de op 30 september 2026 gelezen pagina noemt geen jaartal. Huidige Intershop-zoekroutes, categorie 999999-1700, paginametadata en productdetail met positieve prijs werken nog. Nieuwe URL-/paginering-/prijscontracten zijn niet gepubliceerd of bewezen.
+
+Vervolg bij de feitelijke omschakeling: openbare zoek- en categorieredirects, categorie-identiteit, paginanummers, totalen en route-eindesignalen toetsen; SKU/product-URL/verpakking en reguliere/aanbiedingsprijs op detailpagina's verifiëren. Tijdelijke sluiting of incompatibiliteit is een bronfout, geen assortimentuitputting of aanleiding voor fictieve prijzen. Behoud data/cursors/dagbudget/claims/maintenance; wijzig alleen bewezen incompatibele adapters met fixtures en schrijfvrije tests vóór live gebruik. Geen speculatieve migratie nu gebouwd.
+
+Schrijfvrij onderzoek op 30 september bewijst een spatiecoderingfout en onvoldoende categorieroutes. De featurebranch corrigeert URL-codering en voegt 20 openbare categorieroutes toe; een steekproef levert 59 ontbrekende kandidaten, waarvan 15 detailgevalideerd. Daarna is op 1 oktober de begrensde dagelijkse groei van400 producten live geaccepteerd; details en veiligheidsgrenzen staan in PROJECT_STATE.md en `docs/hoogvliet-product-coverage.md`.
 
 Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en andere toegestane discoverymethoden. Breng de dekking en beperkingen van de huidige routes in kaart en verifieer route-eindesignalen; nul resultaten uit de huidige zoekstrategie betekenen niet dat elders geen geldige producten beschikbaar zijn.
 
-Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. Uitvoering volgt als aparte opdracht; in deze releasecontrole is niets uitgebreid of geïmporteerd.
+Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. Uitvoering vindt plaats op de afzonderlijke branch `feature/hoogvliet-product-coverage`; main/planning blijven ongewijzigd; uitsluitend de expliciet goedgekeurde dagelijkse acceptatie is uitgevoerd en bij400 gestopt.
 
 ## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
@@ -110,7 +120,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is nog **niet gestart**. De eerstvolgende afzonderlijke opdracht daarbinnen is **Verbetering Hoogvliet-productdekking**, zoals hierboven afgebakend.
+Deze mijlpaal is **gestart met het afzonderlijke productdekkingsonderzoek**. De overige onderdelen zijn nog niet gestart; de hierboven afgebakende verbetering blijft Draft tot acceptatie en release.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 
