@@ -1,5 +1,21 @@
 # BoodschappenMaatje — Project State
 
+## Actueel — PR #37 gereleased naar Production — 1 oktober 2026
+
+- PR #37 is na volledige releasegate gemerged naar `main` als **`40f340681f116193f265891716f72082eaa65718`**. De PR-head was `c9c60fbd3c463ea976c9bbf328368fda29a30b7e`; functioneel/live geteste head `8988a3b0345122ca8e8192806f8d9a679cc2f491`.
+- Releasegate: PR conflictvrij/mergeable, 13 commits vóór en 0 achter main; diff uitsluitend importer/workflow/tests/documentatie/screenshots, zonder design-, schema- of migratiewijzigingen en zonder code uit PR #38/#39/#40.
+- Actuele PR-CI `36844939333` groen; na merge is main-CI `36846316766` eveneens groen. Importerfixtures/seedchecks, webregressies, lint, TypeScript en Production-build slaagden.
+- Live read-only eindbewijs opnieuw bevestigd: dagjob **400/400**, remaining **0**, catalogus **6759 producten / 6759 prijzen**, vandaag precies 400 nieuwe producten. Duplicaten supermarkt/SKU 0, ongeldige/niet-positieve prijzen 0, orphan prijzen 0 en producten zonder positieve prijs 0.
+- Dagjob `f029e527-662c-4047-9a74-43646f92b559` staat `target_reached`, attempt_count 3, zonder lock of retry. Attempts: 100 succesvol → 0 door historische `source_challenge` → 300 succesvol. Geen actieve daily attempts of catalogusimports.
+- Maintenance: `confirmed`, `notifiedProducts=704`, pending 0, failures 0. Discovery eindigde op term_cursor 10, `category:999999-1000`, page_cursor 0, `growth_target_reached`.
+- Structurele source_challenge-afhandeling is gereleased: gedeelde seriële pacing minimaal 2s / maximaal 30 top-levelnavigaties per minuut, checkpointbehoud, geen gebufferde writes na challenge, 15/30/60 minuten begrensde backoff, maximaal drie challenge-vervolgpogingen binnen dezelfde dag, normale claim-RPC en hard dagmaximum 400. Geen proxy/header/cookie/identity-bypass.
+- Vercel Production deployment **`dpl_EzwQdgRR57VpBMvNY3HeXqLvxztd`** staat **READY** op exact mergecommit `40f3406`; Production-alias `boodschappenmaatje-pwa.vercel.app` wijst ernaar. Read-only smoke: Home, Menu, Lijst, Budget, Meer en Vrije keuze alle HTTP 200.
+- Rollbackpad: de nieuwe Production-deployment is door Vercel als rollback candidate gemarkeerd; vorige Production-release blijft in deploymenthistorie beschikbaar.
+- Open operationele verificatie: de natuurlijke primaire **06:07 Europe/Amsterdam**-trigger en afzonderlijke **08:30**-monitortrigger zijn op 1 oktober niet aangemaakt. Configuratie staat op main en de bekende latere schedule-run bewijst deze twee triggers niet. Geen willekeurige cronwijziging gedaan; dit blijft een afzonderlijk verificatiepunt en blokkeerde de bewezen PR #37-release niet.
+- **Geen verdere productimport op 1 oktober starten:** dagmaximum 400 is bereikt. Geen reset of extra retry.
+- Eerstvolgende productfase: **Productdata & receptkwaliteit**.
+
+
 ## Actueel — PR #37 gereleased: Hoogvliet-productdekking 400/400 — 1 oktober 2026
 
 **PR #37 is definitief gereleased. Geen verdere import starten op 1 oktober: dagmaximum 400 bereikt, remaining 0.** Functionele release-main/mergecommit: `40f340681f116193f265891716f72082eaa65718`. Vercel Production `dpl_EzwQdgRR57VpBMvNY3HeXqLvxztd` staat `READY`; de alias `boodschappenmaatje-pwa.vercel.app` wijst naar deze deployment. Dit checkpoint vervangt de tussentijdse en historische blokkadestatus hieronder.
