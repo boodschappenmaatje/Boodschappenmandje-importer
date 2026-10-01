@@ -40,6 +40,7 @@ Belangrijke productprincipes:
 | PR #28 — verpakkingen/lijst/budget | Afgerond / Production | Compacte lijst, recept ⇄ lijst, veilige trash, prijsfallback, handmatige override en harde automatische maaltijdgrens |
 | PR #29 — Stabiliteit & kernflows | Afgerond / Production | Kernflow-integraties, centrale hoeveelheidspresentatie en actieve CI-releasegate |
 | Importer & maintenanceherstel | Functioneel gereleased; automatische eindverificatie open | Veilige queue-replay, v4/CAS-writer en begrensde hervatbare importer; dagelijkse groei niet bewezen |
+| PR #37 — Hoogvliet-productdekking | Afgerond / Production | 400/400 live geaccepteerd; veilige source_challenge-checkpoints/backoff/pacing; catalogus 6759/6759 |
 
 ## Afgeronde release — PR #28
 PR #28 is na geslaagde fysieke iPhone-hertest gemerged naar `main` (`d7a234df5ac24ab6fec558413ff2c73649071584`) en in Production uitgerold. Gerichte Production-smoke geslaagd. De verpakkingen-, lijst- en budgetronde is afgerond: compacte inklapbare lijst, oorsprong, directe veilige prullenmand, recept ⇄ lijst-sync, productvervanging, prijsfallback en handmatige bevestiging boven het maaltijdbudget. De automatische planner behoudt de harde grens. Volledige regressie: 687 webtests, 189 importerfixtures, lint, TypeScript en build groen. Echte assortimentsdatablokkades blijven als datawerk apart gedocumenteerd.
@@ -88,11 +89,11 @@ PR #31 heeft de dagelijkse Hoogvliet-discovery begrensd en hervatbaar gemaakt: 8
 
 Releasecontrole 30 september: main `3370bf8`, Production Current/Ready, Home/Menu/Lijst/Budget-smoke en main-CI groen. Catalogus 6359 producten/6359 prijsregels; gecontroleerde duplicaat-, referentie- en positieve-prijsinvarianten zonder afwijkingen. Functioneel herstel en maintenance zijn afgerond. Operationeel blijft een volledige automatische cyclus na de release open. Twee eerdere monitorruns op 29 september stonden als `success` terwijl de monitorstap door een tijdpoort op de vertraagde uitvoertijd was overgeslagen; dit is een bewezen workflowfout. Op 30 september was de verwachte run om circa 09:35 lokaal nog niet zichtbaar; de oorzaak van die ontbrekende trigger is niet bewezen. Een gerichte correctie van de geplande workflow volgt in een afzonderlijke PR, zonder een nieuwe import te starten. Details en bewijslimieten staan in `PROJECT_STATE.md`.
 
-## Eerstvolgende afzonderlijke opdracht: VERBETERING HOOGVLIET-PRODUCTDEKKING
+## Afgerond / Production: VERBETERING HOOGVLIET-PRODUCTDEKKING
 
-**Status: in uitvoering — Draft/Preview, niet gereleased.**
+**Status: afgerond / Production — PR #37 gereleased op 1 oktober 2026.**
 
-Live acceptatie **1 oktober 2026 geslaagd: 400/400** nieuwe, unieke, positief geprijsde en bevestigde producten. Eerst100, daarna een veilige stop op `source_challenge`, vervolgens na structurele checkpoint/backoff/pacing-fix één normale hervatting met300. Catalogus6759 producten/6759 prijzen, pending0/notified704, geen integriteitsafwijkingen. Action36841876717 op functionele head8988a3b is geslaagd. PR #37 blijft expliciet Draft en is niet gereleased; geen merge/Production-deployment. Automatische06:07-/08:30-triggerwerking blijft afzonderlijk onbewezen. Dit dagresultaat bewijst geen structurele dagelijkse beschikbaarheid van400 nieuwe producten.
+Live acceptatie **1 oktober 2026 geslaagd: 400/400** nieuwe, unieke, positief geprijsde en bevestigde producten. Eerst100, daarna een veilige stop op `source_challenge`, vervolgens na structurele checkpoint/backoff/pacing-fix één normale hervatting met300. Catalogus6759 producten/6759 prijzen, pending0/notified704, geen integriteitsafwijkingen. Action36841876717 op functionele head8988a3b is geslaagd. PR #37 is gemerged als `40f340681f116193f265891716f72082eaa65718`; main-CI en Production `dpl_EzwQdgRR57VpBMvNY3HeXqLvxztd` zijn groen/READY en de read-only appsmoke is geslaagd. Automatische06:07-/08:30-triggerwerking blijft afzonderlijk onbewezen. Dit dagresultaat bewijst geen structurele dagelijkse beschikbaarheid van400 nieuwe producten.
 
 ### Broncompatibiliteit bij aangekondigde websitewissel
 
@@ -104,7 +105,7 @@ Schrijfvrij onderzoek op 30 september bewijst een spatiecoderingfout en onvoldoe
 
 Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en andere toegestane discoverymethoden. Breng de dekking en beperkingen van de huidige routes in kaart en verifieer route-eindesignalen; nul resultaten uit de huidige zoekstrategie betekenen niet dat elders geen geldige producten beschikbaar zijn.
 
-Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. Uitvoering vindt plaats op de afzonderlijke branch `feature/hoogvliet-product-coverage`; main/planning blijven ongewijzigd; uitsluitend de expliciet goedgekeurde dagelijkse acceptatie is uitgevoerd en bij400 gestopt.
+Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. De productdekkingswijziging is via `feature/hoogvliet-product-coverage` en PR #37 naar main/Production gebracht. De dagelijkse acceptatie is bij400 hard gestopt; op 1 oktober geen extra import, reset of retry uitvoeren. De nog onbewezen 06:07-/08:30-schedulewerking blijft een afzonderlijke operationele verificatie en blokkeert de afgeronde productdekkingsrelease niet.
 
 ## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
@@ -120,7 +121,7 @@ Omvat:
 - bekende catalogusafwijkingen zoals “Rode uien net 3 stuks” tegenover catalogusinhoud “1 stuk” herleidbaar onderzoeken;
 - geen €0, fictieve hoeveelheden of geforceerde matches.
 
-Deze mijlpaal is **gestart met het afzonderlijke productdekkingsonderzoek**. De overige onderdelen zijn nog niet gestart; de hierboven afgebakende verbetering blijft Draft tot acceptatie en release.
+Deze fase is **actief**. Het afzonderlijke Hoogvliet-productdekkingsonderzoek is afgerond en gereleased via PR #37; de overige onderdelen van Productdata & receptkwaliteit vormen nu de eerstvolgende actieve productfase.
 
 Bestaande onderdelen “Recepten & maaltijdmixen uitbreiden” en “Productcatalogus & datakwaliteit” blijven hieronder inhoudelijke werkstromen en hoeven niet dubbel als losse prioriteitsfase behandeld te worden.
 

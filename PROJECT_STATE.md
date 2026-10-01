@@ -1,8 +1,8 @@
 # BoodschappenMaatje — Project State
 
-## Actueel — PR #37: source_challenge hersteld, 400/400 live bewezen — 1 oktober 2026
+## Actueel — PR #37 gereleased: Hoogvliet-productdekking 400/400 — 1 oktober 2026
 
-**Deze dagacceptatie is afgerond. Geen verdere import starten: dagmaximum 400 bereikt, remaining 0. PR #37 blijft Draft; geen merge of Production-release.** Dit checkpoint vervangt de tussentijdse en historische blokkadestatus hieronder.
+**PR #37 is definitief gereleased. Geen verdere import starten op 1 oktober: dagmaximum 400 bereikt, remaining 0.** Functionele release-main/mergecommit: `40f340681f116193f265891716f72082eaa65718`. Vercel Production `dpl_EzwQdgRR57VpBMvNY3HeXqLvxztd` staat `READY`; de alias `boodschappenmaatje-pwa.vercel.app` wijst naar deze deployment. Dit checkpoint vervangt de tussentijdse en historische blokkadestatus hieronder.
 
 ### Definitief live resultaat
 
@@ -29,10 +29,10 @@
 ### Tests, schedules en releasegrens
 
 - **313 root-tests**, seed-/syntaxchecks, **791 webtests**, lint, TypeScript en productiebuild groen. Functionele CI [36841559467](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/36841559467) en documentatiecheckpoint-CI 36842902434 volledig groen; Vercel Preview-check groen. Regressies omvatten challenge vóór writes/midden in discovery, behoud cursor en dagbudget, claimvrijgave/backoff, geen dubbele writes, geblokkeerde preflight zonder writes, guarded recovery via normale claim en maximaal300 na100.
-- De nieuwe einddocumentatiecommit verandert geen functionele code; zijn CI-status staat op de actuele PR-head en wordt vóór oplevering gecontroleerd.
-- Main/default branch blijft `b202d19f874d0ace293c6ef76c57529b6e3e79eb`; Production blijft ongewijzigd (laatst bevestigd READY `dpl_9CpqCd7nQbXHVAMzz6JrwFgzsmLd`). Geen merge of Production-deployment; andere PR's en design onaangeraakt.
+- Eindhead-CI `36844939333` op `c9c60fbd3c463ea976c9bbf328368fda29a30b7e` is volledig groen. Na merge is ook main-CI `36846316766` op `40f340681f116193f265891716f72082eaa65718` volledig groen.
+- PR #37 is conflictvrij vanaf base `b202d19f874d0ace293c6ef76c57529b6e3e79eb` gemerged als `40f340681f116193f265891716f72082eaa65718`. Production `dpl_EzwQdgRR57VpBMvNY3HeXqLvxztd` draait exact deze main-commit, `READY`, zonder aliasfout en is rollback-kandidaat. Read-only smoke op de Production-alias is HTTP 200 voor Home, Menu (`/week-voorbereiden`), Lijst, Budget, Meer en Vrije keuze. Andere PR's, database/schema en design zijn niet meegenomen.
 - Primaire **06:07 Europe/Amsterdam**-trigger en afzonderlijke **08:30**-monitortrigger zijn op 1 oktober bij de laatste controle niet aangemaakt. Configuratie op default main en enabled workflow gecontroleerd; geen bewezen eigen cron-/condition-/concurrencyfout. **GitHub schedule-trigger niet aangemaakt; exacte platformoorzaak niet bewijsbaar.** Geen willekeurige cronwijziging. Automatische run 36838978269 was prices/core, geen growth. Retryworkflow ongewijzigd; laatste 36784343276 stopte buiten het dagvenster.
-- De live acceptatie bewijst **vandaag 400 betrouwbare nieuwe producten**, niet dat dagelijks 400 beschikbaar zijn of het hele assortiment is uitgeput. Vóór release: gebruiker beoordeelt resultaat en geeft nieuwe mergegoedkeuring; actuele CI/diff/rollback en de afzonderlijke automatische schedulewerking controleren. PR #37 blijft conform deze opdracht Draft; roadmapmijlpaal nog niet gereleased.
+- De live acceptatie bewijst **vandaag 400 betrouwbare nieuwe producten**, niet dat dagelijks 400 beschikbaar zijn of het hele assortiment is uitgeput. Releasegates, rollbackpad, actuele CI/diff en Production-smoke zijn groen en PR #37 is gereleased. De afzonderlijke automatische schedulewerking blijft operationeel open: de natuurlijke 06:07-primary en 08:30-monitor zijn op 1 oktober niet als zodanig bewezen; geen speculatieve cronwijziging.
 
 ## Historische checkpoints — onderstaande tussenstanden zijn geen actuele dagstatus
 
