@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+      # Validate the exact Draft head even while main's ROADMAP conflicts with
+      # the existing PR documentation and GitHub cannot build a PR merge ref.
+      - feature/meal-mix-supplement-matches
       - 'maintenance/replay-schedule/**'
 
 permissions:
