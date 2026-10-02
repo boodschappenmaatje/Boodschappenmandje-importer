@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+import { getPublicSupabaseConfig } from "@/lib/supabase/config";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isPlannerCacheAdminRequest } from "@/server/planner-cache-auth";
 import {
@@ -18,8 +20,11 @@ export async function GET(request: Request): Promise<Response> {
     matchKeys: params.getAll("matchKey"),
   });
   if (!input) return Response.json({ error: "invalid-request" }, { status: 400 });
-  const client = getSupabaseServerClient();
-  if (!client) return Response.json({ error: "cache-unavailable" }, { status: 503 });
+  const publicConfig = getPublicSupabaseConfig();
+  if (!publicConfig.configured) return Response.json({ error: "cache-unavailable" }, { status: 503 });
+  const client = createClient(publicConfig.value.url, publicConfig.value.publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
   try {
     const plan = await dryRunBoundedReadiness(client, input);
     return Response.json(plan, { status: plan.blocked ? 409 : 200 });
