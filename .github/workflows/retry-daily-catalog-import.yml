@@ -58,6 +58,9 @@ jobs:
           node-version: "22"
           cache: npm
 
+      - name: Dependencies installeren
+        run: npm ci
+
       - name: Controleren of een attempt verschuldigd is
         id: due
         shell: bash
@@ -72,10 +75,6 @@ jobs:
           fi
           echo "run_attempt=$run_attempt" >> "$GITHUB_OUTPUT"
           echo "reason=${reason:-unknown}" >> "$GITHUB_OUTPUT"
-
-      - name: Dependencies installeren
-        if: steps.due.outputs.run_attempt == '1'
-        run: npm ci
 
       - name: Chromium installeren
         if: steps.due.outputs.run_attempt == '1'
