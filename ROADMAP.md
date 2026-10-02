@@ -107,6 +107,38 @@ Onderzoek aanvullende Hoogvliet-categorieën, zoekmethoden, productpagina's en a
 
 Doel blijft maximaal **400 nieuwe, unieke, geldige, positief geprijsde en bevestigde producten per dag wanneer voldoende kandidaten beschikbaar zijn**. Behoud het resterende dagbudget, dedupe, cursors, begrensde hervatting/retries, concurrency en normale maintenance. Geen onbeperkte backfill of fictief bewijs van groei. De productdekkingswijziging is via `feature/hoogvliet-product-coverage` en PR #37 naar main/Production gebracht. De dagelijkse acceptatie is bij400 hard gestopt; op 1 oktober geen extra import, reset of retry uitvoeren. De nog onbewezen 06:07-/08:30-schedulewerking blijft een afzonderlijke operationele verificatie en blokkeert de afgeronde productdekkingsrelease niet.
 
+## Uitvoeringsmatrix — Codex / Work
+
+Gebruik deze indeling bij het starten van roadmapwerk. De actuele remote branch/PR en `PROJECT_STATE.md` blijven leidend; de matrix bepaalt de voorkeursomgeving, niet de technische status.
+
+| Roadmaponderdeel | Voorkeursomgeving | Volgorde / gebruik |
+|---|---|---|
+| Productdata & receptkwaliteit | **Allebei** | **Codex eerst** voor matcher/readiness/package-code, gerichte regressies en refactors; **Work daarna** voor live Supabase-audit, GitHub/CI, Preview, begrensde maintenance, release en documentatie. |
+| Honig/Knorr NOT_READY en gerichte readiness-maintenance | **Allebei** | **Codex** voor de begrensde onderhoudsroute en tests; **Work** voor dry-run/live voor-na-audit, Preview, releasegate en gecontroleerde uitvoering. |
+| Honig/Knorr NO_RECIPE / recepten & maaltijdmixen uitbreiden | **Allebei** | **Codex eerst** voor profielen, validator/matcher en tests; **Work daarna** voor actuele catalogus-/broncontrole, Preview en acceptatie. |
+| Betrouwbare opslag + geschiedenis | **Allebei** | **Codex eerst** voor opslagmodel, migratielogica en tests; **Work daarna** voor Supabase/GitHub/Preview, integratiecontrole en releaseflow. |
+| Eigen recepten — vervolg | **Codex**, daarna Work bij release | Gerichte component-/state-/opslagwijzigingen in **Codex**; **Work** zodra Preview, browser/iPhone-acceptatie en release nodig zijn. |
+| Productcatalogus & datakwaliteit | **Work** met Codex voor codefixes | **Work** voor live importer/Supabase/GitHub/monitoring; schakel **Codex** in voor afgebakende importer-, parser- of matcherwijzigingen. |
+| Budgetbewuste productselectie | **Allebei** | **Codex eerst** voor optimalisatie-algoritme, verpakking-/prijslogica en tests; **Work daarna** voor echte catalogusdata, Preview en end-to-end budgetcontrole. |
+| Home-mascotte vernieuwen | **Work** | Visuele integratie, Preview en fysieke iPhone-beoordeling in **Work**; Codex alleen bij gerichte componentcode die los onderzocht moet worden. |
+| Gerechtfoto's | **Work** | Bron-/beeldworkflow, integratie, Preview en visuele acceptatie in **Work**; Codex alleen voor afgebakende technische beeld-/fallbacklogica. |
+| Terugkerende producten | **Allebei** | **Codex eerst** voor state/herkomst/suggestielogica en tests; **Work daarna** voor integratie, Preview en gebruikersflow. |
+| Slimmere suggesties | **Allebei** | **Codex eerst** voor selectie-/budgetlogica; **Work daarna** voor echte data, UX-controle en releaseflow. |
+| Personalisatie | **Allebei** | **Codex eerst** voor datamodel en beslislogica; **Work daarna** voor gekoppelde systemen, privacy-/dataflowcontrole en acceptatie. |
+| Geschiedenis & budgetgeheugen | **Allebei** | **Codex eerst** voor snapshots/berekeningen; **Work daarna** voor opslagintegratie, Preview en release. |
+| Voorraad / waarschijnlijk nog thuis | **Allebei** | **Codex eerst** voor model/suggestielogica; **Work daarna** voor UX, echte flow en acceptatie. |
+| Onboarding & positionering | **Work** | UI/teksten, gegevenspagina, Preview, browser/iPhone-controle en release in één workflow. |
+| Haptische feedback | **Work** | Eerst fysieke iPhone/PWA-haalbaarheid bewijzen; pas daarna eventueel Codex voor een kleine afgebakende implementatie. |
+| Gebruikstest & launch-polish | **Work** | Volledige PWA/iPhone-flow, browsercontrole, GitHub, Vercel, regressies en releasecheck combineren. |
+| Accounts & synchronisatie | **Allebei** | **Codex eerst** voor auth/data-architectuur en tests; **Work daarna** voor Supabase-configuratie, integratie, Preview en end-to-end verificatie. |
+| BoodschappenMaatje Plus / betaling | **Allebei** | **Codex eerst** voor entitlement-/betalingslogica; **Work daarna** voor externe systemen, Preview en releaseflow. |
+| Meldingen | **Allebei** | **Codex eerst** voor implementatie en toestandslogica; **Work daarna** voor platform-/PWA-test en acceptatie. |
+| Offline/PWA-robuustheid | **Codex**, daarna Work | Service-worker/cache/fallbackcode in **Codex**; **Work** voor echte browser-/device- en releasecontrole. |
+| Kassabon / werkelijke uitgaven | **Allebei** | **Codex eerst** voor parsing/datamodel/budgetvergelijking; **Work daarna** voor integratie en echte flow. |
+| Meerdere supermarkten | **Allebei** | **Codex eerst** voor providerarchitectuur en regressies; **Work daarna** voor bronintegraties, live data, Preview en release. |
+
+**Algemene regel:** gebruik **Codex** voor diep, gericht codeonderzoek en implementatie. Gebruik **Work** zodra een stap meerdere systemen combineert, zoals GitHub, Supabase, Vercel, browser/Preview, live data, release of documentatie. Bij **Allebei** begint codewerk standaard in Codex en neemt Work daarna de integratie- en acceptatieflow over, tenzij `PROJECT_STATE.md` voor het actuele checkpoint expliciet anders aangeeft.
+
 ## Overkoepelende volgende fase: PRODUCTDATA & RECEPTKWALITEIT
 Doel: productmatching, receptprofielen, verpakkingsinformatie en readiness systematisch betrouwbaar maken.
 
