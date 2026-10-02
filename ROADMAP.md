@@ -28,6 +28,20 @@ Vaste regels:
 - Work implementeert alleen zelf als een wijziging klein is en direct onderdeel is van integratie/release.
 - Geen merge of Production zonder expliciete goedkeuring wanneer een Preview/iPhone-acceptatie openstaat.
 
+### Codex-snelheid
+
+Gebruik **Standaard** als veilige default voor volledige roadmapstappen. Gebruik **Snel** alleen voor kleine, goed afgebakende deelwijzigingen waarbij weinig context of risico speelt.
+
+| Situatie | Codex-snelheid |
+|---|---|
+| Kleine UI-/tekstfix, eenvoudige testaanpassing, kleine refactor of voorspelbare één-/enkele-bestandswijziging | **Snel** |
+| Normale featureontwikkeling, meerdere gekoppelde bestanden of belangrijke regressietests | **Standaard** |
+| Budget-/plannerlogica, productmatching, importer, opslag, Supabase/database, concurrency/race conditions, migraties of architectuur | **Standaard** |
+| Volledige roadmapstap met `Codex → Work` | **Standaard** voor de Codex-fase; alleen naar **Snel** voor een duidelijk kleine deel-fix |
+| Alleen Work | Niet van toepassing; de Codex-snelheidskeuze speelt daar niet |
+
+Praktische regel: **twijfel = Standaard**. Snel is een versneller voor klein en voorspelbaar werk, niet de standaard voor risicovolle of projectbrede wijzigingen.
+
 ---
 
 # Hoofdroadmap
