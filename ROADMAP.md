@@ -181,8 +181,12 @@ standaard de goedkoopste **geschikte en betrouwbare** productcombinatie kiezen.
 Belangrijk:
 - hele verpakkingskosten vergelijken;
 - huismerk mag winnen;
+- actuele aanbiedingen altijd meenemen in de prijsvergelijking;
+- een aanbieding wint alleen wanneer de werkelijke kassaprijs lager is dan geschikte alternatieven;
+- geen multibuy-optimalisatie puur om extra voorraad te kopen;
 - receptspecifieke eisen blijven hard;
 - producten tussen gerechten slim kunnen hergebruiken;
+- restvoorraad is geen strafpunt: goedkoopste geschikte kassacombinatie wint ook als er product overblijft;
 - prijs mag nooit een verkeerde match rechtvaardigen;
 - gebruikerskeuze heeft altijd voorrang.
 
@@ -214,19 +218,29 @@ Mogelijke verbeteringen:
 
 ---
 
-# 5. Terugkerende producten
+# 5. Voorraadkast + terugkerende producten
 **Status: gepland**
 
 Doel:
-producten herkennen die vaak terugkomen, bijvoorbeeld melk, brood of fruit.
+een eenvoudig voorraadoverzicht combineren met herkenning van terugkerende producten, zodat de planner eerst gebruikt wat echt thuis is en alleen koopt wat nodig is.
 
-Regels:
+Voorraadregels:
+- voorraad telt pas mee nadat de gebruiker het expliciet bevestigt;
+- mogelijke voorraad mag nooit stil als aanwezig worden aangenomen;
+- restverpakkingen uit eerdere weken mogen als **waarschijnlijk nog aanwezig** worden voorgesteld;
+- de gebruiker bevestigt dit telkens via afvinken voordat de planner ermee rekent;
+- toon een overzichtelijke voorraadkast met product, bekende hoeveelheid en status;
+- handmatige correcties blijven leidend.
+
+Terugkerende producten:
+- producten herkennen die vaak terugkomen, bijvoorbeeld melk, brood of fruit;
 - herkomst behouden;
 - gebruiker houdt altijd controle;
 - suggesties overschrijven geen handmatige wijzigingen;
 - nooit automatisch toevoegen zonder duidelijke toestemming.
 
-**Uitvoering:** Codex → Work.
+**Codex eerst:** voorraadmodel, resthoeveelheid-logica, bevestigingsregels en tests.  
+**Work daarna:** echte week-/lijstintegratie, Preview en acceptatie.
 
 ---
 
@@ -359,7 +373,7 @@ Meerdere supermarkten pas wanneer de Hoogvliet-kern betrouwbaar staat.
 3. Betrouwbare opslag + geschiedenis
 4. Budgetbewuste productselectie
 5. Eigen recepten — vervolg
-6. Terugkerende producten
+6. Voorraadkast + terugkerende producten
 7. Slimmere suggesties
 8. Personalisatie
 9. Launch-polish
