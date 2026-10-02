@@ -17,6 +17,7 @@
     "build:recipe-ingredient-seed": "node scripts/build-recipe-ingredient-seed.mjs",
     "check:recipe-ingredient-seed": "node scripts/build-recipe-ingredient-seed.mjs --check",
     "test": "node --test test/*.test.mjs",
+    "test:postgres": "node --test test/postgres/bounded-readiness.test.mjs",
     "check": "node --check src/importer.mjs && node --check src/catalog-growth.mjs && node --check src/daily-catalog-growth.mjs && node --check src/catalog-monitor.mjs && node --check src/hoogvliet.mjs && node --check src/supabase.mjs && node --check src/product-type.mjs && node --check src/ingredient-library.mjs && node --check src/recipe-library.mjs && node --check src/recipe-ingredients.mjs && node --check scripts/build-ingredient-seed.mjs && node --check scripts/build-recipe-seed.mjs && node --check scripts/build-recipe-ingredient-seed.mjs && node --check scripts/extract-swift-recipe-ingredients.mjs && npm run check:ingredient-seed && npm run check:recipe-seed && npm run check:recipe-ingredient-seed"
   },
   "engines": {

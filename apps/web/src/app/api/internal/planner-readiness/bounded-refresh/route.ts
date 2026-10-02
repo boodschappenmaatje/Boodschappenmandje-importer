@@ -3,6 +3,7 @@ import { getPublicSupabaseConfig } from "@/lib/supabase/config";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { isPlannerCacheAdminRequest } from "@/server/planner-cache-auth";
 import {
+  BoundedReadinessConflict,
   dryRunBoundedReadiness,
   parseBoundedRefreshInput,
   writeBoundedReadiness,
@@ -26,9 +27,12 @@ export async function GET(request: Request): Promise<Response> {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   try {
-    const plan = await dryRunBoundedReadiness(client, input);
+    const plan = await dryRunBoundedReadiness(client, input, false);
     return Response.json(plan, { status: plan.blocked ? 409 : 200 });
-  } catch {
+  } catch (error) {
+    if (error instanceof BoundedReadinessConflict) {
+      return Response.json({ blocked: true, reason: error.message, matchWrites: 0, readinessWrites: 0 }, { status: 409 });
+    }
     return Response.json({ error: "bounded-refresh-failed" }, { status: 503 });
   }
 }
@@ -53,7 +57,10 @@ export async function POST(request: Request): Promise<Response> {
       ? await dryRunBoundedReadiness(client, input)
       : await writeBoundedReadiness(client, input);
     return Response.json(result, { status: result.blocked ? 409 : 200 });
-  } catch {
+  } catch (error) {
+    if (error instanceof BoundedReadinessConflict) {
+      return Response.json({ blocked: true, reason: error.message, matchWrites: 0, readinessWrites: 0 }, { status: 409 });
+    }
     return Response.json({ error: "bounded-refresh-failed" }, { status: 503 });
   }
 }

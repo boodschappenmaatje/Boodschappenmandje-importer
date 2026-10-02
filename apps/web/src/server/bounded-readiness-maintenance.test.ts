@@ -80,4 +80,10 @@ describe("begrensde readiness maintenance", () => {
     expect(parseBoundedRefreshInput({ recipeIds, matchKeys, expectedPlanToken: "bad" })).toBeNull();
     expect(parseBoundedRefreshInput(input)).toEqual({ recipeIds: [...recipeIds].sort(), matchKeys: [...matchKeys].sort(), expectedPlanToken: undefined });
   });
+
+  it("normaliseert UUID-casing vóór DB-scopevergelijking en weigert dubbele UUID's met andere casing", () => {
+    const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    expect(parseBoundedRefreshInput({ recipeIds: [id.toUpperCase()], matchKeys })?.recipeIds).toEqual([id]);
+    expect(parseBoundedRefreshInput({ recipeIds: [id, id.toUpperCase()], matchKeys })).toBeNull();
+  });
 });

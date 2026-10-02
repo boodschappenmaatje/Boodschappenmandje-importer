@@ -25,6 +25,18 @@ interface Subscriber {
   dependency_match_keys: string[];
 }
 
+export class BoundedReadinessConflict extends Error {}
+
+export function isBoundedDatabaseConflict(error: { code?: string; message?: string }): boolean {
+  return ["40001", "40P01", "55P03"].includes(error.code ?? "") ||
+    (error.code === "P0001" && error.message?.startsWith("bounded_") === true);
+}
+
+function databaseFailure(error: { code?: string; message?: string }): never {
+  if (isBoundedDatabaseConflict(error)) throw new BoundedReadinessConflict(error.message ?? "bounded_conflict");
+  throw new Error("bounded_database_unavailable");
+}
+
 export interface BoundedRefreshPlan {
   requestedMatchKeys: string[];
   requestedRecipeIds: string[];
@@ -35,6 +47,7 @@ export interface BoundedRefreshPlan {
   blocked: boolean;
   reason: string | null;
   planToken: string | null;
+  transactional?: boolean;
 }
 
 export function parseBoundedRefreshInput(value: unknown): BoundedRefreshInput | null {
@@ -46,14 +59,14 @@ export function parseBoundedRefreshInput(value: unknown): BoundedRefreshInput | 
       input.recipeIds.some((id) => typeof id !== "string" || !UUID.test(id)) ||
       input.matchKeys.some((key) => typeof key !== "string" || key.length > 200 ||
         !/^.+:(g|kg|ml|l|piece|loaf):(ingredient|mealMix):[^:]+$/.test(key)) ||
-      new Set(input.recipeIds).size !== input.recipeIds.length ||
+      new Set(input.recipeIds.map((id) => id.toLowerCase())).size !== input.recipeIds.length ||
       new Set(input.matchKeys).size !== input.matchKeys.length ||
       (input.expectedPlanToken !== undefined &&
         (typeof input.expectedPlanToken !== "string" || !/^[a-f0-9]{64}$/.test(input.expectedPlanToken)))) {
     return null;
   }
   return {
-    recipeIds: [...input.recipeIds].sort() as string[],
+    recipeIds: input.recipeIds.map((id: string) => id.toLowerCase()).sort(),
     matchKeys: [...input.matchKeys].sort() as string[],
     expectedPlanToken: input.expectedPlanToken as string | undefined,
   };
@@ -117,7 +130,12 @@ export function buildBoundedRefreshPlan(
   };
 }
 
-async function inspectBoundedScope(client: SupabaseClient, input: BoundedRefreshInput) {
+async function inspectBoundedScope(client: SupabaseClient, input: BoundedRefreshInput, transactional = true) {
+  // Bracket catalog reads with the DB source revision. A recipe/profile change
+  // during load must not turn an old dependency set into a newly valid plan.
+  const source = transactional ? await client.rpc("bounded_readiness_source_revision") : null;
+  if (source?.error) databaseFailure(source.error);
+  if (transactional && typeof source?.data !== "string") throw new Error("bounded_source_revision_unavailable");
   const catalog = await loadCatalog(client);
   const requested = new Set(input.recipeIds);
   const recipes = catalog.recipes.filter((recipe) => requested.has(recipe.id));
@@ -130,11 +148,28 @@ async function inspectBoundedScope(client: SupabaseClient, input: BoundedRefresh
     .limit(MAX_SUBSCRIBERS);
   if (subscribers.error || !Array.isArray(subscribers.data)) throw new Error("subscriber_scope_unavailable");
   const plan = buildBoundedRefreshPlan(input, keysByPeople, subscribers.data as Subscriber[], recipes.map((recipe) => recipe.id));
-  return { catalog, recipes, plan };
+  const dependencyKeys = [...new Set([...keysByPeople.values()].flatMap((keys) => [...keys.values()].flat()))].sort();
+  plan.transactional = transactional;
+  if (!transactional) {
+    // Public Preview inspection never creates a write token or needs an RPC
+    // privilege. A Production admin dry-run is required for an executable plan.
+    plan.planToken = null;
+  } else if (!plan.blocked) {
+    const snapshot = await client.rpc("bounded_readiness_plan", {
+      p_recipe_ids: input.recipeIds, p_match_keys: input.matchKeys, p_dependency_keys: dependencyKeys,
+    });
+    if (snapshot.error) databaseFailure(snapshot.error);
+    if (snapshot.data?.sourceRevision !== source?.data) throw new BoundedReadinessConflict("bounded_catalog_changed");
+    if (typeof snapshot.data?.planToken !== "string" || !/^[a-f0-9]{64}$/.test(snapshot.data.planToken)) {
+      throw new Error("bounded_plan_unavailable");
+    }
+    plan.planToken = snapshot.data.planToken;
+  }
+  return { catalog, recipes, plan, dependencyKeys };
 }
 
-export async function dryRunBoundedReadiness(client: SupabaseClient, input: BoundedRefreshInput): Promise<BoundedRefreshPlan> {
-  return (await inspectBoundedScope(client, input)).plan;
+export async function dryRunBoundedReadiness(client: SupabaseClient, input: BoundedRefreshInput, transactional = true): Promise<BoundedRefreshPlan> {
+  return (await inspectBoundedScope(client, input, transactional)).plan;
 }
 
 export function boundedWriteBlockReason(plan: BoundedRefreshPlan, expectedPlanToken?: string): string | null {
@@ -176,18 +211,25 @@ export async function writeBoundedReadiness(client: SupabaseClient, input: Bound
   if (matches.size !== allowedKeys.size || readinessRows.length !== initial.plan.plannedReadinessWrites) {
     return { blocked: true, reason: "computed_scope_mismatch", matchWrites: 0, readinessWrites: 0 };
   }
-  // Recheck immediately before writes. The database trigger invalidates subscribers
-  // of match keys, so its observed subscribers must remain inside the allowlist.
-  const recheck = await inspectBoundedScope(client, input);
-  const recheckBlock = boundedWriteBlockReason(recheck.plan, input.expectedPlanToken);
-  if (recheckBlock) {
-    return { blocked: true, reason: recheckBlock, matchWrites: 0, readinessWrites: 0 };
+  // Exactly one final write request. All guards, CAS, legacy trigger effects
+  // and both upserts execute in its PostgreSQL transaction. No write fallback.
+  const committed = await client.rpc("commit_bounded_readiness", {
+    p_recipe_ids: input.recipeIds,
+    p_match_keys: input.matchKeys,
+    p_dependency_keys: initial.dependencyKeys,
+    p_expected_plan_token: input.expectedPlanToken,
+    p_match_rows: [...matches.values()],
+    p_readiness_rows: readinessRows,
+  });
+  if (committed.error) databaseFailure(committed.error);
+  const result = committed.data;
+  if (result?.blocked !== false || result.matchWrites !== matches.size ||
+      result.readinessWrites !== readinessRows.length || result.outsideScopeEffects !== 0 ||
+      typeof result.finalPlanToken !== "string" || !/^[a-f0-9]{64}$/.test(result.finalPlanToken) ||
+      !Array.isArray(result.validatedScope?.recipeIds) || !Array.isArray(result.validatedScope?.matchKeys) ||
+      JSON.stringify([...result.validatedScope.recipeIds].sort()) !== JSON.stringify([...input.recipeIds].sort()) ||
+      JSON.stringify([...result.validatedScope.matchKeys].sort()) !== JSON.stringify([...input.matchKeys].sort())) {
+    throw new Error("bounded_commit_result_invalid");
   }
-  const matchWrite = await client.from("ingredient_product_matches")
-    .upsert([...matches.values()], { onConflict: "match_key" });
-  if (matchWrite.error) throw new Error("bounded_match_write_failed");
-  const readinessWrite = await client.from("recipe_readiness_cache")
-    .upsert(readinessRows, { onConflict: "recipe_id,people_count" });
-  if (readinessWrite.error) throw new Error("bounded_readiness_write_failed");
-  return { blocked: false, reason: null, matchWrites: matches.size, readinessWrites: readinessRows.length };
+  return result;
 }

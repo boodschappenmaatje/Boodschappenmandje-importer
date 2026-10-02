@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { BoundedReadinessConflict, writeBoundedReadiness } from "@/server/bounded-readiness-maintenance";
+
+vi.mock("@/lib/supabase/server", () => ({ getSupabaseServerClient: vi.fn() }));
+vi.mock("@/server/bounded-readiness-maintenance", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/server/bounded-readiness-maintenance")>(), writeBoundedReadiness: vi.fn(),
+}));
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -36,5 +43,17 @@ describe("bounded readiness route", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     const invalid = await GET(new Request("https://example.test/api/internal/planner-readiness/bounded-refresh"));
     expect(invalid.status).toBe(400);
+  });
+
+  it("maps atomic scope/stale conflicts to 409 and database failures to 503", async () => {
+    vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "secret");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.mocked(getSupabaseServerClient).mockReturnValue({} as NonNullable<ReturnType<typeof getSupabaseServerClient>>);
+    vi.mocked(writeBoundedReadiness).mockRejectedValueOnce(new BoundedReadinessConflict("bounded_stale_plan"));
+    const conflict = await POST(request("Bearer secret"));
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toMatchObject({ blocked: true, matchWrites: 0, readinessWrites: 0 });
+    vi.mocked(writeBoundedReadiness).mockRejectedValueOnce(new Error("bounded_database_unavailable"));
+    expect((await POST(request("Bearer secret"))).status).toBe(503);
   });
 });
