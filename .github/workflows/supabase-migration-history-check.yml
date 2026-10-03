@@ -1,6 +1,6 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C.5: narrowly filtered push for a read-only
+# Temporary checkpoint 11C.6: narrowly filtered push for a read-only
 # migration-list diagnosis from PR #39. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
@@ -104,6 +104,26 @@ jobs:
           fi
           printf 'TCP Session pooler: `%s`\n' "$tcp_status" >> "$GITHUB_STEP_SUMMARY"
 
+          psql_status=not_available
+          if command -v psql >/dev/null 2>&1; then
+            export PGPASSWORD="$SUPABASE_DB_PASSWORD"
+            if PGSSLMODE=require timeout 8 psql \
+              --host="$SUPABASE_POOLER_HOST" \
+              --port=5432 \
+              --username="postgres.$SUPABASE_PROJECT_REF" \
+              --dbname=postgres \
+              --no-psqlrc \
+              --tuples-only \
+              --no-align \
+              --command='select 1;' >/dev/null 2>&1 < /dev/null; then
+              psql_status=success
+            else
+              psql_status=failed
+            fi
+            unset PGPASSWORD
+          fi
+          printf 'Postgres read-only auth smoke: `%s`\n' "$psql_status" >> "$GITHUB_STEP_SUMMARY"
+
           if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$MIGRATION_LIST_STDERR" < /dev/null; then
             category="$(
               python3 - <<'PY'
@@ -188,7 +208,7 @@ jobs:
           PY
             )"
             printf 'Diagnostic category: `%s`\nSQLSTATE: `%s`\n' "$category" "$sqlstate" >> "$GITHUB_STEP_SUMMARY"
-            fail "Production migration history could not be read. Safe diagnostic category: $category; TCP: $tcp_status; SQLSTATE: $sqlstate. Raw CLI diagnostics withheld."
+            fail "Production migration history could not be read. Safe diagnostic category: $category; TCP: $tcp_status; psql: $psql_status; SQLSTATE: $sqlstate. Raw CLI diagnostics withheld."
           fi
 
           python3 <<'PY'
