@@ -1,0 +1,303 @@
+name: Supabase Production migration history — READ ONLY — NO REPAIR
+
+# Temporary checkpoint 11C.8: narrowly filtered push for a read-only
+# migration-list diagnosis from PR #39. Ordinary code pushes do not match.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/meal-mix-supplement-matches
+    paths:
+      - .github/workflows/supabase-migration-history-check.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migration-history-read-only
+  cancel-in-progress: false
+
+jobs:
+  migration-history:
+    name: READ ONLY — NO REPAIR
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/feature/meal-mix-supplement-matches'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout triggered branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install official Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 2.119.0
+
+      - name: Show CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version
+
+      - name: Read Production migration history — READ ONLY — NO REPAIR
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
+          SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          printf '%s\n' '## READ ONLY — NO REPAIR' \
+            'Production: pjcqxufvbkkjehituzxz. Only migration history is read.' \
+            'Connection: Supabase IPv4 Session pooler on port 5432.' \
+            'No migration SQL is executed. No history or schema changes.' >> "$GITHUB_STEP_SUMMARY"
+
+          fail() {
+            printf '%s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
+            printf '::error::%s\n' "$1"
+            exit 1
+          }
+
+          [[ ( "$GITHUB_EVENT_NAME" == workflow_dispatch || "$GITHUB_EVENT_NAME" == push ) &&
+             "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+             "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' &&
+             "$SUPABASE_PROJECT_REF" == pjcqxufvbkkjehituzxz &&
+             "$SUPABASE_POOLER_HOST" == aws-1-eu-west-1.pooler.supabase.com ]] || fail 'Unexpected workflow context.'
+          [[ -n "$SUPABASE_ACCESS_TOKEN" ]] || fail 'Missing secret: SUPABASE_ACCESS_TOKEN.'
+          [[ -n "$SUPABASE_DB_PASSWORD" ]] || fail 'Missing secret: SUPABASE_DB_PASSWORD.'
+
+          output_dir=$(mktemp -d)
+          trap 'rm -rf "$output_dir"' EXIT
+          export MIGRATION_LIST_OUTPUT="$output_dir/list.json"
+          export MIGRATION_LIST_STDERR="$output_dir/stderr"
+
+          export SUPABASE_POOLER_DB_URL="$(
+            python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          project_ref = os.environ['SUPABASE_PROJECT_REF']
+          host = os.environ['SUPABASE_POOLER_HOST']
+          password = quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')
+          print(f'postgresql://postgres.{project_ref}:{password}@{host}:5432/postgres?sslmode=require')
+          PY
+          )"
+
+          read_only_list() {
+            [[ "$#" -eq 0 ]] || return 64
+            command supabase migration list \
+              --db-url "$SUPABASE_POOLER_DB_URL" \
+              --workdir "$GITHUB_WORKSPACE" --output-format json
+          }
+
+          tcp_status=unreachable
+          if timeout 5 bash -c 'cat < /dev/null > /dev/tcp/'"$SUPABASE_POOLER_HOST"'/5432' 2>/dev/null; then
+            tcp_status=reachable
+          fi
+          printf 'TCP Session pooler: `%s`\n' "$tcp_status" >> "$GITHUB_STEP_SUMMARY"
+
+          psql_status=not_available
+          psql_category=not_available
+          psql_sqlstate=none
+          if command -v psql >/dev/null 2>&1; then
+            export PSQL_STDERR="$output_dir/psql-stderr"
+            export PGPASSWORD="$SUPABASE_DB_PASSWORD"
+            if PGSSLMODE=require timeout 8 psql \
+              --host="$SUPABASE_POOLER_HOST" \
+              --port=5432 \
+              --username="postgres.$SUPABASE_PROJECT_REF" \
+              --dbname=postgres \
+              --no-psqlrc \
+              --tuples-only \
+              --no-align \
+              --command='select 1;' >/dev/null 2> "$PSQL_STDERR" < /dev/null; then
+              psql_status=success
+              psql_category=success
+            else
+              psql_status=failed
+              psql_category="$(
+                python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          text = Path(os.environ['PSQL_STDERR']).read_text(errors='replace').lower()
+          rules = [
+              ('password_auth_failed', ('password authentication failed', 'invalid password', '28p01')),
+              ('tenant_or_user_not_found', ('tenant or user not found', 'user not found', 'invalid user')),
+              ('database_not_found', ('database', 'does not exist')),
+              ('ssl_or_tls', ('ssl', 'tls', 'certificate', 'x509')),
+              ('network_or_dns', ('could not translate host name', 'connection refused', 'connection timed out', 'network is unreachable')),
+              ('pg_hba_or_access', ('no pg_hba.conf entry', 'permission denied', 'not allowed')),
+          ]
+          for category, needles in rules:
+              if category == 'database_not_found':
+                  if all(n in text for n in needles):
+                      print(category)
+                      break
+              elif any(n in text for n in needles):
+                  print(category)
+                  break
+          else:
+              print('unknown_safe_category')
+          PY
+              )"
+              psql_sqlstate="$(
+                python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          text = Path(os.environ['PSQL_STDERR']).read_text(errors='replace').upper()
+          matches = re.findall(r'\b([0-9A-Z]{5})\b', text)
+          deny = {'HTTPS', 'ERROR', 'FATAL', 'DEBUG', 'TRACE'}
+          code = next((m for m in matches if m not in deny and any(ch.isdigit() for ch in m)), '')
+          print(code or 'none')
+          PY
+              )"
+            fi
+            unset PGPASSWORD
+          fi
+          printf 'Postgres read-only auth smoke: `%s`\nPostgres auth category: `%s`\nPostgres SQLSTATE: `%s`\n' \
+            "$psql_status" "$psql_category" "$psql_sqlstate" >> "$GITHUB_STEP_SUMMARY"
+
+          if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$MIGRATION_LIST_STDERR" < /dev/null; then
+            category="$(
+              python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          text = Path(os.environ['MIGRATION_LIST_STDERR']).read_text(errors='replace').lower()
+
+          rules = [
+              ('password_auth_failed', (
+                  'password authentication failed',
+                  'authentication failed',
+                  'invalid password',
+                  '28p01',
+              )),
+              ('network_or_dns', (
+                  'no such host',
+                  'name or service not known',
+                  'temporary failure in name resolution',
+                  'network is unreachable',
+                  'connection refused',
+                  'connection timed out',
+                  'timeout',
+                  'dial tcp',
+                  'failed to connect',
+              )),
+              ('ssl_or_tls', (
+                  'ssl',
+                  'tls',
+                  'certificate',
+                  'x509',
+              )),
+              ('pooler_or_user', (
+                  'tenant or user not found',
+                  'user not found',
+                  'invalid user',
+                  'pooler',
+              )),
+              ('cli_argument_or_usage', (
+                  'unknown flag',
+                  'unknown shorthand flag',
+                  'accepts ',
+                  'usage:',
+                  'invalid argument',
+              )),
+              ('permission_denied', (
+                  'permission denied',
+                  'insufficient privilege',
+                  '42501',
+              )),
+              ('local_migration_version_format', (
+                  'parsing time',
+                  'cannot parse',
+                  'failed to parse',
+                  'invalid migration filename',
+                  'file name must match pattern',
+                  'migration versions not found',
+                  'remote migration versions not found',
+                  'timestamp',
+              )),
+          ]
+
+          for category, needles in rules:
+              if any(needle in text for needle in needles):
+                  print(category)
+                  break
+          else:
+              print('unknown_safe_category')
+          PY
+            )"
+            sqlstate="$(
+              python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          text = Path(os.environ['MIGRATION_LIST_STDERR']).read_text(errors='replace').upper()
+          matches = re.findall(r'(?:SQLSTATE[ :=()]*)?\b([0-9A-Z]{5})\b', text)
+          deny = {'HTTPS', 'ERROR', 'FATAL', 'DEBUG', 'TRACE'}
+          code = next((m for m in matches if m not in deny and any(ch.isdigit() for ch in m)), '')
+          print(code or 'none')
+          PY
+            )"
+            printf 'Diagnostic category: `%s`\nSQLSTATE: `%s`\n' "$category" "$sqlstate" >> "$GITHUB_STEP_SUMMARY"
+            fail "Production migration history could not be read. CLI category: $category; TCP: $tcp_status; psql: $psql_status/$psql_category/$psql_sqlstate; CLI SQLSTATE: $sqlstate. Raw diagnostics withheld."
+          fi
+
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          try:
+              payload = json.loads(Path(os.environ['MIGRATION_LIST_OUTPUT']).read_text())
+              rows = payload['migrations']
+              if not isinstance(rows, list) or not rows:
+                  raise ValueError('empty history')
+              safe_rows = []
+              for row in rows:
+                  local, remote, time = (row[key] for key in ('local', 'remote', 'time'))
+                  if not all(isinstance(value, str) for value in (local, remote, time)):
+                      raise ValueError('unexpected types')
+                  if not all(re.fullmatch(r'[0-9]{1,14}|', value) for value in (local, remote)):
+                      raise ValueError('unexpected versions')
+                  if not (local or remote) or not re.fullmatch(r'[0-9 :\-]+', time):
+                      raise ValueError('unexpected row')
+                  safe_rows.append(f'| {local} | {remote} | {time} |')
+              if not any(row['remote'] for row in rows):
+                  raise ValueError('no remote history')
+              summary = '\n'.join([
+                  '', 'Production migration history read successfully.', '',
+                  '| Local | Remote | Time (UTC) |', '| --- | --- | --- |',
+                  *safe_rows, '',
+                  'Version differences are evidence for mapping, not permission to repair.',
+                  'Next: inspect migration list. NO REPAIR.', '',
+              ])
+          except Exception:
+              message = 'Migration list output could not be safely validated; no raw output published.'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
+                  handle.write(message + '\n')
+              print('::error::' + message)
+              sys.exit(1)
+
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
+              handle.write(summary)
+          print('Production migration history read. Validated migration list follows. READ ONLY — NO REPAIR.')
+          print('| Local | Remote | Time (UTC) |')
+          print('| --- | --- | --- |')
+          for row in safe_rows:
+              print(row)
+          PY

@@ -6,11 +6,13 @@ import {
   MEAL_MIX_PROFILES,
   enrichIngredientsForMealMixes,
   inferMealMixBrand,
+  mealMixSupplementAliases,
   mealMixProfileForRecipe,
 } from "@/services/week-preparation/meal-mix-profiles";
 import { aggregateWeekIngredients } from "@/services/week-preparation/ingredient-aggregation";
 import {
   applyProductToRequirement,
+  applyManualProductToRequirement,
   combinedProductPurchaseQuantity,
   isReliableIngredientMatch,
   productPackageCapacity,
@@ -124,6 +126,103 @@ describe("merkgebonden maaltijdmixprofielen", () => {
     ] as const;
     for (const [ingredient, name, category] of cases) expect(isReliableIngredientMatch(ingredient, product({ id: name, sku: name, name, category }))).toBe(false);
     expect(productPackageCapacity(product({ id: "onions", sku: "onions", name: "Rode uien net 3 stuks", packageText: "1 stuk" }), "piece")).toBe(3);
+  });
+  it("houdt verse tomaten per stuk geblokkeerd zonder stukaantal en verwerpt blik als automatische match", () => {
+    const ingredient: RecipeIngredientDefinition = {
+      id: "tomaten", sourceKey: "mix-supplement-tomaten", name: "tomaten",
+      normalizedName: "tomaten", aliases: ["tomaten", ...mealMixSupplementAliases("tomaten")],
+      category: "Groente", defaultUnit: "piece",
+    };
+    const canned = product({ id: "canned", sku: "733141000", name: "Mutti Gepelde tomaten",
+      category: "Conserven/Groente", productType: "Groente", packageText: "400 gram", weightGrams: 400 });
+    const small = product({ id: "small", sku: "070476000", name: "Cherry tomaten",
+      category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
+      packageText: "250 gram", weightGrams: 250 });
+    const fresh = product({ id: "fresh", sku: "060936000", name: "Trostomaten",
+      category: "Aardappelen, groente, fruit/Groente", productType: "Groente",
+      packageText: "500 gram", weightGrams: 500,
+      currentPrice: { productId: "fresh", price: 2.29, oldPrice: null, isOffer: false,
+        offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
+    expect(isReliableIngredientMatch(ingredient, canned)).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, { ...canned, packageText: "1 stuk" })).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, small)).toBe(false);
+    expect(isReliableIngredientMatch(ingredient, fresh)).toBe(true);
+    expect(selectIngredientProduct(ingredient, [canned, small, fresh], null, "piece", 2)?.id).toBe("fresh");
+    for (let people = 1; people <= 10; people += 1) {
+      const needed = requirement(people, "piece");
+      const matched = applyProductToRequirement(needed, fresh);
+      expect(matched.packageCapacity).toBeNull();
+      expect(matched.purchaseQuantity).toBeNull();
+      expect(matched.packageCalculationMissing).toBe(true);
+      expect(matched.price?.amountCents).toBe(229);
+    }
+    // An explicit package choice remains a user-controlled choice, not an automatic conversion.
+    expect(applyManualProductToRequirement(requirement(2, "piece"), canned, 2)).toMatchObject({
+      quantityIsPackageCount: true, purchaseQuantity: 2, packageCapacity: 1,
+    });
+  });
+  it("herkent uitsluitend de bewezen rauwe runderriblap als hacheevlees", () => {
+    const ingredient: RecipeIngredientDefinition = { id: "hacheevlees", sourceKey: "mix-supplement-hacheevlees",
+      name: "hacheevlees", normalizedName: "hacheevlees", category: "Vlees", defaultUnit: "g",
+      aliases: ["hacheevlees", ...mealMixSupplementAliases("hacheevlees")] };
+    const riblappen = product({ id: "riblappen", sku: "733659000", name: "Hoogvliet Riblappen",
+      brand: "Hoogvliet", category: "Vlees, vis, vegetarisch/Rund-en varkensvlees/Stoofvlees",
+      productType: "Varkensvlees", packageText: "Ca. 700 gram", weightGrams: 700,
+      currentPrice: { productId: "riblappen", price: 14.34, oldPrice: null, isOffer: false,
+        offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
+    const unsuitable = [
+      product({ id: "mince", sku: "715779000", name: "Hoogvliet Rundergehakt", category: "Vlees/Gehakt" }),
+      product({ id: "meal", sku: "729421000", name: "Daily Chef Hutspot met hachee", category: "Verse maaltijden, salades/Maaltijden" }),
+      product({ id: "other", sku: "other", name: "Riblappen", category: "Vlees/Vleeswaren" }),
+      { ...riblappen, id: "unverified", sku: "unverified" },
+    ];
+    expect(isReliableIngredientMatch(ingredient, riblappen)).toBe(true);
+    for (const item of unsuitable) expect(isReliableIngredientMatch(ingredient, item)).toBe(false);
+    expect(selectIngredientProduct(ingredient, [...unsuitable, riblappen], null, "g", 500)?.sku).toBe("733659000");
+    for (let people = 1; people <= 10; people += 1) {
+      const matched = applyProductToRequirement(requirement(people * 125, "g"), riblappen);
+      expect(matched.packageCapacity).toBe(700);
+      expect(matched.purchaseQuantity).toBe(Math.ceil(people * 125 / 700));
+      expect(matched.price?.amountCents).toBe(1434);
+    }
+  });
+  it("herkent pita als brood maar verzint geen gewicht voor een stuksverpakking", () => {
+    const ingredient: RecipeIngredientDefinition = { id: "pita", sourceKey: "mix-supplement-pitabroodjes",
+      name: "pitabroodjes", normalizedName: "pitabroodjes", category: "Brood", defaultUnit: "g",
+      aliases: ["pitabroodjes", ...mealMixSupplementAliases("pitabroodjes")] };
+    const pita = product({ id: "pita", sku: "675984000", name: "G'woon Pita broodjes", brand: "G'woon",
+      category: "Brood/Thuis afbakken/Afbakbroodjes", productType: "Broodjes", packageText: "10 stuk",
+      currentPrice: { productId: "pita", price: 0.79, oldPrice: null, isOffer: false,
+        offerText: null, validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW } });
+    expect(isReliableIngredientMatch(ingredient, pita)).toBe(true);
+    expect(isReliableIngredientMatch(ingredient, { ...pita, id: "meal-pita", sku: "675985000",
+      name: "G'woon Maaltijd pita`s", packageText: "5 stuk" })).toBe(true);
+    for (const name of ["Naan brood", "Tortilla wraps", "G'woon Pepitamix"])
+      expect(isReliableIngredientMatch(ingredient, { ...pita, id: name, sku: name, name })).toBe(false);
+    for (let people = 1; people <= 10; people += 1) {
+      const matched = applyProductToRequirement(requirement(people * 100, "g"), pita);
+      expect(matched.price?.amountCents).toBe(79);
+      expect(matched.packageCapacity).toBeNull();
+      expect(matched.purchaseQuantity).toBeNull();
+    }
+  });
+  it("houdt de andere historische productvervangers semantisch afgebakend", () => {
+    const supplement = (name: string, category: string, aliases: string[]): RecipeIngredientDefinition => ({
+      id: name, sourceKey: `mix-supplement-${name}`, name, normalizedName: name,
+      category, defaultUnit: "g", aliases: [name, ...aliases],
+    });
+    expect(isReliableIngredientMatch(supplement("bosui", "Groente", ["lente-ui"]),
+      product({ id: "soup", sku: "072108000", name: "Unox Soep in zak Chinese tomatensoep met lente-ui",
+        category: "Soepen, conserven, sauzen, kruiden/Soepen/Soep om op te warmen" }))).toBe(false);
+    expect(isReliableIngredientMatch(supplement("erwtensoepgroenten", "Groente", []),
+      product({ id: "wok", sku: "041182000", name: "Chinese wok",
+        category: "Aardappelen, groente, fruit/Groente/Groentemixen" }))).toBe(false);
+    expect(isReliableIngredientMatch(supplement("Provençaalse wokgroenten", "Groente", []),
+      product({ id: "wok", sku: "041182000", name: "Chinese wok",
+        category: "Aardappelen, groente, fruit/Groente/Groentemixen" }))).toBe(false);
+    expect(isReliableIngredientMatch(supplement("sneetjes volkoren brood", "Brood", []),
+      product({ id: "loaf", sku: "732924000", name: "Leens trots Vloerbrood volkoren brood",
+        category: "Brood/Vers brood uit eigen bakkerij/Volkoren- en meergranenbrood", packageText: "1 stuk" }))).toBe(false);
   });
   it("bevat acht Knorr- en twee Honig-profielen met gevalideerde bron", () => {
     expect(MEAL_MIX_PROFILES).toHaveLength(10);
@@ -302,6 +401,51 @@ describe("merkgebonden maaltijdmixprofielen", () => {
     })).purchaseQuantity).toBe(1);
     expect(productPackageCapacity(pieces, "g")).toBeNull();
     expect(productPackageCapacity(multipack, "g")).toBe(400);
+  });
+
+  it.each([
+    ["675984000", "G'woon Pita broodjes", "10 stuk", 0.79],
+    ["675985000", "G'woon Maaltijd pita`s", "5 stuk", 0.85],
+  ])("leidt voor pita-SKU %s nooit grammen af uit een stukaantal", (sku, name, packageText, price) => {
+    const pita = product({
+      id: sku,
+      sku,
+      name,
+      brand: "G'woon",
+      category: "Brood/Thuis afbakken/Afbakbroodjes",
+      productType: "Broodjes",
+      packageText,
+      weightGrams: null,
+      currentPrice: {
+        productId: sku,
+        price,
+        oldPrice: null,
+        isOffer: false,
+        offerText: null,
+        validFrom: null,
+        validUntil: null,
+        fetchedAt: NOW,
+        updatedAt: NOW,
+      },
+    });
+
+    expect(productPackageCapacity(pita, "g")).toBeNull();
+    for (let people = 1; people <= 10; people += 1) {
+      const selected = applyProductToRequirement(requirement(100 * people, "g"), pita);
+      expect(selected.product?.sku).toBe(sku);
+      expect(selected.price?.amountCents).toBe(Math.round(price * 100));
+      expect(selected).toMatchObject({
+        requiredQuantity: 100 * people,
+        packageCapacity: null,
+        purchaseQuantity: null,
+        packageCalculationMissing: true,
+      });
+      expect(calculateDishCostSummary(0, [selected])).toEqual({
+        knownCostCents: 0,
+        missingProductCount: 1,
+        complete: false,
+      });
+    }
   });
 
   it("rekent twee canonieke regels voor hetzelfde echte product als één gezamenlijke behoefte", () => {

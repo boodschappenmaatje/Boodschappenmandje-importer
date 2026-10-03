@@ -4,6 +4,7 @@ import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository
 import { resolveCurrentPrice } from "@/services/catalog/price";
 import {
   PLANNER_MATCHER_VERSION,
+  matcherVersionForSourceKey,
   SupabasePersistentRecipeReadinessRepository,
   resolveRecipeReadiness,
   type PersistentProductMatchRow,
@@ -38,7 +39,7 @@ export function selectNewProductRepairs(
   return matches.flatMap((match) => {
     if (match.match_status !== "invalid" || match.failure_reason !== "no_catalog_product" ||
       match.refresh_status !== "current" || match.invalidated_at !== null ||
-      match.matcher_version !== PLANNER_MATCHER_VERSION || match.product_id !== null) return [];
+      match.matcher_version !== matcherVersionForSourceKey(match.ingredient_source_key) || match.product_id !== null) return [];
     const descriptor = matchDescriptor(match.match_key);
     const ingredient = descriptor && catalog.ingredients.find((item) =>
       item.id === descriptor.ingredientId && item.sourceKey === match.ingredient_source_key,
@@ -89,7 +90,7 @@ export async function maintainPlannerForNewProducts(
   const missing = await client.from("ingredient_product_matches").select("*")
     .eq("match_status", "invalid").eq("failure_reason", "no_catalog_product")
     .eq("refresh_status", "current").is("invalidated_at", null)
-    .eq("matcher_version", PLANNER_MATCHER_VERSION).limit(1001);
+    .in("matcher_version", [PLANNER_MATCHER_VERSION, PLANNER_MATCHER_VERSION + 1]).limit(1001);
   if (missing.error || !Array.isArray(missing.data) || missing.data.length > 1000) {
     throw new Error("missing-match-scope-read-failed");
   }
@@ -111,7 +112,7 @@ export async function maintainPlannerForNewProducts(
     }).eq("match_key", match.match_key).eq("checked_at", match.checked_at)
       .eq("match_status", "invalid").eq("failure_reason", "no_catalog_product")
       .eq("refresh_status", "current").is("invalidated_at", null)
-      .eq("matcher_version", PLANNER_MATCHER_VERSION).select("match_key");
+      .eq("matcher_version", match.matcher_version).select("match_key");
     if (result.error) throw new Error("new-product-match-write-failed");
     if (result.data?.length) changedMatchKeys.push(match.match_key);
   }
@@ -119,9 +120,10 @@ export async function maintainPlannerForNewProducts(
   // candidate set; the shared quantity-aware selector chooses the final pack.
   const valid = await client.from("ingredient_product_matches").select("*")
     .eq("match_status", "valid").eq("refresh_status", "current")
-    .eq("matcher_version", PLANNER_MATCHER_VERSION).limit(1001);
+    .in("matcher_version", [PLANNER_MATCHER_VERSION, PLANNER_MATCHER_VERSION + 1]).limit(1001);
   if (valid.error || !Array.isArray(valid.data) || valid.data.length > 1000) throw new Error("valid-match-scope-read-failed");
   for (const match of valid.data as PersistentProductMatchRow[]) {
+    if (match.matcher_version !== matcherVersionForSourceKey(match.ingredient_source_key)) continue;
     const descriptor = matchDescriptor(match.match_key);
     const ingredient = catalog.ingredients.find((item) => item.sourceKey === match.ingredient_source_key);
     if (!descriptor || !ingredient) continue;

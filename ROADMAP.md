@@ -24,6 +24,12 @@ Vaste regels:
 - **Codex** doet standaard codeonderzoek, implementatie, refactors, algoritmes, tests en performancewerk.
 - **Work** doet GitHub/PR, Supabase-live-data, Vercel Preview, browsercontrole, live maintenance, release en Production-smoke.
 - **Een Work-run behandelt maximaal één technisch checkpoint.**
+- **Modelstrategie:** begin standaard met **GPT-5.6 Luna** om credits te besparen.
+  - **Luna + High** voor normaal ontwikkelwerk, afgebakende bugs, tests, UI/CSS, documentatie en bestaande patronen volgen.
+  - **Luna + Extra High** voor lastigere bugs, meerdere gekoppelde bestanden of zwaardere logica.
+  - Schaal pas op naar **GPT-5.6 Sol + High** als Luna aantoonbaar vastloopt, onvoldoende resultaat geeft of de taak meerdere complexe systemen tegelijk raakt.
+  - Gebruik **GPT-6 Astra + High/Max** alleen als laatste escalatie voor uitzonderlijk complexe of risicovolle architectuur-, race-condition-, migratie- of refactortaken.
+  - Voor uitvoeringsprompts geldt dus standaard: **Luna eerst → Sol indien nodig → Astra als laatste escalatie**.
 - Bij gecombineerde taken: **Codex eerst → Work daarna**.
 - Work implementeert alleen zelf als een wijziging klein is en direct onderdeel is van integratie/release.
 - Geen merge of Production zonder expliciete goedkeuring wanneer een Preview/iPhone-acceptatie openstaat.
@@ -35,7 +41,8 @@ Vaste regels:
 | # | Onderdeel | Status | 💰 Bespaarimpact | Waarom | Uitvoering | Eerst nodig | Klaar als |
 |---|---|---|---|---|---|---|---|
 | 1A | Honig/Knorr NOT_READY | 🔵 Nu — PR #39 | Hoog | Betrouwbare recepten zonder verkeerde producten/verpakkingen | Codex → Work | — | Veilige fixes gereleased; AFTER-audit gedaan; alleen echte datablokkades blijven |
-| 1B | Honig/Knorr NO_RECIPE | ⏭️ Hierna | Hoog | Meer maaltijdmixen bruikbaar maken | Codex → Work | 1A | 1 Honig + 14 Knorr profielen betrouwbaar beoordeeld/opgebouwd waar data dit toelaat |
+| 1A.1 | Externe scrapingfallback voor Hoogvliet | ⏭️ Direct hierna — onderzoek | Middel | Minder storingen door source_challenge/Incapsula en minder afhankelijkheid van GitHub-runnerfetches | Codex → Work | 1A afronden | Bright Data en Zyte technisch/kostenmatig getest; bestaande importer blijft leidend en externe fetch wordt alleen gebruikt waar aantoonbaar nuttig, bij voorkeur als fallback |
+| 1B | Honig/Knorr NO_RECIPE | Daarna | Hoog | Meer maaltijdmixen bruikbaar maken | Codex → Work | 1A + scrapingfallback-besluit | 1 Honig + 14 Knorr profielen betrouwbaar beoordeeld/opgebouwd waar data dit toelaat |
 | 1C | Overige receptkwaliteit + Data Health | Daarna | Hoog | Minder plannerfouten en betere productmatching | Codex → Work | 1B | Overige kritieke profiel-, package- en matchproblemen aantoonbaar beheerst |
 | 2 | Budgetbewuste productselectie | ⭐ Hoge prioriteit | **Zeer hoog** | Altijd de goedkoopste geschikte kassacombinatie kiezen | Codex → Work | Receptkwaliteit betrouwbaar | Hele verpakkingen, aanbiedingen, huismerk en producthergebruik worden correct geoptimaliseerd binnen budget |
 | 3 | Betrouwbare opslag + geschiedenis | Gepland | Middel | Geen verlies van week, lijst, recepten of keuzes | Codex → Work | Stabiele kernflows | Week/lijst/herstel en weekhistorie betrouwbaar bewezen |

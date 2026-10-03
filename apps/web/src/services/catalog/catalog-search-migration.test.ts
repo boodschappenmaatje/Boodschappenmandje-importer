@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
   new URL(
-    "../../../../../supabase/migrations/20260915_catalog_search_relevance_v2.sql",
+    "../../../../../supabase/migrations/20260915173523_catalog_search_relevance_v2.sql",
     import.meta.url,
   ),
   "utf8",

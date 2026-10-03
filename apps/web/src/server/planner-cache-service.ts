@@ -8,8 +8,8 @@ import {
   isReliableIngredientMatch,
 } from "@/services/week-preparation/product-matching";
 import {
-  PLANNER_MATCHER_VERSION,
-  PLANNER_READINESS_EVALUATOR_VERSION,
+  matcherVersionForSourceKey,
+  readinessVersionForMatchKeys,
   PLANNER_READINESS_TTL_MS,
   SupabasePersistentRecipeReadinessRepository,
   requirementKeysForRecipes,
@@ -45,6 +45,7 @@ export interface PlannerReadinessStateRow {
   recipe_id: string;
   people_count: number;
   evaluator_version: number;
+  dependency_match_keys?: string[];
   refresh_status: string;
   invalidated_at: string | null;
   expires_at: string;
@@ -66,7 +67,7 @@ function currentReadinessState(
 ): boolean {
   const expiresAt = Date.parse(row.expires_at);
   return (
-    row.evaluator_version === PLANNER_READINESS_EVALUATOR_VERSION &&
+    row.evaluator_version === readinessVersionForMatchKeys(row.dependency_match_keys ?? []) &&
     row.refresh_status === "current" &&
     row.invalidated_at === null &&
     Number.isFinite(expiresAt) &&
@@ -201,7 +202,7 @@ export function rowsForGate(
       candidate_product_ids: gate.candidatesByRequirement?.get(key)?.products.map((candidate) => candidate.id) ?? (product ? [product.id] : []),
       match_status: product ? "valid" : "invalid",
       failure_reason: product ? null : ingredient.reason ?? "matcher_failed",
-      matcher_version: PLANNER_MATCHER_VERSION,
+      matcher_version: matcherVersionForSourceKey(ingredient.sourceKey),
       refresh_status: "current",
       invalidated_at: null,
       invalidation_reason: null,
@@ -225,7 +226,9 @@ export function rowsForGate(
         ingredient.requirementKey ? [ingredient.requirementKey] : [],
       ),
     )],
-    evaluator_version: PLANNER_READINESS_EVALUATOR_VERSION,
+    evaluator_version: readinessVersionForMatchKeys(recipe.ingredients.flatMap((ingredient) =>
+      ingredient.requirementKey ? [ingredient.requirementKey] : [],
+    )),
     refresh_status: "current",
     invalidated_at: null,
     invalidation_reason: null,
@@ -305,6 +308,7 @@ const READINESS_STATE_SELECT = [
   "recipe_id",
   "people_count",
   "evaluator_version",
+  "dependency_match_keys",
   "refresh_status",
   "invalidated_at",
   "expires_at",
@@ -495,7 +499,7 @@ export async function repairIngredientProductMatch(
     product_id: product.id,
     match_status: "valid",
     failure_reason: null,
-    matcher_version: PLANNER_MATCHER_VERSION,
+    matcher_version: matcherVersionForSourceKey(ingredient.sourceKey),
     refresh_status: "current",
     invalidated_at: null,
     invalidation_reason: null,

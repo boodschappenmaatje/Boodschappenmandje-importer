@@ -15,7 +15,7 @@ Deze PWA 12-performancefix voegt uitsluitend afgeleide, opnieuw opbouwbare data 
 
 ## Veilige uitrol
 
-De migratie staat in `supabase/migrations/20260919_persistent_planner_readiness_cache.sql`.
+De migratie staat in `supabase/migrations/20260919154657_persistent_planner_readiness_cache.sql`.
 Pas haar niet vanuit een Preview op Production toe. Controleer eerst de SQL en RLS in een lokale of
 afzonderlijke developmentdatabase. De PWA blijft zonder toegepaste migratie werken via de gerichte
 fallback.

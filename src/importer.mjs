@@ -122,7 +122,7 @@ export function formatClassificationSummary(coverage, written) {
 
 async function runProductTypeBackfill(config, logger) {
   if (!config.productTypeSupported) {
-    throw new Error("Supabase-kolom products.product_type ontbreekt; voer eerst supabase/migrations/20260908_add_product_type.sql uit.");
+    throw new Error("Supabase-kolom products.product_type ontbreekt; voer eerst supabase/migrations/20260908091354_add_product_type.sql uit.");
   }
   const products = await fetchExistingProducts(config);
   const classifiedProducts = products.map((product) => ({

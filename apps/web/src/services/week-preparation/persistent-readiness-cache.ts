@@ -20,6 +20,24 @@ export const PLANNER_MATCHER_VERSION = 4;
 export const PLANNER_READINESS_EVALUATOR_VERSION = 4;
 export const PLANNER_READINESS_TTL_MS = 24 * 60 * 60 * 1000;
 
+const UPDATED_MEAL_MIX_SUPPLEMENTS = new Set([
+  "mix-supplement-hacheevlees",
+  "mix-supplement-pitabroodjes",
+  "mix-supplement-tomaten",
+]);
+
+export function matcherVersionForSourceKey(sourceKey: string): number {
+  return UPDATED_MEAL_MIX_SUPPLEMENTS.has(sourceKey)
+    ? PLANNER_MATCHER_VERSION + 1
+    : PLANNER_MATCHER_VERSION;
+}
+
+export function readinessVersionForMatchKeys(keys: readonly string[]): number {
+  return keys.some((key) => [...UPDATED_MEAL_MIX_SUPPLEMENTS].some(
+    (sourceKey) => key.includes(`:${sourceKey}:`),
+  )) ? PLANNER_READINESS_EVALUATOR_VERSION + 1 : PLANNER_READINESS_EVALUATOR_VERSION;
+}
+
 type RefreshStatus = "current" | "pending" | "failed";
 type MatchStatus = "valid" | "invalid";
 
@@ -193,7 +211,7 @@ function sameTimestamp(left: string | null, right: string | null): boolean {
 
 function currentMatch(row: PersistentProductMatchRow): boolean {
   return (
-    row.matcher_version === PLANNER_MATCHER_VERSION &&
+    row.matcher_version === matcherVersionForSourceKey(row.ingredient_source_key) &&
     row.refresh_status === "current" &&
     row.invalidated_at === null
   );
@@ -205,7 +223,7 @@ function currentReadiness(
 ): boolean {
   const expiresAt = timestamp(row.expires_at);
   return (
-    row.evaluator_version === PLANNER_READINESS_EVALUATOR_VERSION &&
+    row.evaluator_version === readinessVersionForMatchKeys(row.dependency_match_keys) &&
     row.refresh_status === "current" &&
     row.invalidated_at === null &&
     expiresAt !== null &&

@@ -310,7 +310,7 @@ test("08:30-bewaking accepteert running, paused, success en partial maar niet at
 
 test("dagjobmigratie is additief, server-locked en browser read-only", async () => {
   const migration = await readFile(
-    new URL("../supabase/migrations/20260917_self_healing_daily_catalog_growth.sql", import.meta.url),
+    new URL("../supabase/migrations/20260917092809_self_healing_daily_catalog_growth.sql", import.meta.url),
     "utf8",
   );
   assert.match(migration, /create table if not exists public\.catalog_daily_jobs/i);

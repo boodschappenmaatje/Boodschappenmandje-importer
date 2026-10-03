@@ -19,7 +19,7 @@ Normalisatie maakt hoofdletters, diakritische tekens, interpunctie en overtollig
 
 Voer na deze commit in de Supabase SQL Editor exact in deze volgorde uit:
 
-1. `supabase/migrations/20260908_create_ingredients.sql`
+1. `supabase/migrations/20260908110213_create_ingredients.sql`
 2. `supabase/seeds/20260908_ingredients.sql`
 
 Beide bestanden zijn veilig opnieuw uitvoerbaar. De seed upsert op de bestaande Swift Ingredient-ID, verwijdert niets en weigert een alias stil naar een ander ingrediënt om te koppelen. RLS staat aan; `anon` en `authenticated` krijgen alleen leesrecht. De bestaande `products` en `product_prices` worden niet aangepast.
@@ -36,7 +36,7 @@ De bestaande Swift-bron bevat exact 100 recepten: 15 legacyrecepten en 85 recept
 
 Nadat de ingrediëntenmigratie en -seed van stap 5 succesvol zijn uitgevoerd, voer je in de Supabase SQL Editor uit:
 
-1. `supabase/migrations/20260908_create_recipes.sql`
+1. `supabase/migrations/20260908121109_create_recipes.sql`
 2. `supabase/seeds/20260908_recipes.sql`
 
 Beide bestanden zijn veilig opnieuw uitvoerbaar. De UUID van een bestaand recept blijft bij een volgende seed behouden doordat de upsert de stabiele Swift `source_key` gebruikt. RLS staat aan; `anon` en `authenticated` krijgen alleen leesrecht. Geen product- of ingrediëntentabel wordt gewijzigd.
@@ -55,7 +55,7 @@ De huidige bron koppelt alle 403 regels exact via de bestaande stabiele Ingredie
 
 Nadat stap 5 en 5.1 live zijn uitgevoerd, voer je in de Supabase SQL Editor exact in deze volgorde uit:
 
-1. `supabase/migrations/20260908_create_recipe_ingredients.sql`
+1. `supabase/migrations/20260908222836_create_recipe_ingredients.sql`
 2. `supabase/seeds/20260908_recipe_ingredients.sql`
 
 De seed controleert vooraf of alle stabiele recept- en Ingredient-ID's bestaan, en stopt bij een verweesde bronregel. De upsert gebruikt `(recipe_id, position)`, maakt bij een tweede uitvoering geen duplicaten en verwijdert geen bestaande data. RLS staat aan; `anon` en `authenticated` krijgen alleen leesrecht.
@@ -170,7 +170,7 @@ gedeeltelijk af; de volgende kalenderdag begint een nieuwe teller zonder de
 globale discovery-cursor te resetten.
 
 Voer vóór activatie eenmalig
-`supabase/migrations/20260917_self_healing_daily_catalog_growth.sql` uit. Deze
+`supabase/migrations/20260917092809_self_healing_daily_catalog_growth.sql` uit. Deze
 additieve migratie maakt alleen job-/attemptmetadata en atomische RPC-locks aan;
 product- en prijstabellen worden niet verwijderd of teruggezet. De 08:30-
 bewaking beschouwt een lopende of geplande retry als normaal herstel en zet een
@@ -193,7 +193,7 @@ retrylus geplaatst.
 
 `src/product-type.mjs` bepaalt centraal een generiek `product_type` uit productnaam, merk, bestaande Hoogvliet-categorie en—alleen als fallback—de gebruikte zoekterm. Merk, Zero/Max en verpakkingsformaat worden geen zelfstandig producttype. Onzekere producten blijven behouden als `Onbekend`.
 
-Voer eenmaal `supabase/migrations/20260908_add_product_type.sql` uit in de Supabase SQL Editor. De kolom is nullable en breekt bestaande clients niet. Zolang de kolom nog ontbreekt, blijven catalogus- en prijsimports zonder `product_type` functioneren.
+Voer eenmaal `supabase/migrations/20260908091354_add_product_type.sql` uit in de Supabase SQL Editor. De kolom is nullable en breekt bestaande clients niet. Zolang de kolom nog ontbreekt, blijven catalogus- en prijsimports zonder `product_type` functioneren.
 
 Kies daarna in de handmatige GitHub Action **Soort update → classify** om bestaande producten met dezelfde centrale regels bij te werken. Nieuwe catalogusproducten en toekomstige prijsvalidaties krijgen hun producttype vervolgens automatisch. De classify-run wijzigt geen `product_prices`.
 

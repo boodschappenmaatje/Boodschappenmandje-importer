@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+      # Validate the exact Draft head even while main's ROADMAP conflicts with
+      # the existing PR documentation and GitHub cannot build a PR merge ref.
+      - feature/meal-mix-supplement-matches
       - 'maintenance/replay-schedule/**'
 
 permissions:
@@ -33,6 +36,8 @@ jobs:
       # Fixtures/syntax only: no importer entry point, DB, secrets or network data.
       - name: Importer fixtures and seed consistency
         run: npm test && npm run check
+      - name: PostgreSQL atomic rollback and concurrency gate
+        run: npm run test:postgres
       # Full web suite includes the core subset once, avoiding duplicate runs.
       - name: Web core flows, regressions, lint, TypeScript and build
         run: npm run check --prefix apps/web

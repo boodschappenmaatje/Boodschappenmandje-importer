@@ -318,6 +318,7 @@ export function mealMixSupplementAliases(name: string): string[] {
     "hollandse bruine bonen": ["bruine bonen"],
     "gezeefde tomaten": ["tomato gezeefd"],
     "mais blik": ["maiskorrels", "crispy mais"],
+    "tomaten": ["trostomaten"],
     "wortels": ["worteltjes", "winterpeen"],
     "wortel": ["worteltjes", "winterpeen"],
     "spinazie diepvries": ["spinazie fijn gehakt", "spinazie grof gehakt"],
@@ -327,6 +328,8 @@ export function mealMixSupplementAliases(name: string): string[] {
     "nasi/bami groenten": ["Chinese wok"],
     "nasi groentepakket": ["Chinese wok"],
     "bami groentepakket": ["Chinese wok"],
+    "hacheevlees": ["Hoogvliet Riblappen"],
+    "pitabroodjes": ["Pita broodjes", "Maaltijd pita"],
   };
   return aliases[key] ?? [];
 }

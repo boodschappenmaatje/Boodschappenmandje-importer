@@ -14,8 +14,8 @@ publishable/anon key. De importer gebruikt buiten de browser zijn bestaande
 
 | Tabel | Doel | Sleutel/relaties | PWA 4 | Vastgelegde RLS |
 | --- | --- | --- | --- | --- |
-| `products` | Hoogvliet-productidentiteit en metadata | `id` PK; uniek `supermarket + sku` | read | beveiligingsmigratie `20260914_secure_catalog_browser_read.sql` |
-| `product_prices` | huidige normale/actieprijs | `product_id` FK → `products.id`, uniek | read | beveiligingsmigratie `20260914_secure_catalog_browser_read.sql` |
+| `products` | Hoogvliet-productidentiteit en metadata | `id` PK; uniek `supermarket + sku` | read | beveiligingsmigratie `20260914193340_secure_catalog_browser_read.sql` |
+| `product_prices` | huidige normale/actieprijs | `product_id` FK → `products.id`, uniek | read | beveiligingsmigratie `20260914193340_secure_catalog_browser_read.sql` |
 | `recipes` | centrale recepten | `id` PK; `source_key` uniek | later read | `recipes_read_only` |
 | `ingredients` | centrale ingrediënten | `id` PK; `source_key` uniek | later read | `ingredients_read_only` |
 | `ingredient_aliases` | aliases voor matching | `ingredient_id` FK → `ingredients.id` | later read | `ingredient_aliases_read_only` |
