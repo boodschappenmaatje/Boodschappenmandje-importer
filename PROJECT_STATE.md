@@ -1,3 +1,60 @@
+# Checkpoint 11F — read-only migration baseline bewezen — 3 oktober 2026
+
+## 11E-plan en actuele remote status
+
+- Voorkeursstrategie B blijft passend: laat de lokale filenames/versies aansluiten op de bewezen Production-history; voeg voor de acht oudere bewezen migrations afzonderlijke historyrecords toe met de officiële Supabase CLI. Geen remote record van de bestaande vijf herschrijven.
+- PR #39 blijft open, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`, head `a9642aaa41bc0afb11364037a759ff12016469c0`. De actuele PR-basis/main-head is `7446d411e9d9cdf48b52df2a6edb2cc4eff34723`.
+- Production is project `pjcqxufvbkkjehituzxz`, BoodschappenMaatje, `eu-west-1`, PostgreSQL 17.6, status ACTIVE_HEALTHY.
+- Read-only Production-history bevat exact vijf records: `20260919154657 persistent_planner_readiness_cache`, `20260920213421 meal_mix_profiles_and_candidate_cache`, `20260920220220 invalidate_readiness_on_candidate_change`, `20260921104333 meal_mix_verified_water_only`, `20261002220202 transactional_bounded_readiness_20261002120000`. De vijf voorgestelde versies bestaan nog; de acht voorgestelde baselineversies ontbreken.
+- Read-only inspectie van `supabase_migrations.schema_migrations`: `version text NOT NULL`, `name text`, `statements text[]`; ook `created_by`, `idempotency_key` en `rollback` zijn aanwezig.
+- De gebruikte Supabase-controles waren uitsluitend SELECT/cataloguslezingen en de Supabase migration-list-actie. Geen history- of schemaschrijfactie.
+
+## Acht oudere lokale migrations — Production-bewijs
+
+| Lokale migration | Production-bewijs | Status | Veilige toekomstige actie |
+| --- | --- | --- | --- |
+| `20260908_add_product_type.sql` | `products.product_type`, index `products_supermarket_product_type_idx` en de bedoelde kolomcommentaar zijn aanwezig. | **PROVEN_APPLIED** | Versie `20260908091354` officieel als applied registreren. |
+| `20260908_create_ingredients.sql` | Beide tabellen, kolommen, unieke/check/FK-constraints, indexen, updated-at-functies/triggers, RLS, read-only policies, tabel-/kolomcommentaar aanwezig. | **PROVEN_APPLIED** | Versie `20260908110213` officieel als applied registreren. |
+| `20260908_create_recipes.sql` | Tabel, kolommen, unieke/check-constraints, weekmenu-index, updated-at-functie/trigger, RLS, read-only policy en comments komen overeen. | **PROVEN_APPLIED** | Versie `20260908121109` officieel als applied registreren. |
+| `20260908_create_recipe_ingredients.sql` | Tabel, FK/check/unique-constraints, beide indexen, updated-at-functie/trigger, RLS, read-only policy en comments komen overeen. | **PROVEN_APPLIED** | Versie `20260908222836` officieel als applied registreren. |
+| `20260914_secure_catalog_browser_read.sql` | RLS staat aan op products/prices; beide bedoelde SELECT-policies en comments bestaan; anon/authenticated hebben SELECT en geen INSERT/UPDATE/DELETE. | **PROVEN_APPLIED** | Versie `20260914193340` officieel als applied registreren. |
+| `20260915_catalog_growth.sql` | Beide productkolommen en check, beide catalogustabellen met kolommen/constraints/indexen, trigram-extension/indexen, RLS/policy, browser- en service-roleprivileges en comments komen overeen. | **PROVEN_APPLIED** | Versie `20260915151220` officieel als applied registreren. |
+| `20260915_catalog_search_relevance_v2.sql` | `unaccent` staat in schema `extensions`; beide functies hebben de bedoelde signature, bodygedragingen, immutability/stability, lege search_path, comments en browser-EXECUTE-grants. De searchfunctie ondersteunt tokenranking, filters, sortering en paginering. | **PROVEN_APPLIED** | Versie `20260915173523` officieel als applied registreren. |
+| `20260917_self_healing_daily_catalog_growth.sql` | Beide job/attempt-tabellen hebben alle bedoelde kolommen, constraints, indexen, RLS/policy, grants en comments. De drie SECURITY DEFINER-functies hebben de bedoelde signatures/logic, `search_path=public`; EXECUTE is service_role-only. | **PROVEN_APPLIED** | Versie `20260917092809` officieel als applied registreren. |
+
+Er is geen aanwijzing voor een gedeeltelijke of afwijkende toepassing van een van deze acht files: alle bedoelde structurele, functionele en rechten-/RLS-effecten zijn read-only gecontroleerd. De status bewijst de huidige Production-toestand; het is geen bewijs van historische uitvoervolgorde.
+
+## Vijf bestaande Production-matches
+
+| Remote version | Logische lokale file | Read-only bevestiging |
+| --- | --- | --- |
+| `20260919154657` | `20260919_persistent_planner_readiness_cache.sql` → toekomstige filenameversie `20260919154657` | Match/readiness-cachetabellen, dependencies, policies, invalidatiegedrag en cachetriggers aanwezig. |
+| `20260920213421` | `20260920211532_meal_mix_profiles_and_candidate_cache.sql` → `20260920213421` | Profiel-/kandidaatcacheobjecten en constraints aanwezig; latere water-only constraint staat apart onder de eigen remote migration. |
+| `20260920220220` | `20260920220500_invalidate_readiness_on_candidate_change.sql` → `20260920220220` | Candidate-change invalidatiefunctie en ingeschakelde producttrigger aanwezig; readiness-invalidatie blijft enabled. |
+| `20260921104333` | `20260921104226_meal_mix_verified_water_only.sql` → `20260921104333` | Verified water-only blijft alleen geldig met `source_evidence` en `source_fingerprint`. |
+| `20261002220202` | `20261002120000_transactional_bounded_readiness.sql` → `20261002220202` | Revisietabel, bounded plan/commit/revision-functies en guards aanwezig; security-definer search_path is vastgezet en alleen bedoelde RPC's zijn service_role-uitvoerbaar. |
+
+## Toekomstige gecontroleerde stap — nog NIET uitgevoerd
+
+Na eerst de vijf lokale filenames exact naar bovenstaande bestaande remote versies te laten aansluiten en de acht oudere filenames uniek te maken, controleer Work opnieuw de PR-head en voer met officiële Supabase CLI 2.119.0 een verse read-only `supabase migration list` uit. Als die controle ongewijzigd dezelfde Production-projectref/history toont, is uitsluitend deze batch veilig om in het volgende checkpoint officieel te registreren:
+
+```text
+20260908091354 --status applied
+20260908110213 --status applied
+20260908121109 --status applied
+20260908222836 --status applied
+20260914193340 --status applied
+20260915151220 --status applied
+20260915173523 --status applied
+20260917092809 --status applied
+```
+
+Gebruik uitsluitend `supabase migration repair` via de officiële CLI voor die acht versions. Voer geen repair uit voor de vijf bestaande matches en geen migration SQL uit. Daarna opnieuw `supabase migration list` lezen en controleren dat alle lokale/remote entries overeenkomen. Stop bij elke nieuwe historyregel, gewijzigde PR-head, onverwachte objectafwijking of projectref-wissel.
+
+**Blokkades:** alleen de noodzakelijke, nog niet uitgevoerde filename-aanpassing en de afzonderlijke toestemming/uitvoering in het volgende checkpoint. Deze checkpoint heeft **geen migration repair, geen SQL-write, geen schemawijziging, geen merge en geen Production-deploy** uitgevoerd.
+
+---
+
 # BoodschappenMaatje — Project State
 
 ## Checkpoint 11D — read-only migration list groen; volledige driftmapping bekend — 3 oktober 2026
