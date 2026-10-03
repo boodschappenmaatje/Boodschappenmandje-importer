@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  REPAIR_ARMED: 'true'
+  REPAIR_ARMED: 'false'
 
 concurrency:
   group: supabase-production-migration-history-repair
