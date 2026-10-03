@@ -1,3 +1,20 @@
+# Checkpoint 11H.2 — migration history geregistreerd, workflow DISARMED — 3 oktober 2026
+
+- PR #39 vóór documentatie stond open, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`; head `ea1727107d266e5ee3b8ba3a87f6e3a26f9cb635`, base/main `7446d411e9d9cdf48b52df2a6edb2cc4eff34723`.
+- Workflowreview op de actuele branch bevestigde de gepinde officiële Supabase CLI 2.119.0, vaste Production-ref `pjcqxufvbkkjehituzxz`, Session pooler `aws-1-eu-west-1.pooler.supabase.com:5432`, fail-closed precheck, repair-job-gate op beide geslaagde precheck en expliciete arming, en uitsluitend de goedgekeurde officiële repairbatch. Geen directe SQL tegen migration history, geen echte db push, migration up/reset of apply_migration.
+- Verse disarmed precheck-run `37152881130` op de start-head was SUCCESS en bewees de verwachte 5 remote records, afwezigheid van de 8 baselineversies en exact 13 lokale versies.
+- Uitsluitend `REPAIR_ARMED: 'false' → 'true'` is gecommit als `d890d0a6cb3254ced6c5880cb41d9183939ea87b`. De padgefilterde armed run `37153208375` was SUCCESS; de volledige verse Production-precheck slaagde. De repair-job voerde uitsluitend de officiële `supabase migration repair --status applied` uit voor exact:
+  `20260908091354`, `20260908110213`, `20260908121109`, `20260908222836`, `20260914193340`, `20260915151220`, `20260915173523`, `20260917092809`.
+  GitHub Actions-log bevestigt alle acht versies als applied. De workflow controleerde daarna de exacte 13/13 local↔remote match en `supabase db push --dry-run`; de validator slaagde en de workflow rapporteerde Production up-to-date, zonder pending migration-SQL.
+- Read-only sanitycheck na de run: products `7543`, product_prices `7543`, ingredient_product_matches `245`, recipe_readiness_cache `1370`, planner_write_revisions `362`; alle gelijk aan de referentiewaarden. Geen aanwijzing van appdatawijziging.
+- Na succesvolle repair is uitsluitend `REPAIR_ARMED: 'true' → 'false'` gecommit als `ea1727107d266e5ee3b8ba3a87f6e3a26f9cb635`. Workflow staat nu **DISARMED**. De daardoor getriggerde finale read-only run `37153303492` bevestigt `REPAIR_ARMED=false` en dat de repairjob is **skipped**, maar de precheck zelf faalde gesloten met `remote migration history differs from expected baseline`. De actuele disarmed precheck roept nog de pre-repair-validator aan, die 5 remote + 8 ontbrekende baselines verwacht; na de geslaagde repair zijn alle 13 remote aanwezig. Dit is een validator-/precheckmismatch, geen aanwijzing voor mislukte repair. Geen tweede repair of workaround uitgevoerd.
+- Geen migration-SQL uitgevoerd; alleen de acht expliciet toegestane migration-history metadatarecords zijn gewijzigd. Geen appdatawrite, schemawijziging, merge of Production app-deploy.
+- **Resterende blokkade:** maak in een afzonderlijk, uitsluitend read-only/disarmed vervolgcheckpoint de validator geschikt voor de normale post-repair 13/13-history en voer dan alleen een DISARMED-precheck uit. Workflow blijft intussen `REPAIR_ARMED=false`; voer geen repairbatch opnieuw uit. PR #39 blijft Draft en ongemerged.
+- **Volgende releasegate na groene disarmed precheck:** CI controleren; Preview alleen opnieuw bevestigen indien nodig; geen nieuwe fysieke iPhone-test tenzij functionele appcode sinds de goedgekeurde releasecandidate wijzigde; daarna expliciete mergegoedkeuring vragen. Merge, Production-deploy/smoke en bounded live herberekening + AFTER-audit blijven afzonderlijke latere stappen.
+- `ROADMAP.md` is niet gewijzigd.
+
+---
+
 # Checkpoint 11H.1 — tijdelijke migration-repairworkflow gebouwd, DISARMED — 3 oktober 2026
 
 - PR #39 was OPEN, Draft, mergeable en ongemergd op `feature/meal-mix-supplement-matches`, start-head `552ccaac7950c12580748eca19b186bc3f10e872`.
