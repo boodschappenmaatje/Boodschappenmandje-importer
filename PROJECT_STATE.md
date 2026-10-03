@@ -1,5 +1,14 @@
 # BoodschappenMaatje — Project State
 
+## Checkpoint 11C.7 — GitHub poolerpad bereikbaar; databasewachtwoord faalt authenticatie — 3 oktober 2026
+
+- Tijdelijke read-only GitHub Actions-diagnose op PR #39 bevestigt dat `SUPABASE_ACCESS_TOKEN` en `SUPABASE_DB_PASSWORD` als secrets aanwezig zijn en afgeschermd worden gelogd.
+- De bewezen Supabase IPv4 Session pooler is `aws-1-eu-west-1.pooler.supabase.com:5432`; TCP vanaf de GitHub-hosted runner is **reachable**.
+- Een onafhankelijke read-only PostgreSQL-smoke (`SELECT 1`) via gebruiker `postgres.pjcqxufvbkkjehituzxz` faalt veilig als **password_auth_failed**. Daarmee is de actuele blokkade het databasewachtwoord/secret, niet GitHub-netwerk, DNS of poolerbereikbaarheid.
+- `supabase migration list` blijft daarom geblokkeerd; nog geen migration mapping mogelijk.
+- **Geen migration repair, migratie-SQL, schemawrite of andere databasewrite uitgevoerd.**
+- Volgende stap: het GitHub-secret `SUPABASE_DB_PASSWORD` exact gelijkzetten aan het actuele Production databasewachtwoord en daarna uitsluitend dezelfde read-only migration-list-check opnieuw uitvoeren.
+
 ## Checkpoint 11C — tijdelijke read-only migration-list-workflow — 3 oktober 2026
 
 - Toegevoegd: `.github/workflows/supabase-migration-history-check.yml`, uitsluitend `workflow_dispatch`, op `feature/meal-mix-supplement-matches`; PR #39 blijft Draft en ongemergd. Officiële `supabase/setup-cli` installeert vastgezette CLI **2.119.0**. Alleen `migration list --linked --project-ref` op Production **`pjcqxufvbkkjehituzxz`**; geen repair-mode, SQL, schema- of historywrite.
