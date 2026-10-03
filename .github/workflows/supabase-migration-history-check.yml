@@ -1,6 +1,6 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C.3: narrowly filtered push for a read-only
+# Temporary checkpoint 11C.4: narrowly filtered push for a read-only
 # migration-list diagnosis from PR #39. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
@@ -147,6 +147,16 @@ jobs:
                   'permission denied',
                   'insufficient privilege',
                   '42501',
+              )),
+              ('local_migration_version_format', (
+                  'parsing time',
+                  'cannot parse',
+                  'failed to parse',
+                  'invalid migration filename',
+                  'file name must match pattern',
+                  'migration versions not found',
+                  'remote migration versions not found',
+                  'timestamp',
               )),
           ]
 
