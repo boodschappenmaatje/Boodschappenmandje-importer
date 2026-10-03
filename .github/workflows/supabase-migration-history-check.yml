@@ -1,6 +1,6 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C.6: narrowly filtered push for a read-only
+# Temporary checkpoint 11C.7: narrowly filtered push for a read-only
 # migration-list diagnosis from PR #39. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
@@ -105,7 +105,10 @@ jobs:
           printf 'TCP Session pooler: `%s`\n' "$tcp_status" >> "$GITHUB_STEP_SUMMARY"
 
           psql_status=not_available
+          psql_category=not_available
+          psql_sqlstate=none
           if command -v psql >/dev/null 2>&1; then
+            export PSQL_STDERR="$output_dir/psql-stderr"
             export PGPASSWORD="$SUPABASE_DB_PASSWORD"
             if PGSSLMODE=require timeout 8 psql \
               --host="$SUPABASE_POOLER_HOST" \
@@ -115,14 +118,55 @@ jobs:
               --no-psqlrc \
               --tuples-only \
               --no-align \
-              --command='select 1;' >/dev/null 2>&1 < /dev/null; then
+              --command='select 1;' >/dev/null 2> "$PSQL_STDERR" < /dev/null; then
               psql_status=success
+              psql_category=success
             else
               psql_status=failed
+              psql_category="$(
+                python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          text = Path(os.environ['PSQL_STDERR']).read_text(errors='replace').lower()
+          rules = [
+              ('password_auth_failed', ('password authentication failed', 'invalid password', '28p01')),
+              ('tenant_or_user_not_found', ('tenant or user not found', 'user not found', 'invalid user')),
+              ('database_not_found', ('database', 'does not exist')),
+              ('ssl_or_tls', ('ssl', 'tls', 'certificate', 'x509')),
+              ('network_or_dns', ('could not translate host name', 'connection refused', 'connection timed out', 'network is unreachable')),
+              ('pg_hba_or_access', ('no pg_hba.conf entry', 'permission denied', 'not allowed')),
+          ]
+          for category, needles in rules:
+              if category == 'database_not_found':
+                  if all(n in text for n in needles):
+                      print(category)
+                      break
+              elif any(n in text for n in needles):
+                  print(category)
+                  break
+          else:
+              print('unknown_safe_category')
+          PY
+              )"
+              psql_sqlstate="$(
+                python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          text = Path(os.environ['PSQL_STDERR']).read_text(errors='replace').upper()
+          matches = re.findall(r'\b([0-9A-Z]{5})\b', text)
+          deny = {'HTTPS', 'ERROR', 'FATAL', 'DEBUG', 'TRACE'}
+          code = next((m for m in matches if m not in deny and any(ch.isdigit() for ch in m)), '')
+          print(code or 'none')
+          PY
+              )"
             fi
             unset PGPASSWORD
           fi
-          printf 'Postgres read-only auth smoke: `%s`\n' "$psql_status" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Postgres read-only auth smoke: `%s`\nPostgres auth category: `%s`\nPostgres SQLSTATE: `%s`\n' \
+            "$psql_status" "$psql_category" "$psql_sqlstate" >> "$GITHUB_STEP_SUMMARY"
 
           if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$MIGRATION_LIST_STDERR" < /dev/null; then
             category="$(
@@ -208,7 +252,7 @@ jobs:
           PY
             )"
             printf 'Diagnostic category: `%s`\nSQLSTATE: `%s`\n' "$category" "$sqlstate" >> "$GITHUB_STEP_SUMMARY"
-            fail "Production migration history could not be read. Safe diagnostic category: $category; TCP: $tcp_status; psql: $psql_status; SQLSTATE: $sqlstate. Raw CLI diagnostics withheld."
+            fail "Production migration history could not be read. CLI category: $category; TCP: $tcp_status; psql: $psql_status/$psql_category/$psql_sqlstate; CLI SQLSTATE: $sqlstate. Raw diagnostics withheld."
           fi
 
           python3 <<'PY'
