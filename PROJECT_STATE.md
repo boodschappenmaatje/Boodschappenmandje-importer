@@ -1,9 +1,11 @@
 # Checkpoint 11H.3 — post-repair disarmed validator hersteld — 3 oktober 2026
 
-- PR #39 is OPEN, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`; vóór deze wijziging stond head `71a98e9c5c8fb1aec4ab8530467fcbf027cb6403`.
-- Validator/workflowlogica hersteld: disarmed precheck gebruikt uitsluitend post-repair-validatie en vereist exact 13/13 local↔remote. Alleen `pre-repair` met `REPAIR_ARMED=true` accepteert de oude 5 remote + 8 local-only toestand; dezelfde armed-modus weigert 13/13 en kan zo geen tweede repair vrijgeven. Workflowflag blijft `false`; repair-job blijft gated op geslaagde precheck plus `repair_armed=true`.
-- YAML en exacte triggers, Bash-syntax en `git diff --check` gecontroleerd. Acht mocktests dekken disarmed 13/13, oude/afwijkende/incomplete history fail-closed, geldige armed 5/8, armed 13/13 blokkade, job-gate en dry-runcontrole. `actionlint` is niet beschikbaar.
-- Geen repair, SQL-/databasewrite, schemawijziging, echte `db push`, merge of Production-deploy uitgevoerd. Finale disarmed Actions-run volgt na push; de run moet 13/13 bevestigen en de repair-job overslaan.
+- PR #39 staat OPEN, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`. De gevalideerde workflow-/validatorhead was `8c1b7a861ea024ddb323ce530b1530d74a6c0a4a`.
+- Validator/workflowlogica hersteld: disarmed precheck gebruikt uitsluitend post-repair-validatie en vereist exact 13/13 local↔remote. Alleen `pre-repair` met `REPAIR_ARMED=true` accepteert de oude 5 remote + 8 local-only toestand; die armed-modus weigert 13/13 en kan geen tweede repair vrijgeven. Workflowflag blijft `false`; repair-job is gated op geslaagde precheck plus `repair_armed=true`.
+- Finale disarmed read-only Actions-run **37153814333** op de gevalideerde head was **SUCCESS**. De precheck slaagde. De post-repair-validator accepteert uitsluitend exact alle 13 lokale en remote versies, dus local↔remote is **13/13 MATCH**. De repair-job was **SKIPPED**.
+- YAML en exacte triggers, Bash-syntax, `git diff --check` en acht mocktests slaagden. `actionlint` is niet beschikbaar.
+- In 11H.3 is geen migration repair, SQL-/databasewrite, schemawijziging, echte `db push`, merge of Production-deploy uitgevoerd. Alleen de read-only migration-list-run draaide; `REPAIR_ARMED=false`.
+- Volgende stap: **PR #39 releasegate** — volledige CI controleren; Preview alleen opnieuw bevestigen indien nodig; bepalen of functionele appcode sinds de goedgekeurde iPhone-test veranderde (zo niet, geen nieuwe iPhone-test); daarna expliciete mergegoedkeuring vragen vóór merge naar main.
 
 ---
 
