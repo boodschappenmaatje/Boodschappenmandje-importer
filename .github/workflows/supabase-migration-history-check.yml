@@ -1,7 +1,7 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C.2: the narrowly filtered push starts this read-only
-# check from PR #39 without changing main. Ordinary code pushes do not match.
+# Temporary checkpoint 11C.3: narrowly filtered push for a read-only
+# migration-list diagnosis from PR #39. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
   push:
@@ -49,7 +49,6 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          # Public identifiers from the proven Production project/session pooler.
           SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
           SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
         run: |
@@ -66,6 +65,7 @@ jobs:
             printf '::error::%s\n' "$1"
             exit 1
           }
+
           [[ ( "$GITHUB_EVENT_NAME" == workflow_dispatch || "$GITHUB_EVENT_NAME" == push ) &&
              "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' &&
              "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' &&
@@ -77,9 +77,8 @@ jobs:
           output_dir=$(mktemp -d)
           trap 'rm -rf "$output_dir"' EXIT
           export MIGRATION_LIST_OUTPUT="$output_dir/list.json"
+          export MIGRATION_LIST_STDERR="$output_dir/stderr"
 
-          # Build the Session-pooler URL without printing it. Percent-encode the
-          # password so special characters cannot corrupt the URI.
           export SUPABASE_POOLER_DB_URL="$(
             python3 - <<'PY'
           import os
@@ -92,8 +91,6 @@ jobs:
           PY
           )"
 
-          # Hard allowlist: no arguments/mode accepted. The sole database command
-          # is migration list against the explicit IPv4 Session-pooler URL.
           read_only_list() {
             [[ "$#" -eq 0 ]] || return 64
             command supabase migration list \
@@ -101,10 +98,68 @@ jobs:
               --workdir "$GITHUB_WORKSPACE" --output-format json
           }
 
-          # Raw stdout/stderr may contain credentials in errors: never log/upload
-          # them. Publish only the validated version/time fields below.
-          if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$output_dir/stderr" < /dev/null; then
-            fail 'Production migration history could not be read through the IPv4 Session pooler. Raw CLI diagnostics withheld to protect secrets.'
+          if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$MIGRATION_LIST_STDERR" < /dev/null; then
+            category="$(
+              python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          text = Path(os.environ['MIGRATION_LIST_STDERR']).read_text(errors='replace').lower()
+
+          rules = [
+              ('password_auth_failed', (
+                  'password authentication failed',
+                  'authentication failed',
+                  'invalid password',
+                  '28p01',
+              )),
+              ('network_or_dns', (
+                  'no such host',
+                  'name or service not known',
+                  'temporary failure in name resolution',
+                  'network is unreachable',
+                  'connection refused',
+                  'connection timed out',
+                  'timeout',
+                  'dial tcp',
+                  'failed to connect',
+              )),
+              ('ssl_or_tls', (
+                  'ssl',
+                  'tls',
+                  'certificate',
+                  'x509',
+              )),
+              ('pooler_or_user', (
+                  'tenant or user not found',
+                  'user not found',
+                  'invalid user',
+                  'pooler',
+              )),
+              ('cli_argument_or_usage', (
+                  'unknown flag',
+                  'unknown shorthand flag',
+                  'accepts ',
+                  'usage:',
+                  'invalid argument',
+              )),
+              ('permission_denied', (
+                  'permission denied',
+                  'insufficient privilege',
+                  '42501',
+              )),
+          ]
+
+          for category, needles in rules:
+              if any(needle in text for needle in needles):
+                  print(category)
+                  break
+          else:
+              print('unknown_safe_category')
+          PY
+            )"
+            printf 'Diagnostic category: `%s`\n' "$category" >> "$GITHUB_STEP_SUMMARY"
+            fail "Production migration history could not be read. Safe diagnostic category: $category. Raw CLI diagnostics withheld."
           fi
 
           python3 <<'PY'
@@ -144,6 +199,7 @@ jobs:
                   handle.write(message + '\n')
               print('::error::' + message)
               sys.exit(1)
+
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
               handle.write(summary)
           print('Production migration history read. Validated migration list is in the summary. READ ONLY — NO REPAIR.')
