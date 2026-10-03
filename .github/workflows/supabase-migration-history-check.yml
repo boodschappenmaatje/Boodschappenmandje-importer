@@ -1,6 +1,6 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C.7: narrowly filtered push for a read-only
+# Temporary checkpoint 11C.8: narrowly filtered push for a read-only
 # migration-list diagnosis from PR #39. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
@@ -295,5 +295,9 @@ jobs:
 
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
               handle.write(summary)
-          print('Production migration history read. Validated migration list is in the summary. READ ONLY — NO REPAIR.')
+          print('Production migration history read. Validated migration list follows. READ ONLY — NO REPAIR.')
+          print('| Local | Remote | Time (UTC) |')
+          print('| --- | --- | --- |')
+          for row in safe_rows:
+              print(row)
           PY
