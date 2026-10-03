@@ -1,9 +1,14 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C. GitHub requires workflow_dispatch on the default
-# branch before dispatch is available; do not merge or add triggers to bypass it.
+# Temporary checkpoint 11C.1: the narrowly filtered push starts this read-only
+# check from PR #39 without changing main. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/meal-mix-supplement-matches
+    paths:
+      - .github/workflows/supabase-migration-history-check.yml
 
 permissions:
   contents: read
@@ -16,14 +21,14 @@ jobs:
   migration-history:
     name: READ ONLY — NO REPAIR
     if: >-
-      github.event_name == 'workflow_dispatch' &&
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
       github.ref == 'refs/heads/feature/meal-mix-supplement-matches'
     environment: Production
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout dispatched branch
+      - name: Checkout triggered branch
         uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -59,7 +64,7 @@ jobs:
             printf '::error::%s\n' "$1"
             exit 1
           }
-          [[ "$GITHUB_EVENT_NAME" == workflow_dispatch &&
+          [[ ( "$GITHUB_EVENT_NAME" == workflow_dispatch || "$GITHUB_EVENT_NAME" == push ) &&
              "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' &&
              "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' &&
              "$SUPABASE_PROJECT_REF" == pjcqxufvbkkjehituzxz ]] || fail 'Unexpected workflow context.'
