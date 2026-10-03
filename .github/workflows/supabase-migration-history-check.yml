@@ -1,6 +1,6 @@
 name: Supabase Production migration history — READ ONLY — NO REPAIR
 
-# Temporary checkpoint 11C.1: the narrowly filtered push starts this read-only
+# Temporary checkpoint 11C.2: the narrowly filtered push starts this read-only
 # check from PR #39 without changing main. Ordinary code pushes do not match.
 on:
   workflow_dispatch:
@@ -49,14 +49,16 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          # Public project identifier, fixed to the proven Production project.
+          # Public identifiers from the proven Production project/session pooler.
           SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
+          SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
         run: |
           set +x
           set -euo pipefail
           umask 077
           printf '%s\n' '## READ ONLY — NO REPAIR' \
             'Production: pjcqxufvbkkjehituzxz. Only migration history is read.' \
+            'Connection: Supabase IPv4 Session pooler on port 5432.' \
             'No migration SQL is executed. No history or schema changes.' >> "$GITHUB_STEP_SUMMARY"
 
           fail() {
@@ -67,7 +69,8 @@ jobs:
           [[ ( "$GITHUB_EVENT_NAME" == workflow_dispatch || "$GITHUB_EVENT_NAME" == push ) &&
              "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' &&
              "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' &&
-             "$SUPABASE_PROJECT_REF" == pjcqxufvbkkjehituzxz ]] || fail 'Unexpected workflow context.'
+             "$SUPABASE_PROJECT_REF" == pjcqxufvbkkjehituzxz &&
+             "$SUPABASE_POOLER_HOST" == aws-1-eu-west-1.pooler.supabase.com ]] || fail 'Unexpected workflow context.'
           [[ -n "$SUPABASE_ACCESS_TOKEN" ]] || fail 'Missing secret: SUPABASE_ACCESS_TOKEN.'
           [[ -n "$SUPABASE_DB_PASSWORD" ]] || fail 'Missing secret: SUPABASE_DB_PASSWORD.'
 
@@ -75,20 +78,33 @@ jobs:
           trap 'rm -rf "$output_dir"' EXIT
           export MIGRATION_LIST_OUTPUT="$output_dir/list.json"
 
+          # Build the Session-pooler URL without printing it. Percent-encode the
+          # password so special characters cannot corrupt the URI.
+          export SUPABASE_POOLER_DB_URL="$(
+            python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          project_ref = os.environ['SUPABASE_PROJECT_REF']
+          host = os.environ['SUPABASE_POOLER_HOST']
+          password = quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')
+          print(f'postgresql://postgres.{project_ref}:{password}@{host}:5432/postgres?sslmode=require')
+          PY
+          )"
+
           # Hard allowlist: no arguments/mode accepted. The sole database command
-          # is migration list. Supplying the password avoids temporary login-role
-          # creation by the CLI. Never add repair or SQL execution to this function.
+          # is migration list against the explicit IPv4 Session-pooler URL.
           read_only_list() {
             [[ "$#" -eq 0 ]] || return 64
-            command supabase migration list --linked \
-              --project-ref "$SUPABASE_PROJECT_REF" \
-              --password "$SUPABASE_DB_PASSWORD" \
+            command supabase migration list \
+              --db-url "$SUPABASE_POOLER_DB_URL" \
               --workdir "$GITHUB_WORKSPACE" --output-format json
           }
+
           # Raw stdout/stderr may contain credentials in errors: never log/upload
           # them. Publish only the validated version/time fields below.
           if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$output_dir/stderr" < /dev/null; then
-            fail 'Production migration history could not be read. Raw CLI diagnostics withheld to protect secrets.'
+            fail 'Production migration history could not be read through the IPv4 Session pooler. Raw CLI diagnostics withheld to protect secrets.'
           fi
 
           python3 <<'PY'
