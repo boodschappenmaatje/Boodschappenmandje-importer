@@ -24,6 +24,12 @@ Vaste regels:
 - **Codex** doet standaard codeonderzoek, implementatie, refactors, algoritmes, tests en performancewerk.
 - **Work** doet GitHub/PR, Supabase-live-data, Vercel Preview, browsercontrole, live maintenance, release en Production-smoke.
 - **Een Work-run behandelt maximaal één technisch checkpoint.**
+- **Modelstrategie:** begin standaard met **GPT-5.6 Luna** om credits te besparen.
+  - **Luna + High** voor normaal ontwikkelwerk, afgebakende bugs, tests, UI/CSS, documentatie en bestaande patronen volgen.
+  - **Luna + Extra High** voor lastigere bugs, meerdere gekoppelde bestanden of zwaardere logica.
+  - Schaal pas op naar **GPT-5.6 Sol + High** als Luna aantoonbaar vastloopt, onvoldoende resultaat geeft of de taak meerdere complexe systemen tegelijk raakt.
+  - Gebruik **GPT-6 Astra + High/Max** alleen als laatste escalatie voor uitzonderlijk complexe of risicovolle architectuur-, race-condition-, migratie- of refactortaken.
+  - Voor uitvoeringsprompts geldt dus standaard: **Luna eerst → Sol indien nodig → Astra als laatste escalatie**.
 - Bij gecombineerde taken: **Codex eerst → Work daarna**.
 - Work implementeert alleen zelf als een wijziging klein is en direct onderdeel is van integratie/release.
 - Geen merge of Production zonder expliciete goedkeuring wanneer een Preview/iPhone-acceptatie openstaat.
