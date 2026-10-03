@@ -1,0 +1,129 @@
+name: Supabase Production migration history — READ ONLY — NO REPAIR
+
+# Temporary checkpoint 11C. GitHub requires workflow_dispatch on the default
+# branch before dispatch is available; do not merge or add triggers to bypass it.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-production-migration-history-read-only
+  cancel-in-progress: false
+
+jobs:
+  migration-history:
+    name: READ ONLY — NO REPAIR
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/feature/meal-mix-supplement-matches'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout dispatched branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install official Supabase CLI
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 2.119.0
+
+      - name: Show CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version
+
+      - name: Read Production migration history — READ ONLY — NO REPAIR
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          # Public project identifier, fixed to the proven Production project.
+          SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          printf '%s\n' '## READ ONLY — NO REPAIR' \
+            'Production: pjcqxufvbkkjehituzxz. Only migration history is read.' \
+            'No migration SQL is executed. No history or schema changes.' >> "$GITHUB_STEP_SUMMARY"
+
+          fail() {
+            printf '%s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
+            printf '::error::%s\n' "$1"
+            exit 1
+          }
+          [[ "$GITHUB_EVENT_NAME" == workflow_dispatch &&
+             "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+             "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' &&
+             "$SUPABASE_PROJECT_REF" == pjcqxufvbkkjehituzxz ]] || fail 'Unexpected workflow context.'
+          [[ -n "$SUPABASE_ACCESS_TOKEN" ]] || fail 'Missing secret: SUPABASE_ACCESS_TOKEN.'
+          [[ -n "$SUPABASE_DB_PASSWORD" ]] || fail 'Missing secret: SUPABASE_DB_PASSWORD.'
+
+          output_dir=$(mktemp -d)
+          trap 'rm -rf "$output_dir"' EXIT
+          export MIGRATION_LIST_OUTPUT="$output_dir/list.json"
+
+          # Hard allowlist: no arguments/mode accepted. The sole database command
+          # is migration list. Supplying the password avoids temporary login-role
+          # creation by the CLI. Never add repair or SQL execution to this function.
+          read_only_list() {
+            [[ "$#" -eq 0 ]] || return 64
+            command supabase migration list --linked \
+              --project-ref "$SUPABASE_PROJECT_REF" \
+              --password "$SUPABASE_DB_PASSWORD" \
+              --workdir "$GITHUB_WORKSPACE" --output-format json
+          }
+          # Raw stdout/stderr may contain credentials in errors: never log/upload
+          # them. Publish only the validated version/time fields below.
+          if ! read_only_list > "$MIGRATION_LIST_OUTPUT" 2> "$output_dir/stderr" < /dev/null; then
+            fail 'Production migration history could not be read. Raw CLI diagnostics withheld to protect secrets.'
+          fi
+
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          try:
+              payload = json.loads(Path(os.environ['MIGRATION_LIST_OUTPUT']).read_text())
+              rows = payload['migrations']
+              if not isinstance(rows, list) or not rows:
+                  raise ValueError('empty history')
+              safe_rows = []
+              for row in rows:
+                  local, remote, time = (row[key] for key in ('local', 'remote', 'time'))
+                  if not all(isinstance(value, str) for value in (local, remote, time)):
+                      raise ValueError('unexpected types')
+                  if not all(re.fullmatch(r'[0-9]{1,14}|', value) for value in (local, remote)):
+                      raise ValueError('unexpected versions')
+                  if not (local or remote) or not re.fullmatch(r'[0-9 :\-]+', time):
+                      raise ValueError('unexpected row')
+                  safe_rows.append(f'| {local} | {remote} | {time} |')
+              if not any(row['remote'] for row in rows):
+                  raise ValueError('no remote history')
+              summary = '\n'.join([
+                  '', 'Production migration history read successfully.', '',
+                  '| Local | Remote | Time (UTC) |', '| --- | --- | --- |',
+                  *safe_rows, '',
+                  'Version differences are evidence for mapping, not permission to repair.',
+                  'Next: inspect migration list. NO REPAIR.', '',
+              ])
+          except Exception:
+              message = 'Migration list output could not be safely validated; no raw output published.'
+              with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
+                  handle.write(message + '\n')
+              print('::error::' + message)
+              sys.exit(1)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
+              handle.write(summary)
+          print('Production migration history read. Validated migration list is in the summary. READ ONLY — NO REPAIR.')
+          PY

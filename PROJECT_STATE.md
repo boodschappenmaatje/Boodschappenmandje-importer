@@ -1,5 +1,13 @@
 # BoodschappenMaatje — Project State
 
+## Checkpoint 11C — tijdelijke read-only migration-list-workflow — 3 oktober 2026
+
+- Toegevoegd: `.github/workflows/supabase-migration-history-check.yml`, uitsluitend `workflow_dispatch`, op `feature/meal-mix-supplement-matches`; PR #39 blijft Draft en ongemergd. Officiële `supabase/setup-cli` installeert vastgezette CLI **2.119.0**. Alleen `migration list --linked --project-ref` op Production **`pjcqxufvbkkjehituzxz`**; geen repair-mode, SQL, schema- of historywrite.
+- Secrets: **`SUPABASE_ACCESS_TOKEN`** en **`SUPABASE_DB_PASSWORD`**, via repositorysecrets of het bestaande GitHub-environment **Production**. De expliciete databasepassword voorkomt CLI-aanmaak van een tijdelijke loginrol. Projectref is een vaste publieke identifier; geen projectref-secret nodig. GitHub secret-list geeft HTTP 403; Work moet de twee namen controleren/toevoegen. Ruwe CLI-uitvoer blijft afgeschermd; alleen gevalideerde migratieversies/tijden komen in de summary. Ontbrekende secrets, onleesbare Production-history of onveilige/lege output laten de run falen.
+- Verificatie groen: YAML-parse, `actionlint` 1.7.12 (Actions-structuur), `bash -n`, `git diff --check` en acht lokale mockcontroles (succes, CLI-fout, ontbrekende token/password, verkeerde triggercontext, ontbrekende remote history, onveilige output, ongeldige JSON). Werkelijke officiële CLI-binary 2.119.0 en `migration list --help` gecontroleerd, zonder databaseverbinding. Workflow niet gestart; **geen live databaseactie of write uitgevoerd**. ROADMAP ongewijzigd.
+- GitHub vereist een `workflow_dispatch`-definitie op de default branch voordat handmatige dispatch beschikbaar is. Dit bestand staat alleen op de Draft-branch; beschikbaarheid moet Work controleren. Geen merge of extra trigger als omweg uitgevoerd.
+- **Volgende Work-checkpoint: HANDMATIGE READ-ONLY WORKFLOW STARTEN → MIGRATION LIST CONTROLEREN → NOG GEEN REPAIR.** Eerst bovenstaande secretnamen en dispatchbeschikbaarheid controleren; mapping blijft onbewezen tot de remote lijst veilig is gelezen.
+
 ## Checkpoint 10 — migratiehistorie read-only onderzocht; geen repair uitgevoerd — 3 oktober 2026
 
 - Production migration history bevat voor de nieuwe transactionele migratie versie `20261002220202` met naam `transactional_bounded_readiness_20261002120000`; repositorybestand is `supabase/migrations/20261002120000_transactional_bounded_readiness.sql`. De SQL is al exact één keer toegepast en schema/data blijven groen.
