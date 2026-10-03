@@ -1,3 +1,16 @@
+# Checkpoint 13 — PR #39 gemerged, Production-deployment en smoke — 3 oktober 2026
+
+- PR #39 is na expliciete gebruikersgoedkeuring gemerged via de normale merge-commitstrategie. Pre-merge PR-head: `14c40dd3e9b555ab14d09932e0dae9ff875e4c1f`. Mergecommit en nieuwe main-head: `27732625d798b0b9b25cce285480047161c2c14a`. GitHub merge-tijd: `2026-10-03T21:23:30Z`.
+- De automatische Vercel Production-deployment `dpl_9vXRQHffVnUftWbcU2jodR1WYcBJ` hoort bij exact die main-head, is **READY**, heeft Production-target, Production-aliases en geen aliasfout. Geen tweede handmatige deployment gestart.
+- Read-only Production-smoke op `https://boodschappenmaatje-pwa.vercel.app`: Home, Menu, Lijst, Budget en Meer laden. Menu toont de start van een nieuwe weekvoorbereiding; de Production-sessie heeft geen actieve week of geplande maaltijden, een lege boodschappenlijst en geen ingesteld budget. De lijst- en budgetschermen laden bruikbaar zonder zichtbare server-/databasefout. Er is geen week gestart en geen test- of gebruikersdata gewijzigd.
+- Read-only Supabase-controle: Production is bereikbaar; de actuele lokale migrations op main en remote history zijn exact **13/13 MATCH**. Alle vijf referentieaantallen zijn ongewijzigd: products `7543`, product_prices `7543`, ingredient_product_matches `245`, recipe_readiness_cache `1370`, planner_write_revisions `362`.
+- De repairworkflow blijft aanwezig maar **DISARMED** met `REPAIR_ARMED=false`; er is geen repair-job geactiveerd en geen pending migration-SQL. In checkpoint 13 is geen migration repair, schemawijziging, appdatawrite, import of bounded live recomputation uitgevoerd.
+- De bestaande week/planner- en maaltijdmix-flow kon zonder Production-testdata niet end-to-end worden uitgevoerd. Geen data aangemaakt om die flow te testen; geen nieuwe fysieke iPhone-test verricht.
+- PR #39 is gemerged. **Roadmap 1A blijft open** totdat bounded live recomputation van de goedgekeurde scope en de Honig/Knorr AFTER-audit zijn uitgevoerd en beoordeeld. `ROADMAP.md` is in dit checkpoint niet gewijzigd.
+- Volgende stap: **Checkpoint 14** — begrensde live herberekening van de goedgekeurde PR #39-scope, daarna read-only AFTER-audit Honig/Knorr en beoordeling van resterende NOT_READY-blokkades. Werk daarna `PROJECT_STATE.md` en `ROADMAP.md` bij; rond 1A alleen af als de resultaten dat aantonen. Pas dan door naar roadmap 1A.1, externe scrapingfallback voor Hoogvliet.
+
+---
+
 # Checkpoint 11H.3 — post-repair disarmed validator hersteld — 3 oktober 2026
 
 - PR #39 staat OPEN, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`. De gevalideerde workflow-/validatorhead was `8c1b7a861ea024ddb323ce530b1530d74a6c0a4a`.
