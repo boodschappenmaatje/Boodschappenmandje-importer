@@ -80,7 +80,7 @@ test("alle ingrediënten hebben alleen centrale toegestane categorieën en eenhe
 
 test("migratie maakt een stabiele read-only ingrediëntenlaag zonder producttabellen te wijzigen", async () => {
   const migration = await readFile(
-    new URL("../supabase/migrations/20260908_create_ingredients.sql", import.meta.url),
+    new URL("../supabase/migrations/20260908110213_create_ingredients.sql", import.meta.url),
     "utf8",
   );
   assert.match(migration, /create table if not exists public\.ingredients/i);

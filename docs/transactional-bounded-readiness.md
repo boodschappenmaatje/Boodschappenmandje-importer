@@ -11,18 +11,18 @@ Geen live migratie, databasewrite, replay, merge of Production-deployment in dit
 
 ## Werkelijk schema en probleem
 
-- `20260919_persistent_planner_readiness_cache.sql`: `ingredient_product_matches`
+- `20260919154657_persistent_planner_readiness_cache.sql`: `ingredient_product_matches`
   heeft PK `match_key`, product-/ingredient-FK's, match-/refreshstatus, versies en
   tijdstempels. `recipe_readiness_cache` heeft PK `(recipe_id, people_count)`,
   `readiness_payload`, `dependency_match_keys text[]`, evaluatorversie en status.
   Subscribers zijn de cachevarianten waarvan de array een matchkey bevat; er is
   geen aparte subscribertabel. De oude `updated_at = now()`-trigger is geen CAS:
   meerdere veranderingen binnen één transactie kunnen hetzelfde tijdstip hebben.
-- `20260920211532_meal_mix_profiles_and_candidate_cache.sql` voegt
+- `20260920213421_meal_mix_profiles_and_candidate_cache.sql` voegt
   `candidate_product_ids`, profielen en kandidaat-/prijsinvalidatie toe.
-  `20260920220500_invalidate_readiness_on_candidate_change.sql` is de actuele
+  `20260920220220_invalidate_readiness_on_candidate_change.sql` is de actuele
   matchtriggerfunctie, inclusief kandidaatwijzigingen. De water-only-constraint
-  uit `20260921104226_meal_mix_verified_water_only.sql` blijft intact.
+  uit `20260921104333_meal_mix_verified_water_only.sql` blijft intact.
 - `ingredient_product_matches_invalidate_readiness` blijft actief en markeert
   **alle** bestaande subscribers van de gewijzigde matchkey als pending.
   Recepten, relaties, ingrediënten, aliassen, producten, prijzen en profielen
@@ -37,7 +37,7 @@ READY-payload over een nieuwe invalidatie schrijven.
 
 ## Additive migratie en RPC-contract
 
-Bestand: `supabase/migrations/20261002120000_transactional_bounded_readiness.sql`.
+Bestand: `supabase/migrations/20261002220202_transactional_bounded_readiness.sql`.
 Het voegt één private revisietabel, functies en guards toe. Het reset geen tabel,
 herschrijft geen bestaande cachedata en verwijdert geen bestaande trigger.
 

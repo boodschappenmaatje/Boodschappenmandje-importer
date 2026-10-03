@@ -1,3 +1,13 @@
+# Checkpoint 11G — migrationfilenames genormaliseerd, geen databasewrite — 3 oktober 2026
+
+- PR #39 staat open, Draft en mergeable op `feature/meal-mix-supplement-matches`; start-head was `c0a797c8aecf23e39693543c5fe1def3ccf96184`. Alle 13 opgegeven migrationfiles zijn naar unieke 14-cijferige versies hernoemd: de vijf bestaande Production-versies sluiten exact aan en acht bewezen oudere migrations hebben elk hun goedgekeurde unieke baselineversie.
+- Actieve padverwijzingen zijn bijgewerkt in README's, planner-/Supabase-documentatie, de importer-foutmelding en migrationpath-tests. Oude seedpaden en historische checkpoints zijn ongewijzigd. Geen oud migrationbestandspad wordt functioneel meer gebruikt.
+- Validatie: alle migratiefilenames hebben 14 cijfers en alle versies zijn uniek; alle 13 SQL-bestanden zijn byte-identiek aan hun pre-rename Git-blobs (inclusief de transactionele migratie). `git diff --check` slaagde. Root-tests: 313 geslaagd; gerichte web-migrationtests: 11 geslaagd.
+- Geen databaseverbinding of SQL-uitvoering, migration repair, `db push`, schema-/databasewrite, merge of Production-deploy uitgevoerd.
+- Volgende stap: **Work checkpoint 11H** — verse read-only `supabase migration list`; bevestig dat uitsluitend de acht baselineversies local-only zijn; registreer daarna uitsluitend die acht via officiële `supabase migration repair --status applied`; herhaal migration list en `db push --dry-run`; stop vóór PR-merge.
+
+---
+
 # Checkpoint 11F — read-only migration baseline bewezen — 3 oktober 2026
 
 ## 11E-plan en actuele remote status

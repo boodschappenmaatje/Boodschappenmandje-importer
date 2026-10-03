@@ -13,7 +13,7 @@ import {
 
 const projectRoot = resolve(process.cwd(), "../..");
 const migration = readFileSync(
-  resolve(projectRoot, "supabase/migrations/20260919_persistent_planner_readiness_cache.sql"),
+  resolve(projectRoot, "supabase/migrations/20260919154657_persistent_planner_readiness_cache.sql"),
   "utf8",
 );
 const dataHealth = readFileSync(

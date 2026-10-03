@@ -1489,7 +1489,7 @@ test("dagelijkse bewaking meldt een ontbrekende of te oude ochtendrun", () => {
 });
 
 test("PWA 8.1-migratie is additief, compact en browser read-only", async () => {
-  const migration = await readFile(new URL("../supabase/migrations/20260915_catalog_growth.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../supabase/migrations/20260915151220_catalog_growth.sql", import.meta.url), "utf8");
   assert.match(migration, /create table if not exists public\.catalog_import_runs/i);
   assert.match(migration, /create table if not exists public\.catalog_discovery_state/i);
   assert.match(migration, /catalog_import_runs_single_running_idx/i);
@@ -1502,7 +1502,7 @@ test("PWA 8.1-migratie is additief, compact en browser read-only", async () => {
 });
 
 test("Supabase-migratie voegt alleen de optionele producttype-kolom en index toe", async () => {
-  const migration = await readFile(new URL("../supabase/migrations/20260908_add_product_type.sql", import.meta.url), "utf8");
+  const migration = await readFile(new URL("../supabase/migrations/20260908091354_add_product_type.sql", import.meta.url), "utf8");
   assert.match(migration, /add column if not exists product_type text/i);
   assert.match(migration, /products_supermarket_product_type_idx/i);
   assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from/i);

@@ -43,7 +43,7 @@ maximaal tien bestaande `products` en hun exact via `product_id` gekoppelde
 De tabel- en RLS-inventarisatie staat in
 [`docs/PWA4_SUPABASE_READ.md`](docs/PWA4_SUPABASE_READ.md). Pas vóór publieke
 catalogustoegang de meegeleverde beveiligingsmigratie
-`supabase/migrations/20260914_secure_catalog_browser_read.sql` toe en verifieer
+`supabase/migrations/20260914193340_secure_catalog_browser_read.sql` toe en verifieer
 de policies in het Supabase Dashboard.
 
 ## PWA-keuze

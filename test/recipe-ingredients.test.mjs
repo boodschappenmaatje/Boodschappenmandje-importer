@@ -143,7 +143,7 @@ test("een technisch dubbele positie wordt geweigerd, maar dezelfde Ingredient-ID
 
 test("recipe_ingredients-migratie gebruikt UUID-foreign keys en beschermt bestaande tabellen", async () => {
   const migration = await readFile(
-    new URL("../supabase/migrations/20260908_create_recipe_ingredients.sql", import.meta.url),
+    new URL("../supabase/migrations/20260908222836_create_recipe_ingredients.sql", import.meta.url),
     "utf8",
   );
   assert.match(migration, /id uuid primary key default gen_random_uuid\(\)/i);

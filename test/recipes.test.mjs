@@ -105,7 +105,7 @@ test("stap-5.1-data bevat geen ingrediëntarray, tags, instructies, porties of v
 
 test("recipes-migratie gebruikt stabiele UUID's en blijft klaar voor een latere koppeltabel", async () => {
   const migration = await readFile(
-    new URL("../supabase/migrations/20260908_create_recipes.sql", import.meta.url),
+    new URL("../supabase/migrations/20260908121109_create_recipes.sql", import.meta.url),
     "utf8",
   );
   assert.match(migration, /create table if not exists public\.recipes/i);

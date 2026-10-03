@@ -95,17 +95,17 @@ before(async () => {
     catch (error) { if (attempt > 60) throw error; await delay(200); }
   }
   sql(readFileSync(new URL("./catalog-bootstrap.sql", import.meta.url), "utf8"));
-  for (const name of ["20260908_create_recipes.sql", "20260908_create_ingredients.sql",
-    "20260908_create_recipe_ingredients.sql", "20260914_secure_catalog_browser_read.sql",
-    "20260919_persistent_planner_readiness_cache.sql", "20260920211532_meal_mix_profiles_and_candidate_cache.sql",
-    "20260920220500_invalidate_readiness_on_candidate_change.sql", "20260921104226_meal_mix_verified_water_only.sql"]) {
+  for (const name of ["20260908121109_create_recipes.sql", "20260908110213_create_ingredients.sql",
+    "20260908222836_create_recipe_ingredients.sql", "20260914193340_secure_catalog_browser_read.sql",
+    "20260919154657_persistent_planner_readiness_cache.sql", "20260920213421_meal_mix_profiles_and_candidate_cache.sql",
+    "20260920220220_invalidate_readiness_on_candidate_change.sql", "20260921104333_meal_mix_verified_water_only.sql"]) {
     sql(readFileSync(new URL(`../../supabase/migrations/${name}`, import.meta.url), "utf8"));
   }
   sql("grant select, insert, update, delete on all tables in schema public to service_role;");
   sql(`insert into recipes(id,source_key,name,normalized_name,symbol,preparation_minutes) values (${quote(ids[3])},'existing','Existing','existing','test',10);
     ${insertReadiness(readinessRow(ids[3], keys[3]))}`);
   const existing = sql("select to_jsonb(r) from public.recipe_readiness_cache r;");
-  sql(readFileSync(new URL("../../supabase/migrations/20261002120000_transactional_bounded_readiness.sql", import.meta.url), "utf8"));
+  sql(readFileSync(new URL("../../supabase/migrations/20261002220202_transactional_bounded_readiness.sql", import.meta.url), "utf8"));
   assert.equal(sql("select to_jsonb(r) from public.recipe_readiness_cache r;"), existing);
   preservedExistingData = true;
 });
