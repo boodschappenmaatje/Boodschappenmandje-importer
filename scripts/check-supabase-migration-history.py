@@ -148,10 +148,12 @@ def main() -> int:
 
         if args.migration_dir is None or args.list_json is None:
             raise ValidationError("migration directory and list output are required")
+        if args.phase == "pre-repair" and args.armed != "true":
+            raise ValidationError("pre-repair validation requires explicit arming")
         validate_local_files(args.migration_dir)
         validate_history(read_rows(args.list_json), args.phase)
-        if args.phase == "pre-repair" and args.armed == "false":
-            print("PRECHECK_VALID_DISARMED")
+        if args.phase == "post-repair":
+            print("POSTREPAIR_VALID")
         else:
             print("PRECHECK_VALID_REPAIR_ARMED")
         return 0

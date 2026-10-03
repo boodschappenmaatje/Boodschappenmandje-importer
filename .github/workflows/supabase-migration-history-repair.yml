@@ -94,8 +94,14 @@ jobs:
             fail 'official migration list could not read Production history; raw output withheld'
           fi
 
+          if [[ "$REPAIR_ARMED" == 'true' ]]; then
+            validation_phase=pre-repair
+          else
+            validation_phase=post-repair
+          fi
+
           if ! decision="$(python3 scripts/check-supabase-migration-history.py \
-            --phase pre-repair \
+            --phase "$validation_phase" \
             --armed "$REPAIR_ARMED" \
             --migration-dir supabase/migrations \
             --list-json "$output_dir/migration-list.json")"; then
@@ -103,11 +109,11 @@ jobs:
           fi
 
           case "$decision" in
-            PRECHECK_VALID_DISARMED)
+            POSTREPAIR_VALID)
               printf '%s\n' \
                 '## DISARMED — READ ONLY — NO REPAIR' \
                 'Production project and pooler matched the fixed configuration.' \
-                'Official CLI migration list matched exactly: five expected remote versions, eight expected local-only baseline versions, and all 13 local versions.' \
+                'Official CLI migration list matched exactly: all 13 expected local and remote versions are aligned.' \
                 'REPAIR_ARMED=false; the repair job is gated off.' >> "$GITHUB_STEP_SUMMARY"
               printf 'precheck_passed=true\nrepair_armed=false\n' >> "$GITHUB_OUTPUT"
               ;;
@@ -223,7 +229,7 @@ jobs:
             fail 'post-repair official migration list failed'
           fi
           if ! python3 scripts/check-supabase-migration-history.py \
-            --phase post-repair --armed true \
+            --phase post-repair --armed "$REPAIR_ARMED" \
             --migration-dir supabase/migrations \
             --list-json "$output_dir/after.json" > /dev/null; then
             fail 'post-repair history is not an exact 13-version match'

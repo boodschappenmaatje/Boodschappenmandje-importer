@@ -21,16 +21,18 @@ BASELINE = VERSIONS[:8]
 
 
 def rows_for(remote_versions: list[str]) -> list[dict[str, str]]:
+    remote_set = set(remote_versions)
     rows = [{"local": version, "remote": version, "time": "2026-10-03 00:00:00"}
-            for version in REMOTE if version in remote_versions]
-    rows.extend({"local": version, "remote": "", "time": ""} for version in BASELINE)
+            for version in VERSIONS if version in remote_set]
+    rows.extend({"local": version, "remote": "", "time": ""}
+                for version in VERSIONS if version not in remote_set)
     rows.extend({"local": "", "remote": version, "time": "2026-10-03 00:00:00"}
-                for version in remote_versions if version not in REMOTE)
+                for version in remote_versions if version not in VERSIONS)
     return rows
 
 
 class MigrationHistoryGuardTests(unittest.TestCase):
-    def run_checker(self, remote_versions: list[str], armed: str = "false") -> subprocess.CompletedProcess[str]:
+    def run_checker(self, remote_versions: list[str], phase: str, armed: str) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
             migrations = directory / "migrations"
@@ -40,32 +42,43 @@ class MigrationHistoryGuardTests(unittest.TestCase):
             list_path = directory / "migration-list.json"
             list_path.write_text(json.dumps({"migrations": rows_for(remote_versions)}), encoding="utf-8")
             return subprocess.run(
-                [sys.executable, str(CHECKER), "--phase", "pre-repair", "--armed", armed,
+                [sys.executable, str(CHECKER), "--phase", phase, "--armed", armed,
                  "--migration-dir", str(migrations), "--list-json", str(list_path)],
                 text=True, capture_output=True, check=False,
             )
 
-    def test_disarmed_exact_mapping_never_enters_repair_state(self) -> None:
-        result = self.run_checker(REMOTE, "false")
+    def test_disarmed_exact_post_repair_mapping_succeeds(self) -> None:
+        result = self.run_checker(VERSIONS, "post-repair", "false")
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(result.stdout.strip(), "PRECHECK_VALID_DISARMED")
+        self.assertEqual(result.stdout.strip(), "POSTREPAIR_VALID")
 
-    def test_wrong_remote_history_fails_closed(self) -> None:
-        result = self.run_checker(REMOTE[:-1] + ["20990101000000"])
+    def test_disarmed_pre_repair_five_eight_state_fails_closed(self) -> None:
+        result = self.run_checker(REMOTE, "post-repair", "false")
         self.assertNotEqual(result.returncode, 0)
 
-    def test_baseline_version_already_remote_fails_closed(self) -> None:
-        result = self.run_checker(REMOTE + [BASELINE[0]])
+    def test_disarmed_missing_remote_version_fails_closed(self) -> None:
+        result = self.run_checker(VERSIONS[:-1], "post-repair", "false")
         self.assertNotEqual(result.returncode, 0)
 
-    def test_missing_existing_remote_version_fails_closed(self) -> None:
-        result = self.run_checker(REMOTE[:-1])
+    def test_disarmed_unexpected_remote_version_fails_closed(self) -> None:
+        result = self.run_checker(VERSIONS + ["20990101000000"], "post-repair", "false")
         self.assertNotEqual(result.returncode, 0)
 
-    def test_exact_mapping_reaches_only_armed_precheck_state(self) -> None:
-        result = self.run_checker(REMOTE, "true")
+    def test_armed_pre_repair_approves_only_exact_five_eight_state(self) -> None:
+        result = self.run_checker(REMOTE, "pre-repair", "true")
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout.strip(), "PRECHECK_VALID_REPAIR_ARMED")
+
+    def test_armed_full_history_cannot_approve_a_second_repair(self) -> None:
+        result = self.run_checker(VERSIONS, "pre-repair", "true")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_disarmed_workflow_job_remains_gated_off(self) -> None:
+        workflow = (ROOT / ".github/workflows/supabase-migration-history-repair.yml").read_text(encoding="utf-8")
+        self.assertIn("REPAIR_ARMED: 'false'", workflow)
+        self.assertIn("needs.precheck.outputs.repair_armed == 'true'", workflow)
+        self.assertIn("needs.precheck.outputs.precheck_passed == 'true'", workflow)
+        self.assertIn('[[ "$REPAIR_ARMED" == \'true\' ]] || fail', workflow)
 
     def test_dry_run_requires_explicit_up_to_date_result(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

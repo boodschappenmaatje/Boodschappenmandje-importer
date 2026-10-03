@@ -1,3 +1,12 @@
+# Checkpoint 11H.3 — post-repair disarmed validator hersteld — 3 oktober 2026
+
+- PR #39 is OPEN, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`; vóór deze wijziging stond head `71a98e9c5c8fb1aec4ab8530467fcbf027cb6403`.
+- Validator/workflowlogica hersteld: disarmed precheck gebruikt uitsluitend post-repair-validatie en vereist exact 13/13 local↔remote. Alleen `pre-repair` met `REPAIR_ARMED=true` accepteert de oude 5 remote + 8 local-only toestand; dezelfde armed-modus weigert 13/13 en kan zo geen tweede repair vrijgeven. Workflowflag blijft `false`; repair-job blijft gated op geslaagde precheck plus `repair_armed=true`.
+- YAML en exacte triggers, Bash-syntax en `git diff --check` gecontroleerd. Acht mocktests dekken disarmed 13/13, oude/afwijkende/incomplete history fail-closed, geldige armed 5/8, armed 13/13 blokkade, job-gate en dry-runcontrole. `actionlint` is niet beschikbaar.
+- Geen repair, SQL-/databasewrite, schemawijziging, echte `db push`, merge of Production-deploy uitgevoerd. Finale disarmed Actions-run volgt na push; de run moet 13/13 bevestigen en de repair-job overslaan.
+
+---
+
 # Checkpoint 11H.2 — migration history geregistreerd, workflow DISARMED — 3 oktober 2026
 
 - PR #39 vóór documentatie stond open, Draft, mergeable en ongemerged op `feature/meal-mix-supplement-matches`; head `ea1727107d266e5ee3b8ba3a87f6e3a26f9cb635`, base/main `7446d411e9d9cdf48b52df2a6edb2cc4eff34723`.
