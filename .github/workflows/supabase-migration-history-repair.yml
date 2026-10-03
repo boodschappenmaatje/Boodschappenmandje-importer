@@ -1,0 +1,247 @@
+name: TEMPORARY Supabase migration-history repair — DISARMED — READ ONLY PRECHECK
+
+# The only automatic event is a change to this workflow on the one PR branch.
+# REPAIR_ARMED stays false until a separate, reviewed Work checkpoint.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/meal-mix-supplement-matches
+    paths:
+      - .github/workflows/supabase-migration-history-repair.yml
+
+permissions:
+  contents: read
+
+env:
+  REPAIR_ARMED: 'false'
+
+concurrency:
+  group: supabase-production-migration-history-repair
+  cancel-in-progress: false
+
+jobs:
+  precheck:
+    name: READ ONLY — exact Production migration-history precheck
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/feature/meal-mix-supplement-matches'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      precheck_passed: ${{ steps.history.outputs.precheck_passed }}
+      repair_armed: ${{ steps.history.outputs.repair_armed }}
+    steps:
+      - name: Checkout exact feature-branch event commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install official Supabase CLI 2.119.0
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 2.119.0
+
+      - name: Check exact Production migration history — DISARMED
+        id: history
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
+          SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
+          SUPABASE_POOLER_PORT: '5432'
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          fail() {
+            printf '%s\n' "Precheck failed closed: $1" >> "$GITHUB_STEP_SUMMARY"
+            printf '::error::Precheck failed closed: %s\n' "$1"
+            exit 1
+          }
+
+          [[ "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' ]] || fail 'unexpected repository'
+          [[ "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' ]] || fail 'unexpected branch'
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || fail 'checkout is not the event commit'
+          [[ "$REPAIR_ARMED" == 'false' || "$REPAIR_ARMED" == 'true' ]] || fail 'invalid REPAIR_ARMED value'
+          [[ "$SUPABASE_PROJECT_REF" == 'pjcqxufvbkkjehituzxz' ]] || fail 'unexpected Production project'
+          [[ "$SUPABASE_POOLER_HOST" == 'aws-1-eu-west-1.pooler.supabase.com' && "$SUPABASE_POOLER_PORT" == '5432' ]] || fail 'unexpected Production pooler'
+          [[ -n "$SUPABASE_ACCESS_TOKEN" ]] || fail 'missing SUPABASE_ACCESS_TOKEN secret'
+          [[ -n "$SUPABASE_DB_PASSWORD" ]] || fail 'missing SUPABASE_DB_PASSWORD secret'
+
+          output_dir="$(mktemp -d)"
+          trap 'rm -rf "$output_dir"' EXIT
+          export SUPABASE_POOLER_DB_URL="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          project = os.environ['SUPABASE_PROJECT_REF']
+          password = quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')
+          host = os.environ['SUPABASE_POOLER_HOST']
+          port = os.environ['SUPABASE_POOLER_PORT']
+          print(f'postgresql://postgres.{project}:{password}@{host}:{port}/postgres?sslmode=require')
+          PY
+          )"
+
+          if ! supabase migration list \
+            --db-url "$SUPABASE_POOLER_DB_URL" \
+            --workdir "$GITHUB_WORKSPACE" \
+            --output-format json > "$output_dir/migration-list.json" 2> "$output_dir/stderr" < /dev/null; then
+            fail 'official migration list could not read Production history; raw output withheld'
+          fi
+
+          if ! decision="$(python3 scripts/check-supabase-migration-history.py \
+            --phase pre-repair \
+            --armed "$REPAIR_ARMED" \
+            --migration-dir supabase/migrations \
+            --list-json "$output_dir/migration-list.json")"; then
+            fail 'local versions or remote history did not match the exact approved mapping'
+          fi
+
+          case "$decision" in
+            PRECHECK_VALID_DISARMED)
+              printf '%s\n' \
+                '## DISARMED — READ ONLY — NO REPAIR' \
+                'Production project and pooler matched the fixed configuration.' \
+                'Official CLI migration list matched exactly: five expected remote versions, eight expected local-only baseline versions, and all 13 local versions.' \
+                'REPAIR_ARMED=false; the repair job is gated off.' >> "$GITHUB_STEP_SUMMARY"
+              printf 'precheck_passed=true\nrepair_armed=false\n' >> "$GITHUB_OUTPUT"
+              ;;
+            PRECHECK_VALID_REPAIR_ARMED)
+              printf '%s\n' \
+                '## ARMED — exact precheck passed' \
+                'All approved local and remote migration versions matched the pre-repair mapping.' >> "$GITHUB_STEP_SUMMARY"
+              printf 'precheck_passed=true\nrepair_armed=true\n' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              fail 'history validator returned an unknown result'
+              ;;
+          esac
+
+  repair:
+    name: Official repair — only after exact precheck and explicit arming
+    needs: precheck
+    if: >-
+      needs.precheck.outputs.precheck_passed == 'true' &&
+      needs.precheck.outputs.repair_armed == 'true' &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/feature/meal-mix-supplement-matches'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact feature-branch event commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install official Supabase CLI 2.119.0
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 2.119.0
+
+      - name: Recheck, apply the eight approved history entries, and verify — HARD GUARDED
+        shell: bash
+        env:
+          REPAIR_ARMED: ${{ env.REPAIR_ARMED }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
+          SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
+          SUPABASE_POOLER_PORT: '5432'
+          PRECHECK_PASSED: ${{ needs.precheck.outputs.precheck_passed }}
+          PRECHECK_ARMED: ${{ needs.precheck.outputs.repair_armed }}
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          fail() {
+            printf '%s\n' "Repair stopped: $1" >> "$GITHUB_STEP_SUMMARY"
+            printf '::error::Repair stopped: %s\n' "$1"
+            exit 1
+          }
+
+          [[ "$REPAIR_ARMED" == 'true' ]] || fail 'REPAIR_ARMED is not exactly true'
+          [[ "$PRECHECK_PASSED" == 'true' && "$PRECHECK_ARMED" == 'true' ]] || fail 'precheck job did not approve this exact run'
+          [[ "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' ]] || fail 'unexpected repository'
+          [[ "$GITHUB_REF" == 'refs/heads/feature/meal-mix-supplement-matches' ]] || fail 'unexpected branch'
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || fail 'checkout is not the event commit'
+          [[ "$SUPABASE_PROJECT_REF" == 'pjcqxufvbkkjehituzxz' ]] || fail 'unexpected Production project'
+          [[ "$SUPABASE_POOLER_HOST" == 'aws-1-eu-west-1.pooler.supabase.com' && "$SUPABASE_POOLER_PORT" == '5432' ]] || fail 'unexpected Production pooler'
+          [[ -n "$SUPABASE_ACCESS_TOKEN" ]] || fail 'missing SUPABASE_ACCESS_TOKEN secret'
+          [[ -n "$SUPABASE_DB_PASSWORD" ]] || fail 'missing SUPABASE_DB_PASSWORD secret'
+
+          output_dir="$(mktemp -d)"
+          trap 'rm -rf "$output_dir"' EXIT
+          export SUPABASE_POOLER_DB_URL="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          project = os.environ['SUPABASE_PROJECT_REF']
+          password = quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')
+          host = os.environ['SUPABASE_POOLER_HOST']
+          port = os.environ['SUPABASE_POOLER_PORT']
+          print(f'postgresql://postgres.{project}:{password}@{host}:{port}/postgres?sslmode=require')
+          PY
+          )"
+
+          if ! supabase migration list \
+            --db-url "$SUPABASE_POOLER_DB_URL" \
+            --workdir "$GITHUB_WORKSPACE" \
+            --output-format json > "$output_dir/before.json" 2> "$output_dir/list-stderr" < /dev/null; then
+            fail 'fresh official migration list failed; repair was not attempted'
+          fi
+          if ! python3 scripts/check-supabase-migration-history.py \
+            --phase pre-repair --armed true \
+            --migration-dir supabase/migrations \
+            --list-json "$output_dir/before.json" > /dev/null; then
+            fail 'fresh remote history differs from the approved pre-repair mapping'
+          fi
+
+          [[ "$REPAIR_ARMED" == 'true' ]] || fail 'REPAIR_ARMED changed before the write gate'
+          supabase migration repair \
+            --db-url "$SUPABASE_POOLER_DB_URL" \
+            --status applied \
+            20260908091354 \
+            20260908110213 \
+            20260908121109 \
+            20260908222836 \
+            20260914193340 \
+            20260915151220 \
+            20260915173523 \
+            20260917092809
+
+          if ! supabase migration list \
+            --db-url "$SUPABASE_POOLER_DB_URL" \
+            --workdir "$GITHUB_WORKSPACE" \
+            --output-format json > "$output_dir/after.json" 2> "$output_dir/list-stderr" < /dev/null; then
+            fail 'post-repair official migration list failed'
+          fi
+          if ! python3 scripts/check-supabase-migration-history.py \
+            --phase post-repair --armed true \
+            --migration-dir supabase/migrations \
+            --list-json "$output_dir/after.json" > /dev/null; then
+            fail 'post-repair history is not an exact 13-version match'
+          fi
+
+          if ! supabase db push --dry-run \
+            --db-url "$SUPABASE_POOLER_DB_URL" \
+            --workdir "$GITHUB_WORKSPACE" > "$output_dir/dry-run.txt" 2> "$output_dir/dry-run-stderr" < /dev/null; then
+            fail 'official db push dry-run failed; raw output withheld'
+          fi
+          if ! python3 scripts/check-supabase-migration-history.py \
+            --phase dry-run --dry-run-output "$output_dir/dry-run.txt" > /dev/null; then
+            fail 'dry-run did not prove that no migrations would be applied'
+          fi
+
+          printf '%s\n' \
+            '## Repair and verification complete' \
+            'Only the eight approved baseline versions were registered as applied via the official CLI.' \
+            'Post-repair list matched all 13 local and remote versions.' \
+            'Dry-run confirmed the remote database is up to date; no migration SQL was applied.' \
+            'STOP before PR merge.' >> "$GITHUB_STEP_SUMMARY"

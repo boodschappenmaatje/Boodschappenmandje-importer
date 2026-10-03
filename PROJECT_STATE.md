@@ -1,3 +1,14 @@
+# Checkpoint 11H.1 — tijdelijke migration-repairworkflow gebouwd, DISARMED — 3 oktober 2026
+
+- PR #39 was OPEN, Draft, mergeable en ongemergd op `feature/meal-mix-supplement-matches`, start-head `552ccaac7950c12580748eca19b186bc3f10e872`.
+- De tijdelijke `.github/workflows/supabase-migration-history-repair.yml` gebruikt uitsluitend `workflow_dispatch` en een push-filter op exact deze branch en exact dit workflowbestand. `REPAIR_ARMED=false`. De read-only precheck controleert de Production-ref/pooler, secrets aanwezig zonder waarden te loggen, officiële CLI 2.119.0, exact de vijf bestaande remote versies, afwezigheid van de acht baselines en aanwezigheid van exact alle 13 lokale versies. Elke afwijking faalt gesloten.
+- De aparte repair-job is job-level gated op een geslaagde exacte precheck en `REPAIR_ARMED=true`; de shell herhaalt die harde guard en de volledige read-only precheck vóór de enige toegestane batch. Die batch markeert alleen de acht goedgekeurde baselineversies als applied. Daarna vereist de workflow een exacte 13/13 historymatch en een `db push --dry-run` die expliciet meldt dat Production up-to-date is.
+- Statische controles: YAML-/workflowstructuur en exacte triggers geldig; beide Bash-stappen slagen voor `bash -n`; verboden commands en directe history-SQL ontbreken. Vijf mocktests geslaagd (disarmed, verkeerde history, baseline al remote, bestaande versie ontbreekt, correcte armed-precheck). `actionlint` is niet beschikbaar in deze runtime.
+- Codex heeft geen workflowdispatch of live CLI uitgevoerd. De padgefilterde push kan uitsluitend de disarmed read-only precheck starten; de repair-job blijft overgeslagen. Geen repair/databasewrite, SQL- of schemawijziging, merge of deploy. `REPAIR_ARMED` blijft `false`.
+- Volgende stap: **Work checkpoint 11H.2** — workflowcode en actuele remote history reviewen; pas na expliciete toestemming `REPAIR_ARMED=true` zetten en uitsluitend de goedgekeurde run volgen.
+
+---
+
 # Checkpoint 11H — Production precheck groen, CLI-uitvoering geblokkeerd — 3 oktober 2026
 
 - Startcontrole: PR #39 stond open, Draft, mergeable en ongemerged op de verwachte branch `feature/meal-mix-supplement-matches`, head `5f2566fd7d0f44527a9d125b0b42e674fa76206e`; base/main `7446d411e9d9cdf48b52df2a6edb2cc4eff34723`.
