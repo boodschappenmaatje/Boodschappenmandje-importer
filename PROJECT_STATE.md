@@ -1,5 +1,22 @@
 # BoodschappenMaatje — Project State
 
+## Checkpoint 11D — read-only migration list groen; volledige driftmapping bekend — 3 oktober 2026
+
+- GitHub Actions run **37148490682** op head `2f2e22b534d49810ce7149c39a93a0af7bf3cc3d` is **SUCCESS** voor de tijdelijke workflow `.github/workflows/supabase-migration-history-check.yml`.
+- Supabase IPv4 Session pooler `aws-1-eu-west-1.pooler.supabase.com:5432`, database-authenticatie en de officiële Supabase CLI 2.119.0 werken nu vanuit GitHub Actions.
+- De read-only `supabase migration list` gaf deze lokale↔remote drift:
+  - lokale 8-cijferige versies zonder remote record: `20260908` (4 bestanden), `20260914`, `20260915` (2 bestanden), `20260917`, `20260919`;
+  - logisch overeenkomstige maar anders getimestampte paren:
+    - local `20260919_persistent_planner_readiness_cache.sql` ↔ remote `20260919154657 persistent_planner_readiness_cache`;
+    - local `20260920211532_meal_mix_profiles_and_candidate_cache.sql` ↔ remote `20260920213421 meal_mix_profiles_and_candidate_cache`;
+    - local `20260920220500_invalidate_readiness_on_candidate_change.sql` ↔ remote `20260920220220 invalidate_readiness_on_candidate_change`;
+    - local `20260921104226_meal_mix_verified_water_only.sql` ↔ remote `20260921104333 meal_mix_verified_water_only`;
+    - local `20261002120000_transactional_bounded_readiness.sql` ↔ remote `20261002220202 transactional_bounded_readiness_20261002120000`.
+- Er zijn dus **geen exact gelijk getimestampte remote matches** voor de huidige lokale migraties. De drift is structureel en ouder dan PR #39; alleen de nieuwste versie repareren zou geen reproduceerbare migratiehistorie opleveren.
+- De nieuwe transactionele SQL van PR #39 is al exact één keer op Production toegepast en schema/data bleven aantoonbaar groen volgens checkpoint 9; deze read-only run heeft niets gewijzigd.
+- **Geen migration repair, SQL-write, schemawrite, db push, migration up of reset uitgevoerd.**
+- Volgende checkpoint: eerst een klein, expliciet repair-/baselineplan opstellen voor deze bewezen mapping. Gebruik alleen officiële `supabase migration repair`; geen directe edits van `supabase_migrations.schema_migrations`. Voer nog niets uit voordat het plan per versie duidelijk maakt welke remote history-records `reverted` en welke lokale versies `applied` zouden worden en waarom.
+
 ## Checkpoint 11C.7 — GitHub poolerpad bereikbaar; databasewachtwoord faalt authenticatie — 3 oktober 2026
 
 - Tijdelijke read-only GitHub Actions-diagnose op PR #39 bevestigt dat `SUPABASE_ACCESS_TOKEN` en `SUPABASE_DB_PASSWORD` als secrets aanwezig zijn en afgeschermd worden gelogd.
