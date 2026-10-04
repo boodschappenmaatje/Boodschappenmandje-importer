@@ -1,3 +1,35 @@
+# Checkpoint 14C — productidentiteit en product_type read-only gecontroleerd — 4 oktober 2026
+
+## Remote en Production
+
+- Remote `main` vóór documentatie-update: `b01c4bc4858de490ac29e0c12a8c45b8ee365a54`. Production Supabase-project `pjcqxufvbkkjehituzxz`; alleen SELECT-controles.
+- Checkpoint 14B blijft onveranderd: één bounded commit SUCCESS; exact 3 matchrecords en 70 readinessrecords binnen scope; geen buiten-scopewrites. AFTER op 4 personen: Honig 11/7/1, Knorr 17/5/14. `RECOMPUTE_ARMED=false`, `REPAIR_ARMED=false).
+- Producttabel heeft geen opgeslagen raw/source-payloadkolommen. Wel zijn naam, merk, categorie, package/gewicht, image-URL, source-URL en tijdstempels beschikbaar.
+
+## Productrecords en officiële bron
+
+| SKU | Production-record | Bron- en catalogusbewijs | Oordeel |
+| --- | --- | --- | --- |
+| `733659000` | Hoogvliet Riblappen; categorie `Vlees, vis, vegetarisch/Rund-en varkensvlees/Stoofvlees`; `product_type=Varkensvlees`; catalogus `Ca. 700 gram`, gewicht 700 g; source URL `https://www.hoogvliet.com/product/hoogvliet-riblappen9`; image asset bevat dezelfde SKU. | De actuele officiële pagina noemt “Runderriblappen / rundvlees”, 100% rundvlees en 3–5 uur stoven. De bestelkop toont circa 700 g en de normale prijs per kilo past bij die circa 700 g. Het afzonderlijke fabrikantveld “Netto-inhoud 1000 GR” conflicteert met de bestelkop en catalogus; daarom is dit geen bewijs voor een exact pakketgewicht. De importer valideert bovendien dat de SKU uit de officiële productpagina gelijk is aan de kandidaat-SKU. | Productidentiteit als runderriblappen is onafhankelijk bevestigd. `SAFE_READY` voor de hacheevlees-matchidentiteit; niet gelezen als bevestiging van een exact gewicht. |
+| `060936000` | Trostomaten; categorie `Aardappelen, groente, fruit/Groente/Tomaat, paprika`; `product_type=Aardappelen`; package/gewicht 500 g; source URL `https://www.hoogvliet.com/product/trostomaten-verpakt`; image asset bevat dezelfde SKU. | De actuele officiële pagina toont Trostomaten, 500 g, en productinformatie met netto-inhoud 500 g. Dit bevestigt de tomatenidentiteit en huidige verpakking, niet een aantal stuks. | Matchidentiteit is veilig; readiness blijft geblokkeerd voor een receptbehoefte in stuks. Geen stuks-per-500-g afgeleid. |
+
+## Oorzaak en structurele impact van product_type
+
+- `product_type` wordt door de server-side importer afgeleid; het is geen onafhankelijk gescrapet productveld. `classifyProductType()` combineert naam, merk en categoriepad en kiest de eerste passende regel. De aardappelregel komt vóór de tomaatregel; het brede categoriepad begint letterlijk met “Aardappelen”. Het vleespakketpad bevat “Rund-en varkensvlees”; de varkensregel matcht “varkens” vóór de rundvleesregel. Dat verklaart beide exacte conflicten.
+- De Hoogvliet refresh-classifier berekent dit opnieuw; als de classifier “Onbekend” geeft, kan hij de bestaande classificatie behouden. De aparte importer-classify/backfill herclassificeert bestaande productrecords. Voor deze twee records is de fout geen stale waarde maar een reproduceerbare overmatch op het brede categoriepad.
+- Read-only Production-profiel vond **280** producten met `product_type=Aardappelen`, zonder “aardappel” in naam/merk en binnen het brede aardappel/groente/fruit-categoriepad, plus **21** producten met `product_type=Varkensvlees`, zonder varkens-termen in naam/merk maar binnen “Rund-en varkensvlees”. Dit zijn kandidaatrecords voor classifierreview, niet allemaal individueel bewezen misclassificaties.
+- Conclusie: **structurele classifierbug ja**; niet geïsoleerd tot deze twee rijen. Geen codewijziging of classificatiebackfill uitgevoerd. Structurele correctie hoort bij roadmap **1C Data Health**.
+
+## Read-only readinesscontrole en roadmapbesluit
+
+- Verse Production-readinesspayloads voor de zeven goedgekeurde 14B-scope-recepten op 4 personen tonen drie tomatenblokkades: behoefte in `piece`, productverpakking 500 g, `package_unknown`; en de Knorr kebab-blokkade: behoefte in gram, pita-verpakking alleen 10 stuks, `package_unknown`. Dit zijn echte verpakkings-/datablokkades, geen reden om READY te forceren.
+- De overige 14B AFTER-blokkades zijn concreet ontbrekende catalogusproducten of onveilige package/category-dekking: Provençaalse wokgroenten, verse basilicum met category mismatch, rookworstverpakking, sneetjes volkoren brood, lasagnebladen en magere yoghurt. De volledige AFTER-audit blijft: Honig 11 READY / 7 NOT_READY / 1 NO_RECIPE; Knorr 17 / 5 / 14.
+- Beide doelproducten zijn inhoudelijk correct geïdentificeerd; de hachee-match is veilig voor productidentiteit. De resterende NOT_READY-items hebben echte catalogus- of verpakkingsblokkades. Geen regressie is zichtbaar en de begrensde 14B-write is binnen scope geverifieerd.
+- **Roadmap 1A kan sluiten.** De aparte structurele `product_type`-classifierfout wordt naar **1C Data Health** verplaatst. ROADMAP-status bijgewerkt: 1A afgerond en 1A.1 externe scrapingfallback voor Hoogvliet is nu de volgende stap. Er is geen nieuwe recomputation uitgevoerd.
+- Dit checkpoint deed geen databasewrite, matchwijziging, readinesswrite, import, scrapingimport, migrationwerk, classifiercorrectie of bounded commit. De twee workflowflags blijven disarmed.
+
+---
+
 # Checkpoint 14B — bounded recomputation en AFTER-audit — 4 oktober 2026
 
 ## Uitvoering
