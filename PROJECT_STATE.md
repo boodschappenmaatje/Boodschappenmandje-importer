@@ -32,7 +32,7 @@
 - Roadmap 1A blijft open. De bounded commit en audit zijn uitgevoerd en er is geen readiness-regressie zichtbaar, maar de conflicterende producttype-classificaties bij de nieuw bijgewerkte matchrecords moeten inhoudelijk worden bevestigd voordat de READY-uitkomst voor hachee zonder voorbehoud als veilig kan gelden. De nog resterende package-/category-/catalogusblokkades moeten eveneens volgens de roadmapcriteria worden beoordeeld.
 - ROADMAP.md is niet gewijzigd; 1A.1 blijft afhankelijk van afronding van 1A. Volgende stap: read-only bron-/classificatiecontrole van de hachee- en tomatenproducten, daarna resterende 1A/1C-blokkades beoordelen. Geen nieuwe live write zonder een afzonderlijk goedgekeurde scope.
 - Na deze documentatie-update is de actuele main-head de nieuwe documentatiecommit; functionele appcode is niet gewijzigd.
-- In dit checkpoint is geen PR-merge of Production-appdeploy gestart.
+- Geen PR-merge of handmatige Production-deploy gestart. De PROJECT_STATE-commit 003102a7a976e1d9d7f26ba87c9724bc49a1f8af triggerde via de bestaande Git-integratie automatisch Vercel Production-deployment dpl_FMcM56zZX9NUnurSDbZWmRkSB5xS; deze is READY en bevat geen functionele appcodewijziging.
 
 ---
 
