@@ -571,3 +571,39 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 - Workflowfix CI op de volledige PR-head `db1264ee142db1ff47b1603e1b83e71481d1bae9`: Actions `36686741289` groen, inclusief importerfixtures/seedchecks, webtests, lint, TypeScript en Production-build; Vercel Preview-check groen. De functionele head `0e6ff5c` had eveneens 275 roottests en 756 webtests groen. Dit bewijst de code/configuratie, niet een geplande live run.
 - PR #36 is conflictvrij met schone diff en groene CI gemerged als `93435b3`. De main-CI `36689014992` en Production-build `dpl_5aDkTgLHigPZuFn1nndf6DH6BT3q` zijn geslaagd; Home/Menu/Lijst/Budget renderen. Op 30 september waren de verwachte automatische primaire en monitortriggers vóór de release niet zichtbaar; hun precieze afwezigheidsreden is niet bewezen. De eerstvolgende geplande primaire run is 1 oktober om 06:07 Europe/Amsterdam, monitor om 08:30; GitHub kan vertragen of een trigger missen. Een volledige primaire dagimport-/monitorcyclus na de release is nog niet waargenomen. De vertraagde automatische prijsshard `36689990758` startte om 10:29 lokaal, voltooide prijsbatch 3/7: 100 gecontroleerd en geschreven, 17 gewijzigd, 83 ongewijzigd, 0 fout. De catalogus bleef 6359 producten/6359 prijzen, 0 nieuwe producten, 100 vandaag bijgewerkte prijsregels; maintenance v4 bleef 0 pending/304 bevestigd. Dit is geen bewijs voor dagelijkse productgroei of de nieuwe monitorplanning. Geen dubbele of handmatige import gestart.
 - Read-only DB-check na merge: 6359 producten, 6359 prijzen, vandaag 0 nieuwe; dagjob `daily_target_partial` 0/400, 2 eerdere pogingen, geen actieve lock of retry; 0 lopende imports of daily attempts. Discovery-state v4, maintenance `confirmed`, 0 pending, `notifiedProducts=304`.
+# Roadmap 1A.1 — Zyte checkpoint 2: listing + challengebewijs — 4 oktober 2026
+
+## Scope en branch
+
+- Codex controleerde `main` op `211a3a1f2333e66598a979315460a7ec0c8ef941` en de onderzoeksbranch op `7ede7101e1f07db2f5a7537f75cfc0d75e318646`; de uiteindelijke onderzoekscommit volgt deze documentatie-update.
+- `ROADMAP.md` is niet gewijzigd. Er is geen import, databasewrite, Production-integratie, bulkcrawl, migrationwerk of brede scraperrefactor uitgevoerd.
+- De bestaande Hoogvliet-listingroute is exact `searchURL("tomaten", 0)` uit `src/hoogvliet.mjs`: het Intershop-endpoint `ViewTWParametricSearch-SimpleOfferSearch`, `PageNumber=0`, `PageSize=40`, `SelectedSearchResult=SFProductSearch`, `SearchTerm=tomaten`.
+
+## Listingonderzoek en Zyte-proef
+
+- De bestaande parser verwacht server-side aanwezige `.product-tile`-elementen met onder meer `form[id^='productDetailForm_']`, `a.product-title`, trackingdata, `.ratio-base-packing-unit`, `.kor-product-sale-price-value` en `img.product-image`. Daarna valideert de importer SKU, product-URL, naam, verpakking en prijs.
+- In de nieuwe beperkte proef is exact één Zyte `httpResponseBody`-request op die URL gedaan. Resultaat: Zyte 200, Hoogvliet 200, 495.645 bytes; 0 product-tile, 0 productlinks, geen `__NEXT_DATA__`, geen JSON-LD, geen embedded product-JSON, wel vier script/XHR-signalen; parsercount 0.
+- Daarna is exact één Zyte `browserHtml`-request op dezelfde URL gedaan. Resultaat: Zyte 200 en Hoogvliet 200, maar geen `browserHtml`-body terug (`0` bytes), geen producten en parsercount 0. Zyte heeft hiermee geen bruikbare listing bewezen.
+- Oordeel oorzaak: **B/D bewezen** — de HTTP-body bevat geen parserstructuur of embedded listingdata en de HTML bevat client-side/XHR-aanwijzingen; de listingdata wordt dus niet als bruikbare server-side HTML aan de parser geleverd. **A** (verkeerde URL) is niet aannemelijk: dit is de actuele importer-gegenereerde URL en dezelfde route werkte in de bestaande normale importer. **C** (alleen verkeerde parser) is niet bewezen en is niet de primaire verklaring, omdat ook de structurele/embedded data ontbreekt. Een specifiek onderliggend API-endpoint is niet uit de niet-opgeslagen body vastgesteld.
+
+## Challengeclassificatie
+
+- `classifySourceResponse()` in `src/hoogvliet.mjs` gebruikt nu drie uitkomsten: `VALID_SOURCE`, `CHALLENGE`, `UNKNOWN`. Positieve bruikbare Hoogvliet-content heeft voorrang op Incapsula-markup; alleen specifieke Incapsula-/captcha-/access-signaturen of status 403/429 worden challenge.
+- Tests dekken: bewezen productcontent → `VALID_SOURCE`; listingcontent → `VALID_SOURCE`; historische lege Incapsula-loader → `CHALLENGE`; generieke foutpagina → `UNKNOWN`; Incapsula-markup naast echte content → `VALID_SOURCE`. Bestaande importer-tests: 326/326 geslaagd.
+- De historische productresponse was aantoonbaar geldig (Trostomaten, SKU `060936000`, 500 gram, €2,29), ondanks de oude brede detectorvlag. De nieuwe detector voorkomt die false positive.
+- Een normale fetch met daadwerkelijke `CHALLENGE` is in dit checkpoint niet reproduceerbaar vastgesteld; er is daarom geen Zyte challenge-fallbacktest gestart. De Zyte listingresponses tonen geen bewezen challenge→valid-source-overgang. **Zyte lost een normale Hoogvliet-challenge: onbewezen.**
+
+## Kosten en schaalindicatie
+
+- Nieuwe requests in dit checkpoint: **2 Zyte-requests** — 1 HTTP-response + 1 browserHtml; geen retries/bulkcrawl. Op basis van de eerder vastgelegde PAYG-bandbreedtes ($0,13–$1,27/1.000 HTTP en $1,01–$16,08/1.000 browser) is dit circa **$0,00114–$0,01735**. Werkelijke facturatie is niet gecontroleerd.
+- Historisch totaal voor dit Zyte-onderzoek: 5 requests (2 eerdere HTTP, 1 eerdere product-browserHtml, plus deze 2 listingrequests), circa **$0,00241–$0,03597** volgens dezelfde ruwe bandbreedte.
+- Zyte is alleen als fallback te modelleren, niet als standaardfetch. Bij `p` fallbackpercentage en `n` producten/request is de extra providerlast per supermarkt ongeveer `n × p × $0,00013–$0,00127` voor HTTP; browserHtml indien nodig ongeveer `n × p × $0,00101–$0,01608`. Voor 3/5/10 supermarkten vermenigvuldigt dit met 3/5/10; de fallbackpercentages mogen per supermarkt verschillen en zijn niet gelijk verondersteld. Listingfallback is momenteel niet bewezen bruikbaar, dus deze schaalindicatie geldt alleen voor bewezen productdetail-fallback.
+
+## Besluit
+
+- Productdetailpad: **bewezen** via HTTP-response; bestaande validatie kan de Trostomatenresponse verwerken.
+- Listingpad: **niet bewezen bruikbaar**; HTTP levert geen parserdata en de ene browserHtml-proef leverde geen body terug.
+- Challenge-detector: **ja, betrouwbaar als classificatielogica getest**, maar normale Hoogvliet challenge-reproductie: **nee**.
+- Roadmap 1A.1 kan **niet sluiten**. Volgende stap is een afzonderlijk, herhaalbaar bewijs voor één normale Hoogvliet `CHALLENGE` gevolgd door exact dezelfde URL via Zyte, of — als dat niet reproduceerbaar is — het fallbackbesluit beperken tot bewezen productdetailrequests. Geen Production-integratie zonder aparte toestemming.
+
+---
