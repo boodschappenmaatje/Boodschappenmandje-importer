@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       recipe_ids_json:
-        description: 'Exacte goedgekeurde 7 recipe-ID JSON-array uit bestaand Preview-/routebewijs (bijv. ["uuid", ...]).'
+        description: 'Exacte 7 recipe UUIDs uit de nieuw goedgekeurde actuele Production-scopebaseline.'
         required: true
         default: "[]"
         type: string
