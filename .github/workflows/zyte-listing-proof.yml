@@ -1,11 +1,14 @@
 name: Temporary Zyte listing proof
 
 on:
-  push:
-    branches:
-      - codex/roadmap-1a-1-provider-research
-    paths:
-      - scripts/zyte-listing-proof.mjs
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Exactly one provider mode for the same listing URL"
+        required: true
+        type: choice
+        options:
+          - browserHtml
 
 permissions:
   contents: read
@@ -26,4 +29,5 @@ jobs:
       - name: One bounded listing HTTP-response request
         env:
           ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+          PROOF_MODE: ${{ inputs.mode }}
         run: node scripts/zyte-listing-proof.mjs

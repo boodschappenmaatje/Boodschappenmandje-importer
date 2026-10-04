@@ -6,6 +6,7 @@ const endpoint = "https://api.zyte.com/v1/extract";
 const listingURL = "https://www.hoogvliet.com/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch?PageNumber=0&PageSize=40&SelectedSearchResult=SFProductSearch&SearchTerm=tomaten&SelectedItem=&SortingOption=&CategoryName=&CategoryTitle=&SearchTermKey=";
 const key = process.env.ZYTE_API_KEY;
 const tempModule = "src/.hoogvliet-zyte-listing-proof.mjs";
+const mode = process.env.PROOF_MODE === "browserHtml" ? "browserHtml" : "httpResponseBody";
 
 function out(name, value) {
   const safe = String(value ?? "").replace(/[\r\n]/g, " ").slice(0, 300);
@@ -29,8 +30,9 @@ async function requestListing() {
     signal: AbortSignal.timeout(120000),
   });
   const json = await response.json();
-  const html = typeof json.httpResponseBody === "string"
-    ? Buffer.from(json.httpResponseBody, "base64").toString("utf8") : "";
+  const encoded = mode === "browserHtml" ? json.browserHtml : json.httpResponseBody;
+  const html = mode === "browserHtml" ? (typeof encoded === "string" ? encoded : "")
+    : (typeof encoded === "string" ? Buffer.from(encoded, "base64").toString("utf8") : "");
   return { apiStatus: response.status, sourceStatus: json.statusCode ?? null, html };
 }
 
@@ -66,6 +68,7 @@ try {
     out("secret_status", "present");
     const response = await requestListing();
     const inspection = response.html ? await inspectHTML(response.html) : { structure: {}, parserCount: 0 };
+    out("mode", mode);
     out("listing_url", listingURL);
     out("zyte_api_status", response.apiStatus);
     out("hoogvliet_status", response.sourceStatus);
