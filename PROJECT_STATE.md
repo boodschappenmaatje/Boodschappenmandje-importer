@@ -1,3 +1,16 @@
+# Checkpoint 14A.3 — integratie en DISARMED Production dry-run afgerond — 4 oktober 2026
+
+- PR #43 is na expliciete toestemming op 4 oktober gemerged met normale merge-commitstrategie. PR-head: `ce798bca9a0610bee0c07e275cdd73c75ac795cc`; mergecommit en main-head voor de Production-deployment: `755282274e0bb6755dacefe3a9a9cfe5508057c4`.
+- Automatische Vercel Production-deployment `dpl_5oTo7wRDSP51sbc1fhKH1GVNrXZE` hoort bij exact die main-head en is **READY**; geen tweede handmatige deploy gestart. Read-only Production-smoke: Home `/`, Menu `/week-voorbereiden`, Lijst `/lijst`, Budget `/budget`, Meer `/meer` gaven HTTP 200.
+- Production-project is bereikbaar en ACTIVE_HEALTHY (`pjcqxufvbkkjehituzxz`, eu-west-1). Read-only migration list bevat de volledige 13 verwachte versies; PR #43 wijzigde geen migrationfiles, dus migration history blijft 13/13 uitgelijnd.
+- Eenmalige DISARMED workflowrun `37213025960` op main-head `755282274e0bb6755dacefe3a9a9cfe5508057c4` was **SUCCESS**. De log toont `RECOMPUTE_ARMED=false`; de scope-summary bevestigt exact 7 goedgekeurde recepten, 3 goedgekeurde matchkeys, 38 dependencykeys, 70 subscribers, 0 onverwachte dependencies, 3 voorgestelde matchwrites en 70 voorgestelde readinesswrites, source revision `2332`, 45 CAS-revisionregels en plan token aanwezig (waarde niet getoond). De runner eindigde expliciet met **DISARMED; commit POST niet verstuurd**.
+- De twee Actions-secrets waren voor deze succesvolle Production dry-run beschikbaar; waarden zijn nooit gelezen of gelogd. Het workflowpad blijft alleen `workflow_dispatch` en de hard ingestelde runnerstatus blijft `RECOMPUTE_ARMED=false`. De afzonderlijke migration-repairworkflow blijft `REPAIR_ARMED=false`.
+- Read-only datasanity na de dry-run: products `7543`, product_prices `7543`, ingredient_product_matches `245`, recipe_readiness_cache `1370`, planner_write_revisions `368`. De eerdere planner_write_revisions-referentie was `362`; de toename van zes rijen is niet verklaard en wordt niet aan de dry-run toegeschreven. Geen write-request is door de runner verstuurd.
+- Geen bounded live commit, migration repair, schemawijziging, import, merge buiten PR #43 of AFTER-audit uitgevoerd. Honig/Knorr AFTER-audit en roadmapbesluit 1A blijven open.
+- Volgende stap: afzonderlijk **Checkpoint 14B** — alleen na expliciete toestemming een verse dry-run beoordelen en, als die nog exact veilig is, de begrensde commit uitvoeren; daarna direct verifiëren en Honig/Knorr AFTER-audit doen. Tot die toestemming blijft er geen live commit plaatsvinden. `ROADMAP.md` is niet gewijzigd.
+
+---
+
 # Checkpoint 14A.2B — nieuwe read-only Production-scopebaseline, scope goedgekeurd — 4 oktober 2026
 
 ## Scopebaseline en actuele Production-data
