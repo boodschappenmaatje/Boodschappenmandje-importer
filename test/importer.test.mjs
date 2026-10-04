@@ -25,6 +25,7 @@ import {
   catalogLimitReached,
   claimCandidateSKU,
   classifySourcePageEvidence,
+  classifySourceResponse,
   describePriceUpdate,
   filterDiscoveryCandidates,
   finalizeTermDiscoveryStats,
@@ -155,6 +156,32 @@ test("een lege Incapsula-loader wordt als tijdelijke bronbeveiliging herkend", (
     hasExplicitEmptyState: true,
     hasIncapsula: true,
   }), "empty");
+});
+
+test("bronclassificatie gebruikt positieve content en specifieke challenge-signaturen", () => {
+  assert.equal(classifySourceResponse({
+    status: 200,
+    html: '<html><body>Trostomaten 500 gram</body></html>',
+    hasUsableProductData: true,
+  }), "VALID_SOURCE");
+  assert.equal(classifySourceResponse({
+    status: 200,
+    html: '<div class="product-tile">Trostomaten</div>',
+    hasUsableListingData: true,
+  }), "VALID_SOURCE");
+  assert.equal(classifySourceResponse({
+    status: 200,
+    html: '<script src="/_Incapsula_Resource?x=1"></script>',
+  }), "CHALLENGE");
+  assert.equal(classifySourceResponse({
+    status: 200,
+    html: '<html><body>Service temporarily unavailable</body></html>',
+  }), "UNKNOWN");
+  assert.equal(classifySourceResponse({
+    status: 200,
+    html: '<script src="/_Incapsula_Resource?x=1"></script><div>Trostomaten</div>',
+    hasUsableProductData: true,
+  }), "VALID_SOURCE");
 });
 
 test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resetten de teller", () => {

@@ -176,8 +176,10 @@ export function searchURL(term, pageNumber = 0) {
 }
 
 export function classifySourcePageEvidence(evidence = {}) {
-  if (evidence.captcha || evidence.denied) return "blocked";
+  // Expected source content wins over incidental security markup. Hoogvliet
+  // can leave an Incapsula resource script in an otherwise usable page.
   if (evidence.hasExpectedContent) return "ready";
+  if (evidence.captcha || evidence.denied) return "blocked";
   if (evidence.hasExplicitEmptyState) return "empty";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
@@ -185,6 +187,33 @@ export function classifySourcePageEvidence(evidence = {}) {
   // geldige productresponse; alleen de verwachte inhoud is dat.
   if (evidence.hasIncapsula) return "security_check";
   return "empty";
+}
+
+const SPECIFIC_CHALLENGE_MARKERS = [
+  /(?:^|[^a-z])_incapsula_resource(?:[^a-z]|$)/i,
+  /(?:^|[^a-z])incap_ses_[a-z0-9]+/i,
+  /(?:^|[^a-z])visid_incap_[a-z0-9]+/i,
+  /request unsuccessful/i,
+  /verify you are human/i,
+  /controleer of je een mens bent/i,
+];
+
+/**
+ * Classifies a fetched source response without treating arbitrary page text
+ * or a provider-side error as proof of a challenge. Parsed source content is
+ * deliberately checked first because challenge markup can coexist with real
+ * Hoogvliet content.
+ */
+export function classifySourceResponse({
+  status = null, html = "", hasExpectedContent = false,
+  hasUsableProductData = false, hasUsableListingData = false,
+} = {}) {
+  if (hasExpectedContent || hasUsableProductData || hasUsableListingData) return "VALID_SOURCE";
+  const body = typeof html === "string" ? html : "";
+  const explicitChallenge = status === 403 || status === 429
+    || SPECIFIC_CHALLENGE_MARKERS.some(marker => marker.test(body));
+  if (explicitChallenge) return "CHALLENGE";
+  return "UNKNOWN";
 }
 
 async function readSourcePageEvidence(page, expectedSelector = null) {
@@ -249,7 +278,7 @@ async function acceptCookiesIfShown(page) {
   }
 }
 
-async function extractSearchCandidates(page) {
+export async function extractSearchCandidates(page) {
   return page.evaluate(() => {
     const cleanText = (value) => (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim() || null;
     const price = (element) => {

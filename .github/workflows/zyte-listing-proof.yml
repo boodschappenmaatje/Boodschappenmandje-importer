@@ -1,0 +1,29 @@
+name: Temporary Zyte listing proof
+
+on:
+  push:
+    branches:
+      - codex/roadmap-1a-1-provider-research
+    paths:
+      - scripts/zyte-listing-proof.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: One bounded listing HTTP-response request
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+        run: node scripts/zyte-listing-proof.mjs
