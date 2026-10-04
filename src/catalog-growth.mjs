@@ -10,6 +10,12 @@ import {
   upsertProducts,
 } from "./supabase.mjs";
 
+// Persisted route exhaustion is only meaningful for the discovery strategy
+// that produced it. Bumping this value is deliberately cheap: existing SKUs
+// make the one-time replay idempotent, while stale exhaustion can no longer
+// turn an incomplete route set into a false global `discovery_exhausted`.
+export const DISCOVERY_STRATEGY_VERSION = "hoogvliet-categories-pagination-v2";
+
 function text(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -212,6 +218,8 @@ export function importRunStatus({
 }
 
 export function formatCatalogGrowthSummary(result) {
+  const accounting = result.accounting ?? {};
+  const categories = accounting.categories ?? {};
   return [
     "Catalogusgroei",
     `status=${result.status}`,
@@ -227,7 +235,13 @@ export function formatCatalogGrowthSummary(result) {
     `ongeldig=${result.invalidCount ?? result.skippedCount}`,
     `niet_relevant=${result.irrelevantCount ?? 0}`,
     `fouten=${result.errorCount}`,
+    `page_hits=${accounting.rawPageHits ?? result.candidatesViewed ?? 0}`,
+    `unieke_kandidaten=${result.uniqueCandidateCount ?? accounting.uniqueRelevantSKUs ?? 0}`,
     `kandidaten_bekeken=${result.candidatesViewed}`,
+    `bestaande_SKUs=${result.existingCount ?? 0}`,
+    `duplicaten=${result.duplicateCount ?? 0}`,
+    `nieuwe_geldige_kandidaten=${result.validNewCandidateCount ?? categories.new ?? 0}`,
+    `werkelijk_toegevoegd=${result.actualGrowth ?? result.newCount ?? 0}`,
     `zoektermen=${result.searchedTerms}`,
     `zoektermfouten=${result.searchErrors}`,
     `totaal_voor=${result.totalUniqueProductsBefore}`,
@@ -282,6 +296,24 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
 
   try {
     discoveryState = await services.fetchCatalogDiscoveryState(config, config.discoveryStateKey);
+    const strategyChanged = discoveryState.discoveryStrategyVersion !== DISCOVERY_STRATEGY_VERSION;
+    if (strategyChanged) {
+      // A route exhausted by an older listing/pagination strategy is not
+      // evidence that the current reachable discovery space is exhausted.
+      // Replay from the start; existing products remain protected by SKU
+      // dedupe and the normal insert confirmation path.
+      discoveryState = {
+        ...discoveryState,
+        termCursor: 0,
+        pageCursor: 0,
+        lastTerm: null,
+        lastStopReason: null,
+        exhaustedTerms: [],
+        stalledTerms: [],
+        discoveryStrategyVersion: DISCOVERY_STRATEGY_VERSION,
+      };
+      logger.info(`Discoverystrategie gewijzigd; oude route-einden worden opnieuw gecontroleerd (${DISCOVERY_STRATEGY_VERSION}).`);
+    }
     scanDate = config.discoveryScanDate ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Amsterdam" }).format(new Date());
     exhaustedTerms = discoveryState.scanDate === scanDate ? discoveryState.exhaustedTerms ?? [] : [];
     const storedStalls = discoveryState.scanDate === scanDate ? discoveryState.stalledTerms ?? [] : [];
@@ -348,6 +380,9 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
         ? discoveryState.pageCursor : 0,
     });
     stats = collected.stats;
+    if (config.discoverySeenSKUs instanceof Set) {
+      for (const sku of stats.discoveredSKUs ?? []) config.discoverySeenSKUs.add(sku);
+    }
     if (previousStalls.length && stats.sourceExhausted) {
       stats.sourceExhausted = false; stats.stopReason = "discovery_incomplete_stalled_terms";
     }
@@ -392,6 +427,10 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
       existingCount: stats.existingCandidatesSkipped ?? 0,
       duplicateCount: stats.duplicateSKUsSkipped ?? 0,
       invalidCount: stats.invalidProductsSkipped ?? 0,
+      uniqueCandidateCount: config.discoverySeenSKUs instanceof Set
+        ? config.discoverySeenSKUs.size
+        : stats.uniqueSKUsDiscovered ?? 0,
+      validNewCandidateCount: stats.newProducts ?? 0,
       irrelevantCount: stats.irrelevantCandidatesSkipped ?? 0,
       searchedTerms: stats.searchedTerms ?? 0,
       searchErrors,
@@ -457,6 +496,10 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
           unchangedCount: 0,
           skippedCount: stats.invalidProductsSkipped ?? 0,
           invalidCount: stats.invalidProductsSkipped ?? 0,
+          uniqueCandidateCount: config.discoverySeenSKUs instanceof Set
+            ? config.discoverySeenSKUs.size
+            : stats.uniqueSKUsDiscovered ?? 0,
+          validNewCandidateCount: stats.newProducts ?? 0,
           sourceErrors: stats.searchErrors ?? 1,
         },
       });

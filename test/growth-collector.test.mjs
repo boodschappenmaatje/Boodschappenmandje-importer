@@ -58,6 +58,27 @@ test('production collector passes known/duplicate/invalid candidates, term cap a
   assert.equal(result.stats.stopReason, 'growth_target_reached');
 });
 
+test('thousands of known candidates do not exhaust discovery before later new candidates', async () => {
+  const known = Array.from({ length: 5_000 }, (_, i) => item(i));
+  const fresh = Array.from({ length: 10 }, (_, i) => item(5_000 + i));
+  let page = 0;
+  const result = await collectGrowthCandidates({ ...config, maxNewProducts: 10 }, {
+    existingSKUs: new Set(known.map(row => row.sku)),
+    findCandidates: async () => ({
+      candidates: page++ === 0 ? known : fresh,
+      pagesFetched: 1,
+      sourceExhausted: page > 1,
+      nextPage: page,
+    }),
+    validateCandidate: async row => row,
+    onBatch: async rows => ({ newProducts: rows.length, existingProducts: 0 }),
+  });
+  assert.equal(result.stats.existingCandidatesSkipped, 5_000);
+  assert.equal(result.stats.persistedNewProducts, 10);
+  assert.equal(result.stats.stopReason, 'growth_target_reached');
+  assert.equal(result.stats.sourceExhausted, false);
+});
+
 test('327 valid products and confirmed empty next page exhaust once without a retry loop', async () => {
   const h = harness(Array.from({ length: 327 }, (_, i) => item(i)));
   const result = await collectGrowthCandidates(config, h.options);

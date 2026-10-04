@@ -9,6 +9,7 @@ import {
   dailyRetryDelayMinutes,
   inspectDailyCatalogAttempt,
   isDailyImportWindowOpen,
+  formatDailyAttemptSummary,
   runDailyCatalogAttempt,
   shouldRunDailyImport,
 } from "../src/daily-catalog-growth.mjs";
@@ -29,6 +30,22 @@ const config = {
   dailyEndHour: 23,
   growthMaxRuntimeMs: 105 * 60_000,
 };
+
+test('daily summary exposes the funnel and cumulative 400 target', () => {
+  const summary = formatDailyAttemptSummary({
+    job: { id: 'daily-1', jobDate: '2026-10-05', attemptCount: 2, targetNewProducts: 400,
+      newProductsCollected: 137, remainingTarget: 263, status: 'retry_scheduled' },
+    counts: { candidates: 8550, uniqueCandidates: 4100, existing: 3800, duplicates: 240,
+      validNewCandidates: 60, new: 55, updated: 12, unchanged: 4, skipped: 5, invalid: 5,
+      sourceErrors: 0, segments: [], accounting: { rawPageHits: 8550, uniqueRelevantSKUs: 4100 } },
+  });
+  assert.match(summary, /raw_paginahits=8550/);
+  assert.match(summary, /unieke_kandidaten=4100/);
+  assert.match(summary, /bestaand=3800/);
+  assert.match(summary, /duplicaten=240/);
+  assert.match(summary, /nieuwe_geldige_kandidaten=60/);
+  assert.match(summary, /cumulatief_nieuw=137\/400/);
+});
 
 test('challenge after 100 preserves remaining, releases via finish and schedules bounded 15/30/60 cooldowns', async () => {
   for (const [previous, minutes] of [[0,15], [1,30], [2,60], [3,null]]) {

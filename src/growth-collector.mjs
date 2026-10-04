@@ -77,7 +77,13 @@ export async function collectGrowthCandidates(config, {
     }
     stats.nextPageCursor = 0; onTermStall(entry);
   };
-  const finalize = () => { stats.accounting = candidateAccounting(stats); return { products, stats }; };
+  const finalize = () => {
+    stats.accounting = candidateAccounting(stats);
+    // Kept in-memory for exact cross-segment funnel accounting. It is never
+    // persisted or logged as a product payload.
+    stats.discoveredSKUs = seen;
+    return { products, stats };
+  };
   try {
     outer: for (const [index, term] of config.searchTerms.entries()) {
       stats.lastSearchedTerm = term;
