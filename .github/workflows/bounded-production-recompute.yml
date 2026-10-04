@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      RECOMPUTE_ARMED: "false"
+      RECOMPUTE_ARMED: "true"
       RECIPE_IDS_JSON: ${{ inputs.recipe_ids_json }}
       PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
       PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
