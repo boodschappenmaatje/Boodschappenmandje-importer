@@ -92,3 +92,11 @@ Historische commits, deployments, testtellingen en technische bewijsdetails hore
 - `DESIGN.md` bevat vaste UX/UI-regels.
 - Diepe technische historie en bewijs horen in relevante docs.
 - Bij conflict met actuele remote code/PR: eerst remote toestand vaststellen en daarna documentatie corrigeren.
+
+---
+
+# Helemaal later — App Store / cloud-Mac
+
+| Idee | Status | Uitvoering | Voorwaarde / notitie |
+|---|---|---|---|
+| Cloud-Mac voor Xcode en App Store | 💡 Idee voor later | Work / cloud-Mac | Bij eventuele App Store-release een betaalbare cloud-Mac gebruiken in plaats van eerst eigen Mac-hardware te kopen. Pay-as-you-go heeft voorkeur voor incidenteel gebruik; code/Xcode-project blijft in GitHub en belangrijke certificaten/back-ups worden extern bewaard. Eerst pas activeren wanneer een native iOS/App Store-traject echt wordt gestart. |
