@@ -1,3 +1,41 @@
+# Checkpoint 14B — bounded recomputation en AFTER-audit — 4 oktober 2026
+
+## Uitvoering
+- Main bleef op 52d206f95e25e47e5093f5103b1b3fdb08cb04ea. De verse DISARMED precommit-run 37214147981 was SUCCESS. Scope: exact 7 goedgekeurde recipe IDs, 3 matchkeys, 38 dependencykeys, 70 subscribers, 0 onverwachte dependencies; 3 matchwrites + 70 readinesswrites voorgesteld; source revision 2332, 45 CAS-entries; plan token aanwezig maar niet vastgelegd.
+- Na expliciete toestemming is exact één armed runner-run uitgevoerd: 37214943380 op de tijdelijke branch codex/checkpoint-14b-single-run-armed, gebaseerd op main. De runner deed intern opnieuw de dry-run en scope/CAS-validatie en accepteerde één transactionele bounded commit: 3 matchwrites + 70 readinesswrites. Resultaat SUCCESS; geen retry of tweede commit.
+- Alleen de workflowregel RECOMPUTE_ARMED is tijdelijk false→true gezet en direct na succesvolle run true→false teruggezet. Disarm-commit: 22d066c6b036370034e9b657a18ee99d831a4319. De uiteindelijke workflowinhoud is byte-identiek aan main; main en de tijdelijke branch tonen RECOMPUTE_ARMED=false. De migration-repairworkflow bleef REPAIR_ARMED=false.
+- De runner-log vermeldt alleen aantallen en withholding van plan token. Tokenwaarde en secrets zijn niet gelezen of vastgelegd.
+
+## Write-verificatie en datasanity
+- Directe read-only verificatie op Production vond exact 3 matchrecords en 70 readinessrecords met update-tijd van de commit; 0 bijgewerkte records buiten de goedgekeurde scope. De transactionele runner valideerde exact 3 matchwrites, 70 readinesswrites en 0 outside-scope effects.
+- Voor de 7 scope-recepten/personen 1–10: vóór de commit 70 NOT_READY (20 current, 50 pending door product_match_changed); erna 10 READY en 60 NOT_READY, alle 70 current. De 10 READY betreffen Honig Basis voor hachee voor personen 1–10.
+- Matchrecords na commit:
+  - hacheevlees: invalid/no_catalog_product → valid, SKU 733659000 Hoogvliet Riblappen, circa 700 g;
+  - pitabroodjes: invalid/no_catalog_product → valid, SKU 675984000 G'woon Pita broodjes, verpakking 10 stuks;
+  - tomaten: valid SKU 733141000 Mutti Gepelde tomaten → valid SKU 060936000 Trostomaten, verpakking 500 g.
+- Readiness blokkeert nog op package_unknown waar de receptbehoefte niet veilig uit de verpakking kan worden afgeleid: tomaten in 3 scope-recepten vereisen stuks maar het gekozen product vermeldt gewicht; Knorr kebab vereist grammen maar de pita-verpakking vermeldt alleen 10 stuks.
+- Read-only catalogussanity vóór→na bleef gelijk: products 7543, product_prices 7543, ingredient_product_matches 245, recipe_readiness_cache 1370, planner_write_revisions 368. Het aantal rijen in planner_write_revisions veranderde niet; individuele counterdelta’s zijn niet uit de runner-samenvatting af te leiden en worden niet toegeschreven.
+- Productmetadata vraagt extra controle: de nieuwe hacheevleesmatch is gekoppeld aan “Hoogvliet Riblappen” met product_type=Varkensvlees; de tomatenmatch aan “Trostomaten” met product_type=Aardappelen. De namen passen bij de ingrediënten, maar de producttype-classificaties spreken die namen tegen. Dit is niet aangepast in dit checkpoint en verhindert een stellige claim dat alle nieuwe READY-uitkomsten semantisch veilig zijn.
+- Geen migration repair, migration-SQL, schemawijziging, import, scraping, NO_RECIPE-opbouw of bounded tweede poging uitgevoerd.
+
+## Honig/Knorr AFTER-audit (4 personen)
+| Merk | BEFORE READY / NOT_READY / NO_RECIPE | AFTER READY / NOT_READY / NO_RECIPE |
+| --- | --- | --- |
+| Honig | 10 / 8 / 1 | 11 / 7 / 1 |
+| Knorr | 17 / 5 / 14 | 17 / 5 / 14 |
+
+- Honig NOT_READY: Bakplaat mix broccoli & rundervink, Bakplaat mix courgette & kip en Basis voor chili con carne blijven geblokkeerd door tomaten — Trostomaten SKU 060936000, package_unknown voor een behoefte in stuks. Basis voor Italiaanse kruidensaus: Provençaalse wokgroenten ontbreken en verse basilicum heeft category_mismatch. Basis voor macaronisaus stroganoff: Provençaalse wokgroenten ontbreken. Maaltijdsoep erwten: rookworst-verpakking heeft onbekende dekking. Mix voor boerenomelet: sneetjes volkoren brood ontbreken in de catalogus.
+- Knorr NOT_READY: Maaltijdmix kebab — G'woon Pita broodjes, package_unknown omdat 10 stuks geen gramgewicht geven; Kip madras en Wereldgerechten Mexicaanse taco’s — tomaten/package_unknown; Lasagne bolognese — lasagnebladen/package_unknown; Tikka masala — magere yoghurt/package_unknown.
+- De genoemde NOT_READY-statussen zijn door de readinesspayload aan concrete ontbrekende catalogusdekking of onveilige verpakkingsomrekening gekoppeld. Geen READY is geforceerd. De bestaande 1 Honig en 14 Knorr NO_RECIPE-profielen zijn ongemoeid gelaten.
+
+## Roadmapbesluit
+- Roadmap 1A blijft open. De bounded commit en audit zijn uitgevoerd en er is geen readiness-regressie zichtbaar, maar de conflicterende producttype-classificaties bij de nieuw bijgewerkte matchrecords moeten inhoudelijk worden bevestigd voordat de READY-uitkomst voor hachee zonder voorbehoud als veilig kan gelden. De nog resterende package-/category-/catalogusblokkades moeten eveneens volgens de roadmapcriteria worden beoordeeld.
+- ROADMAP.md is niet gewijzigd; 1A.1 blijft afhankelijk van afronding van 1A. Volgende stap: read-only bron-/classificatiecontrole van de hachee- en tomatenproducten, daarna resterende 1A/1C-blokkades beoordelen. Geen nieuwe live write zonder een afzonderlijk goedgekeurde scope.
+- Na deze documentatie-update is de actuele main-head de nieuwe documentatiecommit; functionele appcode is niet gewijzigd.
+- In dit checkpoint is geen PR-merge of Production-appdeploy gestart.
+
+---
+
 # Checkpoint 14A.3 — integratie en DISARMED Production dry-run afgerond — 4 oktober 2026
 
 - PR #43 is na expliciete toestemming op 4 oktober gemerged met normale merge-commitstrategie. PR-head: `ce798bca9a0610bee0c07e275cdd73c75ac795cc`; mergecommit en main-head voor de Production-deployment: `755282274e0bb6755dacefe3a9a9cfe5508057c4`.
