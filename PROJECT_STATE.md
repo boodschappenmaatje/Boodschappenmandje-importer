@@ -1,3 +1,37 @@
+# Roadmap 1A.1 — Zyte cloud proof — 4 oktober 2026
+
+## Branch- en workflowstatus
+
+- Remote `main` is opnieuw gecontroleerd op `211a3a1f2333e66598a979315460a7ec0c8ef941`; ROADMAP 1A.1 blijft het actieve onderzoekspunt. `ROADMAP.md` is niet gewijzigd.
+- Tijdelijke proef uitgevoerd via Actions-run `37236565613` op `codex/roadmap-1a-1-provider-research`; run SUCCESS. Secret-check logde alleen `ZYTE_API_KEY=present`. De secretwaarde is niet gelezen of gelogd.
+- De test gebruikte exact twee HTTP-response-body requests (product- en listing-URL) plus één aanvullende `browserHtml`-request op de product-URL. Geen retries of bulkcrawl.
+- Testharness en tijdelijke workflow zijn daarna van de onderzoeksbranch verwijderd. Branch-head vóór deze documentatie-update: `899a20bdbcf68dd517d40fa14a7fc3ba62cb2387`.
+- Het verwijderen van het harness startte onverwacht Actions-run `37236777142`, die FAILURE eindigde in stap “Two bounded HTTP-response requests and optional one browserHtml request”. De workflow-command wees naar `node scripts/zyte-cloud-proof.mjs`, maar dat script was in die commit al verwijderd; Node kon het testprogramma dus niet starten en er zijn geen aanvullende Zyte-requests verzonden. Het harness en workflowbestand zijn verwijderd. Deze mislukte opruimrun is geen Zyte-responsefout.
+
+## Beperkte Zyte-proef
+
+| Test | Resultaat |
+| --- | --- |
+| Product-URL | `https://www.hoogvliet.com/product/trostomaten-verpakt` |
+| Product HTTP-response | Zyte API-status 200; Hoogvliet-status 200; 513.810 bytes HTML |
+| Productinhoud/parser | Bestaande importer-parser haalde Trostomaten, SKU `060936000`, 500 gram en €2,29 uit de HTML. In-memory validatie slaagde. Een kleine response-naar-Playwright-page-adapter was nodig om de bestaande parser in het testharnas te draaien; geen importer uitgevoerd. |
+| Listing-URL | Exacte importer-gegenereerde `searchURL("tomaten", 0)`-URL onder `/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch`, met de importerparameters voor `SearchTerm=tomaten`, pagina 0 en 40 resultaten. |
+| Listing HTTP-response | Zyte API-status 200; Hoogvliet-status 200; 495.646 bytes HTML. De huidige listingextractor leverde 0 producten op; listingcontent was daardoor niet bruikbaar voor de bestaande parser in HTTP-response-modus. |
+| Challenge vastgesteld/opgelost | Niet bewezen. Een brede challenge-markupdetector gaf voor beide gewone HTTP-responses een positieve vlag, maar de productparser haalde echte productgegevens op. Er is geen normale-fetch challenge-baseline uitgevoerd en de detector is achteraf als fout-positief/onvoldoende specifiek beoordeeld. Claim daarom niet dat Incapsula is omzeild. De oorzaak van de lege listingextractie blijft onbeslist. |
+| Extra browserHtml | Eén aanvullende request op de product-URL gaf status 200, 532.219 bytes en dezelfde productvelden. Deze request was onnodig: de brede challenge-vlag activeerde hem ondanks de geslaagde productparser. Geen browserHtml-request voor de listing uitgevoerd. |
+| Volledige HTML/artifacts | Niet gelogd en niet als publiek artifact opgeslagen. |
+| Kosten | Ruwe PAYG-raming voor 2 HTTP-response requests + 1 browser-rendered request: circa **$0,00127–$0,01862** vóór eventuele featuretoeslagen/belasting, afhankelijk van Zyte-site-tier. Dit is een tariefgebaseerde schatting; de Zyte-factuur/werkelijke afschrijving is niet gecontroleerd. Officiële actuele tabel: [Zyte pricing](https://www.zyte.com/pricing/) (PAYG HTTP-body $0,13–$1,27/1.000; browser-rendered $1,01–$16,08/1.000). |
+
+## Besluit en grenzen
+
+- Zyte is **bewezen bruikbaar voor de productdetailpagina via gewone HTTP-response-body** en de bestaande productvalidatie kan de opgehaalde productinhoud verwerken.
+- De importer-listingroute is **niet bewezen bruikbaar** met de gewone HTTP-response. Er is onvoldoende bewijs om te zeggen of browser rendering dit oplost; er zijn in deze proef geen resterende requests gebruikt om dat te testen.
+- De proef bewijst niet dat Zyte Incapsula/source_challenge voor Hoogvliet oplost. De challenge-detector in het tijdelijke testharnas was te breed en mag niet als bewijs worden hergebruikt.
+- Advies: **D — meer bewijs nodig** voordat Zyte als volledige fallbackprovider wordt gekozen. Een volgende, afzonderlijk begrensde proef moet gericht zijn op de bestaande listing-URL en een aantoonbare normale-fetch challenge; eerst de detectievoorwaarde corrigeren. Geen extra request is in dit checkpoint gedaan.
+- Geen Production-integratie, importer-run, productimport, databasewrite, migrationwerk of wijziging aan bestaande Hoogvliet-importer uitgevoerd. Geen wijziging aan `main` of `ROADMAP.md`.
+
+---
+
 # Checkpoint 14C — productidentiteit en product_type read-only gecontroleerd — 4 oktober 2026
 
 ## Remote en Production
