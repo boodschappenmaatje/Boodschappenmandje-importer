@@ -1,3 +1,36 @@
+# Checkpoint 14A.2B — nieuwe read-only Production-scopebaseline, scope goedgekeurd — 4 oktober 2026
+
+## Scopebaseline en actuele Production-data
+
+- Remote Production `main`: `7f8e8fbdd4acf16f8b7d90e8bb7ed2f2692daabc`. Runnerbranch vóór integratie: `27e40392e4cf3bca6ec92c53160d9c981183461a`; na fixturecorrectie: `ab4cb6a658080f459a6d74c82ec0c3022031e482`. Project/ref is Supabase Production `pjcqxufvbkkjehituzxz`.
+- De oude historische UUID-identiteit bleef onbewijsbaar. De volgende lijst is daarom expliciet de **CHECKPOINT 14 NIEUWE VOORGESTELDE PRODUCTION SCOPE**. De gebruiker heeft deze nieuwe scope op 4 oktober goedgekeurd als kandidaat voor de bounded recomputation.
+- De enige drie doelkeys zijn de bestaande PR #39/runner-allowlistkeys:
+  - `meal-mix-ingredient:mix-supplement-hacheevlees:g:ingredient:generic` — huidig `invalid/current/no_catalog_product`.
+  - `meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic` — huidig `valid/current`, Mutti Gepelde tomaten SKU `733141000`, 400 g; verpakking bewijst geen aantal stuks.
+  - `meal-mix-ingredient:mix-supplement-pitabroodjes:g:ingredient:generic` — huidig `invalid/current/no_catalog_product`.
+
+| Recipe UUID | Recept | Merk | Dependencykey | Readiness personen 1–10 |
+| --- | --- | --- | --- | --- |
+| `4e60b9b6-abd3-46e7-b6a1-b10f73ccbec3` | Honig Bakplaat mix broccoli & rundervink | Honig | tomaten/piece | 10 NOT_READY; 0 current, 10 pending (`product_match_changed`), 0 failed |
+| `baf31144-bb45-4c2b-aa2f-2f9be588b01c` | Honig Bakplaat mix courgette & kip | Honig | tomaten/piece | 10 NOT_READY; 0 current, 10 pending (`product_match_changed`), 0 failed |
+| `3bbe1561-d757-422e-aded-3d802310805c` | Honig Basis voor chili con carne | Honig | tomaten/piece | 10 NOT_READY; 0 current, 10 pending (`product_match_changed`), 0 failed |
+| `5726609e-82a3-4fa7-b5b0-dab78b2b59f1` | Honig Basis voor hachee | Honig | hacheevlees/g | 10 NOT_READY; 0 current, 10 pending (`product_match_changed`), 0 failed |
+| `4f871e07-a684-4014-843a-f72a11b4c01d` | Knorr Maaltijdmix kebab | Knorr | pitabroodjes/g | 10 NOT_READY; 10 current, 0 pending, 0 failed |
+| `2825125a-4ec4-4fae-a5f3-b44be2afb0aa` | Knorr Maaltijdmix kip madras | Knorr | tomaten/piece | 10 NOT_READY; 5 current, 5 pending (`product_match_changed`), 0 failed |
+| `6a85d19f-5654-440b-b296-325c8f9fbd30` | Knorr Wereldgerechten Mexicaanse taco’s | Knorr | tomaten/piece | 10 NOT_READY; 5 current, 5 pending (`product_match_changed`), 0 failed |
+
+- Read-only dependency-unie: 7 unieke recepten / 70 readinessrecords. Per key: tomaten 5 recepten/50 records (20 current, 30 pending); hacheevlees 1/10 (10 pending); pitabroodjes 1/10 (10 current). Totaal: 20 current, 50 pending, 0 failed.
+- Historisch bleef bewezen: 3 keys, 7 recepten, 70 records, 35 current, 35 pending, 0 failed. Actueel zijn keys en aantallen recepten/records gelijk; historische UUID-identiteit is niet bewezen. Vijftien records zijn nu pending in plaats van current en dragen de reden `product_match_changed`; geen failed records.
+
+## Integratie en stopgrens
+
+- Draft PR #43: runnerbranch naar `main`; geen merge. De toevoeging in `.github/workflows/bounded-production-recompute.yml` is uitsluitend `workflow_dispatch`, zet hard `RECOMPUTE_ARMED=false` en gebruikt alleen de bestaande authenticated `mode: "dry-run"` POST. De write-tak gebruikt een aparte `mode: "write"` en wordt bij `false` niet bereikt. De plan/snapshot-RPC’s zijn read-only; de transactionele commit-RPC is niet aangeroepen.
+- Eerste CI-run `37211328015` faalde: bestaande transactionele tests misten `state.resources` in hun DB-planfixture na de nieuwe metadata-validatie. Alleen die fixture is aangepast; commit `ab4cb6a658080f459a6d74c82ec0c3022031e482`. Nieuwe CI-run `37211602755` was bij vastleggen nog bezig. Vercel Preview-commentcheck voor de eerste head slaagde; de Preview van de bijgewerkte head moet nog worden bevestigd.
+- GitHub Actions meldt voor de nog niet op `main` aanwezige workflow `This workflow does not exist`. Daarom is nog geen Production DISARMED dry-run uitgevoerd. De Production dry-run vereist integratie/deployment van de service-response-uitbreiding; daarvoor is een afzonderlijke expliciete mergegoedkeuring nodig. Dit scope-akkoord is geen merge- of live-writegoedkeuring.
+- Geen bounded dry-run, commitrequest, databasewrite, import, migrationwerk, runnermerge of Production-deploy uitgevoerd. `ROADMAP.md` bleef ongewijzigd.
+
+---
+
 # Checkpoint 13 — PR #39 gemerged, Production-deployment en smoke — 3 oktober 2026
 
 - PR #39 is na expliciete gebruikersgoedkeuring gemerged via de normale merge-commitstrategie. Pre-merge PR-head: `14c40dd3e9b555ab14d09932e0dae9ff875e4c1f`. Mergecommit en nieuwe main-head: `27732625d798b0b9b25cce285480047161c2c14a`. GitHub merge-tijd: `2026-10-03T21:23:30Z`.
