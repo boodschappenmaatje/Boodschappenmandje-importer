@@ -14,6 +14,7 @@ export async function runResumableCatalogGrowth(config, logger, runGrowth, { now
   const started = now();
   const deadline = started + config.growthMaxRuntimeMs;
   const checkpoints = new Set();
+  const discoverySeenSKUs = new Set();
   let aggregate = null;
   for (let segment = 1; segment <= MAX_DISCOVERY_SEGMENTS; segment++) {
     const remaining = config.maxNewProducts - (aggregate?.actualGrowth ?? 0);
@@ -21,7 +22,7 @@ export async function runResumableCatalogGrowth(config, logger, runGrowth, { now
     if (remaining <= 0 || (aggregate && remainingMs <= 0)) break;
     let result;
     try {
-      result = await runGrowth({ ...config, maxNewProducts: remaining,
+      result = await runGrowth({ ...config, discoverySeenSKUs, maxNewProducts: remaining,
         growthMaxRuntimeMs: Math.max(1, remainingMs) }, logger);
     } catch (error) {
       // Earlier confirmed segments still consume the same daily budget.

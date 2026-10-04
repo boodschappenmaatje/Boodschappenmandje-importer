@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { runCatalogGrowth } from '../src/catalog-growth.mjs';
+import { DISCOVERY_STRATEGY_VERSION, runCatalogGrowth } from '../src/catalog-growth.mjs';
 const logger = { info() {}, error() {} };
 const config = { maxNewProducts: 400, searchTerms: ['rijst', 'pasta'], advanceDiscoveryState: true,
   discoveryScanDate: '2026-09-28', discoveryStateKey: 'fixture', catalogBatch: 'growth' };
 test('homepage challenge preserves exact stored cursor, route ends and maintenance without product writes', async () => {
   const state = { stateKey: 'fixture', termCursor: 1, pageCursor: 12, lastTerm: 'pasta',
     scanDate: config.discoveryScanDate, exhaustedTerms: ['rijst'],
+    discoveryStrategyVersion: DISCOVERY_STRATEGY_VERSION,
     plannerMaintenance: { status: 'confirmed', notifiedProducts: 404, pendingProductIds: [], failures: [] } };
   const h = harness({ fetchCatalogDiscoveryState: async () => state,
     upsertProducts: async () => assert.fail('no product write after challenge'),
@@ -43,10 +44,28 @@ test('growth reports only confirmed unique inserts, not total database count del
   assert.equal(result.actualGrowth, 1); assert.equal(result.totalUniqueProductsAfter, 999);
   assert.equal(result.targetReached, false); assert.equal(h.saved[0].pageCursor, 20);
 });
+test('legacy discovery exhaustion is replayed once after the strategy gains coverage', async () => {
+  let observed;
+  const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture',
+    scanDate: config.discoveryScanDate, termCursor: 4, pageCursor: 9, lastTerm: 'pasta',
+    exhaustedTerms: ['rijst', 'pasta'] }),
+    collectProducts: async settings => {
+      observed = settings.searchTerms;
+      return { products: [], stats: { sourceExhausted: true, stopReason: 'discovery_exhausted',
+        exhaustedTerms: settings.searchTerms } };
+    },
+  });
+  await runCatalogGrowth(config, logger, h.dependencies);
+  assert.ok(observed.includes('rijst'));
+  assert.ok(observed.includes('pasta'));
+  assert.equal(h.saved.at(-1).discoveryStrategyVersion, DISCOVERY_STRATEGY_VERSION);
+});
+
 test('same-day continuation skips completed routes and resumes the exact term, next day revisits from page zero', async () => {
   for (const scanDate of ['2026-09-28', '2026-09-29']) {
     const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture', termCursor: 999,
-      pageCursor: 20, lastTerm: 'pasta', scanDate: '2026-09-28', exhaustedTerms: ['rijst'] }),
+      pageCursor: 20, lastTerm: 'pasta', scanDate: '2026-09-28', exhaustedTerms: ['rijst'],
+      discoveryStrategyVersion: DISCOVERY_STRATEGY_VERSION }),
       collectProducts: async (settings, _logger, options) => {
         assert.equal(settings.searchTerms[0], 'pasta');
         assert.equal(settings.searchTerms.includes('rijst'), scanDate !== '2026-09-28');
@@ -95,7 +114,8 @@ test('durable maintenance scope precedes notification and remains visible after 
 
 test('a repeated-page term from an earlier same-day window migrates to proven exhaustion', async () => {
   const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture', termCursor: 0,
-    scanDate: config.discoveryScanDate, stalledTerms: [{ term: 'rijst', page: 2, reason: 'repeated_sku_set' }] }),
+    scanDate: config.discoveryScanDate, stalledTerms: [{ term: 'rijst', page: 2, reason: 'repeated_sku_set' }],
+    discoveryStrategyVersion: DISCOVERY_STRATEGY_VERSION }),
     collectProducts: async settings => {
       assert.equal(settings.searchTerms.includes('rijst'), false);
       assert.equal(settings.searchTerms.includes('pasta'), true);
@@ -116,7 +136,8 @@ test('new category route remains eligible after same-day keyword exhaustion with
   const maintenance = { status: 'confirmed', pendingProductIds: [], notifiedProducts: 304, failures: [] };
   const h = harness({ fetchCatalogDiscoveryState: async () => ({ stateKey: 'fixture',
     scanDate: config.discoveryScanDate, lastTerm: 'pasta', pageCursor: 0,
-    exhaustedTerms: ['rijst', 'pasta'], plannerMaintenance: maintenance }),
+    exhaustedTerms: ['rijst', 'pasta'], discoveryStrategyVersion: DISCOVERY_STRATEGY_VERSION,
+    plannerMaintenance: maintenance }),
     collectProducts: async (settings, _logger, options) => {
       assert.ok(settings.searchTerms.includes(route));
       assert.equal(settings.searchTerms.includes('pasta'), false);

@@ -122,6 +122,8 @@ function resultCounts(result = {}) {
     invalid: integer(result.invalidCount ?? result.skippedCount),
     sourceErrors: integer(result.searchErrors) + integer(result.errorCount),
     existing: integer(result.existingCount), duplicates: integer(result.duplicateCount),
+    uniqueCandidates: integer(result.uniqueCandidateCount ?? result.accounting?.uniqueRelevantSKUs),
+    validNewCandidates: integer(result.validNewCandidateCount),
     total: result.totalUniqueProductsAfter ?? null, stopReason: result.stopReason ?? null,
   };
 }
@@ -139,6 +141,8 @@ function errorCounts(error) {
     invalid: integer(metrics.invalidCount),
     sourceErrors: integer(metrics.sourceErrors || 1),
     existing: integer(metrics.existingCount), duplicates: integer(metrics.duplicateCount),
+    uniqueCandidates: integer(metrics.uniqueCandidateCount ?? metrics.accounting?.uniqueRelevantSKUs),
+    validNewCandidates: integer(metrics.validNewCandidateCount),
     stopReason: error?.code ?? "technical_failure",
   };
 }
@@ -167,12 +171,14 @@ export function formatDailyAttemptSummary({
     completedAt ? `afgerond=${completedAt.toISOString()}` : null,
     `doel_nieuw=${job.targetNewProducts}`,
     `raw_paginahits=${counts.candidates}`,
+    `unieke_kandidaten=${counts.uniqueCandidates}`,
     `discovery_segmenten=${counts.segments?.length ?? 0}`,
     counts.accounting ? `kandidaatboekhouding=${JSON.stringify(counts.accounting)}` : null,
     counts.stalledTerms?.length ? `gestalde_termen=${JSON.stringify(counts.stalledTerms)}` : null,
     counts.plannerMaintenance ? `planner_onderhoud=${JSON.stringify(counts.plannerMaintenance)}` : null,
     `bestaand=${counts.existing ?? 0}`,
     `duplicaten=${counts.duplicates ?? 0}`,
+    `nieuwe_geldige_kandidaten=${counts.validNewCandidates}`,
     `stopreden=${counts.stopReason ?? retryReason ?? job.status}`,
     counts.total == null ? null : `totaal_na=${counts.total}`,
     `nieuw=${counts.new}`,
@@ -181,7 +187,7 @@ export function formatDailyAttemptSummary({
     `overgeslagen=${counts.skipped}`,
     `ongeldig=${counts.invalid}`,
     `bronfouten=${counts.sourceErrors}`,
-    `cumulatief_nieuw=${job.newProductsCollected}`,
+    `cumulatief_nieuw=${job.newProductsCollected}/${job.targetNewProducts}`,
     `resterend=${job.remainingTarget}`,
     `status=${job.status}`,
     retryReason ? `retryreden=${retryReason}` : null,

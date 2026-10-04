@@ -798,6 +798,7 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     lastAttemptReport: metadata.lastAttemptReport ?? null,
     plannerMaintenance: metadata.plannerMaintenance ?? null,
     saturatedUntil: metadata.saturatedUntil ?? {},
+    discoveryStrategyVersion: metadata.discoveryStrategyVersion ?? null,
     updatedAt: row.updated_at ?? null,
   } : {
     stateKey,
@@ -813,6 +814,7 @@ export async function fetchCatalogDiscoveryState(config, stateKey) {
     lastAttemptReport: null,
     plannerMaintenance: null,
     saturatedUntil: {},
+    discoveryStrategyVersion: null,
     updatedAt: null,
   };
 }
@@ -836,6 +838,7 @@ export async function saveCatalogDiscoveryState(config, state, { acknowledgedPro
       lastStopReason: state.lastStopReason ?? metadata.lastStopReason ?? null,
       termStats: state.termStats ?? metadata.termStats ?? {},
       saturatedUntil: state.saturatedUntil ?? metadata.saturatedUntil ?? {},
+      discoveryStrategyVersion: state.discoveryStrategyVersion ?? metadata.discoveryStrategyVersion ?? null,
       scanDate: state.scanDate ?? metadata.scanDate ?? null,
       exhaustedTerms: state.exhaustedTerms ?? metadata.exhaustedTerms ?? [],
       stalledTerms: state.stalledTerms ?? metadata.stalledTerms ?? [],

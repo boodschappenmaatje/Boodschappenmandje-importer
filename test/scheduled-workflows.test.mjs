@@ -6,11 +6,12 @@ const primary = readFileSync(new URL('../.github/workflows/import-hoogvliet-poc.
 const monitor = readFileSync(new URL('../.github/workflows/monitor-catalog-import.yml', import.meta.url), 'utf8');
 
 test('daily growth keeps one Dutch-time trigger even when GitHub starts late', () => {
-  assert.ok(primary.includes('- cron: "7 6 * * *"\n      timezone: "Europe/Amsterdam"'));
+  assert.ok(primary.includes('- cron: "0 6 * * *"\n      timezone: "Europe/Amsterdam"'));
   assert.ok(!primary.includes('- cron: "0 4 * * *"'));
   assert.ok(!primary.includes('- cron: "0 5 * * *"'));
+  assert.ok(!primary.includes('- cron: "7 6 * * *"'));
   assert.ok(!primary.includes('local_hour='));
-  assert.ok(primary.includes('github.event.schedule }}" == "7 6 * * *"'));
+  assert.ok(primary.includes('github.event.schedule }}" == "0 6 * * *"'));
   assert.ok(primary.includes('daily_import_job="1"'));
   assert.ok(primary.includes('DAILY_IMPORT_END_HOUR=23'));
   assert.ok(primary.includes('group: hoogvliet-supabase-update'));

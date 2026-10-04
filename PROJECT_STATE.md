@@ -1,3 +1,31 @@
+# Checkpoint 15 — Hoogvliet discovery/exhaustion-fix en 06:00-planning — 4 oktober 2026
+
+## Diagnose en bewezen oorzaak
+
+- Actuele remote `main` is vóór deze wijziging gecontroleerd op `13bd4f60fcc00e6821458d1f8a2afb3a4a188a22`; de werkboom was schoon. Deze wijziging staat op featurebranch `codex/fix-highvliet-discovery-400-20261004`; er is niet naar `main` gemerged.
+- De historische nulrun bewees geen lege Hoogvliet-catalogus. De eerder vastgelegde run had 18.286 ruwe hits: 8.651 bestaande, 2.459 duplicaten, 7.112 niet-relevant, 64 herhaalde pagina-hits en 0 nieuw. De in deze opdracht genoemde legacy-funnel van circa 8.550 pagina-hits is niet meer volledig reconstrueerbaar: het oude runrecord bewaart geen betrouwbare unieke-kandidaat-SKU-set. Daarom wordt voor die 8.550 geen verzonnen kandidatengetal gerapporteerd.
+- De codeoorzaak die wél bewezen is: persistente `exhaustedTerms` hadden geen fingerprint van de discoverystrategie. Route-einden uit een oudere listing-/paginationruimte konden daardoor een gewijzigde, grotere bereikbare ruimte overslaan; bij lege resterende routes kon `discovery_exhausted` volgen zonder bewijs dat de actuele ruimte was uitgeput. De al eerder bewezen historische beperkingen — te smalle dynamische keywordruimte, foutieve `+`-spatiecodering en keywordfiltering op categorieproducten — zijn op actuele `main` al opgelost met publieke categorie-routes en behouden normalisatie.
+- Bestaande SKU’s, duplicaten, invalidatie/detail/prijsgates en veilige bron-/paginationstops zijn niet versoepeld. Een route wordt nog steeds niet als globale uitputting gezien door alleen bekende resultaten; uitsluitend de actuele volledige routeverzameling kan `discovery_exhausted` opleveren.
+
+## Codefix en observability
+
+- `DISCOVERY_STRATEGY_VERSION` wordt persistent opgeslagen. Ontbrekende of afwijkende strategy-state wist alleen de oude route-einden/stalls en reset de discoverycursor éénmalig; bestaande producten blijven door SKU-dedupe beschermd. Daarna geldt de normale veilige exhaustionlogica opnieuw.
+- De resumable dagrun houdt een in-memory cross-segment SKU-set bij voor exacte unieke-kandidaatrapportage. De compacte summary toont nu page hits, unieke kandidaten, bestaande SKU’s, duplicaten, invalid, nieuwe geldige kandidaten, werkelijk toegevoegd, stopreden en cumulatieve `X/400`.
+- De primaire workflow staat op `0 6 * * *` met `timezone: Europe/Amsterdam`: op 5 oktober 2026 is dat aantoonbaar 04:00 UTC / 06:00 Nederlandse tijd. De workflow-dispatchvertakking gebruikt dezelfde cronwaarde.
+- Retries behouden de bestaande persistente daily claim en gebruiken uitsluitend `remainingTarget`; ze proberen niet ieder afzonderlijk 400 producten. De summary toont de cumulatieve dagstand als `cumulatief_nieuw=X/400`.
+
+## Tests en verwachte flow
+
+- Nieuwe regressies bewijzen dat 5.000 bekende kandidaten discovery niet blokkeren als latere nieuwe kandidaten bereikbaar zijn, legacy exhaustion na strategywijziging éénmaal wordt herhaald, de funnelsummary correct is en de primaire cron exact 06:00 NL is.
+- Root-gate: **328/328 tests groen**, inclusief pagination/cursor, categorie-traversal, bestaande SKU’s, duplicates, invalid, nieuwe geldige SKU’s, exhaustion-vs-stall, 400-target, retries/dagstand en challenge/bronfouten. `npm run check` groen inclusief syntaxchecks en drie seedchecks.
+- Geen live productimport, databasewrite, migration, Production-deploy of merge uitgevoerd. `ROADMAP.md` is niet gewijzigd.
+
+## Work-controle na PR
+
+- Work controleert PR + CI op exact deze branch/head en voert vóór merge geen import uit.
+- Na expliciete mergegoedkeuring: verifieer dat Production de workflow met de nieuwe `0 6`-cron bevat, dat de eerste natuurlijke run 5 oktober om 06:00 NL start, dat de gewone daily claim actief is en dat retries dezelfde `dailyImportId`/dagstand aanvullen.
+- Monitor live minimaal de funnelvelden en stopreden: page hits → unieke kandidaten → bestaande SKU’s/duplicates/invalid → nieuwe geldige kandidaten → werkelijk toegevoegd, plus `X/400`. Bevestig dat geen duplicate, ongeldige of onbetrouwbare kandidaat als groei telt.
+
 # Checkpoint 14C — productidentiteit en product_type read-only gecontroleerd — 4 oktober 2026
 
 ## Remote en Production

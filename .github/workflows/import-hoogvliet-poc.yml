@@ -74,9 +74,9 @@ on:
           - "5"
           - "6"
   schedule:
-    # Dagelijks 06:07 Nederlandse tijd; vermijd de drukke hele-uurgrens.
-    # GitHub plant dit direct in Europe/Amsterdam, ook over DST-wisselingen.
-    - cron: "7 6 * * *"
+    # Dagelijks exact 06:00 Nederlandse tijd (= 04:00 UTC op 5 oktober 2026);
+    # GitHub plant dit direct in Europe/Amsterdam over DST-wisselingen.
+    - cron: "0 6 * * *"
       timezone: "Europe/Amsterdam"
     # Dagelijks 02:17 UTC: één van zeven vaste prijsdeelbatches.
     - cron: "17 2 * * *"
@@ -248,7 +248,7 @@ jobs:
           discovery_state_key="daily-catalog-growth"
 
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            if [[ "${{ github.event.schedule }}" == "7 6 * * *" ]]; then
+            if [[ "${{ github.event.schedule }}" == "0 6 * * *" ]]; then
               update_mode="growth"
               catalog_batch="growth"
               price_shard="0"
