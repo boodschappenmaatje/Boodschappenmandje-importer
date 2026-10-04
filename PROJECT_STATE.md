@@ -9,6 +9,14 @@
 - PR #39 is gemerged. **Roadmap 1A blijft open** totdat bounded live recomputation van de goedgekeurde scope en de Honig/Knorr AFTER-audit zijn uitgevoerd en beoordeeld. `ROADMAP.md` is in dit checkpoint niet gewijzigd.
 - Volgende stap: **Checkpoint 14** — begrensde live herberekening van de goedgekeurde PR #39-scope, daarna read-only AFTER-audit Honig/Knorr en beoordeling van resterende NOT_READY-blokkades. Werk daarna `PROJECT_STATE.md` en `ROADMAP.md` bij; rond 1A alleen af als de resultaten dat aantonen. Pas dan door naar roadmap 1A.1, externe scrapingfallback voor Hoogvliet.
 
+## Checkpoint 14A — tijdelijke bounded Production runner — 4 oktober 2026
+
+- Remote `main` is opnieuw gecontroleerd op `7f8e8fbdd4acf16f8b7d90e8bb7ed2f2692daabc`; PR #39 is gemerged. Runner en deze documentatie zijn lokaal voorbereid op een aparte Codex-werkbranch; er is niets naar `main` gepusht.
+- De workflow gebruikt uitsluitend de bestaande `POST /api/internal/planner-readiness/bounded-refresh` op `https://boodschappenmaatje-pwa.vercel.app`. Auth is `Authorization: Bearer` met `PLANNER_CACHE_ADMIN_TOKEN`; Vercel deployment protection gebruikt `x-vercel-protection-bypass` met `VERCEL_AUTOMATION_BYPASS_SECRET`. Deze secretnamen staan al in bestaande workflows; GitHub-secretbeschikbaarheid kon niet onafhankelijk worden uitgelezen (GitHub API gaf 403). Geen Supabase/databasecredential nodig.
+- `.github/workflows/bounded-production-recompute.yml` is uitsluitend `workflow_dispatch`, met `RECOMPUTE_ARMED=false`. De bestaande service levert nu ook dependency keys, subscriber scope, source revision en de revision-CAS-snapshot in de admin dry-run response, zodat de runner die bestaande scope kan valideren; de runner berekent die scope niet zelf. De dispatcher moet de exacte zeven eerder goedgekeurde recipe-ID's expliciet invoeren; die UUID's staan niet in de repository-state.
+- Geen workflow-run of Production dry-run uitgevoerd; de vereiste secretwaarden en recipe-ID's zijn hier niet beschikbaar. Geen commit-POST, databasewrite, directe RPC, repair, schemawijziging, deploy of merge uitgevoerd.
+- Volgende stap: **Work checkpoint 14A-review** — workflow/API-uitvoer en vereiste GitHub Secrets controleren en de goedgekeurde recipe-ID's aanleveren. Daarna checkpoint 14B: verse disarmed dry-run beoordelen; alleen bij exacte goedgekeurde scope een afzonderlijke armed-run uitvoeren en direct disarmen, gevolgd door Honig/Knorr AFTER-audit. `ROADMAP.md` is niet gewijzigd.
+
 ---
 
 # Checkpoint 11H.3 — post-repair disarmed validator hersteld — 3 oktober 2026
