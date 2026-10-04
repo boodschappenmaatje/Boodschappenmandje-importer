@@ -607,3 +607,27 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 - Roadmap 1A.1 kan **niet sluiten**. Volgende stap is een afzonderlijk, herhaalbaar bewijs voor één normale Hoogvliet `CHALLENGE` gevolgd door exact dezelfde URL via Zyte, of — als dat niet reproduceerbaar is — het fallbackbesluit beperken tot bewezen productdetailrequests. Geen Production-integratie zonder aparte toestemming.
 
 ---
+# Roadmap 1A.1 — Zyte checkpoint 3: normale challenge-fallback — 4 oktober 2026
+
+## Cloudprobe
+
+- Remote `main` bleef `211a3a1f2333e66598a979315460a7ec0c8ef941`; de proef draaide op `codex/roadmap-1a-1-provider-research`, vanaf `d015210`.
+- Tijdelijke GitHub Actions-run `37238160665` installeerde alleen de bestaande npm-dependencies en Playwright/Chromium en gebruikte de bestaande `waitForSourceContent()` en `validateCandidate()`-flow. Geen nieuwe scraperlogica, import, databasewrite of Production-data.
+- Gebruikte bestaande Hoogvliet-URL: `https://www.hoogvliet.com/product/trostomaten-verpakt`.
+
+## Resultaat
+
+- Chromium/Playwright cloudfetch: **ja**.
+- Normale fetch: HTTP 200, detectorclassificatie **`VALID_SOURCE`**, bestaande parser/validatie vond bruikbare productdata. De normale flow leverde geen `CHALLENGE` op.
+- Volgens de afgesproken stopregel is daarom **geen Zyte-request** uitgevoerd. Er is geen kunstmatig challengegedrag uitgelokt.
+- Zyte-resultaat: **niet van toepassing**; geen `CHALLENGE → VALID_SOURCE`-overgang bewezen.
+- Nieuwe Zyte-requests in dit checkpoint: **0**. Geschatte Zyte-kosten: **$0**. De eerdere checkpoint-2 requests blijven historische onderzoeksdata.
+
+## Besluit
+
+- Een echte normale Hoogvliet-challenge is in deze cloudrun niet reproduceerbaar. Zyte kan daarom nog niet aantoonbaar als challenge-fallback worden aanbevolen.
+- De listingfallback blijft **niet bewezen** en is in dit checkpoint bewust niet onderzocht; listingfallback is niet noodzakelijk om productdetail-fallback te beoordelen.
+- `ROADMAP.md` is niet gewijzigd. Roadmap 1A.1 kan **niet sluiten**.
+- Aanbevolen volgende stap: alleen bij een natuurlijk reproduceerbare normale `CHALLENGE` exact dezelfde URL eenmaal via Zyte testen. Geen challenge kunstmatig uitlokken en geen Production-integratie zonder aparte toestemming.
+
+---
