@@ -25,7 +25,7 @@ const result = { blocked: false, reason: null, matchWrites: 1, readinessWrites: 
 function client(commitError: { code: string; message: string } | null = null) {
   const rpc = vi.fn(async (name: string) => {
     if (name === "bounded_readiness_source_revision") return { data: "17", error: null };
-    if (name === "bounded_readiness_plan") return { data: { planToken: token, sourceRevision: "17" }, error: null };
+    if (name === "bounded_readiness_plan") return { data: { planToken: token, sourceRevision: "17", state: { resources: [[`k:${key}`, "0"], [`r:${recipeId}`, "0"]] } }, error: null };
     if (name === "commit_bounded_readiness") return { data: commitError ? null : result, error: commitError };
     throw new Error(`unexpected RPC ${name}`);
   });

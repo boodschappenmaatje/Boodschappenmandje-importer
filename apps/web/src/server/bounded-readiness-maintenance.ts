@@ -41,6 +41,10 @@ export interface BoundedRefreshPlan {
   requestedMatchKeys: string[];
   requestedRecipeIds: string[];
   resolvedRecipeIds: string[];
+  dependencyKeys?: string[];
+  sourceRevision?: string | null;
+  casRevisions?: Array<[string, string]>;
+  subscriberScope?: Array<{ recipeId: string; peopleCount: number }>;
   plannedMatchWrites: number;
   plannedReadinessWrites: number;
   unexpectedDependencies: string[];
@@ -149,6 +153,13 @@ async function inspectBoundedScope(client: SupabaseClient, input: BoundedRefresh
   if (subscribers.error || !Array.isArray(subscribers.data)) throw new Error("subscriber_scope_unavailable");
   const plan = buildBoundedRefreshPlan(input, keysByPeople, subscribers.data as Subscriber[], recipes.map((recipe) => recipe.id));
   const dependencyKeys = [...new Set([...keysByPeople.values()].flatMap((keys) => [...keys.values()].flat()))].sort();
+  plan.dependencyKeys = dependencyKeys;
+  plan.sourceRevision = transactional ? source?.data as string : null;
+  plan.subscriberScope = subscribers.data.map((row: Subscriber) => ({
+    recipeId: row.recipe_id,
+    peopleCount: row.people_count,
+  })).sort((a: { recipeId: string; peopleCount: number }, b: { recipeId: string; peopleCount: number }) =>
+    a.recipeId.localeCompare(b.recipeId) || a.peopleCount - b.peopleCount);
   plan.transactional = transactional;
   if (!transactional) {
     // Public Preview inspection never creates a write token or needs an RPC
@@ -164,6 +175,13 @@ async function inspectBoundedScope(client: SupabaseClient, input: BoundedRefresh
       throw new Error("bounded_plan_unavailable");
     }
     plan.planToken = snapshot.data.planToken;
+    const revisions = snapshot.data?.state?.resources;
+    if (!Array.isArray(revisions) || revisions.some((entry: unknown) =>
+      !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== "string" ||
+      typeof entry[1] !== "string" || !/^\d+$/.test(entry[1]))) {
+      throw new Error("bounded_revision_snapshot_unavailable");
+    }
+    plan.casRevisions = revisions as Array<[string, string]>;
   }
   return { catalog, recipes, plan, dependencyKeys };
 }
