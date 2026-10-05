@@ -85,10 +85,17 @@ page.on("response", response => {
         const body = await response.text();
         const url = new URL(response.url());
         const query = url.searchParams.get("query") ?? "";
+        const variables = url.searchParams.get("variables") ?? "";
         record.operationName = url.searchParams.get("operationName");
-        record.queryStart = query.replace(/\s+/g, " ").trim().slice(0, 300);
+        record.query = query.replace(/\s+/g, " ").trim();
+        record.variables = variables;
         record.bodyLength = body.length;
         record.bodyStart = body.replace(/\s+/g, " ").slice(0, 300);
+        try {
+          const parsed = JSON.parse(body);
+          const items = parsed?.data?.products?.items;
+          if (Array.isArray(items)) record.firstItem = items[0] ?? null;
+        } catch { record.jsonParse = false; }
       } catch { record.bodyRead = "failed"; }
     })());
   }
