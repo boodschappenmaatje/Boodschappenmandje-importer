@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { DAILY_SCHEDULE_OFFSETS, evaluateDailySchedule } from '../src/daily-schedule-gate.mjs';
+import { nextEmptySourceSearchCount } from '../src/hoogvliet.mjs';
 
 const primary = readFileSync(new URL('../.github/workflows/import-hoogvliet-poc.yml', import.meta.url), 'utf8');
 const monitor = readFileSync(new URL('../.github/workflows/monitor-catalog-import.yml', import.meta.url), 'utf8');
@@ -20,6 +21,16 @@ test('primary workflow uses valid UTC cron entries and keeps the existing jobs',
   assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
   assert.match(primary, /DAILY_IMPORT_END_HOUR=23/);
   assert.match(primary, /group: hoogvliet-supabase-update/);
+  assert.match(primary, /daily_import:\n        description: Start exact de persistente dagelijkse 400-job/);
+  assert.match(primary, /inputs\.daily_import.*true/);
+  assert.match(primary, /update_mode="growth"/);
+  assert.match(primary, /catalog_batch="growth"/);
+  assert.match(primary, /max_products="400"/);
+  assert.match(primary, /daily_import_job="1"/);
+  assert.match(primary, /DAILY_IMPORT_JOB=\$daily_import_job/);
+  assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
+  assert.match(primary, /npm run import:daily/);
+  assert.match(primary, /update_mode="\$\{\{ inputs\.update_mode \}\}"/);
 });
 
 test('04:00 UTC is the 06:00 Dutch trigger during CEST', () => {
@@ -57,6 +68,15 @@ test('the other daily UTC candidate is safely skipped and delayed valid events r
   // runner wall-clock hour after its DST offset has been identified.
   assert.equal(evaluateDailySchedule({ schedule: '0 4 * * *', instant: '2026-07-05T06:00:00Z' }).shouldRun, true);
   assert.equal(evaluateDailySchedule({ schedule: '17 2 * * *', instant: '2026-07-05T02:17:00Z' }).shouldRun, false);
+});
+
+test('three valid empty searches do not become a global source failure', () => {
+  let consecutive = 0;
+  for (const term of ['gehakt', 'rundergehakt', 'kip']) {
+    assert.ok(term);
+    consecutive = nextEmptySourceSearchCount(consecutive, 0, 'valid_empty_search');
+  }
+  assert.equal(consecutive, 0);
 });
 
 test('daily cap, persistent day state, retries, price and weekly schedules stay intact', () => {

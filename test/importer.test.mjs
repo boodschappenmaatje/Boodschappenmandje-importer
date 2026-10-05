@@ -44,6 +44,8 @@ import {
   selectPriceShard,
   selectPriceShardWindow,
   SourceBlockedError,
+  ParserStructureChangedError,
+  SourceNavigationError,
   withTransientNavigationRetry,
   waitForSourceContent,
   resolvedProductTypeForRefresh,
@@ -130,7 +132,7 @@ test("paginering en catalogusfocus zijn configureerbaar en hard begrensd", () =>
   assert.equal(limits.safePagesPerTermLimit, 8);
 });
 
-test("een lege Incapsula-loader wordt als tijdelijke bronbeveiliging herkend", () => {
+test("bronclassificatie onderscheidt challenge, lege zoekroute, parserwijziging en bronstoring", () => {
   assert.equal(classifySourcePageEvidence({
     hasExpectedContent: false,
     hasIncapsula: true,
@@ -143,7 +145,7 @@ test("een lege Incapsula-loader wordt als tijdelijke bronbeveiliging herkend", (
     bodyTextLength: 1832,
     htmlLength: 704779,
   }), "ready");
-  assert.equal(classifySourcePageEvidence({ captcha: true }), "blocked");
+  assert.equal(classifySourcePageEvidence({ captcha: true }), "challenge");
   assert.equal(classifySourcePageEvidence({
     hasExpectedContent: false,
     hasIncapsula: true,
@@ -154,7 +156,16 @@ test("een lege Incapsula-loader wordt als tijdelijke bronbeveiliging herkend", (
     hasExpectedContent: false,
     hasExplicitEmptyState: true,
     hasIncapsula: true,
-  }), "empty");
+  }), "valid_empty_search");
+  assert.equal(classifySourcePageEvidence({
+    hasSearchStructure: true,
+    hasIncapsula: true,
+  }), "security_check");
+  assert.equal(classifySourcePageEvidence({ hasSearchStructure: true, hasZeroProductCount: true }), "valid_empty_search");
+  assert.equal(classifySourcePageEvidence({ hasSearchStructure: true }), "parser_structure_changed");
+  assert.equal(classifySourcePageEvidence({ htmlLength: 200_000 }), "parser_structure_changed");
+  assert.equal(classifySourcePageEvidence({ responseStatus: 503 }), "source_unavailable");
+  assert.equal(classifySourcePageEvidence({ navigationError: true }), "navigation_error");
 });
 
 test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resetten de teller", () => {
@@ -162,6 +173,24 @@ test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resett
   assert.equal(nextEmptySourceSearchCount(1, 0), 2);
   assert.equal(nextEmptySourceSearchCount(2, 0), 3);
   assert.equal(nextEmptySourceSearchCount(3, 4), 0);
+  assert.equal(nextEmptySourceSearchCount(2, 0, "valid_empty_search"), 0);
+});
+
+test("parser- en navigatiefouten worden niet als geldige lege zoekroute verborgen", () => {
+  assert.equal(new ParserStructureChangedError("layout").code, "parser_structure_changed");
+  const navigation = new SourceNavigationError("navigation");
+  assert.equal(navigation.code, "navigation_error");
+  assert.equal(navigation.retryable, true);
+});
+
+test("een geldige lege zoekroute is lokale uitputting, geen globale bronstoring", async () => {
+  const empty = [];
+  empty.sourceClassification = "valid_empty_search";
+  empty.sourceExhausted = true;
+  const result = await collectCandidatePages(async () => empty, "gehakt", 4);
+  assert.equal(result.sourceClassification, "valid_empty_search");
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.stallReason, null);
 });
 
 test("bronproblemen krijgen een consumentveilige catalogusstatus", () => {
