@@ -95,6 +95,12 @@ try {
 }
 
 const candidateCount = collector.status === "ok" ? collector.candidates : 0;
+const legacyIntershopStaticAssets = network
+  .filter(record => /\/INTERSHOP\/static\//i.test(record.endpoint.pathname))
+  .map(record => record.endpoint);
+const legacyDiscoveryEndpoints = network
+  .filter(record => /ViewTWParametricSearch|\/INTERSHOP\/web\/WFS\//i.test(record.endpoint.pathname))
+  .map(record => record.endpoint);
 const legacyIntershopEndpoints = network
   .filter(record => /INTERSHOP|ViewTWParametricSearch/i.test(record.endpoint.pathname))
   .map(record => record.endpoint);
@@ -115,7 +121,9 @@ const proof = {
   proofBeyondInitialBatch: (collector.pagesFetched ?? 0) > 1
     || candidateCount > (collector.initialCandidateCount ?? 0),
   loadMoreCycles: collector.listingLoadMoreCycles ?? 0,
-  noLegacyIntershop: legacyIntershopEndpoints.length === 0,
+  noLegacyIntershop: legacyDiscoveryEndpoints.length === 0,
+  legacyDiscoveryEndpoints,
+  legacyIntershopStaticAssets,
   legacyIntershopEndpoints,
 };
 const result = {

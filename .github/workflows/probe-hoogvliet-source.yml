@@ -77,8 +77,9 @@ jobs:
             const network = (proof.network ?? []).slice(0, 3)
               .map(record => `${record.type}:${record.status}:${record.endpoint?.pathname ?? "?"}`).join("|");
             const navigation = proof.navigation ?? {};
-            const legacy = (proof.proof?.legacyIntershopEndpoints ?? []).map(endpoint => endpoint.pathname).join(",") || "none";
-            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};routes=${proof.proof?.routesVisited ?? 0};categories=${proof.proof?.dynamicCategories ?? 0};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};pages=${proof.proof?.pagesFetched ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};legacy=${legacy};status=${navigation.rootStatus ?? "unknown"};network=${network}`;
+            const legacy = (proof.proof?.legacyDiscoveryEndpoints ?? []).map(endpoint => endpoint.pathname).join(",") || "none";
+            const staticAssets = (proof.proof?.legacyIntershopStaticAssets ?? []).length;
+            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};routes=${proof.proof?.routesVisited ?? 0};categories=${proof.proof?.dynamicCategories ?? 0};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};pages=${proof.proof?.pagesFetched ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};legacy_discovery=${legacy};legacy_static_assets=${staticAssets};status=${navigation.rootStatus ?? "unknown"};network=${network}`;
             process.stdout.write(label.replace(/[\r\n]/g, " ").slice(0, 240));
           } catch {
             process.stdout.write("classification=NO_PROOF;candidates=0");
