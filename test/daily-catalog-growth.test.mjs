@@ -7,9 +7,11 @@ import {
   classifyDailyImportError,
   dailyRetryAt,
   dailyRetryDelayMinutes,
+  failedDailyRecoveryDecision,
   inspectDailyCatalogAttempt,
   isDailyImportWindowOpen,
   formatDailyAttemptSummary,
+  runFailedDailyRecovery,
   runDailyCatalogAttempt,
   shouldRunDailyImport,
 } from "../src/daily-catalog-growth.mjs";
@@ -17,6 +19,7 @@ import { evaluateDailyCatalogMonitor } from "../src/catalog-monitor.mjs";
 import {
   claimCatalogDailyAttempt,
   finishCatalogDailyAttempt,
+  recoverCatalogDailyAttempt,
   rpcURL,
 } from "../src/supabase.mjs";
 
@@ -45,6 +48,88 @@ test('daily summary exposes the funnel and cumulative 400 target', () => {
   assert.match(summary, /duplicaten=240/);
   assert.match(summary, /nieuwe_geldige_kandidaten=60/);
   assert.match(summary, /cumulatief_nieuw=137\/400/);
+});
+
+function failedRecoveryJob(overrides = {}) {
+  const job = {
+    id: 'daily-recovery-1', stateKey: config.dailyImportStateKey, jobDate: '2026-09-17',
+    targetNewProducts: 400, newProductsCollected: 0, remainingTarget: 400,
+    status: 'failed_requires_attention', attemptCount: 1, recoveryCount: 0,
+    lockExpiresAt: null, updatedAt: '2026-09-17T08:05:00.000Z',
+    ...overrides,
+  };
+  return job;
+}
+
+const endedFailureAttempt = [{
+  attempt_number: 1, status: 'non_retryable_failure',
+  error_code: 'non_retryable_import_error', completed_at: '2026-09-17T08:05:00.000Z',
+}];
+
+test('failed_requires_attention 0/400 zonder lock is alleen expliciet recovery-eligible', () => {
+  const decision = failedDailyRecoveryDecision(failedRecoveryJob(), endedFailureAttempt);
+  assert.deepEqual(decision, { allowed: true, reason: 'failed_daily_recovery_eligible' });
+});
+
+test('recovery behoudt gedeeltelijke 137/400-voortgang en resterend 263', () => {
+  const job = failedRecoveryJob({ newProductsCollected: 137, remainingTarget: 263 });
+  const decision = failedDailyRecoveryDecision(job, endedFailureAttempt);
+  assert.equal(decision.allowed, true);
+  assert.equal(job.newProductsCollected, 137);
+  assert.equal(job.remainingTarget, 263);
+  assert.equal(job.targetNewProducts, 400);
+});
+
+test('failed daily recovery wijst status-, target-, lock- en attemptguards af', () => {
+  const cases = [
+    [{ status: 'running' }, 'failed_daily_recovery_status_not_eligible'],
+    [{ newProductsCollected: 400, remainingTarget: 0, status: 'target_reached' }, 'failed_daily_recovery_status_not_eligible'],
+    [{ lockExpiresAt: '2026-09-17T10:00:00.000Z' }, 'failed_daily_recovery_lock_present'],
+    [{}, 'failed_daily_recovery_attempt_running'],
+  ];
+  for (const [overrides, reason] of cases) {
+    const attempts = reason === 'failed_daily_recovery_attempt_running'
+      ? [{ status: 'running', completed_at: null }]
+      : endedFailureAttempt;
+    assert.equal(failedDailyRecoveryDecision(failedRecoveryJob(overrides), attempts).reason, reason);
+  }
+  assert.equal(
+    failedDailyRecoveryDecision(failedRecoveryJob({ recoveryCount: 1 }), endedFailureAttempt).reason,
+    'failed_daily_recovery_already_used',
+  );
+});
+
+test('failed daily recovery claim is explicit, single-use and does not reset state', async () => {
+  const harness = createHarness([{ new: 400 }]);
+  harness.state.status = 'failed_requires_attention';
+  harness.state.updatedAt = '2026-09-17T08:05:00.000Z';
+  harness.state.recoveryCount = 0;
+  harness.dependencies.fetchJob = async () => ({ ...harness.state, recoveryCount: harness.state.recoveryCount });
+  harness.dependencies.fetchAttempts = async () => endedFailureAttempt;
+  let recoveryCalls = 0;
+  harness.dependencies.recover = async (_config, input) => {
+    recoveryCalls += 1;
+    assert.equal(input.job.newProductsCollected, 0);
+    assert.equal(input.job.remainingTarget, 400);
+    harness.state.recoveryCount = 1;
+    harness.state.status = 'running';
+    harness.state.attemptCount = 2;
+    return {
+      claimed: true, recovered: true, recoveryId: 'recovery-1',
+      attemptId: 'attempt-2', lockToken: 'lock-2', job: { ...harness.state },
+    };
+  };
+  const result = await runFailedDailyRecovery({ ...config, dailyRecoveryReason: 'software_fix_verified' }, logger, harness.dependencies);
+  assert.equal(result.job.newProductsCollected, 400);
+  assert.equal(result.job.targetNewProducts, 400);
+  assert.equal(recoveryCalls, 1);
+
+  harness.state.status = 'failed_requires_attention';
+  await assert.rejects(
+    runFailedDailyRecovery({ ...config, dailyRecoveryReason: 'software_fix_verified' }, logger, harness.dependencies),
+    /failed_daily_recovery_already_used/,
+  );
+  assert.equal(recoveryCalls, 1);
 });
 
 test('challenge after 100 preserves remaining, releases via finish and schedules bounded 15/30/60 cooldowns', async () => {
@@ -330,9 +415,20 @@ test("dagjobmigratie is additief, server-locked en browser read-only", async () 
     new URL("../supabase/migrations/20260917092809_self_healing_daily_catalog_growth.sql", import.meta.url),
     "utf8",
   );
+  const recoveryMigration = await readFile(
+    new URL("../supabase/migrations/20261005220000_recover_failed_daily_catalog_growth.sql", import.meta.url),
+    "utf8",
+  );
+  const allMigrations = `${migration}\n${recoveryMigration}`;
   assert.match(migration, /create table if not exists public\.catalog_daily_jobs/i);
   assert.match(migration, /create table if not exists public\.catalog_daily_attempts/i);
   assert.match(migration, /claim_catalog_daily_attempt/i);
+  assert.match(allMigrations, /recover_catalog_daily_attempt/i);
+  assert.match(allMigrations, /catalog_daily_recoveries/i);
+  assert.match(allMigrations, /recovery_count between 0 and 1/i);
+  assert.match(allMigrations, /p_expected_updated_at/i);
+  assert.match(allMigrations, /original_failure_reason/i);
+  assert.match(allMigrations, /new_attempt_id/i);
   assert.match(migration, /for update/i);
   assert.match(migration, /catalog_daily_jobs_single_running_idx/i);
   assert.match(migration, /grant select on public\.catalog_daily_jobs to anon, authenticated/i);
@@ -395,6 +491,47 @@ test("daily job-RPC's gebruiken typed claims en locktokens", async () => {
   assert.equal(requests.length, 2);
   assert.equal(requests[0].body.p_target_new_products, 10);
   assert.equal(requests[1].body.p_lock_token, "lock-1");
+});
+
+test('daily recovery RPC krijgt expected state/CAS en maakt geen directe status-edit', async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), body: JSON.parse(options.body) };
+    return new Response(JSON.stringify({
+      claimed: true, recovered: true, reason: 'recovered_and_claimed',
+      recoveryId: 'recovery-1', attemptId: 'attempt-2', lockToken: 'lock-2',
+      job: {
+        id: 'daily-recovery-1', state_key: 'daily-catalog-growth-test', job_date: '2026-09-17',
+        timezone: 'Europe/Amsterdam', target_new_products: 400,
+        new_products_collected: 137, status: 'running', attempt_count: 2,
+        recovery_count: 1, updated_at: '2026-09-17T08:10:00.000Z',
+      },
+    }), { status: 200 });
+  };
+  try {
+    const result = await recoverCatalogDailyAttempt({
+      supabaseURL: 'https://voorbeeld.supabase.co', supabaseSecret: 'secret',
+    }, {
+      job: failedRecoveryJob({
+        id: 'daily-recovery-1', newProductsCollected: 137, remainingTarget: 263,
+        updatedAt: '2026-09-17T08:05:00.000Z',
+      }),
+      recoveryReason: 'software_fix_verified',
+      now: new Date('2026-09-17T08:10:00.000Z'),
+    });
+    assert.equal(result.recovered, true);
+    assert.equal(result.job.newProductsCollected, 137);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(request.url, 'https://voorbeeld.supabase.co/rest/v1/rpc/recover_catalog_daily_attempt');
+  assert.equal(request.body.p_expected_status, 'failed_requires_attention');
+  assert.equal(request.body.p_expected_updated_at, '2026-09-17T08:05:00.000Z');
+  assert.equal(request.body.p_expected_attempt_count, 1);
+  assert.equal(request.body.p_expected_new_products_collected, 137);
+  assert.equal(request.body.p_expected_remaining_target, 263);
+  assert.equal(request.body.p_recovery_reason, 'software_fix_verified');
 });
 
 test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenlange sleep", async () => {

@@ -80,6 +80,28 @@ test("MAX_PRODUCTS is configureerbaar met een veilige standaard en bovengrens", 
   assert.equal(limits.safeProductLimit, 500);
 });
 
+test("failed daily recovery vereist expliciete daily growth-configuratie en categorie", () => {
+  assert.throws(
+    () => loadConfig({ DRY_RUN: "1", RECOVER_FAILED_DAILY: "1" }),
+    /Failed daily recovery vereist/,
+  );
+  const recovery = loadConfig({
+    DRY_RUN: "1", UPDATE_MODE: "growth", DAILY_IMPORT_JOB: "1",
+    DAILY_NEW_PRODUCT_TARGET: "400", RECOVER_FAILED_DAILY: "1",
+    DAILY_RECOVERY_REASON: "software_fix_verified",
+  });
+  assert.equal(recovery.recoverFailedDaily, true);
+  assert.equal(recovery.dailyRecoveryReason, "software_fix_verified");
+  assert.throws(
+    () => loadConfig({
+      DRY_RUN: "1", UPDATE_MODE: "growth", DAILY_IMPORT_JOB: "1",
+      DAILY_NEW_PRODUCT_TARGET: "400", RECOVER_FAILED_DAILY: "1",
+      DAILY_RECOVERY_REASON: "operator_override",
+    }),
+    /Failed daily recovery vereist/,
+  );
+});
+
 test("catalogusbatches zijn selecteerbaar en SEARCH_TERMS blijft een override", () => {
   const fresh = loadConfig({ DRY_RUN: "1", CATALOG_BATCH: "fresh" });
   assert.equal(fresh.catalogBatch, "fresh");

@@ -13,6 +13,7 @@ import {
   hasProductTypeColumn,
   fetchCatalogAcceptanceSnapshot,
   fetchCatalogDailyAttempts,
+  recoverCatalogDailyAttempt,
   requeueSourceChallenge,
 } from "./supabase.mjs";
 
@@ -109,6 +110,31 @@ export function shouldRunDailyImport(job, now = new Date(), options = {}) {
     }
   }
   return { run: true, reason: "attempt_due" };
+}
+
+export function failedDailyRecoveryDecision(job, attempts = []) {
+  if (!job) return { allowed: false, reason: "failed_daily_recovery_requires_existing_day" };
+  if (job.status !== "failed_requires_attention") {
+    return { allowed: false, reason: "failed_daily_recovery_status_not_eligible" };
+  }
+  if (Number(job.recoveryCount ?? 0) !== 0) {
+    return { allowed: false, reason: "failed_daily_recovery_already_used" };
+  }
+  if (job.targetNewProducts !== 400 || job.newProductsCollected >= job.targetNewProducts
+      || job.remainingTarget <= 0) {
+    return { allowed: false, reason: "failed_daily_recovery_target_not_remaining" };
+  }
+  if (job.lockExpiresAt != null) {
+    return { allowed: false, reason: "failed_daily_recovery_lock_present" };
+  }
+  if (attempts.some(attempt => attempt.status === "running")) {
+    return { allowed: false, reason: "failed_daily_recovery_attempt_running" };
+  }
+  const previous = attempts.at(-1);
+  if (!previous || previous.status !== "non_retryable_failure" || !previous.completed_at) {
+    return { allowed: false, reason: "failed_daily_recovery_previous_attempt_open" };
+  }
+  return { allowed: true, reason: "failed_daily_recovery_eligible" };
 }
 
 function resultCounts(result = {}) {
@@ -233,7 +259,7 @@ export async function runDailyCatalogAttempt(config, logger = console, dependenc
     return { attempted: false, reason: "outside_daily_window", job: null };
   }
 
-  const claim = await (dependencies.claim ?? claimCatalogDailyAttempt)(config, {
+  const claim = dependencies.preclaimedClaim ?? await (dependencies.claim ?? claimCatalogDailyAttempt)(config, {
     stateKey: config.dailyImportStateKey,
     jobDate,
     targetNewProducts: config.dailyTargetNewProducts,
@@ -425,6 +451,38 @@ export async function runDailyAcceptance(config, logger = console, dependencies 
   return { phaseA, phaseB };
 }
 
+export async function runFailedDailyRecovery(config, logger = console, dependencies = {}) {
+  const now = dependencies.now?.() ?? new Date();
+  const jobDate = amsterdamDateKey(now);
+  if (!isDailyImportWindowOpen(now, { endHour: config.dailyEndHour })) {
+    return { attempted: false, recovered: false, reason: "outside_daily_window", job: null };
+  }
+  const job = await (dependencies.fetchJob ?? fetchCatalogDailyJob)(config, {
+    stateKey: config.dailyImportStateKey,
+    jobDate,
+  });
+  if (!job) throw new Error("failed_daily_recovery_requires_existing_day");
+  const attempts = await (dependencies.fetchAttempts ?? fetchCatalogDailyAttempts)(config, job.id);
+  const decision = failedDailyRecoveryDecision(job, attempts);
+  if (!decision.allowed) throw new Error(decision.reason);
+  const recovered = await (dependencies.recover ?? recoverCatalogDailyAttempt)(config, {
+    job,
+    recoveryReason: config.dailyRecoveryReason,
+    now,
+    lockTTLMinutes: 130,
+  });
+  logger.info(
+    `Daily recovery geaccepteerd: recoveryId=${recovered.recoveryId}, `
+      + `dailyImportId=${recovered.job.id}, vorige_stand=${job.newProductsCollected}/${job.targetNewProducts}, `
+      + `resterend=${job.remainingTarget}, nieuwe_attempt=${recovered.attemptId}.`,
+  );
+  return runDailyCatalogAttempt(config, logger, {
+    ...dependencies,
+    now: () => now,
+    preclaimedClaim: recovered,
+  });
+}
+
 export async function mainDailyCatalogGrowth(env = process.env) {
   const config = loadConfig(env);
   if (config.updateMode !== "growth") {
@@ -433,6 +491,7 @@ export async function mainDailyCatalogGrowth(env = process.env) {
   if (config.dryRun) throw new Error("De dagelijkse catalogusjob ondersteunt geen DRY_RUN.");
   const logger = safeLogger(config.supabaseSecret);
   if (config.resumeSourceChallenge) return resumeSourceChallenge(config, logger);
+  if (config.recoverFailedDaily) return runFailedDailyRecovery(config, logger);
   return config.dailyAcceptanceGate ? runDailyAcceptance(config, logger) : runDailyCatalogAttempt(config, logger);
 }
 

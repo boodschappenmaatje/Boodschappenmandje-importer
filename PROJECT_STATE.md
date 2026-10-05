@@ -1,3 +1,41 @@
+# Checkpoint 20 — veilige recovery van failed_requires_attention — 5 oktober 2026
+
+## Startpunt en bewezen blokkade
+
+- De actuele `origin/main` is gecontroleerd op `b901ff77e6181c15c521a4e70471c2bc52c2ce53`. PR #47 is gemerged en Production READY; PR #45 schedulerfix en PR #46 daily-dispatch zijn eveneens onderdeel van deze `main`. Deze wijziging staat op een nieuwe featurebranch en wordt niet naar `main` gemerged.
+- Production-job `daily-catalog-growth`, datum `2026-10-05`, ID `53553be0-2158-47b1-92c3-2bc75cd7d0cc`: `failed_requires_attention`, poging 1, `0/400`, `remainingTarget=400`, geen stale lock. Run #112 / Actions-run `37289231212` faalde met `non_retryable_import_error` vóór discovery of productwrite door de bewezen Playwright `page.evaluate`-argumentenfout; PR #47 heeft die fout opgelost.
+- De bestaande scheduler en `claim_catalog_daily_attempt` blijven correct weigeren: `shouldRunDailyImport` geeft `run=false` voor deze status en de normale claim heropent hem niet. Er is geen workflow-dispatch, statusedit, databasewrite, recovery, import of deploy uitgevoerd.
+
+## Gekozen recoverymechanisme
+
+- De nieuwe service-role RPC `recover_catalog_daily_attempt` voert recovery en precies één nieuwe daily-attemptclaim atomair uit. De normale scheduler/claim blijft onveranderd en kan `failed_requires_attention` niet zelfstandig heropenen.
+- De workflow heeft twee expliciete inputs: `daily_import=true` én `recover_failed_daily=true`, met een beperkte redenkeuze `software_fix_verified` of `infrastructure_fix_verified`. Zonder de eerste input faalt de workflow vóór de importer; preflight/E2E-paden worden uitgesloten. De importer gebruikt geen directe REST-statusupdate.
+- De recovery-RPC maakt een nieuwe attempt met lock en geeft dezelfde `dailyImportId`, `remainingTarget` en bestaande dagstand aan de bestaande `runDailyCatalogAttempt`-logica door. Daarna geldt de normale finish/state-machine-uitkomst. Een tweede expliciete recovery wordt door `recovery_count` en een unieke recovery-auditindex geweigerd; automatische schedulerretries krijgen geen speciale toegang tot de terminale status.
+
+## Guards en statebehoud
+
+- De RPC vereist exact: bestaand `dailyImportId`, dezelfde state key/datum, `failed_requires_attention`, `expected updated_at`/revision, verwacht attempt count, verwachte `new_products_collected` en `remainingTarget`, target exact 400, resterend doel groter dan 0, `recovery_count=0`, geen lock, geen running attempt en een definitief beëindigde laatste `non_retryable_failure`-attempt.
+- De database `FOR UPDATE`-lock plus CAS-vergelijkingen voorkomt races; de tweede gelijktijdige recovery ziet de gewijzigde status/revision/recovery_count en faalt. De RPC accepteert alleen de twee gecontroleerde recoverycategorieën en is uitsluitend aan `service_role` verleend.
+- Migration `20261005220000_recover_failed_daily_catalog_growth.sql` voegt additief `recovery_count` en de RLS-afgeschermde append-only tabel `catalog_daily_recoveries` toe. De audit bewaart recoverytijdstip, originele status/failure reason, recoverycategorie, vorige attempt-ID, nieuwe attempt-ID, dagstand vóór recovery, resterend doel en verwachte revision. Er worden geen products, prices, discovery-cursors, `exhaustedTerms` of bestaande counters gereset.
+- Voor 0/400 blijft de job 0/400 met restant 400; voor bijvoorbeeld 137/400 blijft hij 137/400 met restant 263. De nieuwe poging start alleen met dat resterende doel.
+
+## Tests en releasegate
+
+- Gerichte daily/config/workflow-tests: **127/127 groen**. Volledige root-suite: **341/341 groen**. `npm run check`: groen. PostgreSQL atomic/concurrency-gate: **25/25 groen**. Workflow-YAML-validatie: groen.
+- Regressies dekken 0/400 eligible, 137/400 behoud, running/completed/lock/attempt/revision guards, normale schedulerweigering, één recoveryclaim, dubbele recovery, statebehoud, target 400, audit/CAS-payload, PR #45 scheduler, PR #46 daily-import en PR #47 Playwright-contract.
+- Supabase CLI was niet beschikbaar in deze Codex-omgeving; de migration is daarom expliciet voorbereid en lokaal via tekst-/contracttests gecontroleerd. Work moet de migration als afzonderlijke releasehandeling toepassen en de migration history/read-only schemaresultaten controleren vóór recovery. Geen live migration is uitgevoerd.
+- `ROADMAP.md` is niet gewijzigd. Branch: `codex/recover-failed-daily-attention-20261005`.
+
+## Exacte Work-volgorde na PR
+
+1. Controleer PR + CI en review de migration/RPC-diff.
+2. Pas uitsluitend migration `20261005220000_recover_failed_daily_catalog_growth.sql` veilig toe; verifieer column, audit table, function grants en migration history. Bij schema-/migrationfout: stoppen, geen recovery.
+3. Controleer read-only dat job-ID/datum/status/0/400/restant400/geen lock nog exact kloppen.
+4. Geef expliciete mergegoedkeuring; merge en controleer Production READY.
+5. Dispatch exact één keer met `daily_import=true`, `recover_failed_daily=true`, `recovery_reason=software_fix_verified`; geen `daily_attempt_only`, `resume_source_challenge`, preflight of E2E-flags.
+6. Controleer audit/recovery-ID, dezelfde `dailyImportId`, nieuwe attempt-ID, lock, funnel en `X/400`. Start geen tweede recovery of losse import.
+7. Als discovery werkt maar weinig nieuwe SKU’s vindt: eerst bereikbare unieke Hoogvliet-SKU’s vergelijken met de Production-catalogus (~7.540); geen nieuwe discoveryfix bouwen zonder dat bewijs.
+
 # Checkpoint 19 — PR #47 Playwright-hotfix release — 5 oktober 2026
 
 ## Merge en Production

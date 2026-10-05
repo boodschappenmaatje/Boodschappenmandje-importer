@@ -15,6 +15,17 @@ on:
         description: Start exact de persistente dagelijkse 400-job; gebruikt remainingTarget en import:daily
         type: boolean
         default: false
+      recover_failed_daily:
+        description: Herstel exact één aantoonbaar opgeloste software/infrastructuurfout via de officiële recovery-RPC en claim daarna één daily attempt
+        type: boolean
+        default: false
+      recovery_reason:
+        description: Gecontroleerde reden voor failed daily recovery
+        type: choice
+        options:
+          - software_fix_verified
+          - infrastructure_fix_verified
+        default: software_fix_verified
       falafel_e2e_only:
         description: Alleen de expliciet goedgekeurde falafel-E2E; normale importer overslaan
         type: boolean
@@ -98,7 +109,7 @@ concurrency:
 jobs:
   preflight:
     permissions: {}
-    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.daily_import != true && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
+    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.daily_import != true && inputs.recover_failed_daily != true && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -251,6 +262,7 @@ jobs:
           run_import="1"
           import_trigger="manual"
           daily_import_job="0"
+          recover_failed_daily="0"
           advance_discovery_state="1"
           discovery_state_key="daily-catalog-growth"
 
@@ -291,6 +303,10 @@ jobs:
               exit 1
             fi
           else
+            if [[ "${{ inputs.recover_failed_daily }}" == "true" && "${{ inputs.daily_import }}" != "true" ]]; then
+              echo "recover_failed_daily vereist de expliciete daily_import=true-modus; directe statusomzeiling is niet toegestaan." >&2
+              exit 1
+            fi
             if [[ "${{ inputs.daily_import }}" == "true" ]]; then
               if [[ "${{ inputs.daily_attempt_only }}" == "true" || "${{ inputs.resume_source_challenge }}" == "true" ]]; then
                 echo "daily_import kan niet worden gecombineerd met daily_attempt_only of resume_source_challenge; kies de expliciete dagelijkse job." >&2
@@ -302,6 +318,10 @@ jobs:
               max_products="400"
               import_trigger="schedule"
               daily_import_job="1"
+              if [[ "${{ inputs.recover_failed_daily }}" == "true" ]]; then
+                recover_failed_daily="1"
+                echo "DAILY_RECOVERY_REASON=${{ inputs.recovery_reason }}" >> "$GITHUB_ENV"
+              fi
               advance_discovery_state="1"
             else
               update_mode="${{ inputs.update_mode }}"
@@ -377,6 +397,7 @@ jobs:
             echo "IMPORT_TRIGGER=$([[ "$update_mode" == "growth" && "$import_trigger" == "manual" ]] && echo "test" || echo "$import_trigger")"
             echo "DISCOVERY_STATE_KEY=$discovery_state_key"
             echo "DAILY_IMPORT_JOB=$daily_import_job"
+            echo "RECOVER_FAILED_DAILY=$recover_failed_daily"
             echo "DAILY_IMPORT_STATE_KEY=daily-catalog-growth"
             echo "DAILY_NEW_PRODUCT_TARGET=$max_products"
             echo "DAILY_IMPORT_END_HOUR=23"
@@ -472,7 +493,7 @@ jobs:
 
   falafel-e2e:
     # Manual PR #23 only. Shares the existing importer concurrency lock above.
-    if: github.event_name == 'workflow_dispatch' && inputs.daily_import != true && (inputs.falafel_e2e_only == true || inputs.e2e_test_sku != '') && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
+    if: github.event_name == 'workflow_dispatch' && inputs.daily_import != true && inputs.recover_failed_daily != true && (inputs.falafel_e2e_only == true || inputs.e2e_test_sku != '') && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
     permissions:
       contents: read
     runs-on: ubuntu-latest
