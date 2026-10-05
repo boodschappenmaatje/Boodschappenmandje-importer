@@ -21,7 +21,14 @@ export function createSourcePacer({ delayMs = 2000, now = Date.now,
 const sourcePacers = new WeakMap();
 async function sourceGoto(page, url, options) {
   await sourcePacers.get(page)?.();
-  return page.goto(url, options);
+  try {
+    const response = await page.goto(url, options);
+    page.__hoogvlietLastResponseStatus = response?.status?.() ?? null;
+    return response;
+  } catch (error) {
+    page.__hoogvlietLastResponseStatus = null;
+    throw error;
+  }
 }
 
 export async function verifyNormalSourceAccess(config) {
@@ -50,6 +57,23 @@ export class SourceUnavailableError extends SourceBlockedError {
     super(message);
     this.name = "SourceUnavailableError";
     this.code = "source_unavailable";
+  }
+}
+
+export class ParserStructureChangedError extends SourceBlockedError {
+  constructor(message) {
+    super(message);
+    this.name = "ParserStructureChangedError";
+    this.code = "parser_structure_changed";
+  }
+}
+
+export class SourceNavigationError extends Error {
+  constructor(message, cause = null) {
+    super(message, cause ? { cause } : undefined);
+    this.name = "SourceNavigationError";
+    this.code = "navigation_error";
+    this.retryable = true;
   }
 }
 
@@ -176,38 +200,58 @@ export function searchURL(term, pageNumber = 0) {
 }
 
 export function classifySourcePageEvidence(evidence = {}) {
-  if (evidence.captcha || evidence.denied) return "blocked";
+  const responseStatus = Number(evidence.responseStatus);
+  if (evidence.navigationError) return "navigation_error";
+  if ([408, 425, 429, 500, 502, 503, 504].includes(responseStatus)) return "source_unavailable";
+  if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
   if (evidence.hasExpectedContent) return "ready";
-  if (evidence.hasExplicitEmptyState) return "empty";
+  if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) return "valid_empty_search";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
   // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
   // geldige productresponse; alleen de verwachte inhoud is dat.
   if (evidence.hasIncapsula) return "security_check";
-  return "empty";
+  if (evidence.hasSearchStructure) return "parser_structure_changed";
+  return "parser_structure_changed";
 }
 
 async function readSourcePageEvidence(page, expectedSelector = null) {
-  return page.evaluate((selector) => {
+  return page.evaluate((selector, responseStatus) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     return {
+      responseStatus,
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
       hasExpectedContent: Boolean(selector && document.querySelector(selector)),
       hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 resultaten/.test(text),
+      hasSearchStructure: Boolean(document.querySelector("#product-search-result")),
+      hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
       hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
-  }, expectedSelector);
+  }, expectedSelector, page.__hoogvlietLastResponseStatus ?? null);
 }
 
 async function detectBlocking(page, expectedSelector = null) {
   const evidence = await readSourcePageEvidence(page, expectedSelector);
-  if (classifySourcePageEvidence(evidence) === "blocked") {
+  if (classifySourcePageEvidence(evidence) === "challenge") {
     throw new SourceBlockedError("Hoogvliet blokkeert de browsersessie met een toegangscontrole of CAPTCHA.");
   }
   return evidence;
+}
+
+function throwForSourceEvidence(evidence) {
+  const classification = classifySourcePageEvidence(evidence);
+  if (classification === "source_unavailable") {
+    throw new SourceUnavailableError(`Hoogvliet gaf een tijdelijke bronfout (HTTP ${evidence.responseStatus}).`);
+  }
+  if (classification === "parser_structure_changed") {
+    throw new ParserStructureChangedError(
+      "Hoogvliet-zoekpagina bevat geen herkenbare product- of lege-resultaatstructuur.",
+    );
+  }
+  return classification;
 }
 
 export async function waitForSourceContent(page, expectedSelector, options = {}) {
@@ -226,20 +270,22 @@ export async function waitForSourceContent(page, expectedSelector, options = {})
   await waitForExpectedContent(options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS)
     .catch(() => {});
   let evidence = await detectBlocking(page, expectedSelector);
-  if (classifySourcePageEvidence(evidence) !== "security_check") {
-    return { securityCheckObserved: false, evidence };
+  let classification = throwForSourceEvidence(evidence);
+  if (classification !== "security_check") {
+    return { securityCheckObserved: false, evidence: { ...evidence, classification } };
   }
 
   if (typeof options.onSecurityCheck === "function") options.onSecurityCheck();
   await waitForExpectedContent(options.securityTimeoutMs ?? SECURITY_CHECK_READY_TIMEOUT_MS)
     .catch(() => {});
   evidence = await detectBlocking(page, expectedSelector);
-  if (classifySourcePageEvidence(evidence) === "security_check") {
+  classification = throwForSourceEvidence(evidence);
+  if (classification === "security_check") {
     throw new SourceBlockedError(
       "De normale Hoogvliet-veiligheidscontrole (Incapsula) werd niet binnen de wachttijd afgerond.",
     );
   }
-  return { securityCheckObserved: true, evidence };
+  return { securityCheckObserved: true, evidence: { ...evidence, classification } };
 }
 
 async function acceptCookiesIfShown(page) {
@@ -295,7 +341,11 @@ export function searchPaginationEvidence({ currentPage, totalPages, totalProduct
 
 async function searchPageResult(page, options) {
   const candidates = await extractSearchCandidates(page);
-  if (!options.requirePaginationEvidence) return candidates;
+  if (!options.requirePaginationEvidence) {
+    candidates.sourceClassification = options.sourceEvidence?.classification ?? "ready";
+    candidates.sourceExhausted = candidates.sourceClassification === "valid_empty_search";
+    return candidates;
+  }
   const evidence = await page.evaluate(() => {
     const root = document.querySelector('#product-search-result');
     const positive = value => /^\d+$/.test(value ?? '') ? Number(value) : null;
@@ -307,8 +357,9 @@ async function searchPageResult(page, options) {
       explicitEmpty: /geen resultaten gevonden|niks kunnen vinden/i.test(document.querySelector('[role="main"]')?.textContent ?? ""),
     };
   });
-  return { candidates, ...searchPaginationEvidence({ ...evidence, candidateCount: candidates.length,
-    requestedPage: options.requestedCategoryPage }) };
+  return { candidates, sourceClassification: options.sourceEvidence?.classification ?? "ready",
+    ...searchPaginationEvidence({ ...evidence, candidateCount: candidates.length,
+      requestedPage: options.requestedCategoryPage }) };
 }
 
 export function resolvedSearchPageURL(resolvedURL, pageNumber) {
@@ -348,13 +399,13 @@ export async function navigateSearchPage(page, term, pageNumber = 0, options = {
 
 async function searchOnce(page, term, pageNumber = 0, options = {}) {
   await navigateSearchPage(page, term, pageNumber, options);
-  await waitForSourceContent(page, ".product-tile", options);
-  return searchPageResult(page, { ...options,
+  const source = await waitForSourceContent(page, ".product-tile", options);
+  return searchPageResult(page, { ...options, sourceEvidence: source.evidence,
     requestedCategoryPage: categoryDiscoveryRoute(term) ? pageNumber : undefined });
 }
 
 async function searchUsingVisibleForm(page, term, options = {}) {
-  await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await sourceGoto(page, BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
   await waitForSourceContent(page, "input[name='SearchTerm']", {
     ...options,
     normalTimeoutMs: 5_000,
@@ -365,12 +416,13 @@ async function searchUsingVisibleForm(page, term, options = {}) {
   await input.fill(term);
   await input.press("Enter");
   await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
-  await waitForSourceContent(page, ".product-tile", options);
-  return searchPageResult(page, options);
+  const source = await waitForSourceContent(page, ".product-tile", options);
+  return searchPageResult(page, { ...options, sourceEvidence: source.evidence });
 }
 
-export function nextEmptySourceSearchCount(previousCount, rawCandidateCount) {
-  return Number(rawCandidateCount) > 0 ? 0 : Math.max(0, Math.trunc(previousCount ?? 0)) + 1;
+export function nextEmptySourceSearchCount(previousCount, rawCandidateCount, sourceClassification = null) {
+  return Number(rawCandidateCount) > 0 || sourceClassification === "valid_empty_search"
+    ? 0 : Math.max(0, Math.trunc(previousCount ?? 0)) + 1;
 }
 
 export function normalizedSearchTokens(value) {
@@ -428,12 +480,13 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
 
   const startPage = Math.max(0, Math.trunc(options.startPage ?? 0));
   let sourceExhausted = false;
+  let sourceClassification = null;
   let lastPageNumber = startPage;
   let firstPageAliasSkipped = false;
 
   const snapshot = () => ({ candidates, pagesFetched, rawCandidates, irrelevantCandidates,
     duplicateCandidates, invalidCandidates, repeatedPageCandidates, repeatedPageStopped,
-    firstPageAliasSkipped, sourceExhausted, stallReason, stallPage: stallReason ? lastPageNumber : null,
+    firstPageAliasSkipped, sourceExhausted, sourceClassification, stallReason, stallPage: stallReason ? lastPageNumber : null,
     nextPage: sourceExhausted ? 0 : lastPageNumber + 1 });
   try {
   for (let pageOffset = 0; pageOffset < maxPages; pageOffset += 1) {
@@ -441,6 +494,7 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
     const pageNumber = pageOffset === 0 ? startPage : lastPageNumber + 1;
     const pageResult = await fetchPage(pageNumber);
     const pageCandidates = Array.isArray(pageResult) ? pageResult : pageResult?.candidates;
+    sourceClassification = pageResult?.sourceClassification ?? sourceClassification;
     pagesFetched += 1;
     lastPageNumber = pageNumber;
     if (!Array.isArray(pageCandidates) || pageCandidates.length === 0) {
@@ -526,17 +580,22 @@ export async function withTransientNavigationRetry(operation, {
 
 async function findCandidates(page, term, maxPages, options = {}) {
   return collectCandidatePages(async (pageNumber) => {
-    return withTransientNavigationRetry(async () => {
-      let candidates = await searchOnce(page, term, pageNumber, options);
-      if (pageNumber === 0 && !options.requirePaginationEvidence && candidates.length === 0) {
-        candidates = await searchUsingVisibleForm(page, term, options);
-      }
-      return candidates;
-    }, {
-      maxRetries: options.navigationRetries ?? 2,
-      onRetry: options.onRetry,
-      wait: async (delayMs) => page.waitForTimeout(delayMs),
-    });
+    try {
+      return await withTransientNavigationRetry(async () => {
+        let candidates = await searchOnce(page, term, pageNumber, options);
+        if (pageNumber === 0 && !options.requirePaginationEvidence && candidates.length === 0) {
+          candidates = await searchUsingVisibleForm(page, term, options);
+        }
+        return candidates;
+      }, {
+        maxRetries: options.navigationRetries ?? 2,
+        onRetry: options.onRetry,
+        wait: async (delayMs) => page.waitForTimeout(delayMs),
+      });
+    } catch (error) {
+      if (error instanceof SourceBlockedError) throw error;
+      throw new SourceNavigationError("Hoogvliet-zoekroute kon niet worden genavigeerd.", error);
+    }
   }, term, maxPages, { startPage: options.startPage ?? 0, seenPageSignatures: options.seenPageSignatures, shouldStop: options.shouldStop });
 }
 
@@ -907,6 +966,8 @@ export async function collectProducts(config, logger = console, options = {}) {
     searchRetries: 0,
     sourceSecurityChecks: 0,
     sourceEmptySearches: 0,
+    validEmptySearches: 0,
+    sourceClassifications: {},
     validationFailures: {},
     stopReason: null,
     lastSearchedTerm: null,
@@ -1018,8 +1079,15 @@ export async function collectProducts(config, logger = console, options = {}) {
         consecutiveEmptySourceSearches = nextEmptySourceSearchCount(
           consecutiveEmptySourceSearches,
           pageResult.rawCandidates,
+          pageResult.sourceClassification,
         );
-        if (pageResult.rawCandidates === 0) stats.sourceEmptySearches += 1;
+        if (pageResult.rawCandidates === 0) {
+          stats.sourceEmptySearches += 1;
+          const classification = pageResult.sourceClassification ?? "unknown";
+          stats.sourceClassifications[classification] = (stats.sourceClassifications[classification] ?? 0) + 1;
+          if (classification === "valid_empty_search") stats.validEmptySearches += 1;
+          logger.info(`Zoekroutebewijs | term=${term} | classificatie=${classification} | ruwe_kandidaten=0`);
+        }
         if (consecutiveEmptySourceSearches >= 3) {
           const error = new SourceUnavailableError(
             `Drie opeenvolgende zoekroutes leverden geen productdata op; laatste zoekterm: ${term}.`,
@@ -1053,6 +1121,7 @@ export async function collectProducts(config, logger = console, options = {}) {
         termStats.irrelevant = pageResult.irrelevantCandidates;
         termStats.duplicates += pageResult.duplicateCandidates;
         termStats.sourceExhausted = pageResult.sourceExhausted;
+        termStats.sourceClassification = pageResult.sourceClassification ?? null;
         if (config.catalogNewOnly || growthMode) {
           const discovery = filterDiscoveryCandidates(
             candidates,
@@ -1078,7 +1147,7 @@ export async function collectProducts(config, logger = console, options = {}) {
         stats.nextPageCursor = 0;
         stats.completedTerms += 1;
         stats.termCoverage[term] = finalizeTermDiscoveryStats(termStats, config);
-        logger.error(`Zoekterm overgeslagen (${term}): ${error instanceof Error ? error.message : "onbekende fout"}`);
+        logger.error(`Zoekterm overgeslagen (${term}) | status=${error.code ?? "navigation_error"}: ${error instanceof Error ? error.message : "onbekende fout"}`);
         continue;
       }
       let acceptedForTerm = 0;

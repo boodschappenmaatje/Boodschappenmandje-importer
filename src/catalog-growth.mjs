@@ -32,6 +32,7 @@ export const CATALOG_SOURCE_UNAVAILABLE_MESSAGE =
 export function catalogImportFailure(error, actualGrowth = 0) {
   const sourceStatus = error instanceof SourceBlockedError
     ? (error.code ?? "source_unavailable")
+    : error?.code === "navigation_error" ? "navigation_error"
     : null;
   return {
     sourceStatus,

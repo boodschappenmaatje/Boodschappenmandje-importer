@@ -11,6 +11,10 @@ on:
         description: Eén goedgekeurde dagpoging; maximaal resterend dagdoel 400, daarna geen retry
         type: boolean
         default: false
+      daily_import:
+        description: Start exact de persistente dagelijkse 400-job; gebruikt remainingTarget en import:daily
+        type: boolean
+        default: false
       falafel_e2e_only:
         description: Alleen de expliciet goedgekeurde falafel-E2E; normale importer overslaan
         type: boolean
@@ -94,7 +98,7 @@ concurrency:
 jobs:
   preflight:
     permissions: {}
-    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
+    if: github.event_name == 'workflow_dispatch' && inputs.preflight_only == true && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance' && inputs.daily_import != true && inputs.falafel_e2e_only != true && inputs.e2e_test_sku == ''
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -287,16 +291,30 @@ jobs:
               exit 1
             fi
           else
-            update_mode="${{ inputs.update_mode }}"
-            catalog_batch="${{ inputs.catalog_batch }}"
-            price_shard="${{ inputs.price_shard }}"
-            max_products="${{ inputs.growth_limit }}"
-            advance_discovery_state="${{ inputs.advance_discovery_state && '1' || '0' }}"
-            if [[ "$price_shard" == "auto" ]]; then
-              price_shard=$((10#$(date -u +%u) - 1))
-            fi
-            if [[ "$update_mode" == "growth" ]]; then
+            if [[ "${{ inputs.daily_import }}" == "true" ]]; then
+              if [[ "${{ inputs.daily_attempt_only }}" == "true" || "${{ inputs.resume_source_challenge }}" == "true" ]]; then
+                echo "daily_import kan niet worden gecombineerd met daily_attempt_only of resume_source_challenge; kies de expliciete dagelijkse job." >&2
+                exit 1
+              fi
+              update_mode="growth"
               catalog_batch="growth"
+              price_shard="0"
+              max_products="400"
+              import_trigger="schedule"
+              daily_import_job="1"
+              advance_discovery_state="1"
+            else
+              update_mode="${{ inputs.update_mode }}"
+              catalog_batch="${{ inputs.catalog_batch }}"
+              price_shard="${{ inputs.price_shard }}"
+              max_products="${{ inputs.growth_limit }}"
+              advance_discovery_state="${{ inputs.advance_discovery_state && '1' || '0' }}"
+              if [[ "$price_shard" == "auto" ]]; then
+                price_shard=$((10#$(date -u +%u) - 1))
+              fi
+              if [[ "$update_mode" == "growth" ]]; then
+                catalog_batch="growth"
+              fi
             fi
           fi
 
@@ -454,7 +472,7 @@ jobs:
 
   falafel-e2e:
     # Manual PR #23 only. Shares the existing importer concurrency lock above.
-    if: github.event_name == 'workflow_dispatch' && (inputs.falafel_e2e_only == true || inputs.e2e_test_sku != '') && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
+    if: github.event_name == 'workflow_dispatch' && inputs.daily_import != true && (inputs.falafel_e2e_only == true || inputs.e2e_test_sku != '') && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/fix/planner-new-product-maintenance'
     permissions:
       contents: read
     runs-on: ubuntu-latest

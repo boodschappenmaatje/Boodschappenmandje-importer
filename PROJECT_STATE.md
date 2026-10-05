@@ -1,3 +1,36 @@
+# Checkpoint 17 — handmatige daily-dispatch en bronclassificatie — 5 oktober 2026
+
+## Remote, PR-status en incidentbewijs
+
+- De actuele remote `main` is gecontroleerd op `d0836510f02f09b33bc1fd696859f31c5a506e39`. PR #44 (discoveryfix) en PR #45 (schedulerfix) zijn volgens GitHub gemerged; deze featurebranch is daarvan afgeleid en merge’t niet terug naar `main`.
+- PR #45 blijft functioneel onaangetast: de primaire workflow gebruikt nog steeds `0 4 * * *` en `0 5 * * *`; de Europe/Amsterdam-gate laat exact de kandidaat voor 06:00 lokale tijd door. De prijs- en wekelijkse catalogustriggers zijn niet gewijzigd.
+- Handmatige run `37282770828` op `main` kreeg `RUN_IMPORT=1`, `UPDATE_MODE=catalog`, `CATALOG_BATCH=core`, `MAX_PRODUCTS=180`, `MAX_NEW_PRODUCTS=100`, `DAILY_IMPORT_JOB=0` en `DAILY_NEW_PRODUCT_TARGET=180`. Daardoor werd `npm run import` gestart. Dit was geen dagelijkse 400-job.
+
+## Bewezen oorzaak en veilige handmatige route
+
+- De workflow had geen expliciete `daily_import`-dispatchinput. De bestaande handmatige defaults stuurden naar de normale catalogusmodus; alleen de aparte legacy-optie `daily_attempt_only` forceerde de daily-tak. Dat verklaart `DAILY_IMPORT_JOB=0` en het verkeerde doel.
+- De workflow heeft nu `daily_import: true`. Die route zet uitsluitend de bestaande daily-configuratie aan: `UPDATE_MODE=growth`, `CATALOG_BATCH=growth`, `MAX_PRODUCTS=400`, `DAILY_IMPORT_JOB=1`, `DAILY_NEW_PRODUCT_TARGET=400`, `IMPORT_TRIGGER=schedule` en `ADVANCE_DISCOVERY_STATE=1`. De importstap kiest daardoor `npm run import:daily`.
+- De dagelijkse jobclaim blijft leidend: de code gebruikt de persistente `dailyImportId`, bestaande dagstand en `remainingTarget`; `MAX_NEW_PRODUCTS=400` is alleen de bovengrens van de workflowconfiguratie en vervangt geen dagclaim. Duplicates, bestaande SKU’s, invalid-producten, locks, retries en de 400-cap zijn niet omzeild. `daily_import` wordt uitgesloten van preflight/E2E-paden en conflicten met legacy daily-attempt/challenge-resume worden afgewezen.
+
+## Drie lege zoekroutes: bewijsgrens en codeoorzaak
+
+- De runtime-log bewees voor `gehakt`, `rundergehakt` en `kip` alleen: drie opeenvolgende routes met nul geparseerde productdata, waarna de oude teller globale `source_unavailable` veroorzaakte. Het log bevatte geen HTTP-status, redirect, DOM-signatuur, responseclassificatie of XHR-bewijs.
+- Een live bronreproductie kon in deze Codex-omgeving niet veilig worden vastgesteld: de Hoogvliet-host gaf hier DNS/network `EAI_AGAIN` en er was geen browserbinary. De GitHub runlog kon via de read-only log-URL niet worden opgehaald (`403 Forbidden`). Daarom is A–F (tijdelijke bronuitval, layout/API, client-side data, URL-fout, challenge, te agressieve drempel of catalogusuitputting) niet als upstream oorzaak bewezen. Er is geen Zyte-request uitgevoerd.
+- Wel bewezen in code: elk niet-herkend document werd door `classifySourcePageEvidence` als gewone lege route behandeld. Daardoor kon onbekende HTML/parserstructuur of een niet-gediagnosticeerde route in de drie-lege-routes-stop belanden als `source_unavailable`. Dat is de concrete fout die deze checkpoint oplost; het is geen onbewezen parser- of bronclaim.
+
+## Codefix en observability
+
+- `src/hoogvliet.mjs` bewaart nu compacte response-evidence (HTTP-status, navigatiefout, verwachte productstructuur, expliciete lege zoekstaat, nul-producten en security-signatuur) zonder HTML op te slaan. De classificaties zijn `valid_empty_search`, `source_unavailable`, `challenge`, `parser_structure_changed` en `navigation_error`; Incapsula blijft security/challenge-safe.
+- Een geldige lege zoekroute is lokale uitputting en reset de globale opeenvolgende-lege-routes-teller. Een onbekende structuur faalt expliciet als `parser_structure_changed`; navigatiefouten zijn begrensd retrybaar; tijdelijke HTTP-bronfouten blijven `source_unavailable`. De compacte log toont per lege route `term`, classificatie en ruwe kandidaten.
+- `src/catalog-growth.mjs` en `src/daily-catalog-growth.mjs` behouden de nieuwe foutcodes in status/retrybeleid. Dedupe, validatie, discovery-fingerprint, pagination/cursor, safe exhaustion en dagboekhouding zijn niet versoepeld.
+
+## Tests en stopgrens
+
+- Volledige root-suite: **334/334 groen**. `npm run check`: groen. Getest zijn onder meer de expliciete daily-dispatchwaarden, persistente remainingTarget/dagstand, normale catalogusmodus, geldige lege routes, challenge, bronstoring, parserwijziging, navigatiefout, duplicates/existing/invalid/new, pagination en bestaande scheduler/retry-/prijs-/weektriggers.
+- YAML-validatie: `.github/workflows/import-hoogvliet-poc.yml` is geldig; primaire schedules zijn exact `0 4 * * *`, `0 5 * * *`, `17 2 * * *` en `43 3 * * 0`. Geen `timezone:`-constructie is toegevoegd. Schedulerfix PR #45 is behouden.
+- Geen live productimport, workflow-dispatch, databasewrite, migration, deploy of merge uitgevoerd. `ROADMAP.md` is niet gewijzigd.
+- Branch: `codex/fix-highvliet-daily-dispatch-source-20261005`. Work controleert PR en CI; na expliciete mergegoedkeuring kan de gebruiker zelf exact één workflow-dispatch met uitsluitend `daily_import=true` starten. Controleer dan eerst de logvelden `DAILY_IMPORT_JOB=1`, `DAILY_NEW_PRODUCT_TARGET=400`, `npm run import:daily`, dezelfde `dailyImportId`, funnel en cumulatieve `X/400`.
+
 # Checkpoint 16 — schedulerfix 06:00 Europe/Amsterdam — 5 oktober 2026
 
 ## Bewezen schedulerstatus en oorzaak
