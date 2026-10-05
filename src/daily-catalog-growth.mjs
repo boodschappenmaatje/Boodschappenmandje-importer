@@ -25,6 +25,8 @@ const RETRYABLE_CODES = new Set([
   "source_challenge",
   "source_unavailable",
   "parser_structure_changed",
+  "root_category_discovery_failed",
+  "category_structure_changed",
   "navigation_error",
   "ETIMEDOUT",
   "ECONNRESET",

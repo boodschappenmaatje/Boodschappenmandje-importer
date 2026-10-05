@@ -74,6 +74,22 @@ export class ParserStructureChangedError extends SourceBlockedError {
   }
 }
 
+export class RootCategoryDiscoveryError extends ParserStructureChangedError {
+  constructor(message) {
+    super(message);
+    this.name = "RootCategoryDiscoveryError";
+    this.code = "root_category_discovery_failed";
+  }
+}
+
+export class CategoryStructureChangedError extends ParserStructureChangedError {
+  constructor(message) {
+    super(message);
+    this.name = "CategoryStructureChangedError";
+    this.code = "category_structure_changed";
+  }
+}
+
 export class SourceNavigationError extends Error {
   constructor(message, cause = null) {
     super(message, cause ? { cause } : undefined);
@@ -272,7 +288,7 @@ function isCatalogRouteTerm(term) {
 export function classifySourcePageEvidence(evidence = {}) {
   const responseStatus = Number(evidence.responseStatus);
   if (evidence.navigationError) return "navigation_error";
-  if ([408, 425, 429, 500, 502, 503, 504].includes(responseStatus)) return "source_unavailable";
+  if ([404, 408, 425, 429, 500, 502, 503, 504].includes(responseStatus)) return "source_unavailable";
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
   if (evidence.hasExpectedContent || evidence.hasCatalogStructure) return "ready";
   if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) return "valid_empty_search";
@@ -307,18 +323,32 @@ async function readCatalogPageEvidence(page) {
 }
 
 async function waitForCatalogSource(page, options = {}) {
-  await page.waitForFunction(() => {
+  const expectCategoryLinks = options.expectCategoryLinks === true;
+  await page.waitForFunction(({ expectCategoryLinks: expect, nonCatalogPaths }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
+    const hasCategoryLink = [...document.querySelectorAll("a[href]")].some(link => {
+      try {
+        const url = new URL(link.href, document.location.href);
+        const firstSegment = url.pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
+        return url.origin === document.location.origin
+          && url.pathname !== "/producten"
+          && !url.pathname.startsWith("/product/")
+          && !nonCatalogPaths.includes(firstSegment);
+      } catch { return false; }
+    });
     return document.querySelectorAll("a[href*='/product/']").length > 0
-      || document.location.pathname === "/producten"
+      || (!expect && document.location.pathname === "/producten")
+      || (expect && hasCategoryLink)
       || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten|captcha|verify you are human|controleer of je een mens bent|access denied|toegang geweigerd|forbidden/.test(text);
-  }, undefined, { timeout: options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS }).catch(() => {});
+  }, { expectCategoryLinks, nonCatalogPaths: [...NON_CATALOG_PATHS] }, {
+    timeout: options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS,
+  }).catch(() => {});
   const evidence = await readCatalogPageEvidence(page);
   const classification = classifySourcePageEvidence(evidence);
   if (classification === "challenge") throw new SourceBlockedError("Hoogvliet blokkeert de catalogusbrowser met een toegangscontrole of CAPTCHA.");
   if (classification === "source_unavailable") throw new SourceUnavailableError(`Hoogvliet gaf een tijdelijke catalogusbronfout (HTTP ${evidence.responseStatus}).`);
   if (classification === "parser_structure_changed") {
-    throw new ParserStructureChangedError("Hoogvliet-catalogus bevat geen herkenbare categorie- of productstructuur.");
+    throw new CategoryStructureChangedError("Hoogvliet-catalogus bevat geen herkenbare categorie- of productstructuur.");
   }
   return { evidence, classification };
 }
@@ -446,11 +476,9 @@ export async function extractCatalogListingCandidates(page) {
 
 async function extractCatalogCategoryLinks(page) {
   const links = await page.evaluate(() => {
-    const scoped = [
-      ...document.querySelectorAll("main a[href], [role='main'] a[href], nav[aria-label*='product' i] a[href], nav[aria-label*='catalog' i] a[href]"),
-    ];
-    const anchors = scoped.length ? scoped : [...document.querySelectorAll("a[href]")];
-    return [...new Map(anchors.map(link => [link.href, {
+    // /producten is a navigation page. Its category tree may be outside
+    // <main>, while <main> can already contain unrelated links.
+    return [...new Map([...document.querySelectorAll("a[href]")].map(link => [link.href, {
       href: link.href,
       title: (link.textContent || "").replace(/\s+/g, " ").trim() || null,
     }])).values()];
@@ -607,12 +635,13 @@ export async function collectCatalogListing(page, routeURL, {
   shouldStop = () => false,
   navigationRetries = 2,
   onRetry = null,
+  normalTimeoutMs,
 } = {}) {
   await withTransientNavigationRetry(
     () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
     { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
   );
-  await waitForCatalogSource(page);
+  await waitForCatalogSource(page, { normalTimeoutMs });
   const routeCandidates = new Map();
   const windows = [];
   let loadMoreCycles = 0;
@@ -657,7 +686,7 @@ export async function collectCatalogListing(page, routeURL, {
       () => sourceGoto(page, nextURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
       { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
     );
-    await waitForCatalogSource(page);
+    await waitForCatalogSource(page, { normalTimeoutMs });
     visitedListingURLs.add(nextURL);
   }
 
@@ -671,9 +700,10 @@ export async function collectCatalogListing(page, routeURL, {
     pagesFetched: windows.length,
     windowCount: windows.length,
     emittedWindowCount: Math.min(maxWindows, Math.max(0, windows.length - startWindow)),
+    initialCandidateCount: windows[0]?.length ?? 0,
     loadMoreCycles,
     sourceExhausted,
-    stallReason: stagnated ? "load_more_stagnated" : null,
+    stallReason: stagnated ? "category_listing_stagnated" : null,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
     categoryURL: routeURL,
   };
@@ -693,6 +723,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   let sourceExhausted = true;
   let stallReason = null;
   let rootCategoryCount = 0;
+  let initialCandidateCount = 0;
   let rawCandidates = 0;
   let duplicateCandidates = 0;
   let invalidCandidates = 0;
@@ -705,13 +736,19 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
       { maxRetries: options.navigationRetries ?? 2, onRetry: options.onRetry, wait: ms => page.waitForTimeout(ms) },
     );
-    await waitForCatalogSource(page);
+    await waitForCatalogSource(page, {
+      expectCategoryLinks: routeURL === rootURL,
+      normalTimeoutMs: options.normalTimeoutMs,
+    });
     const childRoutes = await extractCatalogCategoryLinks(page);
     for (const child of childRoutes) {
       if (!queued.has(child.url)) { queued.add(child.url); queue.push(child.url); }
     }
     if (routeURL === rootURL) {
-      rootCategoryCount = queue.length;
+      rootCategoryCount = childRoutes.length;
+      if (!rootCategoryCount) {
+        throw new RootCategoryDiscoveryError("Actuele Hoogvliet-catalogus bevat geen publieke categorie-links.");
+      }
       continue;
     }
     const remaining = Math.max(0, maxPages - pagesFetched);
@@ -723,10 +760,12 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       shouldStop: options.shouldStop,
       navigationRetries: options.navigationRetries,
       onRetry: options.onRetry,
+      normalTimeoutMs: options.normalTimeoutMs,
     });
     // A fresh page starts at window zero. Replay enough load-more clicks to
     // reach the persisted global cursor, then emit only the new window range.
     const emittedWindows = listing.emittedWindowCount;
+    if (pagesFetched === 0) initialCandidateCount = listing.initialCandidateCount ?? 0;
     globalWindowCursor += listing.windowCount;
     pagesFetched += emittedWindows;
     loadMoreCycles += listing.loadMoreCycles;
@@ -743,7 +782,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     if (!listing.sourceExhausted && pagesFetched >= maxPages) { sourceExhausted = false; break; }
   }
 
-  if (!rootCategoryCount) throw new ParserStructureChangedError("Actuele Hoogvliet-catalogus bevat geen publieke categorie-links.");
+  if (!rootCategoryCount) throw new RootCategoryDiscoveryError("Actuele Hoogvliet-catalogus bevat geen publieke categorie-links.");
   const nextPage = sourceExhausted ? 0 : startWindow + Math.max(1, pagesFetched);
   return {
     candidates: allCandidates,
@@ -755,6 +794,9 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     repeatedPageStopped: Boolean(stallReason),
     pagesFetched,
     categoriesVisited: visitedCategories.size - 1,
+    rootCategoriesDiscovered: rootCategoryCount,
+    routesVisited: visitedCategories.size,
+    initialCandidateCount,
     listingLoadMoreCycles: loadMoreCycles,
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
     sourceExhausted: sourceExhausted && queue.length === 0,
