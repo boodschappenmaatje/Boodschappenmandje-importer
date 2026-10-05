@@ -1,3 +1,35 @@
+# Checkpoint 27 — PR #49 Production en ene daily attempt — 5 oktober 2026
+
+## Release
+
+- PR #49 is via squash gemerged. Pre-merge head: `de63d1586bf63b9891321557f0fb263e78ddc5bc`; squash/nieuwe main-head: `e7caa107aa7694c66bdcfd7d462ec672f44f6205`.
+- De finale releasegate was groen. Main-CI-run **37335295557** (#251) is groen. Vercel Production-deployment `dpl_9S9wB7csjEE5P3iXq1fHLj8WUkTY` op dezelfde main-head is **READY**. Homepage smoke gaf HTTP **200**.
+- PR #49 zet de actuele discoverystrategy `hoogvliet-public-catalog-api-pagination-v4` op Production. PR #45–#48 blijven in de main-basis opgenomen. Geen migration of schemawijziging uitgevoerd.
+- De eerdere read-only categorieproef blijft begrensd bewijs: Actions-run **37325662499**, 22 initiële kaarten en 41 unieke SKU-kandidaten over twee pagina's. Dit is geen volledige catalogusdekkingmeting.
+
+## Eén normale daily attempt
+
+- Vlak vóór dispatch read-only bevestigd: dezelfde job `53553be0-2158-47b1-92c3-2bc75cd7d0cc`, datum 2026-10-05, `retry_scheduled`, 0/400, attempt_count 2, recovery_count 1, nul actieve attempts en geen actieve lock; de twee eerdere attempts waren beëindigd.
+- Exact één dispatch op main, run **#114 / 37336178828**, met `daily_import=true`, `recover_failed_daily=false`, groeimodus/batch en limiet 400. Geen tweede dispatch en geen tweede recovery.
+- De run behield dezelfde dailyImportId, claimde attempt **#3** (`795a3342-fb3d-4add-917d-8b93afd90f71`) en eindigde `failed_requires_attention`; recovery_count bleef 1. Geen actieve attempt of lock na afloop.
+
+## Discoveryfunnel en resultaat
+
+- De run logde de nieuwe strategy fingerprint `hoogvliet-public-catalog-api-pagination-v4` en startte `catalog:root`; dynamische categorieën: **0**.
+- Categorie/route geteld: **1** (alleen de root-route). De route liep vast met `load_more_stagnated`; er kwamen geen listing page hits of paginatiepagina's uit.
+- Page hits **0**; unieke kandidaten **0**; bestaande SKU's onder kandidaten **0**; duplicaten **0**; ongeldig **0**; geldige nieuwe kandidaten **0**; werkelijk toegevoegd **0**.
+- Importertelemetrie rapporteerde totaal **7.540 vóór en na**, werkelijke groei **0**, cumulatief **0/400**, resterend **400**. Stopreden: `discovery_incomplete_stalled_terms`.
+- De runlog bevat de root-term als enige discoveryterm; de dagelijkse collector heeft dus niet de categoriepagina bereikt waarvan de begrensde read-only proef 41 SKU-kandidaten vond. De catalogusdekkingbeslissing is daarom **nog niet aan de orde**. Deze run bewijst niet dat de catalogus vrijwel compleet is.
+- Supabase-state na de run: dezelfde job `failed_requires_attention`, attempt_count 3, recovery_count 1, geen actieve lock/attempt. Geen productinsert of productupdate gerapporteerd.
+
+## Volgende stap
+
+- Geen tweede recovery of daily dispatch voor deze dag.
+- Onderzoek read-only waarom de dagelijkse collector bij `catalog:root` op `load_more_stagnated` eindigt en nul dynamische categorieën oplevert, terwijl de aparte expliciete categorieproef wel doorpagineerde. Vergelijk de root/category-discoveryroute en paginator.
+- Pas na aantoonbaar werkende dagelijkse listingdiscovery een nieuwe release/attempt plannen. Catalogusdekking vergelijken met Production alleen wanneer de discovery eerst betrouwbare bereikbare SKU's oplevert.
+
+---
+
 # Checkpoint 26 — actuele Hoogvliet-catalogus geïmplementeerd — 5 oktober 2026
 
 ## Implementatie
