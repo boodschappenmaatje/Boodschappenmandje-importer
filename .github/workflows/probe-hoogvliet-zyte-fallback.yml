@@ -17,7 +17,11 @@ concurrency:
 jobs:
   probe:
     name: One exact Hoogvliet URL via Zyte HTTP response — READ ONLY
-    if: github.event_name == 'push' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/codex/fix-highvliet-parser-20261005' && github.event.head_commit.message == 'ops: trigger one-shot Zyte fallback test'
+    if: >-
+      github.event_name == 'push' &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/codex/fix-highvliet-parser-20261005' &&
+      github.event.head_commit.message == 'ops: trigger one-shot Zyte fallback test'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
