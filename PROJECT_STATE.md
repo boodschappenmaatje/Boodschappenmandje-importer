@@ -1,3 +1,27 @@
+# Checkpoint 16 — schedulerfix 06:00 Europe/Amsterdam — 5 oktober 2026
+
+## Bewezen schedulerstatus en oorzaak
+
+- De actuele `origin/main` is opnieuw gecontroleerd op `f07fa6e27e526110721fbd97f5ef0cd3ec4b5586`; default branch is `main`, de workflow is actief en de werkboom was schoon. Tussen 04:00 en 07:21 UTC op 5 oktober 2026 registreerde GitHub geen scheduled run voor `import-hoogvliet-poc.yml`, hoewel de main-head om 23:15 UTC al actief was. De GitHub read-only API geeft geen interne reden waarom dit event niet werd aangemaakt.
+- De actuele officiële GitHub Docs ondersteunen op GitHub.com inmiddels een optionele IANA-`timezone` voor `schedule` (`actions-schedule-timezone`, GitHub.com-versie `*`). De eerdere aanname dat de sleutel per definitie ongeldig was, is dus niet bewezen. De repository-ervaring toont wel dat de primaire timezone-afhankelijke trigger operationeel niet betrouwbaar genoeg was voor deze deadline; de fix maakt de UTC-planning expliciet en is niet afhankelijk van timezone-aware scheduling.
+
+## Codefix
+
+- `.github/workflows/import-hoogvliet-poc.yml` gebruikt nu alleen geldige UTC-crons `0 4 * * *` en `0 5 * * *`. De eerste is de Nederlandse 06:00-kandidaat tijdens CEST, de tweede tijdens CET.
+- `src/daily-schedule-gate.mjs` laat exact één kandidaat door op basis van de actuele `Europe/Amsterdam`-DST-offset. Het gate’t niet op de runner-wandklok, zodat een door GitHub vertraagde geldige event niet onterecht wordt overgeslagen. De bestaande persistente daily claim, lock, dedupe, retries en 400-cap blijven de feitelijke tweede duplicate-/dagbudgetbeveiliging.
+- Prijsdeelbatch `17 2 * * *`, zondagse catalogustrigger `43 3 * * 0`, monitor en retryworkflow zijn niet functioneel gewijzigd.
+
+## Tests en releasegate
+
+- Schedulerregressies: **5/5 groen**; volledige root-suite: **331/331 groen**; `npm run check`: groen; web `npm run check`: groen (**69 testfiles / 855 tests**, lint, TypeScript en Next production build). PyYAML valideerde alle workflowbestanden; de primaire schedulestructuur bevat exact de vier verwachte cronentries en geen `timezone:`.
+- De officiële broncontrole was `github/docs` `workflow-syntax.md` en `actions-scheduled-workflow-example.md` op 5 oktober 2026: GitHub.com documenteert timezone-aware scheduling als ondersteund. De fix kiest desondanks expliciete UTC-crons om de niet-geschedulede repository-run niet opnieuw afhankelijk te maken van die optionele timezone-laag.
+- Geen productimport, databasewrite, migration, deploy of merge uitgevoerd. Branch: `codex/fix-highvliet-scheduler-20261005`; PR wordt pas na groene lokale releasegate aangemaakt.
+
+## Work-controle na PR
+
+- Work controleert PR + CI en verifieert op main dat de twee UTC-crons zijn gepubliceerd. Vóór expliciete goedkeuring geen merge en geen import.
+- Na expliciete toestemming: merge, daarna één gecontroleerde dagelijkse run via dezelfde persistente `import:daily`-job, 400/dag-cap, dedupe, lock en retrypad; controleer funnel en cumulatieve dagstand.
+
 # Checkpoint 15 — Hoogvliet discovery/exhaustion-fix en 06:00-planning — 4 oktober 2026
 
 ## Diagnose en bewezen oorzaak

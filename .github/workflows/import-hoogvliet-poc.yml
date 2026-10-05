@@ -74,10 +74,11 @@ on:
           - "5"
           - "6"
   schedule:
-    # Dagelijks exact 06:00 Nederlandse tijd (= 04:00 UTC op 5 oktober 2026);
-    # GitHub plant dit direct in Europe/Amsterdam over DST-wisselingen.
-    - cron: "0 6 * * *"
-      timezone: "Europe/Amsterdam"
+    # GitHub Actions cron is UTC.  One candidate is valid per Dutch day:
+    # 04:00 UTC at CEST (06:00 NL) or 05:00 UTC at CET (06:00 NL).
+    # The update-plan step gates the other candidate by the current DST offset.
+    - cron: "0 4 * * *"
+    - cron: "0 5 * * *"
     # Dagelijks 02:17 UTC: één van zeven vaste prijsdeelbatches.
     - cron: "17 2 * * *"
     # Zondag 03:43 UTC: één catalogusbatch; core/fresh/world/pantry rouleren.
@@ -238,6 +239,8 @@ jobs:
 
       - name: Updateplan bepalen
         shell: bash
+        env:
+          SCHEDULE_CRON: ${{ github.event.schedule }}
         run: |
           set -euo pipefail
 
@@ -248,19 +251,31 @@ jobs:
           discovery_state_key="daily-catalog-growth"
 
           if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            if [[ "${{ github.event.schedule }}" == "0 6 * * *" ]]; then
+            if [[ "$SCHEDULE_CRON" == "0 4 * * *" || "$SCHEDULE_CRON" == "0 5 * * *" ]]; then
+              daily_gate_output="$(node src/daily-schedule-gate.mjs)"
+              printf '%s\n' "$daily_gate_output"
+              daily_gate_run="$(printf '%s\n' "$daily_gate_output" | sed -n 's/^run=//p' | tail -1)"
+              if [[ "$daily_gate_run" != "1" ]]; then
+                echo "RUN_IMPORT=0" >> "$GITHUB_ENV"
+                {
+                  echo '## Dagelijkse schedule-gate'
+                  echo 'Deze UTC-kandidaat is niet de 06:00 Europe/Amsterdam-trigger voor de huidige DST-offset; import overgeslagen.'
+                  printf '%s\n' "$daily_gate_output"
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
               update_mode="growth"
               catalog_batch="growth"
               price_shard="0"
               max_products="400"
               import_trigger="schedule"
               daily_import_job="1"
-            elif [[ "${{ github.event.schedule }}" == "17 2 * * *" ]]; then
+            elif [[ "$SCHEDULE_CRON" == "17 2 * * *" ]]; then
               update_mode="prices"
               catalog_batch="core"
               price_shard=$((10#$(date -u +%u) - 1))
               max_products="100"
-            elif [[ "${{ github.event.schedule }}" == "43 3 * * 0" ]]; then
+            elif [[ "$SCHEDULE_CRON" == "43 3 * * 0" ]]; then
               update_mode="catalog"
               batches=(core fresh world pantry)
               week=$((10#$(date -u +%V)))

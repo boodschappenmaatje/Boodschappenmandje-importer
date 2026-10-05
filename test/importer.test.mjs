@@ -1266,8 +1266,10 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /cron: "17 2 \* \* \*"/);
   assert.match(workflow, /cron: "43 3 \* \* 0"/);
-  assert.match(workflow, /cron: "0 6 \* \* \*"\n      timezone: "Europe\/Amsterdam"/);
-  assert.doesNotMatch(workflow, /local_hour|TZ=Europe\/Amsterdam date \+%H/);
+  assert.match(workflow, /cron: "0 4 \* \* \*"/);
+  assert.match(workflow, /cron: "0 5 \* \* \*"/);
+  assert.doesNotMatch(workflow, /^\s+timezone:/m);
+  assert.match(workflow, /src\/daily-schedule-gate\.mjs/);
   assert.match(workflow, /group: hoogvliet-supabase-update/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /SUPABASE_URL: \$\{\{ secrets\.SUPABASE_URL \}\}/);
