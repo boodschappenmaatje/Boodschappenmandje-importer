@@ -1,0 +1,183 @@
+name: TEMPORARY Supabase supersede migration — exact one — DISARMED
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/supersede-failed-daily-20261005
+    paths:
+      - .github/workflows/apply-supersede-migration.yml
+      - scripts/check-supersede-migration-history.py
+      - supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql
+
+permissions:
+  contents: read
+
+env:
+  MIGRATION_ARMED: 'false'
+  SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
+  SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
+  SUPABASE_POOLER_PORT: '5432'
+  TARGET_MIGRATION_FILE: supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql
+
+concurrency:
+  group: supabase-production-supersede-migration
+  cancel-in-progress: false
+
+jobs:
+  precheck:
+    name: Exact one-migration precheck — DISARMED
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/codex/supersede-failed-daily-20261005'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      precheck_passed: ${{ steps.history.outputs.precheck_passed }}
+      migration_armed: ${{ steps.history.outputs.migration_armed }}
+    steps:
+      - name: Checkout exact event commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Install official Supabase CLI 2.119.0
+        uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 2.119.0
+      - name: Read and validate exact Production history — DISARMED
+        id: history
+        shell: bash
+        env:
+          MIGRATION_ARMED: ${{ env.MIGRATION_ARMED }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ env.SUPABASE_PROJECT_REF }}
+          SUPABASE_POOLER_HOST: ${{ env.SUPABASE_POOLER_HOST }}
+          SUPABASE_POOLER_PORT: ${{ env.SUPABASE_POOLER_PORT }}
+          TARGET_MIGRATION_FILE: ${{ env.TARGET_MIGRATION_FILE }}
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          fail() { printf 'Precheck failed closed: %s\n' "$1" >> "$GITHUB_STEP_SUMMARY"; printf '::error::Precheck failed closed: %s\n' "$1"; exit 1; }
+          [[ "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' ]] || fail 'unexpected repository'
+          [[ "$GITHUB_REF" == 'refs/heads/codex/supersede-failed-daily-20261005' ]] || fail 'unexpected branch'
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || fail 'checkout is not the exact event commit'
+          [[ "$MIGRATION_ARMED" == 'false' || "$MIGRATION_ARMED" == 'true' ]] || fail 'invalid MIGRATION_ARMED value'
+          [[ "$SUPABASE_PROJECT_REF" == 'pjcqxufvbkkjehituzxz' ]] || fail 'unexpected Production project'
+          [[ "$SUPABASE_POOLER_HOST" == 'aws-1-eu-west-1.pooler.supabase.com' && "$SUPABASE_POOLER_PORT" == '5432' ]] || fail 'unexpected Production pooler'
+          [[ "$TARGET_MIGRATION_FILE" == 'supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql' && -f "$GITHUB_WORKSPACE/$TARGET_MIGRATION_FILE" ]] || fail 'unexpected or missing target migration file'
+          [[ -n "$SUPABASE_ACCESS_TOKEN" && -n "$SUPABASE_DB_PASSWORD" ]] || fail 'required secret is missing'
+          output_dir="$(mktemp -d)"; trap 'rm -rf "$output_dir"' EXIT
+          export SUPABASE_POOLER_DB_URL="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(f"postgresql://postgres.{os.environ['SUPABASE_PROJECT_REF']}:{quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')}@{os.environ['SUPABASE_POOLER_HOST']}:{os.environ['SUPABASE_POOLER_PORT']}/postgres?sslmode=require")
+          PY
+          )"
+          supabase migration list --db-url "$SUPABASE_POOLER_DB_URL" --workdir "$GITHUB_WORKSPACE" --output-format json > "$output_dir/history.json" 2> "$output_dir/stderr" < /dev/null || fail 'official migration list could not read Production history; raw output withheld'
+          python3 scripts/check-supersede-migration-history.py --phase precheck --migration-dir supabase/migrations --list-json "$output_dir/history.json" > "$output_dir/result" || fail 'history is not exactly one target migration local-only'
+          printf '%s\n' '## DISARMED — READ ONLY — NO MIGRATION WRITE' 'Exact target, branch, head, project and CLI history precheck passed.' 'No db push is permitted while MIGRATION_ARMED=false.' >> "$GITHUB_STEP_SUMMARY"
+          printf 'precheck_passed=true\nmigration_armed=%s\n' "$MIGRATION_ARMED" >> "$GITHUB_OUTPUT"
+
+  apply:
+    name: Apply exactly one migration — only when explicitly armed
+    needs: precheck
+    if: >-
+      needs.precheck.outputs.precheck_passed == 'true' &&
+      needs.precheck.outputs.migration_armed == 'true' &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/codex/supersede-failed-daily-20261005'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1
+        with:
+          version: 2.119.0
+      - name: Recheck, apply one migration, and verify — HARD GUARDED
+        shell: bash
+        env:
+          MIGRATION_ARMED: ${{ env.MIGRATION_ARMED }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ env.SUPABASE_PROJECT_REF }}
+          SUPABASE_POOLER_HOST: ${{ env.SUPABASE_POOLER_HOST }}
+          SUPABASE_POOLER_PORT: ${{ env.SUPABASE_POOLER_PORT }}
+          TARGET_MIGRATION_FILE: ${{ env.TARGET_MIGRATION_FILE }}
+          PRECHECK_PASSED: ${{ needs.precheck.outputs.precheck_passed }}
+          PRECHECK_ARMED: ${{ needs.precheck.outputs.migration_armed }}
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          fail() { printf 'Migration stopped: %s\n' "$1" >> "$GITHUB_STEP_SUMMARY"; printf '::error::Migration stopped: %s\n' "$1"; exit 1; }
+          [[ "$MIGRATION_ARMED" == 'true' && "$PRECHECK_PASSED" == 'true' && "$PRECHECK_ARMED" == 'true' ]] || fail 'fresh exact precheck did not approve this run'
+          [[ "$GITHUB_REPOSITORY" == 'boodschappenmaatje/Boodschappenmandje-importer' && "$GITHUB_REF" == 'refs/heads/codex/supersede-failed-daily-20261005' ]] || fail 'unexpected repository or branch'
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || fail 'checkout is not the exact event commit'
+          [[ "$SUPABASE_PROJECT_REF" == 'pjcqxufvbkkjehituzxz' && "$SUPABASE_POOLER_HOST" == 'aws-1-eu-west-1.pooler.supabase.com' && "$SUPABASE_POOLER_PORT" == '5432' ]] || fail 'unexpected Production connection'
+          [[ "$TARGET_MIGRATION_FILE" == 'supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql' && -f "$GITHUB_WORKSPACE/$TARGET_MIGRATION_FILE" ]] || fail 'unexpected or missing target migration file'
+          [[ -n "$SUPABASE_ACCESS_TOKEN" && -n "$SUPABASE_DB_PASSWORD" ]] || fail 'required secret is missing'
+          output_dir="$(mktemp -d)"; trap 'rm -rf "$output_dir"' EXIT
+          export SUPABASE_POOLER_DB_URL="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          print(f"postgresql://postgres.{os.environ['SUPABASE_PROJECT_REF']}:{quote(os.environ['SUPABASE_DB_PASSWORD'], safe='')}@{os.environ['SUPABASE_POOLER_HOST']}:{os.environ['SUPABASE_POOLER_PORT']}/postgres?sslmode=require")
+          PY
+          )"
+          supabase migration list --db-url "$SUPABASE_POOLER_DB_URL" --workdir "$GITHUB_WORKSPACE" --output-format json > "$output_dir/before.json" 2> "$output_dir/stderr" < /dev/null || fail 'fresh migration list failed; no write attempted'
+          python3 scripts/check-supersede-migration-history.py --phase precheck --migration-dir supabase/migrations --list-json "$output_dir/before.json" > "$output_dir/precheck" || fail 'fresh history no longer proves exactly one target pending'
+          [[ "$MIGRATION_ARMED" == 'true' ]] || fail 'arming changed before write gate'
+          supabase db push --db-url "$SUPABASE_POOLER_DB_URL" --workdir "$GITHUB_WORKSPACE" > "$output_dir/push" 2> "$output_dir/push-stderr" < /dev/null || fail 'official db push failed; raw output withheld'
+          supabase migration list --db-url "$SUPABASE_POOLER_DB_URL" --workdir "$GITHUB_WORKSPACE" --output-format json > "$output_dir/after.json" 2> "$output_dir/after-stderr" < /dev/null || fail 'post-migration history read failed'
+          python3 scripts/check-supersede-migration-history.py --phase postcheck --migration-dir supabase/migrations --list-json "$output_dir/after.json" > "$output_dir/postcheck" || fail 'post-migration history is not an exact local-remote match'
+          command -v psql >/dev/null 2>&1 || fail 'psql is required for read-only postcheck'
+          PGPASSWORD="$SUPABASE_DB_PASSWORD" PGSSLMODE=require timeout 20 psql --host="$SUPABASE_POOLER_HOST" --port="$SUPABASE_POOLER_PORT" --username="postgres.$SUPABASE_PROJECT_REF" --dbname=postgres --no-psqlrc -X -Atq -v ON_ERROR_STOP=1 > "$output_dir/schema" 2> "$output_dir/schema-stderr" <<'SQL'
+          with f as (
+            select p.oid, p.proconfig, p.prosecdef
+            from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+            where n.nspname='public' and p.proname='supersede_failed_catalog_daily_job'
+              and p.pronargs=13
+              and pg_get_function_identity_arguments(p.oid)='p_job_id uuid, p_state_key text, p_job_date date, p_expected_status text, p_expected_updated_at timestamp with time zone, p_expected_attempt_count integer, p_expected_new_products_collected integer, p_expected_remaining_target integer, p_expected_recovery_count integer, p_supersede_reason text, p_actor_context text, p_now timestamp with time zone, p_lock_ttl_minutes integer'
+              and pg_get_function_result(p.oid)='jsonb'
+          )
+          select json_build_object(
+            'function_count',(select count(*) from f),
+            'search_path_public',coalesce((select array_position(proconfig,'search_path=public') is not null from f),false),
+            'security_definer',coalesce((select prosecdef from f),false),
+            'service_role_execute',coalesce((select has_function_privilege('service_role',oid,'EXECUTE') from f),false),
+            'anon_execute',coalesce((select has_function_privilege('anon',oid,'EXECUTE') from f),false),
+            'authenticated_execute',coalesce((select has_function_privilege('authenticated',oid,'EXECUTE') from f),false),
+            'superseded_at',exists(select 1 from information_schema.columns where table_schema='public' and table_name='catalog_daily_jobs' and column_name='superseded_at'),
+            'superseded_by_job_id',exists(select 1 from information_schema.columns where table_schema='public' and table_name='catalog_daily_jobs' and column_name='superseded_by_job_id'),
+            'audit_table',to_regclass('public.catalog_daily_supersedes') is not null,
+            'audit_rls',coalesce((select relrowsecurity from pg_class where oid=to_regclass('public.catalog_daily_supersedes')),false),
+            'audit_service_role_select',coalesce(has_table_privilege('service_role','public.catalog_daily_supersedes','SELECT'),false),
+            'audit_anon_select',coalesce(has_table_privilege('anon','public.catalog_daily_supersedes','SELECT'),false),
+            'audit_authenticated_select',coalesce(has_table_privilege('authenticated','public.catalog_daily_supersedes','SELECT'),false),
+            'current_index',to_regclass('public.catalog_daily_jobs_current_day_idx') is not null,
+            'previous_index',to_regclass('public.catalog_daily_supersedes_previous_once_idx') is not null,
+            'new_index',to_regclass('public.catalog_daily_supersedes_new_once_idx') is not null,
+            'day_index',to_regclass('public.catalog_daily_supersedes_day_once_idx') is not null,
+            'audit_rows',(select count(*) from public.catalog_daily_supersedes)
+          )::text;
+          SQL
+          python3 - "$output_dir/schema" <<'PY'
+          import json, sys
+          lines=[x.strip() for x in open(sys.argv[1], encoding='utf-8') if x.strip()]
+          if len(lines)!=1: raise SystemExit('unexpected schema output')
+          value=json.loads(lines[0])
+          required={'function_count':1,'search_path_public':True,'security_definer':True,'service_role_execute':True,'superseded_at':True,'superseded_by_job_id':True,'audit_table':True,'audit_rls':True,'audit_service_role_select':True,'current_index':True,'previous_index':True,'new_index':True,'day_index':True,'audit_rows':0}
+          for key, expected in required.items():
+              if value.get(key) != expected: raise SystemExit(f'schema check failed: {key}')
+          for key in ('anon_execute','authenticated_execute','audit_anon_select','audit_authenticated_select'):
+              if value.get(key) is not False: raise SystemExit(f'public privilege check failed: {key}')
+          PY
+          printf '%s\n' '## Exact one-migration verification complete' 'History matched repository; supersede RPC, SECURITY DEFINER/search_path, grants, audit fields, indexes and empty audit passed read-only verification.' >> "$GITHUB_STEP_SUMMARY"

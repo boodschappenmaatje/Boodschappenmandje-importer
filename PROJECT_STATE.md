@@ -1,6 +1,15 @@
 
 # Checkpoint 28 — verse daily opvolger na definitief failed job voorbereid — 5 oktober 2026
 
+## Checkpoint 29 — disarmed supersede-migrationrunner voorbereid — 5 oktober 2026
+
+- De bestaande tijdelijke PR #48 Supabase CLI-runner is minimaal hergebruikt in `.github/workflows/apply-supersede-migration.yml`; er is geen nieuwe migrationarchitectuur gebouwd.
+- De runner is branch-, head-, repository-, Production-project-, pooler-, CLI- en exact-bestandsgebonden. `MIGRATION_ARMED=false` staat hard-coded. De precheck vereist exact één lokale-only `20261005230000_supersede_failed_daily_catalog_job.sql`, geen andere pending migration en geen onverwachte remote-only history.
+- De latere armed route gebruikt alleen de officiële Supabase CLI 2.119.0 `db push --db-url`, met een verse precheck en daarna read-only local↔remote history-, RPC/signature-, `SECURITY DEFINER`/`search_path`, service-role-grant-, auditveld-, partial-unique-index- en lege-auditcontroles. Secretwaarden worden niet gelogd.
+- Toegevoegd: `scripts/check-supersede-migration-history.py` en `test/supersede-migration-workflow.test.py`. Geen migration, databasewrite, supersede, import, merge of deploy uitgevoerd.
+- Gates na toevoeging: `npm test` **351/351**, `npm run check` groen, `npm run test:postgres` **28/28**, recovery-runner **9/9**, migration-history guards **8/8**, nieuwe supersede-runner **3/3**, diff-check groen.
+- Branch blijft `codex/supersede-failed-daily-20261005`; vóór deze documentatie/push is de bekende PR-head `68310843f39a66d48b7ea0955d1ebd3ed998dbb6`. Codex stopt na push; Work moet de disarmed precheck controleren en pas daarna de expliciete release/migrationvolgorde uitvoeren.
+
 ## Startpunt en ontwerpbesluit
 
 - `PROJECT_STATE.md` is eerst gelezen. Actuele `origin/main` is read-only gecontroleerd op `6cfcb01e02a82a7c0ed0fedbd33be01c1d520d2d` (`docs: correct main-head checkpoint wording`). Er is niet opnieuw begonnen en er is geen live actie uitgevoerd.
