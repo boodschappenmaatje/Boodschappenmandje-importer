@@ -177,6 +177,7 @@ try {
     loadMoreCycles: collected.loadMoreCycles,
     sourceExhausted: collected.sourceExhausted,
     stallReason: collected.stallReason,
+    uniqueSKUs: new Set(collected.candidates.map(candidate => candidate.sku)).size,
     skuExamples: collected.candidates.map(candidate => candidate.sku).slice(0, 10),
   };
 } catch (error) {
@@ -196,7 +197,7 @@ const proof = {
       : productionCandidateCount > 0 ? "VALID_SOURCE" : "PARSER_STRUCTURE_CHANGED",
   candidateCount: productionCandidateCount,
   uniqueSKUHintCount: collector.status === "ok"
-    ? new Set(collector.skuExamples).size
+    ? collector.uniqueSKUs
     : new Set(allProductURLs.map(skuFromURL).filter(Boolean)).size,
   initialCandidateCount: initial.productURLs.length,
   afterLoadMoreCandidateCount: productionCandidateCount,

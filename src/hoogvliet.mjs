@@ -480,8 +480,10 @@ async function findNextCatalogPageURL(page, currentURL) {
     try {
       const next = new URL(href, currentURL);
       const current = new URL(currentURL);
+      const listingBase = pathname => pathname.replace(/\/q\/page\/\d+\/?$/i, "").replace(/\/$/, "") || "/";
       if (next.protocol !== "https:" || next.origin !== BASE_URL || next.username || next.password
-        || next.hash || next.pathname !== current.pathname || next.pathname.startsWith("/product/")) continue;
+        || next.hash || listingBase(next.pathname) !== listingBase(current.pathname)
+        || next.pathname.startsWith("/product/")) continue;
       next.hash = "";
       if (next.href === current.href) continue;
       return next.href;
