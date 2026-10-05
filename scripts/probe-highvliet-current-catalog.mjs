@@ -95,6 +95,9 @@ try {
 }
 
 const candidateCount = collector.status === "ok" ? collector.candidates : 0;
+const legacyIntershopEndpoints = network
+  .filter(record => /INTERSHOP|ViewTWParametricSearch/i.test(record.endpoint.pathname))
+  .map(record => record.endpoint);
 const proof = {
   sourceClassification: collector.status === "error" && collector.code === "source_challenge"
     ? "CHALLENGE"
@@ -112,7 +115,8 @@ const proof = {
   proofBeyondInitialBatch: (collector.pagesFetched ?? 0) > 1
     || candidateCount > (collector.initialCandidateCount ?? 0),
   loadMoreCycles: collector.listingLoadMoreCycles ?? 0,
-  noLegacyIntershop: !network.some(record => /INTERSHOP|ViewTWParametricSearch/i.test(record.endpoint.pathname)),
+  noLegacyIntershop: legacyIntershopEndpoints.length === 0,
+  legacyIntershopEndpoints,
 };
 const result = {
   target: { catalogURL: CATALOG_ROOT_URL, maxPages },
