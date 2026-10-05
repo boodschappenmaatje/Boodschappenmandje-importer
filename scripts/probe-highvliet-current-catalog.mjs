@@ -64,6 +64,7 @@ async function categoryLinks(page) {
 async function loadMore(page, maxCycles = 10) {
   let cycles = 0;
   let stagnated = false;
+  let error = null;
   const pages = [];
   for (; cycles < maxCycles; cycles += 1) {
     const controls = page.locator("button, a, [role='button']")
@@ -85,7 +86,12 @@ async function loadMore(page, maxCycles = 10) {
       href: element.getAttribute("href"),
       html: element.outerHTML.slice(0, 700),
     })) });
-    await control.click({ timeout: 5_000 });
+    try {
+      await control.click({ timeout: 5_000 });
+    } catch (clickError) {
+      error = clickError?.message ?? "control_click_failed";
+      break;
+    }
     if (href) await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
     const grew = await page.waitForFunction(({ previous, href }) => {
       const current = document.querySelectorAll("a[href*='/product/']").length;
@@ -94,7 +100,7 @@ async function loadMore(page, maxCycles = 10) {
     const current = (await listingSnapshot(page)).productURLs.length;
     if (!grew || (!href && current <= previous)) { stagnated = true; break; }
   }
-  return { cycles, stagnated, pages };
+  return { cycles, stagnated, pages, error };
 }
 
 const network = [];
@@ -184,7 +190,7 @@ const result = {
     title: await page.title().catch(() => ""),
   },
   rootCategories: [...new Set(rootCategories)].slice(0, 80).map(safeURL),
-  initial: { count: initial.productURLs.length, skuExamples: initial.productURLs.map(skuFromURL).filter(Boolean).slice(0, 5) },
+  initial: { count: initial.productURLs.length, skuExamples: initial.productURLs.map(skuFromURL).filter(Boolean).slice(0, 5), controls: initial.controls, loadMoreTextNodes: initial.loadMoreTextNodes },
   final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10), controls: final.controls, loadMoreTextNodes: final.loadMoreTextNodes },
   loadMore: loadMoreResult,
   network: network.slice(0, 80),
