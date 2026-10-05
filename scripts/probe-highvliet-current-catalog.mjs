@@ -30,6 +30,8 @@ async function listingSnapshot(page) {
         .map(element => ({
           tag: element.tagName,
           text: (element.textContent || "").replace(/\s+/g, " ").trim(),
+          href: element.getAttribute("href"),
+          html: element.outerHTML.slice(0, 700),
           visible: Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length),
           disabled: element.disabled === true || element.getAttribute("aria-disabled") === "true",
         }))
@@ -62,19 +64,37 @@ async function categoryLinks(page) {
 async function loadMore(page, maxCycles = 10) {
   let cycles = 0;
   let stagnated = false;
+  const pages = [];
   for (; cycles < maxCycles; cycles += 1) {
-    const control = page.locator("button, a, [role='button']")
-      .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer|toon\s+meer|bekijk\s+meer/i })
-      .last();
-    if (!await control.isVisible({ timeout: 800 }).catch(() => false)) break;
+    const controls = page.locator("button, a, [role='button']")
+      .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer|toon\s+meer|bekijk\s+meer|^next$/i });
+    let control = null;
+    for (let index = 0; index < await controls.count(); index += 1) {
+      const candidate = controls.nth(index);
+      if (await candidate.isVisible({ timeout: 200 }).catch(() => false)) {
+        control = candidate;
+        break;
+      }
+    }
+    if (!control) break;
     const previous = (await listingSnapshot(page)).productURLs.length;
+    const href = await control.getAttribute("href");
+    pages.push({ before: previous, control: await control.evaluate(element => ({
+      tag: element.tagName,
+      text: (element.textContent || "").replace(/\s+/g, " ").trim(),
+      href: element.getAttribute("href"),
+      html: element.outerHTML.slice(0, 700),
+    })) });
     await control.click({ timeout: 5_000 });
-    const grew = await page.waitForFunction(({ previous }) => document.querySelectorAll("a[href*='/product/']").length > previous,
-      { previous }, { timeout: 20_000 }).then(() => true).catch(() => false);
+    if (href) await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
+    const grew = await page.waitForFunction(({ previous, href }) => {
+      const current = document.querySelectorAll("a[href*='/product/']").length;
+      return current > previous || (href && location.href.includes(new URL(href, location.href).pathname));
+    }, { previous, href }, { timeout: 20_000 }).then(() => true).catch(() => false);
     const current = (await listingSnapshot(page)).productURLs.length;
-    if (!grew || current <= previous) { stagnated = true; break; }
+    if (!grew || (!href && current <= previous)) { stagnated = true; break; }
   }
-  return { cycles, stagnated };
+  return { cycles, stagnated, pages };
 }
 
 const network = [];
@@ -165,7 +185,7 @@ const result = {
   },
   rootCategories: [...new Set(rootCategories)].slice(0, 80).map(safeURL),
   initial: { count: initial.productURLs.length, skuExamples: initial.productURLs.map(skuFromURL).filter(Boolean).slice(0, 5) },
-  final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10), controls: final.controls },
+  final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10), controls: final.controls, loadMoreTextNodes: final.loadMoreTextNodes },
   loadMore: loadMoreResult,
   network: network.slice(0, 80),
   proof,
