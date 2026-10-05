@@ -1,3 +1,30 @@
+# Checkpoint 25 — één Zyte HTTP fallbacktest op bewezen 403-route — 5 oktober 2026
+
+## Startbewijs
+
+- Remote `main` bij start: `46ef60576543fc9b05f65fc0fdf8d508bd7139f9`. Onderzoeksbranch: `codex/fix-highvliet-parser-20261005`; deze branch is niet gemerged en er is geen PR geopend.
+- Probe-run **37310940072** (branch-head `65b4f9370051707058ba866ff87786ef8f73910d`) bevestigde voor de normale publieke listing-fetch HTTP **403**, classificatie `CHALLENGE`, nul kandidaten en geen xhr/fetch-responses.
+- Exacte URL uit die run, ongewijzigd gebruikt voor de ene Zyte-call:
+  `https://www.hoogvliet.com/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch?PageNumber=0&PageSize=16&SelectedSearchResult=SFProductSearch&SearchTerm=&SelectedItem=&SortingOption=Relevantie&CategoryName=999999-100&CategoryTitle=Producten--Aardappelen%2C%20groente%2C%20fruit&SearchTermKey=`
+
+## Zyte-request en resultaat
+
+- De goedkoopste HTTP-response-methode is gebruikt: één `POST https://api.zyte.com/v1/extract` met `httpResponseBody=true`; er is geen browserrendering aangevraagd. De API-key kwam alleen uit GitHub Secret `ZYTE_API_KEY` en is niet gelezen of gelogd.
+- Actions-run **37312931721** op trigger-commit `6c9ada2ef2c2e67084c991a4279160a5c2018bbd` voerde exact **1** Zyte-request uit; geen retry en geen tweede Zyte-call.
+- Zyte API-status **200**; upstream Hoogvliet-status **404**; responsegrootte **100.932 bytes**. Zyte volgde een redirect van `www.hoogvliet.com` naar:
+  `https://hoogvliet.nl/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch?PageNumber=0&PageSize=16&SelectedSearchResult=SFProductSearch&SearchTerm=&SelectedItem=&SortingOption=Relevantie&CategoryName=999999-100&CategoryTitle=Producten--Aardappelen%2C%20groente%2C%20fruit&SearchTermKey=`
+- De eindpagina had titel `Pagina niet gevonden - Hoogvliet`. Classificatie: **UNKNOWN**. Geen challenge-signaturen gevonden. De HTML bevatte Intershop-/Hoogvliet-signalen, maar het upstream HTTP 404 en de 404-titel maken dit geen geldige listing.
+- Listinganalyse: `.product-tile` **nee**; `#product-search-result` **nee**; productlinks **0**; SKU’s **0**; pagineringvelden leeg. Ingebedde JSON-scriptblokken: **22**, waarvan **2** parseerbaar; JSON-LD **0**; productachtige JSON-objecten/SKU-hints **0**. De parseerbare JSON had generieke Next.js-paginasleutels (zoals `buildId`, `page`, `props`), geen listingproducten. Scripts: **22**; statische xhr/fetch-vermeldingen **0**; publieke endpoint-hints **0**. Een HTTP-response toont geen werkelijk browser-XHR-verkeer.
+- Bestaande importerparser in-memory uitgevoerd: **0 kandidaten**, **0 unieke SKU’s**, parsercompatibiliteit **nee** (de 404-body mist product- en betrouwbare pagineringstructuur).
+- De twee eerdere onmiddellijke workflow-configuratiefailures (**37312736000**, **37312751176**) hadden nul jobs en stuurden geen Zyte-request. Tijdelijke runner, script en dispatchmarker zijn na de ene echte test van de onderzoeksbranch verwijderd.
+
+## Besluit en volgende kleinste stap
+
+- Challengefallback is **niet bewezen**: normale fetch gaf 403 CHALLENGE, maar Zyte kreeg na redirect een upstream 404 en geen listing.
+- Geen `browserHtml`, tweede aanvraag, import, parserfix, Production-integratie, databasewrite, migration of recovery uitgevoerd. `main` en Production zijn niet gewijzigd.
+- Volgende stap: vóór een nieuwe Zyte-test read-only vaststellen waarom de bestaande listing-URL na canonieke redirect op `hoogvliet.nl` 404 geeft en pas daarna een aantoonbaar geldige listing-URL vastleggen. Geen fallbackintegratie of parseraanpassing totdat dat bewijs bestaat.
+- `ROADMAP.md` is niet gewijzigd: 1A.1 is hiermee niet beslist.
+
 # Checkpoint 24 — Hoogvliet parser-onderzoek geblokkeerd door actuele source challenge — 5 oktober 2026
 
 ## Startpunt en onderzoek
