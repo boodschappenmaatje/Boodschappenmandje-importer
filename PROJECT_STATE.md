@@ -2,7 +2,7 @@
 
 ## Merge en Production
 
-- PR #50 is via squash gemerged. Pre-merge head: `a6fec52968f77cf7ab7047336bc6d674d6bd68da`; mergecommit en nieuwe `main)-head: `f030043e9158037b0f9d2164091dfb2b6d99eab3`.
+- PR #50 is via squash gemerged. Pre-merge head: `a6fec52968f77cf7ab7047336bc6d674d6bd68da`; mergecommit en nieuwe main-head: `f030043e9158037b0f9d2164091dfb2b6d99eab3`.
 - De PR-releasegate was groen: PR niet-Draft en mergeable, Vercel Preview READY en de nieuwste volledige core/regression/build workflowrun **37343581197** (#253) geslaagd. De workflow bevatte importerfixtures/seed consistency, PostgreSQL atomic rollback/concurrency, webflows, regressies, lint, TypeScript en build.
 - Automatische Vercel Production deployment `dpl_HivcFWWAnzV6gyU7ejMCQXS8LgSp` op de nieuwe main-head is **READY**. Production homepage smoke: HTTP **200**. De main commitstatus rapporteert Vercel success; er werd geen afzonderlijke push-triggered main-CI-run teruggegeven door de workflow-runconnector.
 - De nieuwe root→categorie-code en strategy fingerprint `hoogvliet-public-catalog-api-pagination-v4` staan op Production. PR #45–#49 zitten in de main-basis. Geen migration uitgevoerd.
