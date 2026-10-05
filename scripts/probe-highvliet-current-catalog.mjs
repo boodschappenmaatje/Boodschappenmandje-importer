@@ -33,8 +33,17 @@ async function listingSnapshot(page) {
           visible: Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length),
           disabled: element.disabled === true || element.getAttribute("aria-disabled") === "true",
         }))
-        .filter(control => control.text)
-        .slice(-40),
+        .filter(control => control.text && /laden|meer|bekijk|volgende|next|product/i.test(control.text))
+        .slice(0, 80),
+      loadMoreTextNodes: [...document.querySelectorAll("*")]
+        .filter(element => /producten\s+laden|meer\s+producten|bekijk\s+meer/i.test((element.textContent || "").replace(/\s+/g, " ").trim())
+          && element.children.length < 4)
+        .slice(0, 20)
+        .map(element => ({
+          tag: element.tagName,
+          text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120),
+          html: element.outerHTML.slice(0, 500),
+        })),
     };
   });
 }
