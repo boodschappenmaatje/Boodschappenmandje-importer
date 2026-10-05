@@ -1,3 +1,29 @@
+# Checkpoint 28 — root→categorie traversal hotfix — 5 oktober 2026
+
+## Hotfix vanaf actuele main
+
+- De actuele `origin/main` was vóór wijziging `8192dd4`; PR #49 is gemerged en Production READY. De featurebranch is `codex/fix-highvliet-root-discovery-20261005`, head `c783210c6b80210eb55bc80afe9dcee7a49b0b6a`. `ROADMAP.md` is niet gewijzigd.
+- De oorzaak zat vóór de bestaande werkende categorieparser: `catalog:root`/`/producten` werd door `waitForCatalogSource` als klaar beschouwd op basis van alleen het root-pad, terwijl de categorieboom nog client-side/hydrationmatig moest verschijnen. Bovendien koos `extractCatalogCategoryLinks` één DOM-subset zodra die niet-leeg was; daardoor konden navigatielinks buiten `<main>` worden weggegooid. De aparte proof wachtte wel op rendering en verzamelde alle anchors, waardoor die niet dezelfde root-flow testte.
+- De root werd in de collectorcode niet bewust als productlisting gepagineerd: na root-linkextractie bestond al een `continue`. De foutieve root-ready timing/route-extractie verhinderde die overgang; de oude geaggregeerde `load_more_stagnated`-melding maakte rootfalen daarnaast onterecht indistinct van listingfalen.
+
+## Fix en stopredenen
+
+- Root discovery wacht nu op actuele publieke categorie-links vóór extractie en gebruikt alle publieke anchors, waarna de bestaande `normalizeCatalogCategoryURL`-allowlist alleen actuele `https://hoogvliet.nl`-categorieën accepteert. `/producten` blijft uitsluitend navigatie; `collectCatalogListing` wordt alleen voor een categorie aangeroepen.
+- Root zonder categorieën geeft `root_category_discovery_failed`. Een gewijzigde categoriepagina geeft `category_structure_changed`; HTTP 404 valt onder `source_unavailable`; listingstagnatie geeft `category_listing_stagnated`. Er is geen stille Intershop-fallback. Legacy `/INTERSHOP`-paden worden niet als catalogusroutes geaccepteerd; publieke `/INTERSHOP/static/...`-assets van de website zijn geen discoverybron.
+- Dagtarget 400, remainingTarget, strategy fingerprint v4, scheduler 06:00/DST-gate, retries, locks, recovery, detailvalidatie, dedupe en importflow zijn behouden. Geen recovery, daily import, databasewrite, migration, merge of deploy uitgevoerd.
+
+## Read-only root-flow proof
+
+- GitHub Actions read-only proof **37343193141** op deze head gebruikte dezelfde collectorflow: `catalog:root → https://hoogvliet.nl/producten → actuele categorie → listing`. Resultaat: root HTTP **200**; **2 routes bezocht**; **20 dynamisch ontdekte categorieën**; **20 initiële kandidaten**; **41 unieke SKU-kandidaten**; **2 listingpagina's**; `legacy_discovery=none`. De 10 `/INTERSHOP/static/...`-requests waren uitsluitend statische assets. Geen import, Supabase, recovery, productwrite, databasewrite of Zyte.
+- De proof overschreed aantoonbaar de eerste batch; SKU-voorbeelden uit dezelfde collector waren de eerder bewezen actuele Hoogvliet-SKU's, waaronder `064786000`, `081222000`, `729202000`, `000737000` en `060936000` in de categorieproef. Dit is geen volledige catalogusdekkingmeting en zegt niets over 7.540 Production-producten.
+
+## Tests en vervolg
+
+- Volledige lokale gate is groen: `npm run check`, `node --check scripts/probe-highvliet-current-catalog.mjs` en **348/348 tests**. Nieuwe fixtures/tests dekken vertraagde root-hydration, root zonder listing-pagination, root/categorie stopcodes, categorie-pagination, Intershop-routeblokkade, daily retrycodes en bestaande target/remaining/scheduler/recovery-regressies.
+- PR wordt geopend vanaf deze branch/head. Work doet na merge alleen de releasegate, mergegoedkeuring en Production READY-controle; daarna de bestaande failed dagjob via de veilige state-machine behandelen en precies één geldige attempt volgen. Geen tweede recovery. Als discovery werkt maar weinig nieuwe SKU's vindt: meteen bereikbare unieke SKU's versus Production 7.540 meten.
+
+---
+
 # Checkpoint 27 — PR #49 Production en ene daily attempt — 5 oktober 2026
 
 ## Release
