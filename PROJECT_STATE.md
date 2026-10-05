@@ -1,3 +1,33 @@
+# Checkpoint 23 — PR #48 Production-release en één gecontroleerde recovery — 5 oktober 2026
+
+## Release
+
+- PR #48 is op pre-merge head `e1c0efda73cd64814a16392fe5edc73579a6ecc3` via squash gemerged; mergecommit en main-head: `edeebd496774879b520e3cda92c3ad62964f8004`. Geen checks zijn omzeild.
+- PR releasegate: PR-CI en Preview groen; migrationbestand kwam overeen met de eerder officieel toegepaste Production-migration; `MIGRATION_ARMED=false`. PR #45 schedulerfix, PR #46 `daily_import=true` en PR #47 Playwrightfix bleven intact.
+- Main-CI-run **37306392898** (#247) is groen, inclusief PostgreSQL concurrency-gate, web/core-flow regressies, lint, TypeScript en build. Automatische Vercel Production-deployment `dpl_DeBcpjZhkaQ1b66s9sFSXS3u2mF4` is READY en groen; Production-homepage opende en toonde de app.
+- De reeds toegepaste migration blijft `20261005220000_recover_failed_daily_catalog_growth`; in dit checkpoint is geen migration, repair of ander schemawerk uitgevoerd.
+
+## Verse recovery-precheck en ene dispatch
+
+- Direct vóór recovery was dezelfde job read-only bevestigd: `dailyImportId=53553be0-2158-47b1-92c3-2bc75cd7d0cc`, datum `2026-10-05`, `failed_requires_attention`, target 400, 0/400, restant 400, attempt_count 1, recovery_count 0, geen lock/actieve attempt, en vorige attempt `d6d66511-e1de-4379-ba39-3b7e64094f0e` definitief beëindigd.
+- De oude attempt had `non_retryable_import_error` met de bewezen Playwright-fout “Too many arguments…”. De codefix van PR #47 was op Production uitgerold.
+- Exact één workflow_dispatch op main: Actions-run **37306914670** (#113), met `daily_import=true`, `recover_failed_daily=true`, `recovery_reason=software_fix_verified`. Geen tweede dispatch.
+- RPC-audit `b8c3454c-91a1-44fa-ae54-aedef62b42fa`, recovery_count exact 0→1, dezelfde dailyImportId en voortgang behouden, dagtarget bleef 400. Nieuwe attempt `a7e52967-eea5-4efb-93aa-63526a86824f` (#2); vorige attempt-ID bleef in de audit staan. De recovery legde vóórstand 0 en remainingTarget 400 vast.
+
+## Resultaat van poging 2
+
+- Discovery werd gestart, maar de bron-/parsercontrole stopte vóór een eerste discoverysegment met `parser_structure_changed`: Hoogvliet-zoekpagina bevatte geen herkenbare product- of lege-resultaatstructuur.
+- Funnel uit run #113: page hits **0**; unieke kandidaten **0**; bestaande SKU’s onder kandidaten **0**; duplicaten **0**; ongeldig **0**; geldige nieuwe kandidaten **0**; werkelijk toegevoegd **0**.
+- Cumulatief: **0/400**, resterend 400; catalogustotaal in de run bleef **7.540**. Er zijn geen productupdates of inserts gerapporteerd.
+- Poging 2 eindigde als `retryable_failure`, foutcode `parser_structure_changed`. De normale state machine zette de dagjob op `retry_scheduled`, `attempt_count=2`, `recovery_count=1`, zonder actieve/stale lock; `next_retry_at=2026-10-05 15:04:22.779+00 UTC`. Recovery is niet opnieuw gebruikt.
+- Geen handmatige DB-statuswijziging, tweede recovery, tweede handmatige daily-dispatch, migration of discovery-codewijziging uitgevoerd.
+
+## Volgende beslissing
+
+- Laat alleen de bestaande retry/state-machine-flow zijn werk doen; start geen handmatige tweede run. Controleer daarna de normale uitkomst en nieuwe funnel read-only.
+- Deze poging bereikte discoverycode maar de bronstructuur faalde vóór paginahits/kandidaten; er is dus nog geen bewijs dat normale discovery werkt met weinig unieke nieuwe producten. Geen nieuwe discoveryfix zonder nieuw bewijs. Als een volgende poging wel normaal discovert maar weinig/geen nieuwe SKU’s vindt, bepaal dan eerst volledige bereikbare Hoogvliet-catalogusdekking versus Production-catalogus (~7.540), inclusief ontbrekende SKU’s en dekkingspercentage.
+- `ROADMAP.md` is niet gewijzigd.
+
 # Checkpoint 22 — recovery-migration toegepast en runner disarmed — 5 oktober 2026
 
 ## Exacte Production migration
