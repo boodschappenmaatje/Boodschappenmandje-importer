@@ -1,30 +1,79 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { DAILY_SCHEDULE_OFFSETS, evaluateDailySchedule } from '../src/daily-schedule-gate.mjs';
 
 const primary = readFileSync(new URL('../.github/workflows/import-hoogvliet-poc.yml', import.meta.url), 'utf8');
 const monitor = readFileSync(new URL('../.github/workflows/monitor-catalog-import.yml', import.meta.url), 'utf8');
+const retry = readFileSync(new URL('../.github/workflows/retry-daily-catalog-import.yml', import.meta.url), 'utf8');
 
-test('daily growth keeps one Dutch-time trigger even when GitHub starts late', () => {
-  assert.ok(primary.includes('- cron: "0 6 * * *"\n      timezone: "Europe/Amsterdam"'));
-  assert.ok(!primary.includes('- cron: "0 4 * * *"'));
-  assert.ok(!primary.includes('- cron: "0 5 * * *"'));
-  assert.ok(!primary.includes('- cron: "7 6 * * *"'));
-  assert.ok(!primary.includes('local_hour='));
-  assert.ok(primary.includes('github.event.schedule }}" == "0 6 * * *"'));
-  assert.ok(primary.includes('daily_import_job="1"'));
-  assert.ok(primary.includes('DAILY_IMPORT_END_HOUR=23'));
-  assert.ok(primary.includes('group: hoogvliet-supabase-update'));
-  assert.ok(primary.includes('- cron: "17 2 * * *"'));
-  assert.ok(primary.includes('- cron: "43 3 * * 0"'));
+function cronEntries(workflow) {
+  return [...workflow.matchAll(/^\s+- cron: "([^"]+)"$/gm)].map(([, cron]) => cron);
+}
+
+test('primary workflow uses valid UTC cron entries and keeps the existing jobs', () => {
+  assert.deepEqual(cronEntries(primary), ['0 4 * * *', '0 5 * * *', '17 2 * * *', '43 3 * * 0']);
+  assert.doesNotMatch(primary, /^\s+timezone:/m);
+  assert.match(primary, /SCHEDULE_CRON: \$\{\{ github\.event\.schedule \}\}/);
+  assert.match(primary, /src\/daily-schedule-gate\.mjs/);
+  assert.match(primary, /DAILY_IMPORT_STATE_KEY=daily-catalog-growth/);
+  assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
+  assert.match(primary, /DAILY_IMPORT_END_HOUR=23/);
+  assert.match(primary, /group: hoogvliet-supabase-update/);
 });
 
-test('monitor runs its check after a delayed Dutch-time trigger', () => {
-  assert.ok(monitor.includes('- cron: "30 8 * * *"\n      timezone: "Europe/Amsterdam"'));
-  assert.ok(!monitor.includes('- cron: "30 6 * * *"'));
-  assert.ok(!monitor.includes('- cron: "30 7 * * *"'));
-  assert.ok(!monitor.includes('RUN_MONITOR'));
-  assert.ok(!monitor.includes('local_hour='));
-  assert.ok(monitor.includes('- name: Dagelijkse import controleren\n        run: npm run monitor:catalog'));
-  assert.ok(monitor.includes('group: hoogvliet-catalog-monitor'));
+test('04:00 UTC is the 06:00 Dutch trigger during CEST', () => {
+  const instant = '2026-10-05T04:00:00Z';
+  assert.deepEqual(DAILY_SCHEDULE_OFFSETS, { '0 4 * * *': 120, '0 5 * * *': 60 });
+  assert.deepEqual(evaluateDailySchedule({ schedule: '0 4 * * *', instant }), {
+    isDailyTrigger: true,
+    shouldRun: true,
+    reason: 'correct-dst-trigger',
+    localHour: '06',
+    localMinute: '00',
+    localOffsetMinutes: 120,
+    expectedOffsetMinutes: 120,
+  });
+  assert.equal(evaluateDailySchedule({ schedule: '0 5 * * *', instant }).shouldRun, false);
+});
+
+test('05:00 UTC is the 06:00 Dutch trigger during CET', () => {
+  const instant = '2026-01-05T05:00:00Z';
+  assert.equal(evaluateDailySchedule({ schedule: '0 4 * * *', instant }).shouldRun, false);
+  assert.deepEqual(evaluateDailySchedule({ schedule: '0 5 * * *', instant }), {
+    isDailyTrigger: true,
+    shouldRun: true,
+    reason: 'correct-dst-trigger',
+    localHour: '06',
+    localMinute: '00',
+    localOffsetMinutes: 60,
+    expectedOffsetMinutes: 60,
+  });
+});
+
+test('the other daily UTC candidate is safely skipped and delayed valid events remain valid', () => {
+  assert.equal(evaluateDailySchedule({ schedule: '0 5 * * *', instant: '2026-07-05T05:00:00Z' }).shouldRun, false);
+  // GitHub may start a scheduled run late; do not gate the valid event on the
+  // runner wall-clock hour after its DST offset has been identified.
+  assert.equal(evaluateDailySchedule({ schedule: '0 4 * * *', instant: '2026-07-05T06:00:00Z' }).shouldRun, true);
+  assert.equal(evaluateDailySchedule({ schedule: '17 2 * * *', instant: '2026-07-05T02:17:00Z' }).shouldRun, false);
+});
+
+test('daily cap, persistent day state, retries, price and weekly schedules stay intact', () => {
+  assert.match(primary, /daily_import_job="1"/);
+  assert.match(primary, /MAX_NEW_PRODUCTS=.*max_products/);
+  assert.match(primary, /DAILY_IMPORT_STATE_KEY=daily-catalog-growth/);
+  assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
+  assert.match(primary, /npm run import:daily/);
+
+  assert.deepEqual(cronEntries(retry), ['17 8,13,18 * * *']);
+  assert.match(retry, /npm run --silent inspect:daily/);
+  assert.match(retry, /npm run import:daily/);
+  assert.match(retry, /DAILY_NEW_PRODUCT_TARGET: "400"/);
+  assert.match(retry, /group: hoogvliet-supabase-update/);
+
+  assert.match(primary, /- cron: "17 2 \* \* \*"/);
+  assert.match(primary, /- cron: "43 3 \* \* 0"/);
+  assert.match(monitor, /npm run monitor:catalog/);
+  assert.match(monitor, /group: hoogvliet-catalog-monitor/);
 });
