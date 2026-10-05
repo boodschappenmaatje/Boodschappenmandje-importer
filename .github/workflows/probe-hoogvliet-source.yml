@@ -1,0 +1,69 @@
+name: TEMPORARY Hoogvliet source probe — READ ONLY
+
+# One public growth-category fetch only. No importer, Supabase, recovery,
+# product write, database write, or authenticated/private endpoint.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/fix-highvliet-parser-20261005
+    paths:
+      - .github/workflows/probe-hoogvliet-source.yml
+      - scripts/probe-hoogvliet-source.mjs
+      - src/hoogvliet.mjs
+      - src/discovery-routes.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-source-probe-read-only
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: One public Hoogvliet listing probe — READ ONLY
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/codex/fix-highvliet-parser-20261005'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact event commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: Eén actuele openbare bronroute onderzoeken — READ ONLY
+        env:
+          PROBE_TERM: category:999999-100
+          PROBE_OUTPUT: hoogvliet-source-proof.json
+        run: |
+          set -euo pipefail
+          node scripts/probe-hoogvliet-source.mjs | tee hoogvliet-probe.log
+          cat hoogvliet-probe.log >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'No importer, Supabase, recovery, product write, or database write was run.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Bewijsartefact uploaden
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoogvliet-source-proof
+          path: |
+            hoogvliet-source-proof.json
+            hoogvliet-probe.log
+          if-no-files-found: error
