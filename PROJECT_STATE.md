@@ -1,3 +1,27 @@
+
+# Checkpoint 28 — verse daily opvolger na definitief failed job voorbereid — 5 oktober 2026
+
+## Startpunt en ontwerpbesluit
+
+- `PROJECT_STATE.md` is eerst gelezen. Actuele `origin/main` is read-only gecontroleerd op `6cfcb01e02a82a7c0ed0fedbd33be01c1d520d2d` (`docs: correct main-head checkpoint wording`). Er is niet opnieuw begonnen en er is geen live actie uitgevoerd.
+- Het bestaande mechanisme is **gedeeltelijk beschikbaar**: de bestaande daily-jobs/attempts/locks, recovery-counter, CAS-guards en append-only recovery-audit zijn herbruikbaar; er bestond nog geen veilige route naar een nieuwe `dailyImportId` op dezelfde kalenderdag. De bestaande recovery blijft dus onveranderd en wordt niet opnieuw gebruikt.
+- De nieuwe route is expliciet `supersede_failed_daily=true` samen met `daily_import=true`. Alleen `failed_requires_attention`, verbruikte `recovery_count=1`, nul actieve attempts, geen lock, geen `next_retry_at`, definitief beëindigde laatste non-retryable attempt, exacte expected revision en een toegestane maintenance-reden worden geaccepteerd.
+
+## Additieve migration en state-machine
+
+- Voorbereid: `supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql`. Deze vervangt de oude all-history uniqueness door een unieke actuele `(state_key, job_date)`-index en een append-only `catalog_daily_supersedes`-audit met unieke dag-/opvolger-guards. Er worden geen rijen uit jobs, attempts, products, prices of discovery-state verwijderd.
+- De nieuwe `supersede_failed_catalog_daily_job`-RPC sluit de oude rij auditbaar met `superseded_at` en `superseded_by_job_id`, laat status/progress/attempt-history intact, maakt atomair een nieuwe rij-ID (`dailyImportId`), target 400, progress 0, remainingTarget 400, `attempt_count=1`, `recovery_count=0` en claimt de normale eerste attempt met lock.
+- De database-lock/advisory state-key/day guard, partial unique current-job-index en unieke auditindex maken concurrerende supersedes single-winner; een tweede opvolger, tweede retry of tweede claim wordt geweigerd. De normale claim-, finish-, scheduler-, retry-, v4 discovery-, detailvalidatie- en dedupeketen blijft de uitvoerder van de nieuwe job.
+- Audit bewaart oude/new dailyImportId, oude status/progress/remaining target, failure reason/summary, timestamp, reden `software_fix_verified` of `importer_updated`, expected revision en beperkte GitHub actor/run/commit-context zonder secrets.
+
+## Tests en veiligheidsgrens
+
+- `npm test`: **351/351 groen**.
+- `npm run check`: groen; workflow YAML en embedded Bash syntax: groen; migration-workflowtests **9/9** en history-guardtests **8/8** groen.
+- `npm run test:postgres`: **28/28 groen**, inclusief disposable PostgreSQL-tests voor old-history-behoud, catalogus/prijzen/discovery-invariantie, target 400, normale retry/claim, alle guards en concurrerende single-winner-supersede.
+- Geen Supabase- of Production-connectie, migration apply, databasewrite, productimport, job-start, merge of deploy uitgevoerd. Geen parser/discoveryfix toegevoegd. De production migration moet als aparte Work-releasehandeling vóór codegebruik worden toegepast en read-only worden geverifieerd.
+- Featurebranch: `codex/supersede-failed-daily-20261005`. PR en remote head worden na commit/push vastgelegd; Work moet daarna migration → releasegate → merge → Production READY → gecontroleerde supersede + exact één echte import uitvoeren.
+
 # Checkpoint 27 — PR #49 Production en ene daily attempt — 5 oktober 2026
 
 ## Release

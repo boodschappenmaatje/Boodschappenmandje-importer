@@ -595,6 +595,8 @@ function dailyJobFromRow(row) {
     completedAt: row.completed_at ?? null,
     lockExpiresAt: row.lock_expires_at ?? null,
     recoveryCount: boundedCount(row.recovery_count),
+    supersededAt: row.superseded_at ?? null,
+    supersededByJobId: row.superseded_by_job_id ?? null,
     lastPublicMessage: row.last_public_message ?? null,
     updatedAt: row.updated_at ?? null,
   };
@@ -614,9 +616,10 @@ export async function fetchCatalogDailyJob(config, {
     "catalog_daily_jobs",
     config.supabaseSecret,
     {
-      select: "id,state_key,job_date,timezone,target_new_products,new_products_collected,status,attempt_count,started_at,last_attempt_at,next_retry_at,completed_at,lock_expires_at,recovery_count,last_public_message,updated_at",
+      select: "id,state_key,job_date,timezone,target_new_products,new_products_collected,status,attempt_count,started_at,last_attempt_at,next_retry_at,completed_at,lock_expires_at,recovery_count,superseded_at,superseded_by_job_id,last_public_message,updated_at",
       state_key: `eq.${stateKey}`,
       job_date: `eq.${jobDate}`,
+      superseded_at: "is.null",
     },
     0,
     0,
@@ -702,6 +705,64 @@ export async function recoverCatalogDailyAttempt(config, {
     attemptId: result.attemptId,
     lockToken: result.lockToken,
     job: recoveredJob,
+  };
+}
+
+// Atomically close one terminal failed day as historical metadata and claim a
+// fresh dailyImportId/attempt #1. The database RPC owns the CAS, same-day
+// successor uniqueness, lock, and append-only audit; no direct status edit is
+// permitted here.
+export async function supersedeFailedCatalogDailyJob(config, {
+  job,
+  supersedeReason,
+  actorContext,
+  now = new Date(),
+  lockTTLMinutes = 130,
+} = {}) {
+  if (!job?.id || job.status !== "failed_requires_attention") {
+    throw new Error("daily supersede vereist failed_requires_attention");
+  }
+  if (typeof supersedeReason !== "string" || !supersedeReason.trim()) {
+    throw new Error("daily supersede reason ontbreekt");
+  }
+  if (typeof actorContext !== "string" || !actorContext.trim()) {
+    throw new Error("daily supersede actor context ontbreekt");
+  }
+  const result = rpcObject(await postRPC(
+    config.supabaseURL,
+    "supersede_failed_catalog_daily_job",
+    config.supabaseSecret,
+    {
+      p_job_id: job.id,
+      p_state_key: job.stateKey,
+      p_job_date: job.jobDate,
+      p_expected_status: job.status,
+      p_expected_updated_at: job.updatedAt,
+      p_expected_attempt_count: job.attemptCount,
+      p_expected_new_products_collected: job.newProductsCollected,
+      p_expected_remaining_target: job.remainingTarget,
+      p_expected_recovery_count: job.recoveryCount,
+      p_supersede_reason: supersedeReason.trim(),
+      p_actor_context: actorContext.trim(),
+      p_now: now.toISOString(),
+      p_lock_ttl_minutes: lockTTLMinutes,
+    },
+  ));
+  const newJob = dailyJobFromRow(result?.job);
+  if (!newJob || result?.claimed !== true || result?.superseded !== true
+      || typeof result?.attemptId !== "string" || typeof result?.lockToken !== "string"
+      || typeof result?.supersedeId !== "string" || typeof result?.previousDailyImportId !== "string") {
+    throw new Error("Supabase bevestigde geen veilige daily supersede-claim.");
+  }
+  return {
+    claimed: true,
+    superseded: true,
+    reason: typeof result.reason === "string" ? result.reason : "superseded_and_claimed",
+    supersedeId: result.supersedeId,
+    previousDailyImportId: result.previousDailyImportId,
+    attemptId: result.attemptId,
+    lockToken: result.lockToken,
+    job: newJob,
   };
 }
 

@@ -26,6 +26,10 @@ test('primary workflow uses valid UTC cron entries and keeps the existing jobs',
   assert.match(primary, /RECOVER_FAILED_DAILY=\$recover_failed_daily/);
   assert.match(primary, /DAILY_RECOVERY_REASON=\$\{\{ inputs\.recovery_reason \}\}/);
   assert.match(primary, /recover_failed_daily.*daily_import/s);
+  assert.match(primary, /supersede_failed_daily.*daily_import/s);
+  assert.match(primary, /SUPERSEDE_FAILED_DAILY=\$supersede_failed_daily/);
+  assert.match(primary, /DAILY_SUPERSEDE_REASON=\$\{\{ inputs\.supersede_reason \}\}/);
+  assert.match(primary, /DAILY_SUPERSEDE_ACTOR_CONTEXT=github_actions/);
   assert.match(primary, /inputs\.daily_import.*true/);
   assert.match(primary, /update_mode="growth"/);
   assert.match(primary, /catalog_batch="growth"/);
