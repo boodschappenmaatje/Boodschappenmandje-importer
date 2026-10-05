@@ -26,6 +26,15 @@ async function listingSnapshot(page) {
     return {
       productURLs: [...new Set(links)],
       text: (document.body?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 300),
+      controls: [...document.querySelectorAll("button, a, [role='button']")]
+        .map(element => ({
+          tag: element.tagName,
+          text: (element.textContent || "").replace(/\s+/g, " ").trim(),
+          visible: Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length),
+          disabled: element.disabled === true || element.getAttribute("aria-disabled") === "true",
+        }))
+        .filter(control => control.text)
+        .slice(-40),
     };
   });
 }
@@ -46,7 +55,7 @@ async function loadMore(page, maxCycles = 10) {
   let stagnated = false;
   for (; cycles < maxCycles; cycles += 1) {
     const control = page.locator("button, a, [role='button']")
-      .filter({ hasText: /producten\s+laden|meer\s+producten|laad\s+meer|toon\s+meer/i })
+      .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer|toon\s+meer|bekijk\s+meer/i })
       .last();
     if (!await control.isVisible({ timeout: 800 }).catch(() => false)) break;
     const previous = (await listingSnapshot(page)).productURLs.length;
@@ -60,12 +69,29 @@ async function loadMore(page, maxCycles = 10) {
 }
 
 const network = [];
+const responseTasks = [];
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
 const page = await context.newPage();
 page.on("response", response => {
   const type = response.request().resourceType();
-  if (type === "xhr" || type === "fetch") network.push({ type, status: response.status(), endpoint: safeURL(response.url()) });
+  if (type !== "xhr" && type !== "fetch") return;
+  const endpoint = safeURL(response.url());
+  const record = { type, status: response.status(), endpoint };
+  network.push(record);
+  if (endpoint.pathname === "/api/graphql") {
+    responseTasks.push((async () => {
+      try {
+        const body = await response.text();
+        const url = new URL(response.url());
+        const query = url.searchParams.get("query") ?? "";
+        record.operationName = url.searchParams.get("operationName");
+        record.queryStart = query.replace(/\s+/g, " ").trim().slice(0, 300);
+        record.bodyLength = body.length;
+        record.bodyStart = body.replace(/\s+/g, " ").slice(0, 300);
+      } catch { record.bodyRead = "failed"; }
+    })());
+  }
 });
 
 let navigationResponse = null;
@@ -88,9 +114,10 @@ let loadMoreResult = { cycles: 0, stagnated: false };
 try {
   categoryResponse = await page.goto(categoryURL, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await page.waitForTimeout(2_000);
+  await page.waitForTimeout(5_000);
   initial = await listingSnapshot(page);
   loadMoreResult = await loadMore(page);
+  await page.waitForTimeout(3_000);
   final = await listingSnapshot(page);
 } catch (error) {
   categoryError = error?.message ?? "navigation_error";
@@ -122,12 +149,14 @@ const result = {
   },
   rootCategories: [...new Set(rootCategories)].slice(0, 80).map(safeURL),
   initial: { count: initial.productURLs.length, skuExamples: initial.productURLs.map(skuFromURL).filter(Boolean).slice(0, 5) },
-  final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10) },
+  final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10), controls: final.controls },
   loadMore: loadMoreResult,
   network: network.slice(0, 80),
   proof,
 };
 
+await Promise.allSettled(responseTasks);
+result.network = network.slice(0, 80);
 if (network.some(record => /INTERSHOP|ViewTWParametricSearch/i.test(record.endpoint.pathname))) {
   throw new Error("Legacy Intershop discovery endpoint appeared in current catalog traffic.");
 }
