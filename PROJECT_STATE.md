@@ -1,3 +1,24 @@
+# Checkpoint 19 — PR #47 Playwright-hotfix release — 5 oktober 2026
+
+## Merge en Production
+
+- PR #47 is gemerged vanaf goedgekeurde pre-merge head `2b3eddde3bfbc4cf380e97e4610fd8acce5d4143`, squash mergecommit `f3c9ac7a57ac9d371993b0be692c9b2c09a42656`; dit is de actuele `main`.
+- Main-CI run **37294369743** (#240) is geslaagd. Vercel Production-deployment `dpl_7ddWk9WaZ1cX2nm5gypivAJ5CVa8` staat **READY**, zonder aliasfout. Read-only homepage-smoke op `https://boodschappenmaatje-pwa.vercel.app/` gaf HTTP 200.
+- De runtimefix past de source-evidencewaarden als één object toe op Playwright `page.evaluate`. Bestaande classificatielogica en regressietests zijn behouden.
+- Releasegate controleerde dat PR #45 schedulerfix intact is (`0 4 * * *` / `0 5 * * *` UTC met DST-offset-gate), PR #46 `daily_import=true` en de 400-config intact zijn, en `DISCOVERY_STRATEGY_VERSION=hoogvliet-categories-pagination-v2` nog wordt gebruikt. De PR-diff had uitsluitend `src/hoogvliet.mjs`, `test/importer.test.mjs` en `PROJECT_STATE.md`.
+
+## Dagjob read-only gecontroleerd; geen nieuwe run gestart
+
+- Production-job `daily-catalog-growth`, datum `2026-10-05`, ID `53553be0-2158-47b1-92c3-2bc75cd7d0cc`: `failed_requires_attention`, poging 1, 0/400 toegevoegd, resterend 400, `next_retry_at=null`, `lock_expires_at=null`. Stale lock: **nee**.
+- Poging 1 is `non_retryable_failure` met `non_retryable_import_error`. Run #112 eindigde vóór discovery: 0 paginahits, 0 unieke kandidaten, 0 discoverysegmenten en 0 toegevoegd. Cumulatief blijft 0/400.
+- De bestaande veilige code weigert deze toestand te herstarten: `shouldRunDailyImport` geeft voor `failed_requires_attention` `run=false`; de bestaande `claim_catalog_daily_attempt`-functie retourneert dezelfde status zonder claim. Daardoor was een nieuwe `daily_import=true`-dispatch niet veilig toegestaan zonder statusomzeiling. Er is geen nieuwe dispatch gestart en geen dagstatus aangepast.
+- Nieuwe daily-run na PR #47: **geen run-ID**; discovery is niet opnieuw bereikt. Er is geen nieuwe import of Production-databasewrite uitgevoerd.
+
+## Volgende stap
+
+- Ontwerp als afzonderlijke, begrensde release een veilige herstelroute voor uitsluitend de aantoonbaar verholpen Playwright-runtimefout. Behoud bestaande dagcounter, resterend doel, claim/lock en dedupe; geen directe database-edit.
+- Pas na die releasegate kan één nieuwe daily-run worden beoordeeld. Als die discovery bereikt maar weinig of geen nieuwe producten vindt, vergelijk eerst het aantal bereikbare unieke Hoogvliet-SKU's met de Production-catalogus; bouw dan niet automatisch een discoveryfix.
+
 # Checkpoint 18 — Playwright-bronstatus hotfix — 5 oktober 2026
 
 ## Remote en runtimebevinding
@@ -13,7 +34,7 @@
 - `test/importer.test.mjs` bevat een regressietest via `waitForSourceContent` met een strikte `page.evaluate`-contractstub. Die controleert één objectargument en bevestigt dat een expliciet lege pagina nog steeds `valid_empty_search` oplevert. Bestaande bronclassificatietests blijven ongewijzigd en dekken challenge, bronstoring, parserstructuur en navigatiefout.
 - De volledige root/importer-suite en `npm run check` zijn via GitHub Actions releasegate-run **37290835429** (run #236) geslaagd op functionele code/test-head `4c511a0`. Ook de PostgreSQL atomic rollback/concurrency-gate en web core flows, lint, TypeScript en Production-build zijn groen. De regressietest liep mee in de importer-suite. Latere commits op deze branch wijzigen alleen documentatie/PR-tekst, niet de geteste code. De lokale Codex-werkruimte bevatte geen checkout; verificatie is uitgevoerd in GitHub Actions.
 - Alleen importerbron, regressietest en deze projectstatus zijn gewijzigd. Geen discovery-, scheduler-, dedupe-, validatie-, retry- of dagjoblogica gewijzigd. In dit hotfixcheckpoint is geen live import, Production-databasewrite, merge of Production-deploy gestart.
-- Featurebranch: `codex/fix-playwright-evaluate-arguments-20261005`; Draft PR #47 staat open. Merge blijft buiten scope.
+- Featurebranch `codex/fix-playwright-evaluate-arguments-20261005` werd PR #47 en is na dit checkpoint gemerged; zie checkpoint 19 voor de release- en dagjobstatus.
 
 # Checkpoint 17 — handmatige daily-dispatch en bronclassificatie — 5 oktober 2026
 
