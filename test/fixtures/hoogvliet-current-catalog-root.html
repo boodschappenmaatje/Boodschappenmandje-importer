@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="nl">
+  <head><meta charset="utf-8"><title>Producten - Hoogvliet</title></head>
+  <body>
+    <main>
+      <a href="/producten">Producten</a>
+      <p id="root-status">Catalogus laden...</p>
+    </main>
+    <script>
+      setTimeout(() => {
+        document.querySelector('#root-status').insertAdjacentHTML('afterend', `
+          <nav aria-label="Productcatalogus">
+            <a href="/aardappelen-groente-fruit">Aardappelen, groente, fruit</a>
+            <a href="/aardappelen-groente-fruit/fruit">Fruit</a>
+          </nav>`);
+      }, 30);
+    </script>
+  </body>
+</html>

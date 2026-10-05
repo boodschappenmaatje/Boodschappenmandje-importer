@@ -378,6 +378,13 @@ test("non-retryable configuratiefout stopt automatische retries en vraagt aandac
   assert.equal(classifyDailyImportError(new Error("schema ontbreekt")).retryable, false);
 });
 
+test("root- en categoriebronfouten blijven expliciete retrybare bronstatussen", () => {
+  for (const code of ["root_category_discovery_failed", "category_structure_changed"]) {
+    assert.equal(classifyDailyImportError({ code }).retryable, true, code);
+    assert.equal(classifyDailyImportError({ code }).code, code);
+  }
+});
+
 test("23:00 Europe/Amsterdam sluit veilig af als partial zonder rollback", async () => {
   const harness = createHarness([{ new: 327 }], {
     times: [

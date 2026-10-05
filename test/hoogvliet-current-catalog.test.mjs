@@ -10,18 +10,20 @@ import {
   extractSKUFromProductURL,
   normalizeCatalogCategoryURL,
   normalizeCatalogListingCandidate,
+  RootCategoryDiscoveryError,
 } from "../src/hoogvliet.mjs";
 
 const fixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog.html", import.meta.url), "utf8");
 const paginationFixture = await readFile(new URL("./fixtures/hoogvliet-current-pagination.html", import.meta.url), "utf8");
+const rootFixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog-root.html", import.meta.url), "utf8");
 
-async function browserFor({ body = fixture, status = 200 } = {}) {
+async function browserFor({ body = fixture, rootBody = body, status = 200 } = {}) {
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   await context.route("https://hoogvliet.nl/**", route => route.fulfill({
     status,
     contentType: "text/html",
-    body,
+    body: new URL(route.request().url()).pathname === "/producten" ? rootBody : body,
   }));
   await context.route("https://hoogvliet.nl/api/graphql**", async route => {
     const url = new URL(route.request().url());
@@ -108,7 +110,22 @@ test("catalog root discovers multiple public categories and deduplicates cross-l
   assert.equal(result.rawCandidates, 6);
   assert.equal(result.duplicateCandidates, 3);
   assert.equal(result.uniqueListingSKUs, 3);
+  assert.equal(result.rootCategoriesDiscovered, 2);
+  assert.equal(result.routesVisited, 3);
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
+});
+
+test("catalog root waits for hydrated navigation and never runs listing pagination on root", async t => {
+  const h = await browserFor({ rootBody: rootFixture });
+  t.after(() => h.browser.close());
+  const result = await collectPublicCatalogCandidates(h.page, 1);
+  assert.equal(result.rootCategoriesDiscovered, 2);
+  assert.equal(result.categoriesVisited, 1);
+  assert.equal(result.routesVisited, 2);
+  assert.equal(result.pagesFetched, 1);
+  assert.equal(result.initialCandidateCount, 2);
+  assert.equal(result.listingLoadMoreCycles, 1);
+  assert.equal(result.candidates.length, 2);
 });
 
 test("load-more stagnation is fail-closed and does not claim exhaustion", async t => {
@@ -119,10 +136,10 @@ test("load-more stagnation is fail-closed and does not claim exhaustion", async 
     maxWindows: 10,
   });
   assert.equal(result.sourceExhausted, false);
-  assert.equal(result.stallReason, "load_more_stagnated");
+  assert.equal(result.stallReason, "category_listing_stagnated");
 });
 
-test("challenge and changed catalog structure stop with explicit source codes", async t => {
+test("root discovery failure, category structure changes and challenge have explicit source codes", async t => {
   const challenge = await browserFor({ body: "<main>Access denied</main>", status: 403 });
   t.after(() => challenge.browser.close());
   await assert.rejects(
@@ -130,11 +147,18 @@ test("challenge and changed catalog structure stop with explicit source codes", 
     error => error.code === "source_challenge",
   );
 
-  const changed = await browserFor({ body: "<main><h1>Nieuwe catalogus</h1></main>" });
+  const changed = await browserFor({ rootBody: "<main><h1>Nieuwe catalogus</h1></main>" });
   t.after(() => changed.browser.close());
   await assert.rejects(
-    collectPublicCatalogCandidates(changed.page, 2),
-    error => error.code === "parser_structure_changed",
+    collectPublicCatalogCandidates(changed.page, 2, { normalTimeoutMs: 50 }),
+    error => error instanceof RootCategoryDiscoveryError && error.code === "root_category_discovery_failed",
+  );
+
+  const changedCategory = await browserFor({ body: "<main><h1>Nieuwe categoriepagina</h1></main>" });
+  t.after(() => changedCategory.browser.close());
+  await assert.rejects(
+    collectCatalogListing(changedCategory.page, "https://hoogvliet.nl/aardappelen-groente-fruit", { normalTimeoutMs: 50 }),
+    error => error.code === "category_structure_changed",
   );
 });
 
@@ -142,5 +166,6 @@ test("catalog URL guard accepts only current public category paths", () => {
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/aardappelen-groente-fruit"),
     "https://hoogvliet.nl/aardappelen-groente-fruit");
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/product/trostomaten-verpakt-060936000"), null);
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/INTERSHOP/web/WFS/catalog"), null);
   assert.equal(normalizeCatalogCategoryURL("https://evil.example/aardappelen-groente-fruit"), null);
 });
