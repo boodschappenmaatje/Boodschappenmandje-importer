@@ -20,7 +20,7 @@
 - `npm run check`: groen; workflow YAML en embedded Bash syntax: groen; migration-workflowtests **9/9** en history-guardtests **8/8** groen.
 - `npm run test:postgres`: **28/28 groen**, inclusief disposable PostgreSQL-tests voor old-history-behoud, catalogus/prijzen/discovery-invariantie, target 400, normale retry/claim, alle guards en concurrerende single-winner-supersede.
 - Geen Supabase- of Production-connectie, migration apply, databasewrite, productimport, job-start, merge of deploy uitgevoerd. Geen parser/discoveryfix toegevoegd. De production migration moet als aparte Work-releasehandeling vóór codegebruik worden toegepast en read-only worden geverifieerd.
-- Featurebranch: `codex/supersede-failed-daily-20261005`. PR en remote head worden na commit/push vastgelegd; Work moet daarna migration → releasegate → merge → Production READY → gecontroleerde supersede + exact één echte import uitvoeren.
+- Featurebranch: `codex/supersede-failed-daily-20261005`; implementation commit `2d286cbfe7fd169c7f555a4d90fa7ac19fbd3d27`; PR **#51** open tegen `main`: `https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/51`. Bij de eerste read-only PR-statuscontrole waren Vercel checks pending en waren er nog geen PR workflow-runs teruggegeven. Work moet daarna migration → releasegate → merge → Production READY → gecontroleerde supersede + exact één echte import uitvoeren.
 
 # Checkpoint 27 — PR #49 Production en ene daily attempt — 5 oktober 2026
 
