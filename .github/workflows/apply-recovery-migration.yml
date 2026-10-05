@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  MIGRATION_ARMED: 'true'
+  MIGRATION_ARMED: 'false'
   SUPABASE_PROJECT_REF: pjcqxufvbkkjehituzxz
   SUPABASE_POOLER_HOST: aws-1-eu-west-1.pooler.supabase.com
   SUPABASE_POOLER_PORT: '5432'
