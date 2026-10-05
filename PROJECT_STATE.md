@@ -1,3 +1,24 @@
+# Checkpoint 24 — Hoogvliet parser-onderzoek geblokkeerd door actuele source challenge — 5 oktober 2026
+
+## Startpunt en onderzoek
+
+- Actuele `origin/main` is gecontroleerd op `46ef60576543fc9b05f65fc0fdf8d508bd7139f9` (`docs: record PR48 recovery attempt`). De nieuwe branch is `codex/fix-highvliet-parser-20261005`; de branch startte exact vanaf deze main-head.
+- Production-run **37306914670** (#113) blijft het relevante bewijs voor de applicatiestatus: discovery stopte op `parser_structure_changed` vóór paginahits en kandidaten. Er is in Codex geen Production-read, databasewrite, recovery, import, migration, merge of deploy uitgevoerd.
+- De bestaande parser verwacht de Intershop-listingstructuur `.product-tile`, `#product-search-result` en de bijbehorende pagineringsmetadata. De huidige code classificeert een HTTP-200-document zonder product- of lege-resultaatstructuur terecht als `parser_structure_changed`; een XHR/API-fallback is nog niet aanwezig.
+
+## Read-only live proof
+
+- Directe Hoogvliet-egress vanuit Codex is door het runtimebeleid geblokkeerd. Daarom is één tijdelijke, strikt read-only GitHub Actions-probe gebouwd: `.github/workflows/probe-hoogvliet-source.yml` met `scripts/probe-hoogvliet-source.mjs`.
+- Probe-run **37310940072** op exact branch-head **65b4f9370051707058ba866ff87786ef8f73910d** onderzocht uitsluitend één publieke groeicategorie-route (`category:999999-100`). Resultaat: HTTP **403**, classificatie **`CHALLENGE`**, **0 kandidaten**, geen DOM-producten en geen XHR/fetch-responses om als openbare catalogus-API te beoordelen.
+- De probe verrichtte geen importer-, Supabase-, recovery-, product- of databaseactie. De workflow publiceert alleen beperkte veilige metadata; secrets en response-body’s worden niet gelogd.
+- Eerder aangeleverde Zyte-evidence (HTTP 200, geen producttiles/productlinks, wel XHR/fetch-signalen) is hiermee niet zelfstandig reproduceerbaar. De actuele endpoint-URL en JSON-schema zijn daardoor nog niet bewezen.
+
+## Besluit en volgende stap
+
+- Er is bewust **geen parser- of discoveryfix** toegevoegd: een generieke XHR-parser zonder bewezen endpoint/schema zou productidentiteit, SKU, detailvalidatie en paginering kunnen gokken. De bestaande `parser_structure_changed`-classificatie blijft voor deze bewezen-onbekende 200-structuur behouden.
+- De tijdelijke probe staat op branch-head `65b4f9370051707058ba866ff87786ef8f73910d`; er is nog geen PR geopend omdat de onderliggende oorzaak en duurzame fix niet bewezen zijn. `ROADMAP.md` is niet gewijzigd.
+- Volgende Work-stap: voer dezelfde read-only broninspectie uit vanuit een runtime/proxy die de eerder bewezen publieke 200-response kan bereiken (zonder challenge-bypass), leg endpoint/schema en één actuele fixture vast, en implementeer pas daarna de minimale API/listing-adapter met bestaande detailvalidatie, dedupe, fingerprint, retry- en 400-state-machine-behoud. Daarna pas tests, PR en releasegate.
+
 # Checkpoint 23 — PR #48 Production-release en één gecontroleerde recovery — 5 oktober 2026
 
 ## Release
