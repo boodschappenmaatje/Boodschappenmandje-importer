@@ -1,3 +1,73 @@
+# Checkpoint 26 — actuele Hoogvliet-catalogus geïmplementeerd — 5 oktober 2026
+
+## Implementatie
+
+- Remote `main` blijft `46ef60576543fc9b05f65fc0fdf8d508bd7139f9`. De releasebranch is `codex/implement-highvliet-catalog-discovery-20261005`; actuele head vóór deze checkpoint-update: `5a9986a2e0a75a62c1a120a81a70fead1a78c89c`.
+- De primaire discoveryroute gebruikt nu `https://hoogvliet.nl/producten` en ontdekt publieke categorie-/subcategorielinks runtime uit de actuele catalogusstructuur. De voorbeeldcategorie is `/aardappelen-groente-fruit`; productroutes worden alleen als `https://hoogvliet.nl/product/...`-kandidaten toegelaten.
+- De oude Intershop-route `ViewTWParametricSearch-SimpleOfferSearch` en `CategoryName=999999-100` zijn niet langer een geldige discoveryterm. Onbekende/legacy-termen falen met `source_unavailable`; er bestaat geen stille legacy-fallback.
+- Listing discovery combineert actuele HTML/DOM-kaarten met de publieke `GET https://hoogvliet.nl/api/graphql`-`GetProducts`-hydratie die de website zelf gebruikt. De endpoint gebruikt de publieke queryparameters `operationName`, `query` en `variables`; SKU’s worden voor simple products uit `url_key` bevestigd. Detailvalidatie blijft leidend voor package, prijs en opslag.
+- Pagination volgt uitsluitend de zichtbare publieke `Next`/`Volgende`-link. De bewezen vorm is `/aardappelen-groente-fruit/q/page/2`. Een echte load-moreknop wordt alleen gevolgd voor teksten als `Producten laden`, `Meer producten` of `Laad meer`; filter-/carouselknoppen zoals `Toon meer` en `Bekijk meer` worden niet aangeklikt. Visited-URL’s, SKU-dedupe, stagnatiedetectie en veiligheidslimieten blijven actief.
+- Strategy fingerprint is verhoogd naar `hoogvliet-public-catalog-api-pagination-v4`, zodat oude exhausted-state niet de nieuwe catalogusstrategie blokkeert. Dagtarget 400, persistent restant, scheduler, retries, locks, recovery en downstream detail-/dedupe-/prijslogica zijn niet inhoudelijk vervangen.
+
+## Read-only cloud proof
+
+- Actions-run **37325662499** op head `5a9986a2e0a75a62c1a120a81a70fead1a78c89c` was succesvol. De actuele categorie gaf HTTP **200** en de production collector vond in een begrensde proof **22 initiële kaarten** en **41 unieke SKU-kandidaten over 2 listingpagina’s**. SKU-voorbeelden: `064786000`, `081222000`, `729202000`, `000737000`, `671474000`, `075080000`, `683144000`, `001427000`, `211990000`, `047519000`, `002499000`, `060936000`.
+- De collector-proef eindigde bewust na 2 pagina’s met `sourceExhausted=false`; dit is bewijs dat de eerste batch wordt overschreden, geen uitspraak over de volledige catalogusomvang of over 7.540 Production-producten.
+- De live netwerkregistratie bevatte de publieke `/api/graphql`-requests met `GetProducts` en SKU-filters. Geen Intershop-request werd gezien. De workflow was read-only: geen importer, Supabase, productwrite, databasewrite, migration, recovery, Zyte-request, merge of deploy.
+
+## Tests en vervolg
+
+- Lokale fixtures dekken actuele listingvelden, publieke GraphQL-hydratatie, meerdere categorieën, cross-category duplicates, bestaande SKU’s, detailvalidatie, load-more, `Next`-pagination, stagnatie, challenge, gewijzigde structuur, daily target 400, remainingTarget, retries/locks/recovery en strategy fingerprint.
+- De kleine cloud-proof is geen volledige catalogusdekkingmeting. Na merge moet Work eerst de releasegate uitvoeren, daarna precies één veilige daily attempt. Alleen bij weinig nieuwe producten volgt een aparte vergelijking van bereikbare unieke Hoogvliet-SKU’s met Production (~7.540).
+
+# Checkpoint 25 — één Zyte HTTP fallbacktest op bewezen 403-route — 5 oktober 2026
+
+## Startbewijs
+
+- Remote `main` bij start: `46ef60576543fc9b05f65fc0fdf8d508bd7139f9`. Onderzoeksbranch: `codex/fix-highvliet-parser-20261005`; deze branch is niet gemerged en er is geen PR geopend.
+- Probe-run **37310940072** (branch-head `65b4f9370051707058ba866ff87786ef8f73910d`) bevestigde voor de normale publieke listing-fetch HTTP **403**, classificatie `CHALLENGE`, nul kandidaten en geen xhr/fetch-responses.
+- Exacte URL uit die run, ongewijzigd gebruikt voor de ene Zyte-call:
+  `https://www.hoogvliet.com/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch?PageNumber=0&PageSize=16&SelectedSearchResult=SFProductSearch&SearchTerm=&SelectedItem=&SortingOption=Relevantie&CategoryName=999999-100&CategoryTitle=Producten--Aardappelen%2C%20groente%2C%20fruit&SearchTermKey=`
+
+## Zyte-request en resultaat
+
+- De goedkoopste HTTP-response-methode is gebruikt: één `POST https://api.zyte.com/v1/extract` met `httpResponseBody=true`; er is geen browserrendering aangevraagd. De API-key kwam alleen uit GitHub Secret `ZYTE_API_KEY` en is niet gelezen of gelogd.
+- Actions-run **37312931721** op trigger-commit `6c9ada2ef2c2e67084c991a4279160a5c2018bbd` voerde exact **1** Zyte-request uit; geen retry en geen tweede Zyte-call.
+- Zyte API-status **200**; upstream Hoogvliet-status **404**; responsegrootte **100.932 bytes**. Zyte volgde een redirect van `www.hoogvliet.com` naar:
+  `https://hoogvliet.nl/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch?PageNumber=0&PageSize=16&SelectedSearchResult=SFProductSearch&SearchTerm=&SelectedItem=&SortingOption=Relevantie&CategoryName=999999-100&CategoryTitle=Producten--Aardappelen%2C%20groente%2C%20fruit&SearchTermKey=`
+- De eindpagina had titel `Pagina niet gevonden - Hoogvliet`. Classificatie: **UNKNOWN**. Geen challenge-signaturen gevonden. De HTML bevatte Intershop-/Hoogvliet-signalen, maar het upstream HTTP 404 en de 404-titel maken dit geen geldige listing.
+- Listinganalyse: `.product-tile` **nee**; `#product-search-result` **nee**; productlinks **0**; SKU’s **0**; pagineringvelden leeg. Ingebedde JSON-scriptblokken: **22**, waarvan **2** parseerbaar; JSON-LD **0**; productachtige JSON-objecten/SKU-hints **0**. De parseerbare JSON had generieke Next.js-paginasleutels (zoals `buildId`, `page`, `props`), geen listingproducten. Scripts: **22**; statische xhr/fetch-vermeldingen **0**; publieke endpoint-hints **0**. Een HTTP-response toont geen werkelijk browser-XHR-verkeer.
+- Bestaande importerparser in-memory uitgevoerd: **0 kandidaten**, **0 unieke SKU’s**, parsercompatibiliteit **nee** (de 404-body mist product- en betrouwbare pagineringstructuur).
+- De twee eerdere onmiddellijke workflow-configuratiefailures (**37312736000**, **37312751176**) hadden nul jobs en stuurden geen Zyte-request. Tijdelijke runner, script en dispatchmarker zijn na de ene echte test van de onderzoeksbranch verwijderd.
+
+## Besluit en volgende kleinste stap
+
+- Challengefallback is **niet bewezen**: normale fetch gaf 403 CHALLENGE, maar Zyte kreeg na redirect een upstream 404 en geen listing.
+- Geen `browserHtml`, tweede aanvraag, import, parserfix, Production-integratie, databasewrite, migration of recovery uitgevoerd. `main` en Production zijn niet gewijzigd.
+- Volgende stap: vóór een nieuwe Zyte-test read-only vaststellen waarom de bestaande listing-URL na canonieke redirect op `hoogvliet.nl` 404 geeft en pas daarna een aantoonbaar geldige listing-URL vastleggen. Geen fallbackintegratie of parseraanpassing totdat dat bewijs bestaat.
+- `ROADMAP.md` is niet gewijzigd: 1A.1 is hiermee niet beslist.
+
+# Checkpoint 24 — Hoogvliet parser-onderzoek geblokkeerd door actuele source challenge — 5 oktober 2026
+
+## Startpunt en onderzoek
+
+- Actuele `origin/main` is gecontroleerd op `46ef60576543fc9b05f65fc0fdf8d508bd7139f9` (`docs: record PR48 recovery attempt`). De nieuwe branch is `codex/fix-highvliet-parser-20261005`; de branch startte exact vanaf deze main-head.
+- Production-run **37306914670** (#113) blijft het relevante bewijs voor de applicatiestatus: discovery stopte op `parser_structure_changed` vóór paginahits en kandidaten. Er is in Codex geen Production-read, databasewrite, recovery, import, migration, merge of deploy uitgevoerd.
+- De bestaande parser verwacht de Intershop-listingstructuur `.product-tile`, `#product-search-result` en de bijbehorende pagineringsmetadata. De huidige code classificeert een HTTP-200-document zonder product- of lege-resultaatstructuur terecht als `parser_structure_changed`; een XHR/API-fallback is nog niet aanwezig.
+
+## Read-only live proof
+
+- Directe Hoogvliet-egress vanuit Codex is door het runtimebeleid geblokkeerd. Daarom is één tijdelijke, strikt read-only GitHub Actions-probe gebouwd: `.github/workflows/probe-hoogvliet-source.yml` met `scripts/probe-hoogvliet-source.mjs`.
+- Probe-run **37310940072** op exact branch-head **65b4f9370051707058ba866ff87786ef8f73910d** onderzocht uitsluitend één publieke groeicategorie-route (`category:999999-100`). Resultaat: HTTP **403**, classificatie **`CHALLENGE`**, **0 kandidaten**, geen DOM-producten en geen XHR/fetch-responses om als openbare catalogus-API te beoordelen.
+- De probe verrichtte geen importer-, Supabase-, recovery-, product- of databaseactie. De workflow publiceert alleen beperkte veilige metadata; secrets en response-body’s worden niet gelogd.
+- Eerder aangeleverde Zyte-evidence (HTTP 200, geen producttiles/productlinks, wel XHR/fetch-signalen) is hiermee niet zelfstandig reproduceerbaar. De actuele endpoint-URL en JSON-schema zijn daardoor nog niet bewezen.
+
+## Besluit en volgende stap
+
+- Er is bewust **geen parser- of discoveryfix** toegevoegd: een generieke XHR-parser zonder bewezen endpoint/schema zou productidentiteit, SKU, detailvalidatie en paginering kunnen gokken. De bestaande `parser_structure_changed`-classificatie blijft voor deze bewezen-onbekende 200-structuur behouden.
+- De tijdelijke probe staat op branch-head `65b4f9370051707058ba866ff87786ef8f73910d`; er is nog geen PR geopend omdat de onderliggende oorzaak en duurzame fix niet bewezen zijn. `ROADMAP.md` is niet gewijzigd.
+- Volgende Work-stap: voer dezelfde read-only broninspectie uit vanuit een runtime/proxy die de eerder bewezen publieke 200-response kan bereiken (zonder challenge-bypass), leg endpoint/schema en één actuele fixture vast, en implementeer pas daarna de minimale API/listing-adapter met bestaande detailvalidatie, dedupe, fingerprint, retry- en 400-state-machine-behoud. Daarna pas tests, PR en releasegate.
+
 # Checkpoint 23 — PR #48 Production-release en één gecontroleerde recovery — 5 oktober 2026
 
 ## Release

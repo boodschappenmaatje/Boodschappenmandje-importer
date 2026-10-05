@@ -413,11 +413,12 @@ test("meerdere resultaatpagina's leveren afzonderlijke SKU-varianten zonder dubb
   assert.equal(result.duplicateCandidates, 1);
 });
 
-test("Hoogvliet-zoek-URL vraagt expliciet een volgend resultaatblok op", () => {
-  const url = new URL(searchURL("cola", 3));
-  assert.equal(url.searchParams.get("SearchTerm"), "cola");
-  assert.equal(url.searchParams.get("PageNumber"), "3");
-  assert.equal(url.searchParams.get("PageSize"), "40");
+test("Hoogvliet discovery gebruikt de actuele catalogusroute zonder verzonnen cursor", () => {
+  const url = new URL(searchURL("catalog:root", 3));
+  assert.equal(url.origin, "https://hoogvliet.nl");
+  assert.equal(url.pathname, "/producten");
+  assert.equal(url.search, "");
+  assert.throws(() => searchURL("cola", 3), { code: "source_unavailable" });
 });
 
 test("herhaalde resultaatpagina stopt begrensd en voorkomt een paginalus", async () => {
@@ -1398,7 +1399,7 @@ test("groeiconfiguratie gebruikt 400 als doel voor werkelijk nieuwe producten", 
   assert.equal(config.maxProducts, 400);
   assert.equal(config.maxNewProducts, 400);
   assert.equal(config.importTrigger, "schedule");
-  assert.ok(config.searchTerms.length > 100);
+  assert.deepEqual(config.searchTerms, ["catalog:root"]);
   assert.equal(new Set(config.searchTerms).size, config.searchTerms.length);
 });
 

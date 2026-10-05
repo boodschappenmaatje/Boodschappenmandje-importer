@@ -1,0 +1,109 @@
+name: TEMPORARY current Hoogvliet catalog probe — READ ONLY
+
+# One public catalog/category fetch with a bounded visible load-more proof.
+# No importer, Supabase, recovery, product write, database write, Zyte, or
+# authenticated/private endpoint.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/implement-highvliet-catalog-discovery-20261005
+    paths:
+      - .github/workflows/probe-hoogvliet-source.yml
+      - scripts/probe-highvliet-current-catalog.mjs
+      - src/hoogvliet.mjs
+      - src/discovery-routes.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-source-probe-read-only
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Current public Hoogvliet catalog probe — READ ONLY
+    outputs:
+      result_label: ${{ steps.result.outputs.result_label }}
+    if: >-
+      (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/codex/implement-highvliet-catalog-discovery-20261005'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout exact event commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: Eén actuele openbare bronroute onderzoeken — READ ONLY
+        id: run_probe
+        continue-on-error: true
+        env:
+          PROBE_CATEGORY: /aardappelen-groente-fruit
+          PROBE_OUTPUT: hoogvliet-current-catalog-proof.json
+        run: |
+          set -uo pipefail
+          node scripts/probe-highvliet-current-catalog.mjs | tee hoogvliet-probe.log
+          probe_status=${PIPESTATUS[0]}
+          cat hoogvliet-probe.log >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'No importer, Supabase, recovery, product write, or database write was run.' >> "$GITHUB_STEP_SUMMARY"
+          exit "$probe_status"
+
+      - name: Veilige probe-uitkomst als jobmetadata publiceren
+        id: result
+        if: always()
+        run: |
+          set -euo pipefail
+          result_label=$(node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          try {
+            const proof = JSON.parse(readFileSync("hoogvliet-current-catalog-proof.json", "utf8"));
+            const network = (proof.network ?? []).slice(0, 3)
+              .map(record => `${record.type}:${record.status}:${record.endpoint?.pathname ?? "?"}`).join("|");
+            const navigation = proof.navigation ?? {};
+            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};after_load_more=${proof.proof?.afterLoadMoreCandidateCount ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};status=${navigation.categoryStatus ?? "unknown"};network=${network}`;
+            process.stdout.write(label.replace(/[\r\n]/g, " ").slice(0, 240));
+          } catch {
+            process.stdout.write("classification=NO_PROOF;candidates=0");
+          }
+          NODE
+          )
+          echo "result_label=$result_label" >> "$GITHUB_OUTPUT"
+
+      - name: Probe-uitkomst zichtbaar maken
+        if: always()
+        run: echo "${{ steps.result.outputs.result_label }}"
+
+      - name: Bewijsartefact uploaden
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoogvliet-source-proof
+          path: |
+            hoogvliet-current-catalog-proof.json
+            hoogvliet-probe.log
+          if-no-files-found: error
+
+  result:
+    name: ${{ needs.probe.outputs.result_label }}
+    needs: probe
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Read-only probe metadata is recorded in this job name; no write was performed."

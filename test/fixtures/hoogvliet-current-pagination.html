@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="nl">
+  <body>
+    <main id="catalog-listing">
+      <article class="product-card">
+        <a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a>
+        <span class="package-size">1 stuk</span><span class="price">€ 0,69</span>
+      </article>
+      <article class="product-card">
+        <a href="/product/blauwe-bessen-081222000"><h2>Blauwe bessen</h2></a>
+        <span class="package-size">300 gram</span><span class="price">€ 4,39</span>
+      </article>
+      <a id="next" href="/aardappelen-groente-fruit?page=2">Next</a>
+    </main>
+    <script>
+      if (new URLSearchParams(location.search).get('page') === '2') {
+        document.querySelector('#catalog-listing').insertAdjacentHTML('beforeend', `
+          <article class="product-card">
+            <a href="/product/trostomaten-verpakt-060936000"><h2>Trostomaten verpakt</h2></a>
+            <span class="package-size">500 gram</span><span class="price">€ 2,29</span>
+          </article>`);
+        document.querySelector('#next').remove();
+      }
+    </script>
+  </body>
+</html>

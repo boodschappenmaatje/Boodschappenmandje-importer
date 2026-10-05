@@ -14,7 +14,8 @@ export async function collectGrowthCandidates(config, {
   const started = now();
   const products = [], pending = [], seen = new Set();
   const stats = {
-    searchedTerms: 0, pagesFetched: 0, candidatesExamined: 0, uniqueSKUsDiscovered: 0,
+    searchedTerms: 0, pagesFetched: 0, categoriesVisited: 0, listingLoadMoreCycles: 0,
+    uniqueListingSKUs: 0, candidatesExamined: 0, uniqueSKUsDiscovered: 0,
     existingCandidatesSkipped: 0, duplicateSKUsSkipped: 0, invalidProductsSkipped: 0,
     irrelevantCandidatesSkipped: 0, productErrors: 0, searchErrors: 0,
     processedProducts: 0, newProducts: 0, persistedNewProducts: 0,
@@ -52,6 +53,9 @@ export async function collectGrowthCandidates(config, {
     : now() - started >= config.growthMaxRuntimeMs ? 'runtime_safety_limit' : null;
   const absorb = (result, coverage) => {
     stats.pagesFetched += result.pagesFetched;
+    stats.categoriesVisited += result.categoriesVisited ?? 0;
+    stats.listingLoadMoreCycles += result.listingLoadMoreCycles ?? 0;
+    stats.uniqueListingSKUs += result.uniqueListingSKUs ?? result.candidates.length;
     coverage.pages += result.pagesFetched;
     stats.candidatesExamined += result.rawCandidates ?? result.candidates.length;
     stats.duplicateSKUsSkipped += result.duplicateCandidates ?? 0;

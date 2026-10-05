@@ -3,7 +3,8 @@
 export const MAX_DISCOVERY_SEGMENTS = 8;
 const RESUMABLE = new Set(["page_safety_limit", "candidate_safety_limit"]);
 const SUM_FIELDS = ["newCount", "actualGrowth", "updatedCount", "unchangedCount", "processedCount",
-  "skippedCount", "errorCount", "candidatesViewed", "existingCount", "duplicateCount",
+  "skippedCount", "errorCount", "candidatesViewed", "categoriesVisited", "listingLoadMoreCycles",
+  "uniqueListingSKUs", "existingCount", "duplicateCount",
   "invalidCount", "irrelevantCount", "searchedTerms", "searchErrors", "durationSeconds"];
 
 export async function runResumableCatalogGrowth(config, logger, runGrowth, { now = Date.now } = {}) {

@@ -1,4 +1,4 @@
-import { HOOGVLIET_CATEGORIES } from "./discovery-routes.mjs";
+import { PUBLIC_CATALOG_ROUTE } from "./discovery-routes.mjs";
 
 export const catalogBatches = {
   core: Object.freeze([
@@ -36,17 +36,10 @@ export const catalogBatches = {
   growth: Object.freeze([]),
 };
 
-// Category routes have their own persistent cursor keys, outside the capped
-// dynamic keyword pool. Explicit keyword overrides retain their old scope.
-catalogBatches.growth = Object.freeze([
-  ...HOOGVLIET_CATEGORIES.map(route => route.key),
-  ...new Set([
-    ...catalogBatches.core,
-    ...catalogBatches.fresh,
-    ...catalogBatches.world,
-    ...catalogBatches.pantry,
-  ]),
-]);
+// The current public catalog is the growth source. Its departments and
+// subcategories are discovered from /producten at runtime; no stale static
+// Intershop category IDs or keyword fallback belongs in the daily route.
+catalogBatches.growth = Object.freeze([PUBLIC_CATALOG_ROUTE.key]);
 Object.freeze(catalogBatches);
 
 const DEFAULT_BATCH = "core";
