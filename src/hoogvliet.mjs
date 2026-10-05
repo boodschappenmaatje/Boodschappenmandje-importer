@@ -216,7 +216,7 @@ export function classifySourcePageEvidence(evidence = {}) {
 }
 
 async function readSourcePageEvidence(page, expectedSelector = null) {
-  return page.evaluate((selector, responseStatus) => {
+  return page.evaluate(({ selector, responseStatus }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     return {
       responseStatus,
@@ -230,7 +230,10 @@ async function readSourcePageEvidence(page, expectedSelector = null) {
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
-  }, expectedSelector, page.__hoogvlietLastResponseStatus ?? null);
+  }, {
+    selector: expectedSelector,
+    responseStatus: page.__hoogvlietLastResponseStatus ?? null,
+  });
 }
 
 async function detectBlocking(page, expectedSelector = null) {

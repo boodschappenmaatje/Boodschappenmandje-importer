@@ -1,3 +1,20 @@
+# Checkpoint 18 — Playwright-bronstatus hotfix — 5 oktober 2026
+
+## Remote en runtimebevinding
+
+- Actuele remote `main`: `fe5b248815dc0dc2639e8ff6c9f7b00fbac1a785`; PR #46 is daarin gemerged.
+- De gecontroleerde Production-run #112 gebruikte de daily-growthroute correct, maar stopte vóór discovery met 0/400 en de fout `Too many arguments. If you need to pass more than 1 argument to the function wrap them in an object.`
+- Exacte oorzaak in `src/hoogvliet.mjs`, `readSourcePageEvidence`: `page.evaluate(callback, expectedSelector, responseStatus)` gaf twee losse serialiseerbare argumenten door. Playwright accepteert één argument naast de callback.
+
+## Beperkte fix en regressie
+
+- De callback destructureert nu `{ selector, responseStatus }`; de aanroep geeft één object met dezelfde twee bestaande waarden door. Classificatiegedrag is niet gewijzigd.
+- Repositorybrede GitHub-codezoekactie vond twee `page.evaluate`-locaties: deze importer-aanroep en `scripts/pwa13-browser.mjs`, waar de callbacks geen extra argumenten krijgen. Geen tweede foutief meervoudig-argumentgebruik gevonden.
+- `test/importer.test.mjs` bevat een regressietest via `waitForSourceContent` met een strikte `page.evaluate`-contractstub. Die controleert één objectargument en bevestigt dat een expliciet lege pagina nog steeds `valid_empty_search` oplevert. Bestaande bronclassificatietests blijven ongewijzigd en dekken challenge, bronstoring, parserstructuur en navigatiefout.
+- De volledige root-suite en `npm run check` draaien via de PR-CI; in deze Codex-werkruimte is geen repositorycheckout aanwezig. Git-clone is door ontbrekende netwerktoegang niet beschikbaar. CI-resultaat wordt na afronding hier aangevuld.
+- Alleen importerbron, regressietest en deze projectstatus zijn gewijzigd. Geen discovery-, scheduler-, dedupe-, validatie-, retry- of dagjoblogica gewijzigd. In dit hotfixcheckpoint is geen import, databasewrite, merge of Production-deploy gestart.
+- Featurebranch: `codex/fix-playwright-evaluate-arguments-20261005`; PR wordt na push aangemaakt. Merge blijft buiten scope.
+
 # Checkpoint 17 — handmatige daily-dispatch en bronclassificatie — 5 oktober 2026
 
 ## Remote, PR-status en incidentbewijs

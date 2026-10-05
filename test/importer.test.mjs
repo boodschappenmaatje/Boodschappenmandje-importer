@@ -168,6 +168,39 @@ test("bronclassificatie onderscheidt challenge, lege zoekroute, parserwijziging 
   assert.equal(classifySourcePageEvidence({ navigationError: true }), "navigation_error");
 });
 
+test("bronstatus gebruikt het Playwright page.evaluate-contract met één objectargument", async () => {
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: {
+      body: { innerText: "Geen producten gevonden" },
+      documentElement: { outerHTML: "<main></main>" },
+      querySelector: () => null,
+    },
+  });
+
+  const page = {
+    __hoogvlietLastResponseStatus: 200,
+    waitForFunction: async () => {},
+    evaluate: async (...args) => {
+      assert.equal(args.length, 2, "page.evaluate accepts one serializable argument after the callback");
+      const [callback, argument] = args;
+      assert.equal(typeof callback, "function");
+      assert.deepEqual(argument, { selector: ".product-tile", responseStatus: 200 });
+      return callback(argument);
+    },
+  };
+
+  try {
+    const result = await waitForSourceContent(page, ".product-tile", { normalTimeoutMs: 1 });
+    assert.equal(result.evidence.classification, "valid_empty_search");
+    assert.equal(result.evidence.responseStatus, 200);
+  } finally {
+    if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
+    else delete globalThis.document;
+  }
+});
+
 test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resetten de teller", () => {
   assert.equal(nextEmptySourceSearchCount(0, 0), 1);
   assert.equal(nextEmptySourceSearchCount(1, 0), 2);
