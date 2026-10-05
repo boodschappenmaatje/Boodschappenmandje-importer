@@ -1,35 +1,62 @@
+# Checkpoint 31 — PR #51 main-sync en releasegate voorbereid — 5 oktober 2026
 
-# Checkpoint 28 — verse daily opvolger na definitief failed job voorbereid — 5 oktober 2026
+## Main-sync
 
-## Checkpoint 29 — disarmed supersede-migrationrunner voorbereid — 5 oktober 2026
+- `origin/main` is opnieuw gecontroleerd op `6cfcb01e02a82a7c0ed0fedbd33be01c1d520d2d`. PR #51 stond op `5ec19fdbcaffc133ded339d04c86ebc901cd68a1`; GitHub rapporteerde `mergeable=false`/`dirty`.
+- Lokale `git merge-tree` vond exact één inhoudelijk conflict: `PROJECT_STATE.md`. Er waren geen codeconflicten. Het document is opgelost met behoud van de actuele main-checkpoints én de PR #51 supersede/migrationrunner-historie.
+- De main-sync nam de actuele root→categorie Hoogvliet-wijzigingen mee; supersede-RPC, migration `20261005230000`, runner, target 400, retries, dedupe en bestaande PR #45–#50-functionaliteit zijn behouden.
 
-- De bestaande tijdelijke PR #48 Supabase CLI-runner is minimaal hergebruikt in `.github/workflows/apply-supersede-migration.yml`; er is geen nieuwe migrationarchitectuur gebouwd.
-- De runner is branch-, head-, repository-, Production-project-, pooler-, CLI- en exact-bestandsgebonden. `MIGRATION_ARMED=false` staat hard-coded. De precheck vereist exact één lokale-only `20261005230000_supersede_failed_daily_catalog_job.sql`, geen andere pending migration en geen onverwachte remote-only history.
-- De latere armed route gebruikt alleen de officiële Supabase CLI 2.119.0 `db push --db-url`, met een verse precheck en daarna read-only local↔remote history-, RPC/signature-, `SECURITY DEFINER`/`search_path`, service-role-grant-, auditveld-, partial-unique-index- en lege-auditcontroles. Secretwaarden worden niet gelogd.
-- Toegevoegd: `scripts/check-supersede-migration-history.py` en `test/supersede-migration-workflow.test.py`. Geen migration, databasewrite, supersede, import, merge of deploy uitgevoerd.
-- Gates na toevoeging: `npm test` **351/351**, `npm run check` groen, `npm run test:postgres` **28/28**, recovery-runner **9/9**, migration-history guards **8/8**, nieuwe supersede-runner **3/3**, diff-check groen.
-- Branch blijft `codex/supersede-failed-daily-20261005`; vóór deze documentatie/push is de bekende PR-head `68310843f39a66d48b7ea0955d1ebd3ed998dbb6`. Codex stopt na push; Work moet de disarmed precheck controleren en pas daarna de expliciete release/migrationvolgorde uitvoeren.
+## Disarmed releasegrens
 
-## Startpunt en ontwerpbesluit
+- Run **37367248965** hoort bij de oude branch-head `5ec19fd` en stond bij controle nog `queued`; hij wordt niet als releasebewijs gebruikt. Er is geen tweede migrationprecheck gestart.
+- `MIGRATION_ARMED=false` blijft hard-coded. De runner kent uitsluitend `20261005230000_supersede_failed_daily_catalog_job.sql`; er is geen migration, databasewrite, supersede, import, merge of deploy uitgevoerd.
+- Na de merge-resolutie volgen opnieuw de volledige lokale gates, push naar dezelfde PR-branch, CI/Preview-controle en uitsluitend een nieuwe disarmed runnercontrole indien de oude run achterhaald is.
 
-- `PROJECT_STATE.md` is eerst gelezen. Actuele `origin/main` is read-only gecontroleerd op `6cfcb01e02a82a7c0ed0fedbd33be01c1d520d2d` (`docs: correct main-head checkpoint wording`). Er is niet opnieuw begonnen en er is geen live actie uitgevoerd.
-- Het bestaande mechanisme is **gedeeltelijk beschikbaar**: de bestaande daily-jobs/attempts/locks, recovery-counter, CAS-guards en append-only recovery-audit zijn herbruikbaar; er bestond nog geen veilige route naar een nieuwe `dailyImportId` op dezelfde kalenderdag. De bestaande recovery blijft dus onveranderd en wordt niet opnieuw gebruikt.
-- De nieuwe route is expliciet `supersede_failed_daily=true` samen met `daily_import=true`. Alleen `failed_requires_attention`, verbruikte `recovery_count=1`, nul actieve attempts, geen lock, geen `next_retry_at`, definitief beëindigde laatste non-retryable attempt, exacte expected revision en een toegestane maintenance-reden worden geaccepteerd.
+# Checkpoint 29 — PR #50 Production en dagjobstatus — 5 oktober 2026
 
-## Additieve migration en state-machine
+## Merge en Production
 
-- Voorbereid: `supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql`. Deze vervangt de oude all-history uniqueness door een unieke actuele `(state_key, job_date)`-index en een append-only `catalog_daily_supersedes`-audit met unieke dag-/opvolger-guards. Er worden geen rijen uit jobs, attempts, products, prices of discovery-state verwijderd.
-- De nieuwe `supersede_failed_catalog_daily_job`-RPC sluit de oude rij auditbaar met `superseded_at` en `superseded_by_job_id`, laat status/progress/attempt-history intact, maakt atomair een nieuwe rij-ID (`dailyImportId`), target 400, progress 0, remainingTarget 400, `attempt_count=1`, `recovery_count=0` en claimt de normale eerste attempt met lock.
-- De database-lock/advisory state-key/day guard, partial unique current-job-index en unieke auditindex maken concurrerende supersedes single-winner; een tweede opvolger, tweede retry of tweede claim wordt geweigerd. De normale claim-, finish-, scheduler-, retry-, v4 discovery-, detailvalidatie- en dedupeketen blijft de uitvoerder van de nieuwe job.
-- Audit bewaart oude/new dailyImportId, oude status/progress/remaining target, failure reason/summary, timestamp, reden `software_fix_verified` of `importer_updated`, expected revision en beperkte GitHub actor/run/commit-context zonder secrets.
+- PR #50 is via squash gemerged. Pre-merge head: `a6fec52968f77cf7ab7047336bc6d674d6bd68da`; mergecommit en nieuwe main-head: `f030043e9158037b0f9d2164091dfb2b6d99eab3`.
+- De PR-releasegate was groen: PR niet-Draft en mergeable, Vercel Preview READY en de nieuwste volledige core/regression/build workflowrun **37343581197** (#253) geslaagd. De workflow bevatte importerfixtures/seed consistency, PostgreSQL atomic rollback/concurrency, webflows, regressies, lint, TypeScript en build.
+- Automatische Vercel Production deployment `dpl_HivcFWWAnzV6gyU7ejMCQXS8LgSp` op de nieuwe main-head is **READY**. Production homepage smoke: HTTP **200**. De main commitstatus rapporteert Vercel success; er werd geen afzonderlijke push-triggered main-CI-run teruggegeven door de workflow-runconnector.
+- De nieuwe root→categorie-code en strategy fingerprint `hoogvliet-public-catalog-api-pagination-v4` staan op Production. PR #45–#49 zitten in de main-basis. Geen migration uitgevoerd.
 
-## Tests en veiligheidsgrens
+## Read-only discoverybewijs en bestaande dagjob
 
-- `npm test`: **351/351 groen**.
-- `npm run check`: groen; workflow YAML en embedded Bash syntax: groen; migration-workflowtests **9/9** en history-guardtests **8/8** groen.
-- `npm run test:postgres`: **28/28 groen**, inclusief disposable PostgreSQL-tests voor old-history-behoud, catalogus/prijzen/discovery-invariantie, target 400, normale retry/claim, alle guards en concurrerende single-winner-supersede.
-- Geen Supabase- of Production-connectie, migration apply, databasewrite, productimport, job-start, merge of deploy uitgevoerd. Geen parser/discoveryfix toegevoegd. De production migration moet als aparte Work-releasehandeling vóór codegebruik worden toegepast en read-only worden geverifieerd.
-- Featurebranch: `codex/supersede-failed-daily-20261005`; implementation commit `2d286cbfe7fd169c7f555a4d90fa7ac19fbd3d27`; PR **#51** open tegen `main`: `https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/51`. Bij de eerste read-only PR-statuscontrole waren Vercel checks pending en waren er nog geen PR workflow-runs teruggegeven. Work moet daarna migration → releasegate → merge → Production READY → gecontroleerde supersede + exact één echte import uitvoeren.
+- Read-only proof **37343193141** toonde root `/producten` → **20 dynamische categorieën**, **2 routes bezocht**, **2 listingpagina's**, **20 initiële kandidaten** en **41 unieke SKU-kandidaten**; legacy Intershop-discovery: **niet gebruikt**. Dit is een begrensde proof, geen volledige catalogusdekkingmeting en geen daily import.
+- Actuele Production-job `53553be0-2158-47b1-92c3-2bc75cd7d0cc`, datum **2026-10-05**, target **400**, blijft **0/400**, status `failed_requires_attention`, attempt_count **3**, recovery_count **1**, `next_retry_at=null`, geen lock.
+- Attempt #3 is `non_retryable_failure`: `discovery_incomplete_stalled_terms`; scanned/new/updated/unchanged/skipped/invalid **0**, source_errors **1**, remaining **400**. De vorige stop van de dagjob blijft leidend voor de state-machine.
+- Er is geen veilige normale retry beschikbaar in deze jobstatus. Geen recovery of daily dispatch uitgevoerd; de guard is niet omzeild. Er is dus geen nieuwe daily funnel, geen importresultaat en geen nieuwe productcount om te rapporteren.
+- Geen catalogusdekkingmeting uitgevoerd: de daily discovery kon door de state-machine niet opnieuw worden uitgevoerd en de begrensde 2-pagina proof is onvoldoende om volledigheid of een betrouwbare ontbrekende-SKU-lijst vast te stellen.
+- Kleinste veilige vervolgstap: onderzoek/definieer in Codex een state-machine-goedgekeurde volgende dagjob na `failed_requires_attention` en `recovery_count=1`, zonder handmatige DB-statuswijziging. Start pas daarna een enkele normale daily attempt; verander target 400 of productstrategie niet zonder expliciete toestemming.
+
+---
+
+# Checkpoint 28 — root→categorie traversal hotfix — 5 oktober 2026
+
+## Hotfix vanaf actuele main
+
+- De actuele `origin/main` was vóór wijziging `8192dd4`; PR #49 is gemerged en Production READY. De featurebranch is `codex/fix-highvliet-root-discovery-20261005`, head `c783210c6b80210eb55bc80afe9dcee7a49b0b6a`. `ROADMAP.md` is niet gewijzigd.
+- De oorzaak zat vóór de bestaande werkende categorieparser: `catalog:root`/`/producten` werd door `waitForCatalogSource` als klaar beschouwd op basis van alleen het root-pad, terwijl de categorieboom nog client-side/hydrationmatig moest verschijnen. Bovendien koos `extractCatalogCategoryLinks` één DOM-subset zodra die niet-leeg was; daardoor konden navigatielinks buiten `<main>` worden weggegooid. De aparte proof wachtte wel op rendering en verzamelde alle anchors, waardoor die niet dezelfde root-flow testte.
+- De root werd in de collectorcode niet bewust als productlisting gepagineerd: na root-linkextractie bestond al een `continue`. De foutieve root-ready timing/route-extractie verhinderde die overgang; de oude geaggregeerde `load_more_stagnated`-melding maakte rootfalen daarnaast onterecht indistinct van listingfalen.
+
+## Fix en stopredenen
+
+- Root discovery wacht nu op actuele publieke categorie-links vóór extractie en gebruikt alle publieke anchors, waarna de bestaande `normalizeCatalogCategoryURL`-allowlist alleen actuele `https://hoogvliet.nl`-categorieën accepteert. `/producten` blijft uitsluitend navigatie; `collectCatalogListing` wordt alleen voor een categorie aangeroepen.
+- Root zonder categorieën geeft `root_category_discovery_failed`. Een gewijzigde categoriepagina geeft `category_structure_changed`; HTTP 404 valt onder `source_unavailable`; listingstagnatie geeft `category_listing_stagnated`. Er is geen stille Intershop-fallback. Legacy `/INTERSHOP`-paden worden niet als catalogusroutes geaccepteerd; publieke `/INTERSHOP/static/...`-assets van de website zijn geen discoverybron.
+- Dagtarget 400, remainingTarget, strategy fingerprint v4, scheduler 06:00/DST-gate, retries, locks, recovery, detailvalidatie, dedupe en importflow zijn behouden. Geen recovery, daily import, databasewrite, migration, merge of deploy uitgevoerd.
+
+## Read-only root-flow proof
+
+- GitHub Actions read-only proof **37343193141** op deze head gebruikte dezelfde collectorflow: `catalog:root → https://hoogvliet.nl/producten → actuele categorie → listing`. Resultaat: root HTTP **200**; **2 routes bezocht**; **20 dynamisch ontdekte categorieën**; **20 initiële kandidaten**; **41 unieke SKU-kandidaten**; **2 listingpagina's**; `legacy_discovery=none`. De 10 `/INTERSHOP/static/...`-requests waren uitsluitend statische assets. Geen import, Supabase, recovery, productwrite, databasewrite of Zyte.
+- De proof overschreed aantoonbaar de eerste batch; SKU-voorbeelden uit dezelfde collector waren de eerder bewezen actuele Hoogvliet-SKU's, waaronder `064786000`, `081222000`, `729202000`, `000737000` en `060936000` in de categorieproef. Dit is geen volledige catalogusdekkingmeting en zegt niets over 7.540 Production-producten.
+
+## Tests en vervolg
+
+- Volledige lokale gate is groen: `npm run check`, `node --check scripts/probe-highvliet-current-catalog.mjs` en **348/348 tests**. Nieuwe fixtures/tests dekken vertraagde root-hydration, root zonder listing-pagination, root/categorie stopcodes, categorie-pagination, Intershop-routeblokkade, daily retrycodes en bestaande target/remaining/scheduler/recovery-regressies.
+- PR wordt geopend vanaf deze branch/head. Work doet na merge alleen de releasegate, mergegoedkeuring en Production READY-controle; daarna de bestaande failed dagjob via de veilige state-machine behandelen en precies één geldige attempt volgen. Geen tweede recovery. Als discovery werkt maar weinig nieuwe SKU's vindt: meteen bereikbare unieke SKU's versus Production 7.540 meten.
+
+---
 
 # Checkpoint 27 — PR #49 Production en ene daily attempt — 5 oktober 2026
 

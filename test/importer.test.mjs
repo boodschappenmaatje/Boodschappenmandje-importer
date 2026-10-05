@@ -217,6 +217,7 @@ test("bronclassificatie onderscheidt challenge, lege zoekroute, parserwijziging 
   assert.equal(classifySourcePageEvidence({ hasSearchStructure: true, hasZeroProductCount: true }), "valid_empty_search");
   assert.equal(classifySourcePageEvidence({ hasSearchStructure: true }), "parser_structure_changed");
   assert.equal(classifySourcePageEvidence({ htmlLength: 200_000 }), "parser_structure_changed");
+  assert.equal(classifySourcePageEvidence({ responseStatus: 404 }), "source_unavailable");
   assert.equal(classifySourcePageEvidence({ responseStatus: 503 }), "source_unavailable");
   assert.equal(classifySourcePageEvidence({ navigationError: true }), "navigation_error");
 });

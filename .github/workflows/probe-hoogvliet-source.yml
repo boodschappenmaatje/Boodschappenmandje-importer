@@ -1,13 +1,13 @@
 name: TEMPORARY current Hoogvliet catalog probe — READ ONLY
 
-# One public catalog/category fetch with a bounded visible load-more proof.
+# One public catalog-root traversal with a bounded listing pagination proof.
 # No importer, Supabase, recovery, product write, database write, Zyte, or
 # authenticated/private endpoint.
 on:
   workflow_dispatch:
   push:
     branches:
-      - codex/implement-highvliet-catalog-discovery-20261005
+      - codex/fix-highvliet-root-discovery-20261005
     paths:
       - .github/workflows/probe-hoogvliet-source.yml
       - scripts/probe-highvliet-current-catalog.mjs
@@ -29,7 +29,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      github.ref == 'refs/heads/codex/implement-highvliet-catalog-discovery-20261005'
+      github.ref == 'refs/heads/codex/fix-highvliet-root-discovery-20261005'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -55,7 +55,7 @@ jobs:
         id: run_probe
         continue-on-error: true
         env:
-          PROBE_CATEGORY: /aardappelen-groente-fruit
+          PROBE_MAX_PAGES: 2
           PROBE_OUTPUT: hoogvliet-current-catalog-proof.json
         run: |
           set -uo pipefail
@@ -77,7 +77,9 @@ jobs:
             const network = (proof.network ?? []).slice(0, 3)
               .map(record => `${record.type}:${record.status}:${record.endpoint?.pathname ?? "?"}`).join("|");
             const navigation = proof.navigation ?? {};
-            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};after_load_more=${proof.proof?.afterLoadMoreCandidateCount ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};status=${navigation.categoryStatus ?? "unknown"};network=${network}`;
+            const legacy = (proof.proof?.legacyDiscoveryEndpoints ?? []).map(endpoint => endpoint.pathname).join(",") || "none";
+            const staticAssets = (proof.proof?.legacyIntershopStaticAssets ?? []).length;
+            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};routes=${proof.proof?.routesVisited ?? 0};categories=${proof.proof?.dynamicCategories ?? 0};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};pages=${proof.proof?.pagesFetched ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};legacy_discovery=${legacy};legacy_static_assets=${staticAssets};status=${navigation.rootStatus ?? "unknown"};network=${network}`;
             process.stdout.write(label.replace(/[\r\n]/g, " ").slice(0, 240));
           } catch {
             process.stdout.write("classification=NO_PROOF;candidates=0");

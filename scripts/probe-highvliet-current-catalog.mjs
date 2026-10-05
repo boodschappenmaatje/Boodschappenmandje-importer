@@ -1,238 +1,166 @@
 import { writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
-import { collectCatalogListing } from "../src/hoogvliet.mjs";
+import {
+  CATALOG_ROOT_URL,
+  collectPublicCatalogCandidates,
+  normalizeCatalogCategoryURL,
+} from "../src/hoogvliet.mjs";
 
-const baseURL = "https://hoogvliet.nl";
-const catalogURL = `${baseURL}/producten`;
 const outputPath = process.env.PROBE_OUTPUT ?? "hoogvliet-current-catalog-proof.json";
-const requestedCategory = process.env.PROBE_CATEGORY ?? "/aardappelen-groente-fruit";
+const maxPages = Math.max(1, Math.min(2, Number(process.env.PROBE_MAX_PAGES ?? 2)));
 
 function safeURL(raw) {
   try {
     const url = new URL(raw);
     return { origin: url.origin, pathname: url.pathname, queryKeys: [...new Set(url.searchParams.keys())].sort() };
-  } catch { return { origin: "invalid", pathname: "invalid", queryKeys: [] }; }
+  } catch {
+    return { origin: "invalid", pathname: "invalid", queryKeys: [] };
+  }
 }
 
-function skuFromURL(raw) {
-  const match = new URL(raw).pathname.replace(/\/$/, "").match(/(?:^|-)(\d{9})$/);
-  return match?.[1] ?? null;
+function safeCategoryURLs(hrefs) {
+  return [...new Set((hrefs ?? []).map(normalizeCatalogCategoryURL).filter(Boolean))]
+    .slice(0, 80)
+    .map(safeURL);
 }
 
-async function listingSnapshot(page) {
+async function rootSnapshot(page) {
   return page.evaluate(() => {
-    const links = [...document.querySelectorAll("a[href*='/product/']")]
-      .map(link => link.href)
-      .filter(href => /-\d{9}\/?$/.test(new URL(href).pathname));
+    const scopedSelector = "main a[href], [role='main'] a[href], nav[aria-label*='product' i] a[href], nav[aria-label*='catalog' i] a[href]";
+    const hrefs = [...document.querySelectorAll("a[href]")].map(link => link.href);
+    const scopedHrefs = [...document.querySelectorAll(scopedSelector)].map(link => link.href);
     return {
-      productURLs: [...new Set(links)],
-      text: (document.body?.innerText ?? "").replace(/\s+/g, " ").trim().slice(0, 300),
-      controls: [...document.querySelectorAll("button, a, [role='button']")]
-        .map(element => ({
-          tag: element.tagName,
-          text: (element.textContent || "").replace(/\s+/g, " ").trim(),
-          href: element.getAttribute("href"),
-          html: element.outerHTML.slice(0, 700),
-          visible: Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length),
-          disabled: element.disabled === true || element.getAttribute("aria-disabled") === "true",
-        }))
-        .filter(control => control.text && /laden|meer|bekijk|volgende|next|product/i.test(control.text))
-        .slice(0, 80),
-      loadMoreTextNodes: [...document.querySelectorAll("*")]
-        .filter(element => /producten\s+laden|meer\s+producten|bekijk\s+meer/i.test((element.textContent || "").replace(/\s+/g, " ").trim())
-          && element.children.length < 4)
-        .slice(0, 20)
-        .map(element => ({
-          tag: element.tagName,
-          text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120),
-          html: element.outerHTML.slice(0, 500),
-        })),
+      hrefCount: hrefs.length,
+      scopedCount: scopedHrefs.length,
+      hrefs,
+      scopedHrefs,
+      pathname: document.location.pathname,
+      bodyTextLength: (document.body?.innerText ?? "").trim().length,
     };
   });
 }
 
-async function categoryLinks(page) {
-  return page.evaluate(({ base }) => [...document.querySelectorAll("a[href]")]
-    .map(link => link.href)
-    .filter(href => {
-      const url = new URL(href, base);
-      return url.origin === base && url.pathname !== "/producten"
-        && !url.pathname.startsWith("/product/")
-        && !["/aanbiedingen", "/recepten", "/winkels", "/service"].includes(url.pathname);
-    }), { base: baseURL });
-}
-
-async function loadMore(page, maxCycles = 10) {
-  let cycles = 0;
-  let stagnated = false;
-  let error = null;
-  const pages = [];
-  for (; cycles < maxCycles; cycles += 1) {
-    const controls = page.locator("button, a, [role='button']")
-      .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer/i });
-    let control = null;
-    for (let index = 0; index < await controls.count(); index += 1) {
-      const candidate = controls.nth(index);
-      if (await candidate.isVisible({ timeout: 200 }).catch(() => false)) {
-        control = candidate;
-        break;
-      }
-    }
-    if (!control) break;
-    const previous = (await listingSnapshot(page)).productURLs.length;
-    const href = await control.getAttribute("href");
-    pages.push({ before: previous, control: await control.evaluate(element => ({
-      tag: element.tagName,
-      text: (element.textContent || "").replace(/\s+/g, " ").trim(),
-      href: element.getAttribute("href"),
-      html: element.outerHTML.slice(0, 700),
-    })) });
-    try {
-      await control.click({ timeout: 5_000 });
-    } catch (clickError) {
-      error = clickError?.message ?? "control_click_failed";
-      break;
-    }
-    if (href) await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
-    const grew = await page.waitForFunction(({ previous, href }) => {
-      const current = document.querySelectorAll("a[href*='/product/']").length;
-      return current > previous || (href && location.href.includes(new URL(href, location.href).pathname));
-    }, { previous, href }, { timeout: 20_000 }).then(() => true).catch(() => false);
-    const current = (await listingSnapshot(page)).productURLs.length;
-    if (!grew || (!href && current <= previous)) { stagnated = true; break; }
-  }
-  return { cycles, stagnated, pages, error };
-}
-
 const network = [];
-const responseTasks = [];
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
-const page = await context.newPage();
-page.on("response", response => {
+const rootPage = await context.newPage();
+context.on("response", response => {
   const type = response.request().resourceType();
   if (type !== "xhr" && type !== "fetch") return;
   const endpoint = safeURL(response.url());
   const record = { type, status: response.status(), endpoint };
-  network.push(record);
   if (endpoint.pathname === "/api/graphql") {
-    responseTasks.push((async () => {
-      try {
-        const body = await response.text();
-        const url = new URL(response.url());
-        const query = url.searchParams.get("query") ?? "";
-        const variables = url.searchParams.get("variables") ?? "";
-        record.operationName = url.searchParams.get("operationName");
-        record.query = query.replace(/\s+/g, " ").trim();
-        record.variables = variables;
-        record.bodyLength = body.length;
-        record.bodyStart = body.replace(/\s+/g, " ").slice(0, 300);
-        try {
-          const parsed = JSON.parse(body);
-          const items = parsed?.data?.products?.items;
-          if (Array.isArray(items)) record.firstItem = items[0] ?? null;
-        } catch { record.jsonParse = false; }
-      } catch { record.bodyRead = "failed"; }
-    })());
+    const url = new URL(response.url());
+    record.operationName = url.searchParams.get("operationName");
+    try { record.variableKeys = Object.keys(JSON.parse(url.searchParams.get("variables") || "{}")); }
+    catch { record.variableKeys = []; }
   }
+  network.push(record);
 });
 
-let navigationResponse = null;
-let navigationError = null;
+let rootResponse = null;
+let rootError = null;
+let rootImmediate = { hrefCount: 0, scopedCount: 0, hrefs: [], scopedHrefs: [] };
+let rootSettled = rootImmediate;
 try {
-  navigationResponse = await page.goto(catalogURL, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await page.waitForTimeout(3_000);
+  rootResponse = await rootPage.goto(CATALOG_ROOT_URL, { waitUntil: "domcontentloaded", timeout: 45_000 });
+  rootImmediate = await rootSnapshot(rootPage);
+  await rootPage.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
+  await rootPage.waitForTimeout(3_000);
+  rootSettled = await rootSnapshot(rootPage);
 } catch (error) {
-  navigationError = error?.message ?? "navigation_error";
-}
-
-const rootCategories = await categoryLinks(page).catch(() => []);
-const categoryURL = new URL(requestedCategory, baseURL).href;
-let categoryResponse = null;
-let categoryError = null;
-let initial = { productURLs: [], text: "" };
-let final = initial;
-let loadMoreResult = { cycles: 0, stagnated: false };
-let collector = { status: "not_run", error: null };
-try {
-  categoryResponse = await page.goto(categoryURL, { waitUntil: "domcontentloaded", timeout: 45_000 });
-  await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-  await page.waitForTimeout(5_000);
-  initial = await listingSnapshot(page);
-  loadMoreResult = await loadMore(page);
-  await page.waitForTimeout(3_000);
-  final = await listingSnapshot(page);
-} catch (error) {
-  categoryError = error?.message ?? "navigation_error";
+  rootError = error?.message ?? "root_navigation_error";
 }
 
 const collectorPage = await context.newPage();
+let collector = { status: "not_run", error: null, code: null };
 try {
-  const collected = await collectCatalogListing(collectorPage, categoryURL, { maxWindows: 2 });
+  const result = await collectPublicCatalogCandidates(collectorPage, maxPages);
   collector = {
     status: "ok",
-    candidates: collected.candidates.length,
-    pagesFetched: collected.pagesFetched,
-    loadMoreCycles: collected.loadMoreCycles,
-    sourceExhausted: collected.sourceExhausted,
-    stallReason: collected.stallReason,
-    uniqueSKUs: new Set(collected.candidates.map(candidate => candidate.sku)).size,
-    skuExamples: collected.candidates.map(candidate => candidate.sku).slice(0, 10),
+    routesVisited: result.routesVisited,
+    rootCategoriesDiscovered: result.rootCategoriesDiscovered,
+    categoriesVisited: result.categoriesVisited,
+    candidates: result.candidates.length,
+    initialCandidateCount: result.initialCandidateCount,
+    pagesFetched: result.pagesFetched,
+    listingLoadMoreCycles: result.listingLoadMoreCycles,
+    sourceExhausted: result.sourceExhausted,
+    stallReason: result.stallReason,
+    uniqueSKUs: result.uniqueListingSKUs,
+    skuExamples: result.candidates.map(candidate => candidate.sku).slice(0, 10),
   };
 } catch (error) {
   collector = { status: "error", error: error?.message ?? "collector_error", code: error?.code ?? null };
 }
 
-const allProductURLs = [...new Set(final.productURLs)];
-const productionCandidateCount = collector.status === "ok" ? collector.candidates : allProductURLs.length;
-const productionPagesFetched = collector.status === "ok" ? collector.pagesFetched : 0;
+const candidateCount = collector.status === "ok" ? collector.candidates : 0;
+const legacyIntershopStaticAssets = network
+  .filter(record => /\/INTERSHOP\/static\//i.test(record.endpoint.pathname))
+  .map(record => record.endpoint);
+const legacyDiscoveryEndpoints = network
+  .filter(record => /ViewTWParametricSearch|\/INTERSHOP\/web\/WFS\//i.test(record.endpoint.pathname))
+  .map(record => record.endpoint);
+const legacyIntershopEndpoints = network
+  .filter(record => /INTERSHOP|ViewTWParametricSearch/i.test(record.endpoint.pathname))
+  .map(record => record.endpoint);
 const proof = {
   sourceClassification: collector.status === "error" && collector.code === "source_challenge"
     ? "CHALLENGE"
-    : navigationError || categoryError
-    ? "NAVIGATION_ERROR"
-    : navigationResponse?.status() === 403 || categoryResponse?.status() === 403
-      ? "CHALLENGE"
-      : productionCandidateCount > 0 ? "VALID_SOURCE" : "PARSER_STRUCTURE_CHANGED",
-  candidateCount: productionCandidateCount,
-  uniqueSKUHintCount: collector.status === "ok"
-    ? collector.uniqueSKUs
-    : new Set(allProductURLs.map(skuFromURL).filter(Boolean)).size,
-  initialCandidateCount: initial.productURLs.length,
-  afterLoadMoreCandidateCount: productionCandidateCount,
-  proofBeyondInitialBatch: productionPagesFetched > 1 || final.productURLs.length > initial.productURLs.length,
-  loadMoreCycles: collector.status === "ok" ? collector.loadMoreCycles : loadMoreResult.cycles,
-  loadMoreStagnated: loadMoreResult.stagnated,
-  productionCollector: collector.status === "ok" && collector.candidates > 0 ? "VALID_SOURCE" : collector.status.toUpperCase(),
+    : rootError
+      ? "NAVIGATION_ERROR"
+      : candidateCount > 0 ? "VALID_SOURCE" : collector.code ?? "ROOT_CATEGORY_DISCOVERY_FAILED",
+  routesVisited: collector.routesVisited ?? 0,
+  dynamicCategories: collector.rootCategoriesDiscovered ?? 0,
+  categoriesVisited: collector.categoriesVisited ?? 0,
+  candidateCount,
+  uniqueSKUHintCount: collector.uniqueSKUs ?? 0,
+  initialCandidateCount: collector.initialCandidateCount ?? 0,
+  afterLoadMoreCandidateCount: candidateCount,
+  pagesFetched: collector.pagesFetched ?? 0,
+  proofBeyondInitialBatch: (collector.pagesFetched ?? 0) > 1
+    || candidateCount > (collector.initialCandidateCount ?? 0),
+  loadMoreCycles: collector.listingLoadMoreCycles ?? 0,
+  noLegacyIntershop: legacyDiscoveryEndpoints.length === 0,
+  legacyDiscoveryEndpoints,
+  legacyIntershopStaticAssets,
+  legacyIntershopEndpoints,
 };
 const result = {
-  target: { catalogURL, categoryURL, requestedCategory },
+  target: { catalogURL: CATALOG_ROOT_URL, maxPages },
   navigation: {
-    error: navigationError,
-    initialStatus: navigationResponse?.status() ?? null,
-    finalURL: page.url(),
-    categoryStatus: categoryResponse?.status() ?? null,
-    title: await page.title().catch(() => ""),
+    error: rootError,
+    rootStatus: rootResponse?.status() ?? null,
+    finalURL: rootPage.url(),
+    title: await rootPage.title().catch(() => ""),
   },
-  rootCategories: [...new Set(rootCategories)].slice(0, 80).map(safeURL),
-  initial: { count: initial.productURLs.length, skuExamples: initial.productURLs.map(skuFromURL).filter(Boolean).slice(0, 5), controls: initial.controls, loadMoreTextNodes: initial.loadMoreTextNodes },
-  final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10), controls: final.controls, loadMoreTextNodes: final.loadMoreTextNodes },
-  loadMore: loadMoreResult,
-  productionCollector: collector,
+  rootImmediate: {
+    pathname: rootImmediate.pathname,
+    hrefCount: rootImmediate.hrefCount,
+    scopedCount: rootImmediate.scopedCount,
+    categoryLinks: safeCategoryURLs(rootImmediate.hrefs),
+    scopedCategoryLinks: safeCategoryURLs(rootImmediate.scopedHrefs),
+  },
+  rootSettled: {
+    pathname: rootSettled.pathname,
+    hrefCount: rootSettled.hrefCount,
+    scopedCount: rootSettled.scopedCount,
+    categoryLinks: safeCategoryURLs(rootSettled.hrefs),
+    scopedCategoryLinks: safeCategoryURLs(rootSettled.scopedHrefs),
+  },
+  collector,
   network: network.slice(0, 80),
   proof,
 };
 
-await Promise.allSettled(responseTasks);
-result.network = network.slice(0, 80);
-if (network.some(record => /INTERSHOP|ViewTWParametricSearch/i.test(record.endpoint.pathname))) {
-  throw new Error("Legacy Intershop discovery endpoint appeared in current catalog traffic.");
-}
 await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
 console.log(`HOOGVLIET_CURRENT_CATALOG_PROOF ${JSON.stringify(proof)}`);
-console.log(JSON.stringify({ navigation: result.navigation, proof, rootCategories: result.rootCategories.slice(0, 20), network: result.network }, null, 2));
+console.log(JSON.stringify({ navigation: result.navigation, rootSettled: result.rootSettled, collector, proof, network: result.network }, null, 2));
 await context.close();
 await browser.close();
 
-if (proof.sourceClassification !== "VALID_SOURCE" || proof.candidateCount < 1) process.exitCode = 1;
+if (proof.sourceClassification !== "VALID_SOURCE"
+  || proof.routesVisited <= 1
+  || proof.dynamicCategories < 1
+  || proof.candidateCount < 1
+  || !proof.noLegacyIntershop) process.exitCode = 1;
