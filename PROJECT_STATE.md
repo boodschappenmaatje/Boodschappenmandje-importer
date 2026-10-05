@@ -1,3 +1,25 @@
+# Checkpoint 26 — actuele Hoogvliet-catalogus geïmplementeerd — 5 oktober 2026
+
+## Implementatie
+
+- Remote `main` blijft `46ef60576543fc9b05f65fc0fdf8d508bd7139f9`. De releasebranch is `codex/implement-highvliet-catalog-discovery-20261005`; actuele head vóór deze checkpoint-update: `5a9986a2e0a75a62c1a120a81a70fead1a78c89c`.
+- De primaire discoveryroute gebruikt nu `https://hoogvliet.nl/producten` en ontdekt publieke categorie-/subcategorielinks runtime uit de actuele catalogusstructuur. De voorbeeldcategorie is `/aardappelen-groente-fruit`; productroutes worden alleen als `https://hoogvliet.nl/product/...`-kandidaten toegelaten.
+- De oude Intershop-route `ViewTWParametricSearch-SimpleOfferSearch` en `CategoryName=999999-100` zijn niet langer een geldige discoveryterm. Onbekende/legacy-termen falen met `source_unavailable`; er bestaat geen stille legacy-fallback.
+- Listing discovery combineert actuele HTML/DOM-kaarten met de publieke `GET https://hoogvliet.nl/api/graphql`-`GetProducts`-hydratie die de website zelf gebruikt. De endpoint gebruikt de publieke queryparameters `operationName`, `query` en `variables`; SKU’s worden voor simple products uit `url_key` bevestigd. Detailvalidatie blijft leidend voor package, prijs en opslag.
+- Pagination volgt uitsluitend de zichtbare publieke `Next`/`Volgende`-link. De bewezen vorm is `/aardappelen-groente-fruit/q/page/2`. Een echte load-moreknop wordt alleen gevolgd voor teksten als `Producten laden`, `Meer producten` of `Laad meer`; filter-/carouselknoppen zoals `Toon meer` en `Bekijk meer` worden niet aangeklikt. Visited-URL’s, SKU-dedupe, stagnatiedetectie en veiligheidslimieten blijven actief.
+- Strategy fingerprint is verhoogd naar `hoogvliet-public-catalog-api-pagination-v4`, zodat oude exhausted-state niet de nieuwe catalogusstrategie blokkeert. Dagtarget 400, persistent restant, scheduler, retries, locks, recovery en downstream detail-/dedupe-/prijslogica zijn niet inhoudelijk vervangen.
+
+## Read-only cloud proof
+
+- Actions-run **37325662499** op head `5a9986a2e0a75a62c1a120a81a70fead1a78c89c` was succesvol. De actuele categorie gaf HTTP **200** en de production collector vond in een begrensde proof **22 initiële kaarten** en **41 unieke SKU-kandidaten over 2 listingpagina’s**. SKU-voorbeelden: `064786000`, `081222000`, `729202000`, `000737000`, `671474000`, `075080000`, `683144000`, `001427000`, `211990000`, `047519000`, `002499000`, `060936000`.
+- De collector-proef eindigde bewust na 2 pagina’s met `sourceExhausted=false`; dit is bewijs dat de eerste batch wordt overschreden, geen uitspraak over de volledige catalogusomvang of over 7.540 Production-producten.
+- De live netwerkregistratie bevatte de publieke `/api/graphql`-requests met `GetProducts` en SKU-filters. Geen Intershop-request werd gezien. De workflow was read-only: geen importer, Supabase, productwrite, databasewrite, migration, recovery, Zyte-request, merge of deploy.
+
+## Tests en vervolg
+
+- Lokale fixtures dekken actuele listingvelden, publieke GraphQL-hydratatie, meerdere categorieën, cross-category duplicates, bestaande SKU’s, detailvalidatie, load-more, `Next`-pagination, stagnatie, challenge, gewijzigde structuur, daily target 400, remainingTarget, retries/locks/recovery en strategy fingerprint.
+- De kleine cloud-proof is geen volledige catalogusdekkingmeting. Na merge moet Work eerst de releasegate uitvoeren, daarna precies één veilige daily attempt. Alleen bij weinig nieuwe producten volgt een aparte vergelijking van bereikbare unieke Hoogvliet-SKU’s met Production (~7.540).
+
 # Checkpoint 25 — één Zyte HTTP fallbacktest op bewezen 403-route — 5 oktober 2026
 
 ## Startbewijs
