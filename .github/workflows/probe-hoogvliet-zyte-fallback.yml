@@ -1,7 +1,11 @@
 name: TEMPORARY Zyte HTTP listing fallback — one request
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - codex/fix-highvliet-parser-20261005
+    paths:
+      - scripts/zyte-fallback-dispatch.once
 
 permissions:
   contents: read
@@ -13,11 +17,11 @@ concurrency:
 jobs:
   probe:
     name: One exact Hoogvliet URL via Zyte HTTP response — READ ONLY
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/codex/fix-highvliet-parser-20261005'
+    if: github.event_name == 'push' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/codex/fix-highvliet-parser-20261005' && github.event.head_commit.message == 'ops: trigger one-shot Zyte fallback test'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Checkout exact dispatch commit
+      - name: Checkout exact trigger commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
