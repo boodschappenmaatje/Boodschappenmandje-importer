@@ -15,7 +15,7 @@ import { isPublicCatalogDiscoveryTerm } from "./discovery-routes.mjs";
 // that produced it. Bumping this value is deliberately cheap: existing SKUs
 // make the one-time replay idempotent, while stale exhaustion can no longer
 // turn an incomplete route set into a false global `discovery_exhausted`.
-export const DISCOVERY_STRATEGY_VERSION = "hoogvliet-public-catalog-load-more-v3";
+export const DISCOVERY_STRATEGY_VERSION = "hoogvliet-public-catalog-api-pagination-v4";
 
 function text(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;

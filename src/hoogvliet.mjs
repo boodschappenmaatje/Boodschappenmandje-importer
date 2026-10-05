@@ -6,6 +6,11 @@ import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 export const BASE_URL = "https://hoogvliet.nl";
 export const CATALOG_ROOT_PATH = "/producten";
 export const CATALOG_ROOT_URL = `${BASE_URL}${CATALOG_ROOT_PATH}`;
+export const PUBLIC_CATALOG_GRAPHQL_URL = `${BASE_URL}/api/graphql`;
+// This is the public GetProducts shape observed in the current site's own
+// hydration request. The query is deliberately limited to listing fields;
+// product detail validation remains the authority before persistence.
+export const PUBLIC_CATALOG_GRAPHQL_QUERY = `query GetProducts($pageSize: Int! $currentPage: Int! $filters: ProductAttributeFilterInput! $sort: ProductAttributeSortInput) { products(pageSize: $pageSize currentPage: $currentPage filter: $filters sort: $sort) { items { sku name url_key stock_status small_image { url label } categories { name level url_path } price_range { maximum_price { final_price { currency value } } minimum_price { regular_price { value currency } final_price { currency value } discount { percent_off } } } metadata sub_title_attributes { volume unit qty_unit price_per_qty_unit } is_promotion promotion_meta_data { korting_label raw_discount_label { text price full_label } valid_from valid_to promotion_id prijs promotie_prijs } brand: metafield(key: "merk") { value } webshop: metafield(key: "webshop") { value } } } } }`;
 const NORMAL_SOURCE_READY_TIMEOUT_MS = 12_000;
 const SECURITY_CHECK_READY_TIMEOUT_MS = 45_000;
 
@@ -198,7 +203,12 @@ export function searchURL(term, pageNumber = 0) {
 
 const NON_CATALOG_PATHS = new Set([
   "aanbiedingen", "acties", "recepten", "winkels", "service", "contact", "over-hoogvliet",
-  "account", "inloggen", "login", "privacy", "voorwaarden", "nieuws", "folder",
+  "account", "inloggen", "login", "privacy", "privacybeleid", "voorwaarden", "algemene-voorwaarden",
+  "nieuws", "nieuwsbrief", "folder", "folders", "klantenservice", "customer", "mijnhoogvliet",
+  "spotgoedkoopjes", "kies-mix", "goeie-dagdeals", "gratis-bezorging", "gezond-en-vers",
+  "warme-bakker-leen", "wijnen", "sint", "klantenkaart", "zelfscan", "online-bestellen",
+  "garanties", "team-hoogvliet", "geschiedenis", "duurzaamheid", "klantenpanel", "sponsoring",
+  "cookies",
 ]);
 
 export function extractSKUFromProductURL(value) {
@@ -435,20 +445,49 @@ export async function extractCatalogListingCandidates(page) {
 }
 
 async function extractCatalogCategoryLinks(page) {
-  const links = await page.evaluate(() => [...document.querySelectorAll("a[href]")].map(link => ({
-    href: link.href,
-    title: (link.textContent || "").replace(/\s+/g, " ").trim() || null,
-  })));
+  const links = await page.evaluate(() => {
+    const scoped = [
+      ...document.querySelectorAll("main a[href], [role='main'] a[href], nav[aria-label*='product' i] a[href], nav[aria-label*='catalog' i] a[href]"),
+    ];
+    const anchors = scoped.length ? scoped : [...document.querySelectorAll("a[href]")];
+    return [...new Map(anchors.map(link => [link.href, {
+      href: link.href,
+      title: (link.textContent || "").replace(/\s+/g, " ").trim() || null,
+    }])).values()];
+  });
   return links
     .map(({ href, title }) => ({ url: normalizeCatalogCategoryURL(href), title }))
     .filter(route => route.url);
 }
 
 async function findLoadMoreControl(page) {
-  const locator = page.locator("button, a, [role='button']")
-    .filter({ hasText: /producten\s+laden|meer\s+producten|laad\s+meer|toon\s+meer/i })
-    .last();
-  return await locator.isVisible({ timeout: 800 }).catch(() => false) ? locator : null;
+  const controls = page.locator("button, a, [role='button']")
+    .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer/i });
+  for (let index = 0; index < await controls.count(); index += 1) {
+    const candidate = controls.nth(index);
+    if (await candidate.isVisible({ timeout: 250 }).catch(() => false)) return candidate;
+  }
+  return null;
+}
+
+async function findNextCatalogPageURL(page, currentURL) {
+  const links = page.locator("a[href]").filter({ hasText: /^(?:next|volgende)$/i });
+  for (let index = 0; index < await links.count(); index += 1) {
+    const link = links.nth(index);
+    if (!await link.isVisible({ timeout: 250 }).catch(() => false)) continue;
+    const href = await link.getAttribute("href");
+    if (!href) continue;
+    try {
+      const next = new URL(href, currentURL);
+      const current = new URL(currentURL);
+      if (next.protocol !== "https:" || next.origin !== BASE_URL || next.username || next.password
+        || next.hash || next.pathname !== current.pathname || next.pathname.startsWith("/product/")) continue;
+      next.hash = "";
+      if (next.href === current.href) continue;
+      return next.href;
+    } catch {}
+  }
+  return null;
 }
 
 async function waitForListingGrowth(page, previousCount) {
@@ -458,6 +497,102 @@ async function waitForListingGrowth(page, previousCount) {
     return current > previousCount
       || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
   }, { previousCount }, { timeout: 20_000 }).then(() => true).catch(() => false);
+}
+
+function catalogAPIPrice(item) {
+  return item?.price_range?.minimum_price?.final_price?.value
+    ?? item?.price_range?.maximum_price?.final_price?.value
+    ?? null;
+}
+
+function catalogAPIPackage(item) {
+  let metadata = {};
+  try { metadata = typeof item?.metadata === "string" ? JSON.parse(item.metadata) : (item?.metadata ?? {}); }
+  catch {}
+  const subtitle = item?.sub_title_attributes;
+  if (subtitle?.volume && subtitle?.unit) return String(subtitle.volume) + " " + String(subtitle.unit);
+  return clean(metadata.verpakking) || null;
+}
+
+function catalogAPICategory(item) {
+  return [...(item?.categories ?? [])]
+    .sort((left, right) => (Number(left?.level) || 0) - (Number(right?.level) || 0))
+    .map(category => clean(category?.name))
+    .filter(Boolean)
+    .at(-1) ?? null;
+}
+
+async function fetchPublicCatalogItems(page, skus) {
+  const uniqueSKUs = [...new Set(skus.filter(isValidSKU))];
+  if (uniqueSKUs.length === 0) return [];
+  const response = await page.evaluate(async ({ endpoint, query, variables }) => {
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("operationName", "GetProducts");
+      url.searchParams.set("query", query);
+      url.searchParams.set("variables", JSON.stringify(variables));
+      const response = await fetch(url.href, { credentials: "same-origin" });
+      let body = null;
+      try { body = await response.json(); } catch {}
+      return { status: response.status, body };
+    } catch (error) {
+      return { status: 0, error: error?.message ?? "graphql_fetch_failed" };
+    }
+  }, {
+    endpoint: PUBLIC_CATALOG_GRAPHQL_URL,
+    query: PUBLIC_CATALOG_GRAPHQL_QUERY,
+    variables: { filters: { sku: { in: uniqueSKUs } }, pageSize: uniqueSKUs.length, currentPage: 1 },
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new SourceBlockedError("Hoogvliet blokkeert de openbare catalogus-API.");
+  }
+  if (response.status >= 400 || response.status === 0) {
+    throw new SourceUnavailableError("Hoogvliet gaf een catalogus-API-fout (HTTP "
+      + (response.status || "onbekend") + ").");
+  }
+  if (Array.isArray(response.body?.errors) && response.body.errors.length > 0) {
+    throw new ParserStructureChangedError("De actuele Hoogvliet-catalogus-API heeft een gewijzigde productschema-respons.");
+  }
+  const items = response.body?.data?.products?.items;
+  if (!Array.isArray(items)) {
+    throw new ParserStructureChangedError("De actuele Hoogvliet-catalogus-API bevat geen productitems.");
+  }
+  return items;
+}
+
+export async function hydrateCatalogListingCandidates(page, candidates) {
+  const domBySKU = new Map(candidates
+    .map(candidate => [extractSKUFromProductURL(candidate.sourceURL), candidate])
+    .filter(([sku]) => sku));
+  const items = await fetchPublicCatalogItems(page, [...domBySKU.keys()]);
+  const apiBySKU = new Map(items.map(item => [clean(item?.sku), item]).filter(([sku]) => sku));
+  if (apiBySKU.size === 0 && domBySKU.size > 0) {
+    throw new ParserStructureChangedError("De actuele Hoogvliet-catalogus-API leverde geen zichtbare productitems.");
+  }
+  const hydrated = [...apiBySKU].map(([sku, item]) => {
+    const domCandidate = domBySKU.get(sku);
+    const urlKey = clean(item?.url_key);
+    const sourceURL = domCandidate?.sourceURL
+      ?? (urlKey ? BASE_URL + "/product/" + urlKey : null);
+    return {
+      ...domCandidate,
+      sku,
+      name: clean(item?.name) || domCandidate?.name,
+      brand: clean(item?.brand?.value) || domCandidate?.brand,
+      category: catalogAPICategory(item) || domCandidate?.category,
+      packageText: domCandidate?.packageText || catalogAPIPackage(item),
+      displayedPrice: catalogAPIPrice(item) ?? domCandidate?.displayedPrice,
+      sourceURL,
+      imageURL: clean(item?.small_image?.url) || domCandidate?.imageURL,
+      available: item?.stock_status ? item.stock_status === "IN_STOCK" : domCandidate?.available,
+    };
+  });
+  // The public endpoint currently hydrates the visible cards in one request.
+  // Keep any visible card omitted by a server-side page-size limit as a DOM
+  // candidate; detail validation still decides whether it is usable.
+  return [...hydrated, ...candidates.filter(candidate => (
+    !apiBySKU.has(extractSKUFromProductURL(candidate.sourceURL))
+  ))];
 }
 
 export async function collectCatalogListing(page, routeURL, {
@@ -477,9 +612,11 @@ export async function collectCatalogListing(page, routeURL, {
   let loadMoreCycles = 0;
   let stagnated = false;
   let currentSignature = "";
+  const visitedListingURLs = new Set([page.url()]);
 
   const snapshot = async () => {
-    const raw = await extractCatalogListingCandidates(page);
+    const rawDOM = await extractCatalogListingCandidates(page);
+    const raw = await hydrateCatalogListingCandidates(page, rawDOM);
     const fresh = raw.filter(candidate => !routeCandidates.has(candidate.sourceURL));
     for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
     const signature = [...routeCandidates.keys()].sort().join("|");
@@ -495,17 +632,27 @@ export async function collectCatalogListing(page, routeURL, {
     currentSignature = signature;
     windows.push(fresh);
     const loadMore = await findLoadMoreControl(page);
-    if (!loadMore) break;
-    const previousCount = routeCandidates.size;
-    await loadMore.click({ timeout: 5_000 }).catch(() => { stagnated = true; });
-    if (stagnated) break;
-    loadMoreCycles += 1;
-    const grew = await waitForListingGrowth(page, previousCount);
-    if (!grew) {
-      const after = await extractCatalogListingCandidates(page);
-      const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
-      if (afterCount <= previousCount) stagnated = true;
+    if (loadMore) {
+      const previousCount = routeCandidates.size;
+      await loadMore.click({ timeout: 5_000 }).catch(() => { stagnated = true; });
+      if (stagnated) break;
+      loadMoreCycles += 1;
+      const grew = await waitForListingGrowth(page, previousCount);
+      if (!grew) {
+        const after = await hydrateCatalogListingCandidates(page, await extractCatalogListingCandidates(page));
+        const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
+        if (afterCount <= previousCount) stagnated = true;
+      }
+      continue;
     }
+    const nextURL = await findNextCatalogPageURL(page, page.url());
+    if (!nextURL || visitedListingURLs.has(nextURL)) break;
+    await withTransientNavigationRetry(
+      () => sourceGoto(page, nextURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+      { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
+    );
+    await waitForCatalogSource(page);
+    visitedListingURLs.add(nextURL);
   }
 
   // `windows` is a deterministic global cursor: a resumed segment can replay

@@ -13,6 +13,7 @@ import {
 } from "../src/hoogvliet.mjs";
 
 const fixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog.html", import.meta.url), "utf8");
+const paginationFixture = await readFile(new URL("./fixtures/hoogvliet-current-pagination.html", import.meta.url), "utf8");
 
 async function browserFor({ body = fixture, status = 200 } = {}) {
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
@@ -22,6 +23,30 @@ async function browserFor({ body = fixture, status = 200 } = {}) {
     contentType: "text/html",
     body,
   }));
+  await context.route("https://hoogvliet.nl/api/graphql**", async route => {
+    const url = new URL(route.request().url());
+    const variables = JSON.parse(url.searchParams.get("variables") || "{}");
+    const requested = variables.filters?.sku?.in ?? [];
+    const catalog = new Map([
+      ["064786000", { name: "Hoogvliet Komkommer", url_key: "hoogvliet-komkommer-064786000", package: "Stuks", price: 0.69 }],
+      ["081222000", { name: "Blauwe bessen", url_key: "blauwe-bessen-081222000", package: "300 gram", price: 4.39 }],
+      ["060936000", { name: "Trostomaten verpakt", url_key: "trostomaten-verpakt-060936000", package: "500 gram", price: 2.29 }],
+    ]);
+    const items = requested.filter(sku => catalog.has(sku)).map(sku => {
+      const item = catalog.get(sku);
+      return {
+        sku,
+        name: item.name,
+        url_key: item.url_key,
+        stock_status: "IN_STOCK",
+        small_image: { url: `https://hoogvliet.nl/images/${sku}.jpg`, label: item.name },
+        categories: [{ name: "Aardappelen, groente, fruit", level: 2, url_path: "aardappelen-groente-fruit" }],
+        price_range: { minimum_price: { final_price: { value: item.price }, regular_price: { value: item.price } } },
+        metadata: JSON.stringify({ verpakking: item.package }),
+      };
+    });
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { products: { items } } }) });
+  });
   return { browser, context, page: await context.newPage() };
 }
 
@@ -53,6 +78,21 @@ test("current category load-more traverses beyond the initial visible batch", as
   assert.equal(result.pagesFetched, 2);
   assert.equal(result.loadMoreCycles, 1);
   assert.equal(result.candidates.length, 3);
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000", "060936000",
+  ]);
+});
+
+test("current category Next pagination traverses a second public listing page", async t => {
+  const h = await browserFor({ body: paginationFixture });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+  });
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.stallReason, null);
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.loadMoreCycles, 0);
   assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
     "064786000", "081222000", "060936000",
   ]);

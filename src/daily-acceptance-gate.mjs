@@ -52,7 +52,7 @@ export function verifyDailyAcceptance({ before, after, job, result, limit }) {
     let url; try { url = new URL(p.source_url); } catch { /* fail closed below */ }
     requireEvidence(p.supermarket === "Hoogvliet" && /^\d{9}$/.test(p.sku) && p.name?.trim()
       && !oldSkus.has(`${p.supermarket}\0${p.sku}`) && dateKey(p.created_at) === job.jobDate
-      && url?.protocol === "https:" && url.hostname === "www.hoogvliet.com"
+      && url?.protocol === "https:" && url.hostname === "hoogvliet.nl"
       && !url.username && !url.password && url.pathname.startsWith("/product/"), "new_product_identity");
   }
   const oldPrices = new Map(before.prices.map(p => [p.product_id, p]));

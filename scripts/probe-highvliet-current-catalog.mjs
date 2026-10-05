@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
+import { collectCatalogListing } from "../src/hoogvliet.mjs";
 
 const baseURL = "https://hoogvliet.nl";
 const catalogURL = `${baseURL}/producten`;
@@ -68,7 +69,7 @@ async function loadMore(page, maxCycles = 10) {
   const pages = [];
   for (; cycles < maxCycles; cycles += 1) {
     const controls = page.locator("button, a, [role='button']")
-      .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer|toon\s+meer|bekijk\s+meer|^next$/i });
+      .filter({ hasText: /producten\s+laden|meer\s+producten|meer\s+laden|laad\s+meer/i });
     let control = null;
     for (let index = 0; index < await controls.count(); index += 1) {
       const candidate = controls.nth(index);
@@ -153,6 +154,7 @@ let categoryError = null;
 let initial = { productURLs: [], text: "" };
 let final = initial;
 let loadMoreResult = { cycles: 0, stagnated: false };
+let collector = { status: "not_run", error: null };
 try {
   categoryResponse = await page.goto(categoryURL, { waitUntil: "domcontentloaded", timeout: 45_000 });
   await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
@@ -165,20 +167,43 @@ try {
   categoryError = error?.message ?? "navigation_error";
 }
 
+const collectorPage = await context.newPage();
+try {
+  const collected = await collectCatalogListing(collectorPage, categoryURL, { maxWindows: 2 });
+  collector = {
+    status: "ok",
+    candidates: collected.candidates.length,
+    pagesFetched: collected.pagesFetched,
+    loadMoreCycles: collected.loadMoreCycles,
+    sourceExhausted: collected.sourceExhausted,
+    stallReason: collected.stallReason,
+    skuExamples: collected.candidates.map(candidate => candidate.sku).slice(0, 10),
+  };
+} catch (error) {
+  collector = { status: "error", error: error?.message ?? "collector_error", code: error?.code ?? null };
+}
+
 const allProductURLs = [...new Set(final.productURLs)];
+const productionCandidateCount = collector.status === "ok" ? collector.candidates : allProductURLs.length;
+const productionPagesFetched = collector.status === "ok" ? collector.pagesFetched : 0;
 const proof = {
-  sourceClassification: navigationError || categoryError
+  sourceClassification: collector.status === "error" && collector.code === "source_challenge"
+    ? "CHALLENGE"
+    : navigationError || categoryError
     ? "NAVIGATION_ERROR"
     : navigationResponse?.status() === 403 || categoryResponse?.status() === 403
       ? "CHALLENGE"
-      : allProductURLs.length > 0 ? "VALID_SOURCE" : "PARSER_STRUCTURE_CHANGED",
-  candidateCount: allProductURLs.length,
-  uniqueSKUHintCount: new Set(allProductURLs.map(skuFromURL).filter(Boolean)).size,
+      : productionCandidateCount > 0 ? "VALID_SOURCE" : "PARSER_STRUCTURE_CHANGED",
+  candidateCount: productionCandidateCount,
+  uniqueSKUHintCount: collector.status === "ok"
+    ? new Set(collector.skuExamples).size
+    : new Set(allProductURLs.map(skuFromURL).filter(Boolean)).size,
   initialCandidateCount: initial.productURLs.length,
-  afterLoadMoreCandidateCount: final.productURLs.length,
-  proofBeyondInitialBatch: final.productURLs.length > initial.productURLs.length,
-  loadMoreCycles: loadMoreResult.cycles,
+  afterLoadMoreCandidateCount: productionCandidateCount,
+  proofBeyondInitialBatch: productionPagesFetched > 1 || final.productURLs.length > initial.productURLs.length,
+  loadMoreCycles: collector.status === "ok" ? collector.loadMoreCycles : loadMoreResult.cycles,
   loadMoreStagnated: loadMoreResult.stagnated,
+  productionCollector: collector.status === "ok" && collector.candidates > 0 ? "VALID_SOURCE" : collector.status.toUpperCase(),
 };
 const result = {
   target: { catalogURL, categoryURL, requestedCategory },
@@ -193,6 +218,7 @@ const result = {
   initial: { count: initial.productURLs.length, skuExamples: initial.productURLs.map(skuFromURL).filter(Boolean).slice(0, 5), controls: initial.controls, loadMoreTextNodes: initial.loadMoreTextNodes },
   final: { count: final.productURLs.length, skuExamples: allProductURLs.map(skuFromURL).filter(Boolean).slice(0, 10), controls: final.controls, loadMoreTextNodes: final.loadMoreTextNodes },
   loadMore: loadMoreResult,
+  productionCollector: collector,
   network: network.slice(0, 80),
   proof,
 };

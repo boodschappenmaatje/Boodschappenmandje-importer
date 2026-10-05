@@ -8,7 +8,7 @@ import { loadConfig } from "../src/config.mjs";
 function snapshot(n) {
   return {
     products: Array.from({ length: n }, (_, i) => ({ id: `id-${i}`, sku: String(100000000 + i),
-      supermarket: "Hoogvliet", name: `Product ${i}`, source_url: `https://www.hoogvliet.com/product/p-${i}`,
+      supermarket: "Hoogvliet", name: `Product ${i}`, source_url: `https://hoogvliet.nl/product/p-${i}`,
       created_at: "2026-10-01T07:00:00Z" })),
     prices: Array.from({ length: n }, (_, i) => ({ product_id: `id-${i}`, price: 1.99, fetched_at: "2026-10-01T07:00:00Z" })),
     maintenance: { status: "confirmed", pendingProductIds: [], failures: [], notifiedProducts: 304 + n },

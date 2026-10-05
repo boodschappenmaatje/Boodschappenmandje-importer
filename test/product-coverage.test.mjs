@@ -33,7 +33,7 @@ test("the daily route is the current public catalog root and has no keyword fall
   assert.equal(searchURL(PUBLIC_CATALOG_ROUTE.key), "https://hoogvliet.nl/producten");
   assert.throws(() => searchURL("category:999999-100"), { code: "source_unavailable" });
   assert.equal(buildDynamicDiscoveryTerms([{ brand: "Brand 1" }], catalogBatches.growth).length, 0);
-  assert.equal(DISCOVERY_STRATEGY_VERSION, "hoogvliet-public-catalog-load-more-v3");
+  assert.equal(DISCOVERY_STRATEGY_VERSION, "hoogvliet-public-catalog-api-pagination-v4");
 });
 
 test("only current public category URLs are accepted and SKU comes from the product URL", () => {
