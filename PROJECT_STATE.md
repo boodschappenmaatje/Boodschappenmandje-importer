@@ -1,3 +1,23 @@
+# Checkpoint 29 — PR #50 Production en dagjobstatus — 5 oktober 2026
+
+## Merge en Production
+
+- PR #50 is via squash gemerged. Pre-merge head: `a6fec52968f77cf7ab7047336bc6d674d6bd68da`; mergecommit en nieuwe `main)-head: `f030043e9158037b0f9d2164091dfb2b6d99eab3`.
+- De PR-releasegate was groen: PR niet-Draft en mergeable, Vercel Preview READY en de nieuwste volledige core/regression/build workflowrun **37343581197** (#253) geslaagd. De workflow bevatte importerfixtures/seed consistency, PostgreSQL atomic rollback/concurrency, webflows, regressies, lint, TypeScript en build.
+- Automatische Vercel Production deployment `dpl_HivcFWWAnzV6gyU7ejMCQXS8LgSp` op de nieuwe main-head is **READY**. Production homepage smoke: HTTP **200**. De main commitstatus rapporteert Vercel success; er werd geen afzonderlijke push-triggered main-CI-run teruggegeven door de workflow-runconnector.
+- De nieuwe root→categorie-code en strategy fingerprint `hoogvliet-public-catalog-api-pagination-v4` staan op Production. PR #45–#49 zitten in de main-basis. Geen migration uitgevoerd.
+
+## Read-only discoverybewijs en bestaande dagjob
+
+- Read-only proof **37343193141** toonde root `/producten` → **20 dynamische categorieën**, **2 routes bezocht**, **2 listingpagina's**, **20 initiële kandidaten** en **41 unieke SKU-kandidaten**; legacy Intershop-discovery: **niet gebruikt**. Dit is een begrensde proof, geen volledige catalogusdekkingmeting en geen daily import.
+- Actuele Production-job `53553be0-2158-47b1-92c3-2bc75cd7d0cc`, datum **2026-10-05**, target **400**, blijft **0/400**, status `failed_requires_attention`, attempt_count **3**, recovery_count **1**, `next_retry_at=null`, geen lock.
+- Attempt #3 is `non_retryable_failure`: `discovery_incomplete_stalled_terms`; scanned/new/updated/unchanged/skipped/invalid **0**, source_errors **1**, remaining **400**. De vorige stop van de dagjob blijft leidend voor de state-machine.
+- Er is geen veilige normale retry beschikbaar in deze jobstatus. Geen recovery of daily dispatch uitgevoerd; de guard is niet omzeild. Er is dus geen nieuwe daily funnel, geen importresultaat en geen nieuwe productcount om te rapporteren.
+- Geen catalogusdekkingmeting uitgevoerd: de daily discovery kon door de state-machine niet opnieuw worden uitgevoerd en de begrensde 2-pagina proof is onvoldoende om volledigheid of een betrouwbare ontbrekende-SKU-lijst vast te stellen.
+- Kleinste veilige vervolgstap: onderzoek/definieer in Codex een state-machine-goedgekeurde volgende dagjob na `failed_requires_attention` en `recovery_count=1`, zonder handmatige DB-statuswijziging. Start pas daarna een enkele normale daily attempt; verander target 400 of productstrategie niet zonder expliciete toestemming.
+
+---
+
 # Checkpoint 28 — root→categorie traversal hotfix — 5 oktober 2026
 
 ## Hotfix vanaf actuele main
