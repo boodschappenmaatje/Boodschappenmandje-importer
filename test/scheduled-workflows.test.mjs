@@ -22,6 +22,10 @@ test('primary workflow uses valid UTC cron entries and keeps the existing jobs',
   assert.match(primary, /DAILY_IMPORT_END_HOUR=23/);
   assert.match(primary, /group: hoogvliet-supabase-update/);
   assert.match(primary, /daily_import:\n        description: Start exact de persistente dagelijkse 400-job/);
+  assert.match(primary, /recover_failed_daily:\n        description: Herstel exact één aantoonbaar opgeloste/);
+  assert.match(primary, /RECOVER_FAILED_DAILY=\$recover_failed_daily/);
+  assert.match(primary, /DAILY_RECOVERY_REASON=\$\{\{ inputs\.recovery_reason \}\}/);
+  assert.match(primary, /recover_failed_daily.*daily_import/s);
   assert.match(primary, /inputs\.daily_import.*true/);
   assert.match(primary, /update_mode="growth"/);
   assert.match(primary, /catalog_batch="growth"/);

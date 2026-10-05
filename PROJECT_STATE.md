@@ -1,3 +1,78 @@
+# Checkpoint 22 — recovery-migration toegepast en runner disarmed — 5 oktober 2026
+
+## Exacte Production migration
+
+- Voor arming was PR #48 op head `67eea724d687eafef1e070aa32e155cf67bcc034`, remote `main` op `b901ff77e6181c15c521a4e70471c2bc52c2ce53`. DISARMED-run **37301751242** was SUCCESS op exact dezelfde PR-head; CLI 2.119.0, Production-ref en beide secrets zijn door de runner gevalideerd. De enige lokale pending migration was `20261005220000_recover_failed_daily_catalog_growth.sql`.
+- De enige armingwijziging is commit `634f0d911d2a661337e8484386aec9138394ed36`. De verse precheck van Actions-run **37304326712** was SUCCESS. Daarna voerde de officiële Supabase CLI 2.119.0 `db push --db-url` uit.
+- Production migrationhistory registreert exact één `20261005220000`, met naam `recover_failed_daily_catalog_growth`. De workflow's volledige post-migration local↔remote historycontrole kwam voorbij; daarna faalde zijn eigen RPC-inspectie. Oorzaak: de tijdelijke workflow filtert `pg_get_function_identity_arguments` alsof PostgreSQL alleen types retourneert, terwijl de geretourneerde signature ook parameter­namen bevat. Daardoor rapporteerde de workflow ten onrechte `function_count=0`. De migration is read-only onafhankelijk geverifieerd; dit was geen SQL-migrationfout.
+- De runner is direct gedisarmd in commit `fd18b67cbf0c211bad01f2676a72e69374211c64`; de workflow bevat weer hard-coded `MIGRATION_ARMED=false`. Automatische disarmed-run **37304446843** deed alleen de read-only precheck en faalde gesloten omdat die precheck vóór toepassing precies één local-only migration verwacht. De apply-job is **skipped**; er was geen tweede apply.
+- Read-only RPC-verificatie: exact één functie `public.recover_catalog_daily_attempt`, 11 argumenten, resultaat `jsonb`, `SECURITY DEFINER`, `search_path=public`; EXECUTE voor `service_role` **ja**, voor `anon` en `authenticated` **nee**. Recoverykolom en checkconstraint, RLS-auditabel en beide recovery-indexen zijn aanwezig. Auditrijen: 0.
+- Geen tweede migration, repair, recovery, daily import, product-/prijswrite, PR-merge of app-deploy uitgevoerd.
+
+## Dagjob onveranderd
+
+- Dezelfde `dailyImportId` `53553be0-2158-47b1-92c3-2bc75cd7d0cc`, datum `2026-10-05`, state key `daily-catalog-growth`: `failed_requires_attention`, target 400, progress 0, remaining 400, attempt count 1, recovery_count 0, geen lock. `updated_at` bleef `2026-10-05T09:21:48.292+00:00`.
+- Vorige attempt blijft `d6d66511-e1de-4379-ba39-3b7e64094f0e`, poging 1, `non_retryable_failure`, `non_retryable_import_error`, definitief beëindigd. Er is geen recovery audit aangemaakt.
+
+## Volgende stap
+
+- Work voert de aparte PR #48 releasegate uit: controleer de finale branch-head, disarmed toestand, PR-diff en CI; behandel de tijdelijke workflow-postcheck false negative expliciet. Pas na groen de PR-merge uitvoeren volgens de reeds gegeven toestemming. Daarna Production READY controleren en een verse recovery-precheck doen vóór exact één recovery + daily attempt. Funnel en cumulatieve `X/400` beoordelen.
+- Bij werkende discovery maar weinig unieke nieuwe SKU's: bepaal eerst volledige bereikbare catalogusdekking versus Production-catalogus; geen nieuwe discoveryfix zonder die vergelijking.
+
+# Checkpoint 21 — tijdelijke exacte Supabase migrationrunner — 5 oktober 2026
+
+## PR #48 en veilige runner
+
+- PR #48 blijft ongemergd op `codex/recover-failed-daily-attention-20261005`. De start-head was `d707f8cb14d8e919bdea347dc25bf474443413c9`; remote `main` was `b901ff77e6181c15c521a4e70471c2bc52c2ce53`.
+- Tijdelijke workflow `.github/workflows/apply-recovery-migration.yml` is toegevoegd met uitsluitend `workflow_dispatch` en een smalle push-trigger op deze branch voor alleen het workflowbestand. De workflow gebruikt officiële Supabase CLI `2.119.0`, bestaande secrets `SUPABASE_ACCESS_TOKEN` en `SUPABASE_DB_PASSWORD`, project `pjcqxufvbkkjehituzxz` en de bewezen IPv4 Session pooler.
+- `MIGRATION_ARMED=false` staat hard-coded. De disarmed job doet alleen een officiële `supabase migration list`; de apply-job wordt bovendien job-level geblokkeerd totdat de precheck-output én een expliciete `MIGRATION_ARMED=true` beide aanwezig zijn. De apply-stap herhaalt de exacte precheck vlak vóór de write.
+- `scripts/check-recovery-migration-history.py` vereist vóór write dat alle bestaande repositoryversies remote matchen en uitsluitend `20261005220000_recover_failed_daily_catalog_growth.sql` local-only is. Na een toekomstige write vereist hij volledige local↔remote match. Tweede pending migration, remote-only history of een al remote aanwezige target faalt gesloten.
+- De toekomstige armed route gebruikt alleen de officiële repositoryflow `supabase db push --db-url ... --workdir ...`; geen `apply_migration`, migration repair, reset, seed, `--include-all`, directe history-SQL, recovery-call, import of productwrite. Daarna volgen uitsluitend read-only RPC/grant/schema- en dagjobcontroles.
+
+## Verificatie en volgende stap
+
+- Lokale workflowtests dekken YAML, bash-syntax, disarmed write-gate, forbidden-command scan, exact één pending migration, tweede pending migration, onverwachte remote-only history, al remote aanwezige target en volledige postcheck-match.
+- Codex heeft geen GitHub Actions-run gestart, geen Production migration toegepast, geen recovery/import/productwrite uitgevoerd, niets gemerged en geen deploy gestart. `ROADMAP.md` is niet gewijzigd.
+- Volgende stap Work: controleer de disarmed Actions-run en bevestig exact één pending migration. Alleen daarna kan een afzonderlijk goedgekeurd Work-checkpoint `MIGRATION_ARMED=true` zetten voor exact één migration; disarm direct daarna opnieuw en controleer history, RPC/grants en dagjob vóór de PR-mergegate.
+
+# Checkpoint 20 — veilige recovery van failed_requires_attention — 5 oktober 2026
+
+## Startpunt en bewezen blokkade
+
+- De actuele `origin/main` is gecontroleerd op `b901ff77e6181c15c521a4e70471c2bc52c2ce53`. PR #47 is gemerged en Production READY; PR #45 schedulerfix en PR #46 daily-dispatch zijn eveneens onderdeel van deze `main`. Deze wijziging staat op een nieuwe featurebranch en wordt niet naar `main` gemerged.
+- Production-job `daily-catalog-growth`, datum `2026-10-05`, ID `53553be0-2158-47b1-92c3-2bc75cd7d0cc`: `failed_requires_attention`, poging 1, `0/400`, `remainingTarget=400`, geen stale lock. Run #112 / Actions-run `37289231212` faalde met `non_retryable_import_error` vóór discovery of productwrite door de bewezen Playwright `page.evaluate`-argumentenfout; PR #47 heeft die fout opgelost.
+- De bestaande scheduler en `claim_catalog_daily_attempt` blijven correct weigeren: `shouldRunDailyImport` geeft `run=false` voor deze status en de normale claim heropent hem niet. Er is geen workflow-dispatch, statusedit, databasewrite, recovery, import of deploy uitgevoerd.
+
+## Gekozen recoverymechanisme
+
+- De nieuwe service-role RPC `recover_catalog_daily_attempt` voert recovery en precies één nieuwe daily-attemptclaim atomair uit. De normale scheduler/claim blijft onveranderd en kan `failed_requires_attention` niet zelfstandig heropenen.
+- De workflow heeft twee expliciete inputs: `daily_import=true` én `recover_failed_daily=true`, met een beperkte redenkeuze `software_fix_verified` of `infrastructure_fix_verified`. Zonder de eerste input faalt de workflow vóór de importer; preflight/E2E-paden worden uitgesloten. De importer gebruikt geen directe REST-statusupdate.
+- De recovery-RPC maakt een nieuwe attempt met lock en geeft dezelfde `dailyImportId`, `remainingTarget` en bestaande dagstand aan de bestaande `runDailyCatalogAttempt`-logica door. Daarna geldt de normale finish/state-machine-uitkomst. Een tweede expliciete recovery wordt door `recovery_count` en een unieke recovery-auditindex geweigerd; automatische schedulerretries krijgen geen speciale toegang tot de terminale status.
+
+## Guards en statebehoud
+
+- De RPC vereist exact: bestaand `dailyImportId`, dezelfde state key/datum, `failed_requires_attention`, `expected updated_at`/revision, verwacht attempt count, verwachte `new_products_collected` en `remainingTarget`, target exact 400, resterend doel groter dan 0, `recovery_count=0`, geen lock, geen running attempt en een definitief beëindigde laatste `non_retryable_failure`-attempt.
+- De database `FOR UPDATE`-lock plus CAS-vergelijkingen voorkomt races; de tweede gelijktijdige recovery ziet de gewijzigde status/revision/recovery_count en faalt. De RPC accepteert alleen de twee gecontroleerde recoverycategorieën en is uitsluitend aan `service_role` verleend.
+- Migration `20261005220000_recover_failed_daily_catalog_growth.sql` voegt additief `recovery_count` en de RLS-afgeschermde append-only tabel `catalog_daily_recoveries` toe. De audit bewaart recoverytijdstip, originele status/failure reason, recoverycategorie, vorige attempt-ID, nieuwe attempt-ID, dagstand vóór recovery, resterend doel en verwachte revision. Er worden geen products, prices, discovery-cursors, `exhaustedTerms` of bestaande counters gereset.
+- Voor 0/400 blijft de job 0/400 met restant 400; voor bijvoorbeeld 137/400 blijft hij 137/400 met restant 263. De nieuwe poging start alleen met dat resterende doel.
+
+## Tests en releasegate
+
+- Gerichte daily/config/workflow-tests: **127/127 groen**. Volledige root-suite: **341/341 groen**. `npm run check`: groen. PostgreSQL atomic/concurrency-gate: **25/25 groen**. Workflow-YAML-validatie: groen.
+- Regressies dekken 0/400 eligible, 137/400 behoud, running/completed/lock/attempt/revision guards, normale schedulerweigering, één recoveryclaim, dubbele recovery, statebehoud, target 400, audit/CAS-payload, PR #45 scheduler, PR #46 daily-import en PR #47 Playwright-contract.
+- Supabase CLI was niet beschikbaar in deze Codex-omgeving; de migration is daarom expliciet voorbereid en lokaal via tekst-/contracttests gecontroleerd. Work moet de migration als afzonderlijke releasehandeling toepassen en de migration history/read-only schemaresultaten controleren vóór recovery. Geen live migration is uitgevoerd.
+- `ROADMAP.md` is niet gewijzigd. Branch: `codex/recover-failed-daily-attention-20261005`.
+
+## Exacte Work-volgorde na PR
+
+1. Controleer PR + CI en review de migration/RPC-diff.
+2. Pas uitsluitend migration `20261005220000_recover_failed_daily_catalog_growth.sql` veilig toe; verifieer column, audit table, function grants en migration history. Bij schema-/migrationfout: stoppen, geen recovery.
+3. Controleer read-only dat job-ID/datum/status/0/400/restant400/geen lock nog exact kloppen.
+4. Geef expliciete mergegoedkeuring; merge en controleer Production READY.
+5. Dispatch exact één keer met `daily_import=true`, `recover_failed_daily=true`, `recovery_reason=software_fix_verified`; geen `daily_attempt_only`, `resume_source_challenge`, preflight of E2E-flags.
+6. Controleer audit/recovery-ID, dezelfde `dailyImportId`, nieuwe attempt-ID, lock, funnel en `X/400`. Start geen tweede recovery of losse import.
+7. Als discovery werkt maar weinig nieuwe SKU’s vindt: eerst bereikbare unieke Hoogvliet-SKU’s vergelijken met de Production-catalogus (~7.540); geen nieuwe discoveryfix bouwen zonder dat bewijs.
+
 # Checkpoint 19 — PR #47 Playwright-hotfix release — 5 oktober 2026
 
 ## Merge en Production

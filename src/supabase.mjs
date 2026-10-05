@@ -594,6 +594,7 @@ function dailyJobFromRow(row) {
     nextRetryAt: row.next_retry_at ?? null,
     completedAt: row.completed_at ?? null,
     lockExpiresAt: row.lock_expires_at ?? null,
+    recoveryCount: boundedCount(row.recovery_count),
     lastPublicMessage: row.last_public_message ?? null,
     updatedAt: row.updated_at ?? null,
   };
@@ -613,7 +614,7 @@ export async function fetchCatalogDailyJob(config, {
     "catalog_daily_jobs",
     config.supabaseSecret,
     {
-      select: "id,state_key,job_date,timezone,target_new_products,new_products_collected,status,attempt_count,started_at,last_attempt_at,next_retry_at,completed_at,lock_expires_at,last_public_message,updated_at",
+      select: "id,state_key,job_date,timezone,target_new_products,new_products_collected,status,attempt_count,started_at,last_attempt_at,next_retry_at,completed_at,lock_expires_at,recovery_count,last_public_message,updated_at",
       state_key: `eq.${stateKey}`,
       job_date: `eq.${jobDate}`,
     },
@@ -651,6 +652,57 @@ export async function requeueSourceChallenge(config, job, attempts, now) {
     });
   if (rows.length !== 1) throw new Error('source_challenge_recovery_claim_conflict');
   return dailyJobFromRow(rows[0]);
+}
+
+// Atomically acknowledge one explicitly verified software/infrastructure
+// failure and claim exactly one new attempt. The database RPC owns all guards,
+// the CAS revision and the append-only recovery audit; no direct status edit is
+// permitted here.
+export async function recoverCatalogDailyAttempt(config, {
+  job,
+  recoveryReason,
+  now = new Date(),
+  lockTTLMinutes = 130,
+} = {}) {
+  if (!job?.id || job.status !== "failed_requires_attention") {
+    throw new Error("daily recovery vereist failed_requires_attention");
+  }
+  if (typeof recoveryReason !== "string" || !recoveryReason.trim()) {
+    throw new Error("daily recovery reason ontbreekt");
+  }
+  const result = rpcObject(await postRPC(
+    config.supabaseURL,
+    "recover_catalog_daily_attempt",
+    config.supabaseSecret,
+    {
+      p_job_id: job.id,
+      p_state_key: job.stateKey,
+      p_job_date: job.jobDate,
+      p_expected_status: job.status,
+      p_expected_updated_at: job.updatedAt,
+      p_expected_attempt_count: job.attemptCount,
+      p_expected_new_products_collected: job.newProductsCollected,
+      p_expected_remaining_target: job.remainingTarget,
+      p_recovery_reason: recoveryReason.trim(),
+      p_now: now.toISOString(),
+      p_lock_ttl_minutes: lockTTLMinutes,
+    },
+  ));
+  const recoveredJob = dailyJobFromRow(result?.job);
+  if (!recoveredJob || result?.claimed !== true || result?.recovered !== true
+      || typeof result?.attemptId !== "string" || typeof result?.lockToken !== "string"
+      || typeof result?.recoveryId !== "string") {
+    throw new Error("Supabase bevestigde geen veilige daily recovery-claim.");
+  }
+  return {
+    claimed: true,
+    recovered: true,
+    reason: typeof result.reason === "string" ? result.reason : "recovered_and_claimed",
+    recoveryId: result.recoveryId,
+    attemptId: result.attemptId,
+    lockToken: result.lockToken,
+    job: recoveredJob,
+  };
 }
 
 export async function ensureCatalogDailyJob(config, {

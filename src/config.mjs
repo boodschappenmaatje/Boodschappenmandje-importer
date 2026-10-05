@@ -76,6 +76,10 @@ const DEFAULT_PRICE_SHARD_COUNT = 7;
 const SAFE_PRICE_SHARD_COUNT = 31;
 const DEFAULT_DAILY_GROWTH_TARGET = 400;
 const DEFAULT_DAILY_END_HOUR = 23;
+const DAILY_RECOVERY_REASONS = new Set([
+  "software_fix_verified",
+  "infrastructure_fix_verified",
+]);
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -89,6 +93,16 @@ function nonNegativeInteger(value, fallback) {
 
 export function loadConfig(env = process.env) {
   const resumeSourceChallenge = env.RESUME_SOURCE_CHALLENGE === '1';
+  const recoverFailedDaily = env.RECOVER_FAILED_DAILY === "1";
+  const dailyRecoveryReason = (env.DAILY_RECOVERY_REASON ?? "").trim();
+  if (recoverFailedDaily && (
+    env.DAILY_IMPORT_JOB !== "1" || env.UPDATE_MODE !== "growth"
+      || env.DAILY_NEW_PRODUCT_TARGET !== "400"
+      || env.DAILY_SINGLE_ATTEMPT === "1" || env.DAILY_ACCEPTANCE_GATE
+      || !DAILY_RECOVERY_REASONS.has(dailyRecoveryReason)
+  )) {
+    throw new Error("Failed daily recovery vereist de expliciete growth-dagjob met doel 400 en een toegestane recoverycategorie.");
+  }
   if (resumeSourceChallenge && (env.DAILY_SINGLE_ATTEMPT !== '1' || env.DAILY_NEW_PRODUCT_TARGET !== '400'
       || env.UPDATE_MODE !== 'growth' || env.DAILY_ACCEPTANCE_GATE)) {
     throw new Error('Challengehervatting vereist een dagelijkse restantpoging, zonder nieuwe 100-gate.');
@@ -201,6 +215,8 @@ export function loadConfig(env = process.env) {
       .slice(0, 80) || "daily-catalog-growth",
     dailySingleAttempt: env.DAILY_SINGLE_ATTEMPT === "1",
     resumeSourceChallenge,
+    recoverFailedDaily,
+    dailyRecoveryReason: recoverFailedDaily ? dailyRecoveryReason : null,
     dailyAcceptanceGate: acceptance === "100",
     dailyTargetNewProducts: Math.min(
       positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
