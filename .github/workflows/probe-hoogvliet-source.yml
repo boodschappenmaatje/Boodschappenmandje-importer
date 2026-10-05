@@ -23,6 +23,8 @@ concurrency:
 jobs:
   probe:
     name: One public Hoogvliet listing probe — READ ONLY
+    outputs:
+      result_label: ${{ steps.result.outputs.result_label }}
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
@@ -49,14 +51,53 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Eén actuele openbare bronroute onderzoeken — READ ONLY
+        id: run_probe
+        continue-on-error: true
         env:
           PROBE_TERM: category:999999-100
           PROBE_OUTPUT: hoogvliet-source-proof.json
         run: |
-          set -euo pipefail
+          set -uo pipefail
           node scripts/probe-hoogvliet-source.mjs | tee hoogvliet-probe.log
+          probe_status=${PIPESTATUS[0]}
           cat hoogvliet-probe.log >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' 'No importer, Supabase, recovery, product write, or database write was run.' >> "$GITHUB_STEP_SUMMARY"
+          exit "$probe_status"
+
+      - name: Veilige probe-uitkomst als jobmetadata publiceren
+        id: result
+        if: always()
+        run: |
+          set -euo pipefail
+          result_label=$(node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          try {
+            const proof = JSON.parse(readFileSync("hoogvliet-source-proof.json", "utf8"));
+            const network = (proof.network ?? [])
+              .filter(record => record.type === "xhr" || record.type === "fetch")
+              .slice(0, 3)
+              .map(record => {
+                const endpoint = record.endpoint ?? {};
+                const json = record.json ?? {};
+                const shape = json.shape && typeof json.shape === "object" && !Array.isArray(json.shape)
+                  ? Object.keys(json.shape).slice(0, 20).join(",")
+                  : String(json.shape ?? "none");
+                return `${record.type}:${record.status}:${endpoint.pathname ?? "?"}?${(endpoint.queryKeys ?? []).join(",")}:objects=${json.productLikeObjects ?? 0}:skus=${(json.uniqueSKUHints ?? []).length}:urls=${(json.productURLHints ?? []).length}:keys=${shape}`;
+              })
+              .join("|");
+            const navigation = proof.navigation ?? {};
+            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};candidates=${proof.proof?.candidateCount ?? 0};status=${navigation.initialStatus ?? "unknown"};title=${String(navigation.title ?? "").slice(0, 60)};network=${network}`;
+            process.stdout.write(label.replace(/[\r\n]/g, " ").slice(0, 240));
+          } catch {
+            process.stdout.write("classification=NO_PROOF;candidates=0");
+          }
+          NODE
+          )
+          echo "result_label=$result_label" >> "$GITHUB_OUTPUT"
+
+      - name: Probe-uitkomst zichtbaar maken
+        if: always()
+        run: echo "${{ steps.result.outputs.result_label }}"
 
       - name: Bewijsartefact uploaden
         if: always()
@@ -67,3 +108,11 @@ jobs:
             hoogvliet-source-proof.json
             hoogvliet-probe.log
           if-no-files-found: error
+
+  result:
+    name: ${{ needs.probe.outputs.result_label }}
+    needs: probe
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Read-only probe metadata is recorded in this job name; no write was performed."
