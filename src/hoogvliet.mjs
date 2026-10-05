@@ -224,6 +224,7 @@ const NON_CATALOG_PATHS = new Set([
   "spotgoedkoopjes", "kies-mix", "goeie-dagdeals", "gratis-bezorging", "gezond-en-vers",
   "warme-bakker-leen", "wijnen", "sint", "klantenkaart", "zelfscan", "online-bestellen",
   "garanties", "team-hoogvliet", "geschiedenis", "duurzaamheid", "klantenpanel", "sponsoring",
+  "intershop",
   "cookies",
 ]);
 
@@ -333,6 +334,7 @@ async function waitForCatalogSource(page, options = {}) {
         return url.origin === document.location.origin
           && url.pathname !== "/producten"
           && !url.pathname.startsWith("/product/")
+          && !url.search && !url.hash
           && !nonCatalogPaths.includes(firstSegment);
       } catch { return false; }
     });
