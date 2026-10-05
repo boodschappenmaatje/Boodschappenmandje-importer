@@ -1,10 +1,11 @@
 import { collectGrowthCandidates } from "./growth-collector.mjs";
-import { categoryDiscoveryRoute } from "./discovery-routes.mjs";
+import { categoryDiscoveryRoute, isPublicCatalogDiscoveryTerm } from "./discovery-routes.mjs";
 import { chromium } from "playwright";
 import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
 
-const BASE_URL = "https://www.hoogvliet.com";
-const SEARCH_PATH = "/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch";
+export const BASE_URL = "https://hoogvliet.nl";
+export const CATALOG_ROOT_PATH = "/producten";
+export const CATALOG_ROOT_URL = `${BASE_URL}${CATALOG_ROOT_PATH}`;
 const NORMAL_SOURCE_READY_TIMEOUT_MS = 12_000;
 const SECURITY_CHECK_READY_TIMEOUT_MS = 45_000;
 
@@ -37,8 +38,8 @@ export async function verifyNormalSourceAccess(config) {
     const context = await browser.newContext({ locale: 'nl-NL', timezoneId: 'Europe/Amsterdam' });
     const page = await context.newPage();
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 35_000 });
-    await waitForSourceContent(page, "input[name='SearchTerm']", { normalTimeoutMs: 5000 });
-    if (!(await readSourcePageEvidence(page, "input[name='SearchTerm']")).hasExpectedContent) {
+    await waitForSourceContent(page, "a[href^='/producten']", { normalTimeoutMs: 5000 });
+    if (!(await readSourcePageEvidence(page, "a[href^='/producten']")).hasExpectedContent) {
       throw new SourceUnavailableError('Normale openbare startpagina niet beschikbaar.');
     }
   } finally { await browser.close(); }
@@ -104,7 +105,12 @@ export function isValidSKU(value) {
 export function isValidProductURL(value) {
   try {
     const url = new URL(value, BASE_URL);
-    return url.protocol === "https:" && url.hostname === "www.hoogvliet.com" && url.pathname.startsWith("/product/");
+    // Existing rows may still contain the old www alias, which redirects to
+    // the current public host. New listing candidates are canonicalized to
+    // hoogvliet.nl below; no legacy listing endpoint is accepted.
+    return url.protocol === "https:"
+      && ["hoogvliet.nl", "www.hoogvliet.com"].includes(url.hostname)
+      && url.pathname.startsWith("/product/");
   } catch {
     return false;
   }
@@ -173,30 +179,84 @@ function absoluteURL(value) {
   }
 }
 
-const SEARCH_PAGE_SIZE = 40;
-
-// Intershop's search treats '+' differently from the visible form's '%20'.
-// URLSearchParams also recodes existing %20 when changing only PageNumber.
-function sourceSearchURL(url) {
-  return url.href.replaceAll("+", "%20");
-}
-
 export function searchURL(term, pageNumber = 0) {
   const category = categoryDiscoveryRoute(term);
   if (String(term).startsWith("category:") && !category) {
     throw new SourceUnavailableError("Onbekende categorieroute.");
   }
-  const url = new URL(SEARCH_PATH, BASE_URL);
-  url.searchParams.set("PageNumber", String(pageNumber));
-  url.searchParams.set("PageSize", String(category ? 16 : SEARCH_PAGE_SIZE));
-  url.searchParams.set("SelectedSearchResult", "SFProductSearch");
-  url.searchParams.set("SearchTerm", category ? "" : term);
-  url.searchParams.set("SelectedItem", "");
-  url.searchParams.set("SortingOption", category ? "Relevantie" : "");
-  url.searchParams.set("CategoryName", category?.id ?? "");
-  url.searchParams.set("CategoryTitle", category ? `Producten--${category.title}` : "");
-  url.searchParams.set("SearchTermKey", "");
-  return sourceSearchURL(url);
+  if (!category) {
+    throw new SourceUnavailableError(
+      `Onbekende Hoogvliet-discoveryroute '${term}'; gebruik de actuele openbare catalogusstructuur.`,
+    );
+  }
+  const url = new URL(category.path, BASE_URL);
+  // The current site paginates the public listing through its visible
+  // load-more control. Do not invent a query cursor here.
+  void pageNumber;
+  return url.href;
+}
+
+const NON_CATALOG_PATHS = new Set([
+  "aanbiedingen", "acties", "recepten", "winkels", "service", "contact", "over-hoogvliet",
+  "account", "inloggen", "login", "privacy", "voorwaarden", "nieuws", "folder",
+]);
+
+export function extractSKUFromProductURL(value) {
+  try {
+    const url = new URL(value, BASE_URL);
+    if (url.protocol !== "https:" || !["hoogvliet.nl", "www.hoogvliet.com"].includes(url.hostname)
+      || !url.pathname.startsWith("/product/")) return null;
+    const match = url.pathname.replace(/\/$/, "").match(/(?:^|-)(\d{9})$/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeCatalogCategoryURL(value) {
+  try {
+    const url = new URL(value, BASE_URL);
+    const firstSegment = url.pathname.split("/").filter(Boolean)[0] ?? "";
+    if (url.protocol !== "https:" || url.hostname !== "hoogvliet.nl"
+      || url.username || url.password || url.search || url.hash
+      || url.pathname === CATALOG_ROOT_PATH || url.pathname.startsWith("/product/")
+      || !firstSegment || NON_CATALOG_PATHS.has(firstSegment.toLowerCase())) return null;
+    return `${BASE_URL}${url.pathname.replace(/\/$/, "")}`;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeCatalogListingCandidate(candidate, categoryURL = CATALOG_ROOT_URL) {
+  const sourceURLValue = absoluteURL(candidate?.sourceURL);
+  let sourceURL = sourceURLValue;
+  try {
+    const parsed = new URL(sourceURLValue);
+    if (parsed.hostname === "www.hoogvliet.com") {
+      parsed.hostname = "hoogvliet.nl";
+    }
+    parsed.search = "";
+    parsed.hash = "";
+    sourceURL = parsed.href;
+  } catch {}
+  const sku = extractSKUFromProductURL(sourceURL);
+  const normalized = {
+    ...candidate,
+    sku,
+    name: clean(candidate?.name),
+    brand: clean(candidate?.brand),
+    category: clean(candidate?.category) || clean(categoryURL?.split("/").at(-1)?.replaceAll("-", " ")),
+    packageText: clean(candidate?.packageText),
+    sourceURL,
+    imageURL: absoluteURL(candidate?.imageURL),
+  };
+  return isValidSKU(normalized.sku) && normalized.name && isValidProductURL(normalized.sourceURL)
+    ? normalized
+    : null;
+}
+
+function isCatalogRouteTerm(term) {
+  return isPublicCatalogDiscoveryTerm(term) || Boolean(normalizeCatalogCategoryURL(term));
 }
 
 export function classifySourcePageEvidence(evidence = {}) {
@@ -204,15 +264,53 @@ export function classifySourcePageEvidence(evidence = {}) {
   if (evidence.navigationError) return "navigation_error";
   if ([408, 425, 429, 500, 502, 503, 504].includes(responseStatus)) return "source_unavailable";
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
-  if (evidence.hasExpectedContent) return "ready";
+  if (evidence.hasExpectedContent || evidence.hasCatalogStructure) return "ready";
   if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) return "valid_empty_search";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
   // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
   // geldige productresponse; alleen de verwachte inhoud is dat.
   if (evidence.hasIncapsula) return "security_check";
-  if (evidence.hasSearchStructure) return "parser_structure_changed";
+  if (evidence.hasSearchStructure || evidence.hasCatalogStructure) return "parser_structure_changed";
   return "parser_structure_changed";
+}
+
+async function readCatalogPageEvidence(page) {
+  return page.evaluate(({ responseStatus }) => {
+    const text = (document.body?.innerText ?? "").toLowerCase();
+    const productLinks = document.querySelectorAll("a[href*='/product/']").length;
+    const categoryLinks = [...document.querySelectorAll("a[href]")]
+      .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
+    return {
+      responseStatus,
+      captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
+      denied: /access denied|toegang geweigerd|forbidden/.test(text),
+      hasExpectedContent: productLinks > 0,
+      hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten",
+      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text),
+      hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
+      productLinks,
+      bodyTextLength: text.trim().length,
+      htmlLength: document.documentElement?.outerHTML?.length ?? 0,
+    };
+  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null });
+}
+
+async function waitForCatalogSource(page, options = {}) {
+  await page.waitForFunction(() => {
+    const text = (document.body?.innerText ?? "").toLowerCase();
+    return document.querySelectorAll("a[href*='/product/']").length > 0
+      || document.location.pathname === "/producten"
+      || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten|captcha|verify you are human|controleer of je een mens bent|access denied|toegang geweigerd|forbidden/.test(text);
+  }, undefined, { timeout: options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS }).catch(() => {});
+  const evidence = await readCatalogPageEvidence(page);
+  const classification = classifySourcePageEvidence(evidence);
+  if (classification === "challenge") throw new SourceBlockedError("Hoogvliet blokkeert de catalogusbrowser met een toegangscontrole of CAPTCHA.");
+  if (classification === "source_unavailable") throw new SourceUnavailableError(`Hoogvliet gaf een tijdelijke catalogusbronfout (HTTP ${evidence.responseStatus}).`);
+  if (classification === "parser_structure_changed") {
+    throw new ParserStructureChangedError("Hoogvliet-catalogus bevat geen herkenbare categorie- of productstructuur.");
+  }
+  return { evidence, classification };
 }
 
 async function readSourcePageEvidence(page, expectedSelector = null) {
@@ -224,7 +322,7 @@ async function readSourcePageEvidence(page, expectedSelector = null) {
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
       hasExpectedContent: Boolean(selector && document.querySelector(selector)),
       hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 resultaten/.test(text),
-      hasSearchStructure: Boolean(document.querySelector("#product-search-result")),
+      hasSearchStructure: Boolean(document.querySelector("a[href*='/product/']")),
       hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
       hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       bodyTextLength: text.trim().length,
@@ -298,7 +396,7 @@ async function acceptCookiesIfShown(page) {
   }
 }
 
-async function extractSearchCandidates(page) {
+export async function extractCatalogListingCandidates(page) {
   return page.evaluate(() => {
     const cleanText = (value) => (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim() || null;
     const price = (element) => {
@@ -306,29 +404,210 @@ async function extractSearchCandidates(page) {
       const match = cleanText(element.textContent)?.replace(/\s+/g, "").match(/\d+[.,]\d{2}/);
       return match ? Number(match[0].replace(",", ".")) : null;
     };
-
-    return Array.from(document.querySelectorAll(".product-tile")).map((tile) => {
-      const form = tile.querySelector("form[id^='productDetailForm_']");
-      const titleLink = tile.querySelector("a.product-title");
-      const trackingElement = tile.querySelector("[data-track-click]");
-      let tracking = {};
-      try {
-        tracking = JSON.parse(trackingElement?.getAttribute("data-track-click") || "{}").products?.[0] || {};
-      } catch {}
-      const spinner = tile.querySelector(".spinner");
-      return {
-        sku: (tile.id || "").replace("product-tile_", ""),
-        name: cleanText(titleLink?.textContent),
-        brand: cleanText(tracking.brand),
-        category: cleanText(tracking.category || tracking.categoryName),
-        packageText: cleanText(form?.querySelector(".ratio-base-packing-unit")?.textContent),
-        displayedPrice: price(tile.querySelector(".kor-product-sale-price-value")),
-        sourceURL: titleLink?.href || null,
-        imageURL: tile.querySelector("img.product-image")?.src || null,
-        available: spinner ? Number(spinner.getAttribute("maxqty") || "0") > 0 : null,
+    const packagePattern = /\b\d+(?:[.,]\d+)?\s*(?:kg|kilo|kilogram|g|gram|gr|l|liter|ml|milliliter|stuk|stuks)\b/i;
+    const cardFor = (link) => link.closest("article, li, [data-testid*='product' i], [class*='product-card' i], [class*='product-tile' i]")
+      || link.parentElement || link;
+    const cards = new Map();
+    for (const link of document.querySelectorAll("a[href*='/product/']")) {
+      const sourceURL = link.href;
+      if (!/-\d{9}\/?(?:[?#].*)?$/i.test(new URL(sourceURL).pathname)) continue;
+      const card = cardFor(link);
+      const text = cleanText(card.textContent);
+      const title = card.querySelector("h2, h3, h4, [class*='name' i], [class*='title' i]")
+        || link;
+      const priceElement = card.querySelector("[class*='price' i], [data-testid*='price' i]");
+      const image = card.querySelector("img");
+      const packageMatch = text?.match(packagePattern);
+      const candidate = {
+        name: cleanText(title.textContent),
+        brand: cleanText(card.querySelector("[class*='brand' i]")?.textContent),
+        category: cleanText(document.querySelector("nav[aria-label*='breadcrumb' i] a:last-child, [class*='breadcrumb' i] a:last-child")?.textContent),
+        packageText: packageMatch?.[0] ?? null,
+        displayedPrice: price(priceElement) ?? price(card),
+        sourceURL,
+        imageURL: image?.currentSrc || image?.src || null,
+        available: card.querySelector("[disabled], [aria-disabled='true']") ? false : null,
       };
-    });
+      if (!cards.has(sourceURL)) cards.set(sourceURL, candidate);
+    }
+    return [...cards.values()];
   });
+}
+
+async function extractCatalogCategoryLinks(page) {
+  const links = await page.evaluate(() => [...document.querySelectorAll("a[href]")].map(link => ({
+    href: link.href,
+    title: (link.textContent || "").replace(/\s+/g, " ").trim() || null,
+  })));
+  return links
+    .map(({ href, title }) => ({ url: normalizeCatalogCategoryURL(href), title }))
+    .filter(route => route.url);
+}
+
+async function findLoadMoreControl(page) {
+  const locator = page.locator("button, a, [role='button']")
+    .filter({ hasText: /producten\s+laden|meer\s+producten|laad\s+meer|toon\s+meer/i })
+    .last();
+  return await locator.isVisible({ timeout: 800 }).catch(() => false) ? locator : null;
+}
+
+async function waitForListingGrowth(page, previousCount) {
+  return page.waitForFunction(({ previousCount }) => {
+    const current = document.querySelectorAll("a[href*='/product/']").length;
+    const text = (document.body?.innerText ?? "").toLowerCase();
+    return current > previousCount
+      || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
+  }, { previousCount }, { timeout: 20_000 }).then(() => true).catch(() => false);
+}
+
+export async function collectCatalogListing(page, routeURL, {
+  startWindow = 0,
+  maxWindows = 20,
+  shouldStop = () => false,
+  navigationRetries = 2,
+  onRetry = null,
+} = {}) {
+  await withTransientNavigationRetry(
+    () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+    { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
+  );
+  await waitForCatalogSource(page);
+  const routeCandidates = new Map();
+  const windows = [];
+  let loadMoreCycles = 0;
+  let stagnated = false;
+  let currentSignature = "";
+
+  const snapshot = async () => {
+    const raw = await extractCatalogListingCandidates(page);
+    const fresh = raw.filter(candidate => !routeCandidates.has(candidate.sourceURL));
+    for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
+    const signature = [...routeCandidates.keys()].sort().join("|");
+    return { fresh, signature };
+  };
+
+  while (!shouldStop() && windows.length < maxWindows) {
+    const { fresh, signature } = await snapshot();
+    if (signature === currentSignature && currentSignature) {
+      stagnated = true;
+      break;
+    }
+    currentSignature = signature;
+    windows.push(fresh);
+    const loadMore = await findLoadMoreControl(page);
+    if (!loadMore) break;
+    const previousCount = routeCandidates.size;
+    await loadMore.click({ timeout: 5_000 }).catch(() => { stagnated = true; });
+    if (stagnated) break;
+    loadMoreCycles += 1;
+    const grew = await waitForListingGrowth(page, previousCount);
+    if (!grew) {
+      const after = await extractCatalogListingCandidates(page);
+      const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
+      if (afterCount <= previousCount) stagnated = true;
+    }
+  }
+
+  // `windows` is a deterministic global cursor: a resumed segment can replay
+  // earlier visible batches, but only emits windows at/after its checkpoint.
+  const emitted = windows.slice(Math.max(0, startWindow), Math.max(0, startWindow) + maxWindows)
+    .flatMap(window => window);
+  const sourceExhausted = !stagnated && windows.length < maxWindows;
+  return {
+    candidates: emitted,
+    pagesFetched: windows.length,
+    windowCount: windows.length,
+    emittedWindowCount: Math.min(maxWindows, Math.max(0, windows.length - startWindow)),
+    loadMoreCycles,
+    sourceExhausted,
+    stallReason: stagnated ? "load_more_stagnated" : null,
+    nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
+    categoryURL: routeURL,
+  };
+}
+
+export async function collectPublicCatalogCandidates(page, maxPages, options = {}) {
+  const rootURL = CATALOG_ROOT_URL;
+  const queue = [rootURL];
+  const queued = new Set(queue);
+  const visitedCategories = new Set();
+  const allCandidates = [];
+  const seenURLs = new Set();
+  const startWindow = Math.max(0, Math.trunc(options.startPage ?? 0));
+  let globalWindowCursor = 0;
+  let pagesFetched = 0;
+  let loadMoreCycles = 0;
+  let sourceExhausted = true;
+  let stallReason = null;
+  let rootCategoryCount = 0;
+  let rawCandidates = 0;
+  let duplicateCandidates = 0;
+  let invalidCandidates = 0;
+
+  while (queue.length && !options.shouldStop?.()) {
+    const routeURL = queue.shift();
+    if (visitedCategories.has(routeURL)) continue;
+    visitedCategories.add(routeURL);
+    await withTransientNavigationRetry(
+      () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+      { maxRetries: options.navigationRetries ?? 2, onRetry: options.onRetry, wait: ms => page.waitForTimeout(ms) },
+    );
+    await waitForCatalogSource(page);
+    const childRoutes = await extractCatalogCategoryLinks(page);
+    for (const child of childRoutes) {
+      if (!queued.has(child.url)) { queued.add(child.url); queue.push(child.url); }
+    }
+    if (routeURL === rootURL) {
+      rootCategoryCount = queue.length;
+      continue;
+    }
+    const remaining = Math.max(0, maxPages - pagesFetched);
+    if (remaining === 0) { sourceExhausted = false; break; }
+    const routeSkip = Math.max(0, startWindow - globalWindowCursor);
+    const listing = await collectCatalogListing(page, routeURL, {
+      startWindow: routeSkip,
+      maxWindows: routeSkip + remaining,
+      shouldStop: options.shouldStop,
+      navigationRetries: options.navigationRetries,
+      onRetry: options.onRetry,
+    });
+    // A fresh page starts at window zero. Replay enough load-more clicks to
+    // reach the persisted global cursor, then emit only the new window range.
+    const emittedWindows = listing.emittedWindowCount;
+    globalWindowCursor += listing.windowCount;
+    pagesFetched += emittedWindows;
+    loadMoreCycles += listing.loadMoreCycles;
+    sourceExhausted = listing.sourceExhausted;
+    if (listing.stallReason) { stallReason = listing.stallReason; break; }
+    for (const candidate of listing.candidates) {
+      rawCandidates += 1;
+      const normalized = normalizeCatalogListingCandidate(candidate, routeURL);
+      if (!normalized) { invalidCandidates += 1; continue; }
+      if (seenURLs.has(normalized.sourceURL)) { duplicateCandidates += 1; continue; }
+      seenURLs.add(normalized.sourceURL);
+      allCandidates.push(normalized);
+    }
+    if (!listing.sourceExhausted && pagesFetched >= maxPages) { sourceExhausted = false; break; }
+  }
+
+  if (!rootCategoryCount) throw new ParserStructureChangedError("Actuele Hoogvliet-catalogus bevat geen publieke categorie-links.");
+  const nextPage = sourceExhausted ? 0 : startWindow + Math.max(1, pagesFetched);
+  return {
+    candidates: allCandidates,
+    rawCandidates,
+    duplicateCandidates,
+    irrelevantCandidates: 0,
+    invalidCandidates,
+    repeatedPageCandidates: 0,
+    repeatedPageStopped: Boolean(stallReason),
+    pagesFetched,
+    categoriesVisited: visitedCategories.size - 1,
+    listingLoadMoreCycles: loadMoreCycles,
+    uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
+    sourceExhausted: sourceExhausted && queue.length === 0,
+    stallReason,
+    nextPage: sourceExhausted && queue.length === 0 ? 0 : nextPage,
+  };
 }
 
 export function searchPaginationEvidence({ currentPage, totalPages, totalProducts, candidateCount, explicitEmpty = false, requestedPage }) {
@@ -343,21 +622,20 @@ export function searchPaginationEvidence({ currentPage, totalPages, totalProduct
 }
 
 async function searchPageResult(page, options) {
-  const candidates = await extractSearchCandidates(page);
+  const candidates = await extractCatalogListingCandidates(page);
   if (!options.requirePaginationEvidence) {
     candidates.sourceClassification = options.sourceEvidence?.classification ?? "ready";
     candidates.sourceExhausted = candidates.sourceClassification === "valid_empty_search";
     return candidates;
   }
   const evidence = await page.evaluate(() => {
-    const root = document.querySelector('#product-search-result');
-    const positive = value => /^\d+$/.test(value ?? '') ? Number(value) : null;
-    const total = root?.querySelector('.pagination-total')?.textContent?.match(/^\s*([\d.]+)\s+Producten\s*$/i);
+    const text = document.body?.innerText ?? "";
+    const total = text.match(/([\d.]+)\s+producten/i);
     return {
-      currentPage: positive(root?.querySelector('.storePageNo')?.getAttribute('data-page-number')),
-      totalPages: positive(root?.querySelector('#nrofpages')?.getAttribute('data-page-number')),
+      currentPage: 1,
+      totalPages: 1,
       totalProducts: total ? Number(total[1].replaceAll('.', '')) : null,
-      explicitEmpty: /geen resultaten gevonden|niks kunnen vinden/i.test(document.querySelector('[role="main"]')?.textContent ?? ""),
+      explicitEmpty: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden/i.test(text),
     };
   });
   return { candidates, sourceClassification: options.sourceEvidence?.classification ?? "ready",
@@ -367,16 +645,19 @@ async function searchPageResult(page, options) {
 
 export function resolvedSearchPageURL(resolvedURL, pageNumber) {
   const url = new URL(resolvedURL);
-  if (url.origin !== BASE_URL || url.pathname !== SEARCH_PATH || url.username || url.password) {
-    throw new SourceUnavailableError("Zoekredirect verlaat het vertrouwde zoekendpoint.");
+  if (url.origin !== BASE_URL || url.username || url.password
+    || (url.pathname !== CATALOG_ROOT_PATH && !normalizeCatalogCategoryURL(url.href))) {
+    throw new SourceUnavailableError("Catalogusredirect verlaat het vertrouwde openbare Hoogvliet-endpoint.");
   }
-  url.searchParams.set("PageNumber", String(pageNumber));
-  return sourceSearchURL(url);
+  void pageNumber;
+  url.search = "";
+  url.hash = "";
+  return url.href.replace(/\/$/, "");
 }
 
 export function verifyCategorySearchRoute(resolvedURL, category) {
   const url = new URL(resolvedSearchPageURL(resolvedURL, 0));
-  if (url.searchParams.get("CategoryName") !== category.id || url.searchParams.get("SearchTerm")) {
+  if (category?.path !== url.pathname) {
     throw new SourceUnavailableError("Categoriezoekopdracht verliest de gevraagde broncategorie.");
   }
 }
@@ -384,42 +665,47 @@ export function verifyCategorySearchRoute(resolvedURL, category) {
 export async function navigateSearchPage(page, term, pageNumber = 0, options = {}) {
   const routes = options.resolvedRoutes;
   const knownRoute = routes?.get(term);
-  await sourceGoto(page, knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber), { waitUntil: "domcontentloaded", timeout: 35_000 });
+  if (!isCatalogRouteTerm(term)) {
+    throw new SourceUnavailableError(
+      `Hoogvliet-keyworddiscovery '${term}' is disabled; gebruik de actuele publieke catalogusroute.`,
+    );
+  }
+  const route = knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber);
+  await sourceGoto(page, route, { waitUntil: "domcontentloaded", timeout: 35_000 });
   const category = categoryDiscoveryRoute(term);
-  if (category) verifyCategorySearchRoute(page.url(), category);
+  if (category && new URL(page.url()).pathname !== category.path) verifyCategorySearchRoute(page.url(), category);
   if (routes) {
-    // A term such as fruit redirects to a category and resets PageNumber=0.
-    // Keep the resolved category, sorting and page size for all subsequent windows.
     const resolved = resolvedSearchPageURL(page.url(), pageNumber);
     routes.set(term, resolved);
-    if (new URL(page.url()).searchParams.get("PageNumber") !== String(pageNumber)) {
-      await sourceGoto(page, resolved, { waitUntil: "domcontentloaded", timeout: 35_000 });
-      if (category) verifyCategorySearchRoute(page.url(), category);
-    }
   }
   return page.url();
 }
 
 async function searchOnce(page, term, pageNumber = 0, options = {}) {
+  if (isCatalogRouteTerm(term)) {
+    return collectPublicCatalogCandidates(page, Math.max(1, options.maxPages ?? 1), {
+      ...options, startPage: pageNumber,
+    });
+  }
   await navigateSearchPage(page, term, pageNumber, options);
-  const source = await waitForSourceContent(page, ".product-tile", options);
+  const source = await waitForCatalogSource(page, options);
   return searchPageResult(page, { ...options, sourceEvidence: source.evidence,
-    requestedCategoryPage: categoryDiscoveryRoute(term) ? pageNumber : undefined });
+    requestedCategoryPage: undefined });
 }
 
 async function searchUsingVisibleForm(page, term, options = {}) {
   await sourceGoto(page, BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
-  await waitForSourceContent(page, "input[name='SearchTerm']", {
+  await waitForSourceContent(page, "input[name='SearchTerm'], input[placeholder*='Waar ben je' i]", {
     ...options,
     normalTimeoutMs: 5_000,
   });
   await acceptCookiesIfShown(page);
-  const input = page.locator("input[name='SearchTerm']").first();
+  const input = page.locator("input[name='SearchTerm'], input[placeholder*='Waar ben je' i]").first();
   if (!(await input.isVisible({ timeout: 5000 }).catch(() => false))) return [];
   await input.fill(term);
   await input.press("Enter");
   await page.waitForLoadState("domcontentloaded", { timeout: 20_000 }).catch(() => {});
-  const source = await waitForSourceContent(page, ".product-tile", options);
+  const source = await waitForCatalogSource(page, options);
   return searchPageResult(page, { ...options, sourceEvidence: source.evidence });
 }
 
@@ -512,9 +798,8 @@ export async function collectCandidatePages(fetchPage, term, maxPages, options =
       || JSON.stringify([candidate?.name, candidate?.sourceURL])))].sort().join("|");
     if (seenPageSignatures.has(signature)) {
       repeatedPageCandidates += pageCandidates.length;
-      // Sommige Intershop-varianten behandelen PageNumber=0 en 1 allebei als
-      // de eerste pagina. Probeer dan één keer pagina 2 voordat discovery de
-      // term als werkelijk herhaald/uitgeput markeert.
+      // Some public listing implementations expose the first window twice.
+      // Try one extra window before treating the route as repeated/exhausted.
       if (Array.isArray(pageResult) && startPage === 0 && pageNumber === 1 && !firstPageAliasSkipped) {
         firstPageAliasSkipped = true;
         continue;
@@ -582,6 +867,9 @@ export async function withTransientNavigationRetry(operation, {
 }
 
 async function findCandidates(page, term, maxPages, options = {}) {
+  if (isCatalogRouteTerm(term)) {
+    return collectPublicCatalogCandidates(page, maxPages, options);
+  }
   return collectCandidatePages(async (pageNumber) => {
     try {
       return await withTransientNavigationRetry(async () => {
@@ -604,7 +892,7 @@ async function findCandidates(page, term, maxPages, options = {}) {
 
 async function extractProductDetails(page) {
   return page.evaluate(() => {
-    const root = document.querySelector(".product-details");
+    const root = document.querySelector(".product-details, [itemtype*='Product' i], main");
     if (!root) return null;
     const cleanText = (value) => (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim() || null;
     const price = (element) => {
@@ -620,7 +908,8 @@ async function extractProductDetails(page) {
       .map((element) => cleanText(element.textContent)).filter(Boolean);
 
     return {
-      sku: (form?.id || "").replace("productDetailForm_", ""),
+      sku: (form?.id || "").replace("productDetailForm_", "")
+        || location.pathname.match(/(?:^|-)(\d{9})\/?$/)?.[1] || null,
       name: cleanText(root.querySelector("h1")?.textContent),
       packageText: cleanText(root.querySelector(".unitPrice .ratio-base-packing-unit")?.textContent)
         || cleanText(root.querySelector(".ratio-base-packing-unit")?.textContent),
@@ -650,7 +939,7 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     return null;
   };
   await sourceGoto(page, candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 });
-  await waitForSourceContent(page, ".product-details");
+  await waitForSourceContent(page, "h1");
   const details = await extractProductDetails(page);
   if (!details) return fail("notFound");
   if (details.sku !== candidate.sku || !isValidSKU(details.sku)) return fail("invalidProduct");
@@ -946,6 +1235,9 @@ export async function collectProducts(config, logger = console, options = {}) {
     configuredSearchTerms: config.searchTerms.length,
     searchedTerms: 0,
     pagesFetched: 0,
+    categoriesVisited: 0,
+    listingLoadMoreCycles: 0,
+    uniqueListingSKUs: 0,
     rawCandidatesFound: 0,
     candidatesFound: 0,
     irrelevantCandidatesSkipped: 0,
@@ -1002,7 +1294,7 @@ export async function collectProducts(config, logger = console, options = {}) {
         wait: async (delayMs) => searchPage.waitForTimeout(delayMs),
       },
     );
-    await waitForSourceContent(searchPage, "input[name='SearchTerm']", {
+    await waitForSourceContent(searchPage, "a[href^='/producten']", {
       normalTimeoutMs: 5_000,
       onSecurityCheck: () => {
         stats.sourceSecurityChecks += 1;
@@ -1107,6 +1399,9 @@ export async function collectProducts(config, logger = console, options = {}) {
           ? pageResult.candidates
           : prioritizeCandidates(pageResult.candidates, existingSKUs);
         stats.pagesFetched += pageResult.pagesFetched;
+        stats.categoriesVisited += pageResult.categoriesVisited ?? 0;
+        stats.listingLoadMoreCycles += pageResult.listingLoadMoreCycles ?? 0;
+        stats.uniqueListingSKUs += pageResult.uniqueListingSKUs ?? pageResult.candidates.length;
         stats.rawCandidatesFound += pageResult.rawCandidates;
         stats.irrelevantCandidatesSkipped += pageResult.irrelevantCandidates;
         stats.duplicateSKUsSkipped += pageResult.duplicateCandidates;

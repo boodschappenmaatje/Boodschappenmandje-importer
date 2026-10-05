@@ -9,12 +9,13 @@ import {
   startCatalogImportRun,
   upsertProducts,
 } from "./supabase.mjs";
+import { isPublicCatalogDiscoveryTerm } from "./discovery-routes.mjs";
 
 // Persisted route exhaustion is only meaningful for the discovery strategy
 // that produced it. Bumping this value is deliberately cheap: existing SKUs
 // make the one-time replay idempotent, while stale exhaustion can no longer
 // turn an incomplete route set into a false global `discovery_exhausted`.
-export const DISCOVERY_STRATEGY_VERSION = "hoogvliet-categories-pagination-v2";
+export const DISCOVERY_STRATEGY_VERSION = "hoogvliet-public-catalog-load-more-v3";
 
 function text(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -58,6 +59,10 @@ function discoveryKey(value) {
 }
 
 export function buildDynamicDiscoveryTerms(existingProducts, configuredTerms, limit = 450) {
+  // The public catalog route traverses its live department tree. Adding old
+  // keyword-derived routes would duplicate work and silently reintroduce a
+  // discovery strategy that is no longer backed by the public site.
+  if ((configuredTerms ?? []).some(isPublicCatalogDiscoveryTerm)) return [];
   const seen = new Set((configuredTerms ?? []).map(discoveryKey).filter(Boolean));
   const result = [];
   const add = (value) => {
@@ -243,6 +248,9 @@ export function formatCatalogGrowthSummary(result) {
     `duplicaten=${result.duplicateCount ?? 0}`,
     `nieuwe_geldige_kandidaten=${result.validNewCandidateCount ?? categories.new ?? 0}`,
     `werkelijk_toegevoegd=${result.actualGrowth ?? result.newCount ?? 0}`,
+    `categorieen_bezocht=${result.categoriesVisited ?? 0}`,
+    `listing_load_more=${result.listingLoadMoreCycles ?? 0}`,
+    `unieke_listing_skus=${result.uniqueListingSKUs ?? 0}`,
     `zoektermen=${result.searchedTerms}`,
     `zoektermfouten=${result.searchErrors}`,
     `totaal_voor=${result.totalUniqueProductsBefore}`,
@@ -425,6 +433,9 @@ export async function runCatalogGrowth(config, logger = console, dependencies = 
       totalUniqueProductsAfter,
       actualGrowth,
       candidatesViewed: stats.candidatesExamined ?? stats.uniqueSKUsDiscovered ?? 0,
+      categoriesVisited: stats.categoriesVisited ?? 0,
+      listingLoadMoreCycles: stats.listingLoadMoreCycles ?? 0,
+      uniqueListingSKUs: stats.uniqueListingSKUs ?? 0,
       existingCount: stats.existingCandidatesSkipped ?? 0,
       duplicateCount: stats.duplicateSKUsSkipped ?? 0,
       invalidCount: stats.invalidProductsSkipped ?? 0,

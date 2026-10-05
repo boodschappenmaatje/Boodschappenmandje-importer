@@ -1,28 +1,20 @@
-// Public Producten menu, observed 2026-09-30. These are category identities,
-// not search keywords; every returned SKU still needs normal detail validation.
-export const HOOGVLIET_CATEGORIES = Object.freeze([
-  ["100", "Aardappelen, groente, fruit"],
-  ["200", "Vlees, vis, vegetarisch"],
-  ["300", "Kaas, vleeswaren, tapas"],
-  ["400", "Verse maaltijden, salades"],
-  ["500", "Zuivel, plantaardig, eieren"],
-  ["600", "Diepvries"],
-  ["700", "Brood"],
-  ["800", "Ontbijtgranen, broodbeleg, tussendoor"],
-  ["900", "Frisdrank, sappen"],
-  ["1900", "Koffie, thee"],
-  ["1000", "Bier, wijn, alcoholvrij"],
-  ["1100", "Chips, zoutjes, noten"],
-  ["1200", "Koek, chocolade, snoep, zelf bakken"],
-  ["1300", "Internationale keuken, pasta, rijst"],
-  ["1400", "Soepen, conserven, sauzen, kruiden"],
-  ["1500", "Huishoud, non-food"],
-  ["1800", "Huisdier"],
-  ["1600", "Gezondheid, cosmetica"],
-  ["2000", "Baby, kind"],
-  ["1700", "Bewuste voeding"],
-].map(([id, title]) => Object.freeze({ key: `category:999999-${id}`, id: `999999-${id}`, title })));
+// The current public catalog exposes its own category tree below /producten.
+// Category URLs are discovered from that tree at runtime; this module only
+// identifies the stable catalog root and never carries a stale department list.
+export const PUBLIC_CATALOG_ROUTE = Object.freeze({
+  key: "catalog:root",
+  path: "/producten",
+  title: "Producten",
+});
+
+// Compatibility export for callers that used the old name. This is deliberately
+// not a static list of departments.
+export const HOOGVLIET_CATEGORIES = Object.freeze([PUBLIC_CATALOG_ROUTE]);
 
 export function categoryDiscoveryRoute(key) {
-  return HOOGVLIET_CATEGORIES.find(route => route.key === key) ?? null;
+  return key === PUBLIC_CATALOG_ROUTE.key ? PUBLIC_CATALOG_ROUTE : null;
+}
+
+export function isPublicCatalogDiscoveryTerm(value) {
+  return value === PUBLIC_CATALOG_ROUTE.key;
 }

@@ -159,13 +159,11 @@ test('explicit one-based source page count advances zero-based URL pages exactly
   assert.deepEqual(calls, [0, 1]); assert.equal(result.sourceExhausted, true);
 });
 
-test('fruit keeps its resolved category context and zero-based page beyond a redirect', () => {
-  const category = 'https://www.hoogvliet.com/INTERSHOP/web/WFS/org-webshop-Site/nl_NL/-/EUR/ViewTWParametricSearch-SimpleOfferSearch?PageNumber=0&PageSize=16&SearchTerm=&CategoryName=100-10003&SortingOption=Relevantie';
+test('current category route has no invented query cursor', () => {
+  const category = 'https://hoogvliet.nl/aardappelen-groente-fruit/fruit';
   const next = new URL(resolvedSearchPageURL(category, 21));
-  assert.equal(next.searchParams.get('PageNumber'), '21');
-  for (const key of ['CategoryName', 'PageSize', 'SearchTerm', 'SortingOption']) {
-    assert.equal(next.searchParams.get(key), new URL(category).searchParams.get(key));
-  }
+  assert.equal(next.pathname, '/aardappelen-groente-fruit/fruit');
+  assert.equal(next.search, '');
   assert.throws(() => resolvedSearchPageURL('https://other.example/search', 1));
 });
 
@@ -271,22 +269,16 @@ test('partial page-fetch failure and partial database confirmation preserve a ba
   }
 });
 
-test('actual navigation preserves redirected fruit category across windows and on nonzero resume', async () => {
+test('actual navigation preserves the current catalog route across load-more windows', async () => {
   const calls = []; let current;
   const page = { url: () => current, goto: async value => {
     const url = new URL(value); calls.push(url);
-    if (url.searchParams.get('SearchTerm') === 'fruit') {
-      url.searchParams.set('SearchTerm', ''); url.searchParams.set('CategoryName', '100-10003'); url.searchParams.set('PageNumber', '0');
-    }
     current = url.href;
   } };
   const resolvedRoutes = new Map();
-  await navigateSearchPage(page, 'fruit', 0, { resolvedRoutes });
-  await navigateSearchPage(page, 'fruit', 1, { resolvedRoutes });
-  await navigateSearchPage(page, 'fruit', 21, { resolvedRoutes });
-  assert.deepEqual(calls.map(url => url.searchParams.get('PageNumber')), ['0', '1', '21']);
-  assert.equal(calls[1].searchParams.get('CategoryName'), '100-10003');
-  await navigateSearchPage(page, 'fruit', 22, { resolvedRoutes: new Map() });
-  assert.equal(calls.at(-1).searchParams.get('CategoryName'), '100-10003');
-  assert.equal(new URL(current).searchParams.get('PageNumber'), '22');
+  await navigateSearchPage(page, 'catalog:root', 0, { resolvedRoutes });
+  await navigateSearchPage(page, 'catalog:root', 20, { resolvedRoutes });
+  assert.deepEqual(calls.map(url => url.pathname), ['/producten', '/producten']);
+  assert.deepEqual(calls.map(url => url.search), ['', '']);
+  assert.equal(current, 'https://hoogvliet.nl/producten');
 });

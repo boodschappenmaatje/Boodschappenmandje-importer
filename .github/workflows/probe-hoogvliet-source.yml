@@ -1,15 +1,16 @@
-name: TEMPORARY Hoogvliet source probe — READ ONLY
+name: TEMPORARY current Hoogvliet catalog probe — READ ONLY
 
-# One public growth-category fetch only. No importer, Supabase, recovery,
-# product write, database write, or authenticated/private endpoint.
+# One public catalog/category fetch with a bounded visible load-more proof.
+# No importer, Supabase, recovery, product write, database write, Zyte, or
+# authenticated/private endpoint.
 on:
   workflow_dispatch:
   push:
     branches:
-      - codex/fix-highvliet-parser-20261005
+      - codex/implement-highvliet-catalog-discovery-20261005
     paths:
       - .github/workflows/probe-hoogvliet-source.yml
-      - scripts/probe-hoogvliet-source.mjs
+      - scripts/probe-highvliet-current-catalog.mjs
       - src/hoogvliet.mjs
       - src/discovery-routes.mjs
 
@@ -22,13 +23,13 @@ concurrency:
 
 jobs:
   probe:
-    name: One public Hoogvliet listing probe — READ ONLY
+    name: Current public Hoogvliet catalog probe — READ ONLY
     outputs:
       result_label: ${{ steps.result.outputs.result_label }}
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      github.ref == 'refs/heads/codex/fix-highvliet-parser-20261005'
+      github.ref == 'refs/heads/codex/implement-highvliet-catalog-discovery-20261005'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -54,11 +55,11 @@ jobs:
         id: run_probe
         continue-on-error: true
         env:
-          PROBE_TERM: category:999999-100
-          PROBE_OUTPUT: hoogvliet-source-proof.json
+          PROBE_CATEGORY: /aardappelen-groente-fruit
+          PROBE_OUTPUT: hoogvliet-current-catalog-proof.json
         run: |
           set -uo pipefail
-          node scripts/probe-hoogvliet-source.mjs | tee hoogvliet-probe.log
+          node scripts/probe-highvliet-current-catalog.mjs | tee hoogvliet-probe.log
           probe_status=${PIPESTATUS[0]}
           cat hoogvliet-probe.log >> "$GITHUB_STEP_SUMMARY"
           printf '%s\n' 'No importer, Supabase, recovery, product write, or database write was run.' >> "$GITHUB_STEP_SUMMARY"
@@ -72,21 +73,11 @@ jobs:
           result_label=$(node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
           try {
-            const proof = JSON.parse(readFileSync("hoogvliet-source-proof.json", "utf8"));
-            const network = (proof.network ?? [])
-              .filter(record => record.type === "xhr" || record.type === "fetch")
-              .slice(0, 3)
-              .map(record => {
-                const endpoint = record.endpoint ?? {};
-                const json = record.json ?? {};
-                const shape = json.shape && typeof json.shape === "object" && !Array.isArray(json.shape)
-                  ? Object.keys(json.shape).slice(0, 20).join(",")
-                  : String(json.shape ?? "none");
-                return `${record.type}:${record.status}:${endpoint.pathname ?? "?"}?${(endpoint.queryKeys ?? []).join(",")}:objects=${json.productLikeObjects ?? 0}:skus=${(json.uniqueSKUHints ?? []).length}:urls=${(json.productURLHints ?? []).length}:keys=${shape}`;
-              })
-              .join("|");
+            const proof = JSON.parse(readFileSync("hoogvliet-current-catalog-proof.json", "utf8"));
+            const network = (proof.network ?? []).slice(0, 3)
+              .map(record => `${record.type}:${record.status}:${record.endpoint?.pathname ?? "?"}`).join("|");
             const navigation = proof.navigation ?? {};
-            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};candidates=${proof.proof?.candidateCount ?? 0};status=${navigation.initialStatus ?? "unknown"};title=${String(navigation.title ?? "").slice(0, 60)};network=${network}`;
+            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};after_load_more=${proof.proof?.afterLoadMoreCandidateCount ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};status=${navigation.categoryStatus ?? "unknown"};network=${network}`;
             process.stdout.write(label.replace(/[\r\n]/g, " ").slice(0, 240));
           } catch {
             process.stdout.write("classification=NO_PROOF;candidates=0");
@@ -105,7 +96,7 @@ jobs:
         with:
           name: hoogvliet-source-proof
           path: |
-            hoogvliet-source-proof.json
+            hoogvliet-current-catalog-proof.json
             hoogvliet-probe.log
           if-no-files-found: error
 

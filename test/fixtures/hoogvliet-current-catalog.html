@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="nl">
+  <head><meta charset="utf-8"><title>Producten - Hoogvliet</title></head>
+  <body>
+    <nav aria-label="Productcatalogus">
+      <a href="/producten">Producten</a>
+      <a href="/aardappelen-groente-fruit">Aardappelen, groente, fruit</a>
+      <a href="/aardappelen-groente-fruit/fruit">Fruit</a>
+    </nav>
+    <main id="catalog-listing">
+      <article class="product-card">
+        <a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a>
+        <span class="package-size">1 stuk</span><span class="price">€ 0,69</span>
+        <img src="https://hoogvliet.nl/images/komkommer.jpg" alt="Hoogvliet Komkommer">
+      </article>
+      <article class="product-card">
+        <a href="/product/blauwe-bessen-081222000"><h2>Blauwe bessen</h2></a>
+        <span class="package-size">300 gram</span><span class="price">€ 4,39</span>
+        <img src="https://hoogvliet.nl/images/bessen.jpg" alt="Blauwe bessen">
+      </article>
+      <button type="button" id="load-more">Producten laden</button>
+    </main>
+    <script>
+      document.querySelector('#load-more').addEventListener('click', () => {
+        document.querySelector('#load-more').insertAdjacentHTML('beforebegin', `
+          <article class="product-card">
+            <a href="/product/trostomaten-verpakt-060936000"><h2>Trostomaten verpakt</h2></a>
+            <span class="package-size">500 gram</span><span class="price">€ 2,29</span>
+            <img src="https://hoogvliet.nl/images/tomaten.jpg" alt="Trostomaten verpakt">
+          </article>`);
+        document.querySelector('#load-more').remove();
+      });
+    </script>
+  </body>
+</html>
