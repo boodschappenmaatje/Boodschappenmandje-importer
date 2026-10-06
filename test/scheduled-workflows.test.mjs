@@ -39,6 +39,7 @@ test('primary workflow uses valid UTC cron entries and keeps the existing jobs',
   assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
   assert.match(primary, /npm run import:daily/);
   assert.match(primary, /update_mode="\$\{\{ inputs\.update_mode \}\}"/);
+  assert.match(primary, /workflow_dispatch:/);
 });
 
 test('04:00 UTC is the 06:00 Dutch trigger during CEST', () => {
@@ -94,7 +95,8 @@ test('daily cap, persistent day state, retries, price and weekly schedules stay 
   assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
   assert.match(primary, /npm run import:daily/);
 
-  assert.deepEqual(cronEntries(retry), ['17 8,13,18 * * *']);
+  assert.deepEqual(cronEntries(retry), ['17 4 * * *', '17 5 * * *', '17 8,13,18 * * *']);
+  assert.match(retry, /Vaste UTC-watchdogkandidaten/);
   assert.match(retry, /npm run --silent inspect:daily/);
   assert.match(retry, /npm run import:daily/);
   assert.match(retry, /DAILY_NEW_PRODUCT_TARGET: "400"/);

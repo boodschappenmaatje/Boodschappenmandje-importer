@@ -2,6 +2,12 @@ name: Hoogvliet dagelijkse catalogusretry
 
 on:
   schedule:
+    # Vaste UTC-watchdogkandidaten rond 06:00 Europe/Amsterdam. Beide zijn
+    # veilig: buiten het lokale dagvenster doet inspect:daily niets; binnen
+    # het venster maakt de gewone claim een ontbrekende dagjob aan en voorkomt
+    # de database een tweede job/attempt.
+    - cron: "17 4 * * *"
+    - cron: "17 5 * * *"
     # Drie kansen na de primaire import om 06:00 en bewaking om 08:30 NL.
     # 08:17/13:17/18:17 UTC = 10:17/15:17/20:17 CEST of
     # 09:17/14:17/19:17 CET. Minstens vijf uur tussen retries; de

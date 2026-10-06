@@ -432,6 +432,40 @@ test("nieuwe Amsterdamse dag start eigen job, oude onvolledige dag blokkeert nie
   assert.equal(result.run, true);
 });
 
+test("watchdog maakt ontbrekende dagjob via normale claim aan en tweede trigger is een no-op", async () => {
+  let currentJob = null;
+  let attempts = 0;
+  const result = await runDailyCatalogAttempt({ ...config, dailyEndHour: 23 }, logger, {
+    now: () => new Date("2026-10-06T04:17:00Z"),
+    fetchAttempts: async () => [],
+    hasProductTypeColumn: async () => true,
+    claim: async (_config, input) => {
+      attempts += 1;
+      if (currentJob) return { claimed: false, reason: "target_reached", job: currentJob };
+      currentJob = {
+        id: "watchdog-daily-job", stateKey: input.stateKey, jobDate: input.jobDate,
+        targetNewProducts: 400, newProductsCollected: 0, remainingTarget: 400,
+        status: "running", attemptCount: 1, nextRetryAt: null,
+      };
+      return { claimed: true, reason: "claimed", attemptId: "watchdog-attempt-1", lockToken: "watchdog-lock-1", job: currentJob };
+    },
+    runGrowth: async () => ({ actualGrowth: 400, candidatesViewed: 400, sourceExhausted: false }),
+    finish: async (_config, input) => ({ ...currentJob, newProductsCollected: 400, remainingTarget: 0, status: "target_reached", attemptCount: 1, nextRetryAt: null }),
+  });
+  assert.equal(result.attempted, true);
+  assert.equal(result.job.targetNewProducts, 400);
+  assert.equal(result.job.newProductsCollected, 400);
+  assert.equal(result.job.status, "target_reached");
+  const second = await runDailyCatalogAttempt({ ...config, dailyEndHour: 23 }, logger, {
+    now: () => new Date("2026-10-06T05:17:00Z"),
+    fetchJob: async () => currentJob,
+    claim: async () => ({ claimed: false, reason: "target_reached", job: currentJob }),
+  });
+  assert.equal(second.attempted, false);
+  assert.equal(second.reason, "target_reached");
+  assert.equal(attempts, 1);
+});
+
 test("een lopende attempt en een dubbele retrytrigger worden geweigerd", () => {
   const running = {
     status: "running", newProductsCollected: 137, targetNewProducts: 400,
