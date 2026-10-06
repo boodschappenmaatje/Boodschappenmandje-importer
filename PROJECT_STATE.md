@@ -1,28 +1,45 @@
-# Checkpoint 37 — PR #53 Production bevestigd; catalogusdekkingmeting begrensd — 6 oktober 2026
+# Checkpoint 38 — Hoogvliet-catalogus gemeten, maar crawl bleef partieel — 6 oktober 2026
 
-## PR #53 / Production
-- PR #53 is gemerged om 07:42 UTC; mergecommit is `3fc161a214bf35d9721d73a31312a004f801ff5d`.
-- Vercel Production deployment `dpl_CjAfdwsLLBPioLJchJfJseybWkBt` staat READY en is gekoppeld aan dezelfde main-commit. De gecombineerde commitstatus toont Vercel success. De Production-homepage is via de Vercel-main-alias opgehaald en leverde de app-HTML; de eerder gebruikte eigen domeinnaam gaf geen bruikbaar antwoord.
-- PR #53 bevat de stale-detail-404-hotfix; die staat dus op main en Production.
+## PR #53 en Production
+- PR #53 is gemerged; mergecommit en actuele main-head zijn `3fc161a214bf35d9721d73a31312a004f801ff5d`.
+- De Vercel Production-deployment `dpl_CjAfdwsLLBPioLJchJfJseybWkBt` staat READY op deze commit. De Production-homepage retourneerde de app-HTML (HTTP 200).
+- De stale-productdetail-404-hotfix uit PR #53 staat op main/Production.
+- Dit checkpoint is bijgewerkt op de bestaande Draft documentatie-PR #54; niet gemerged.
+
+## Methodiek en crawlbewijs
+- De meting gebruikte de current-main discovery van `hoogvliet.nl/producten` via dynamische runtimecategorieën, publieke categorie-/subcategorielijsten en de publieke GraphQL `GetProducts`-paginatie waar de code die gebruikt.
+- Geen legacy Intershop productdiscovery, Zyte, Supabase write, importer, daily job, recovery of product-/prijswrite uitgevoerd.
+- Tijdelijke read-only proof Actions-run **37436942666**, commit `99029b17bb5815772ec70c11f3facf11482167f3` van de proof-harness; de discovery-implementatie is dezelfde code als main. De run eindigde groen en publiceerde de volledige kandidaatset.
+- De run vond **20** rootcategorieën, bezocht **5** categorie-/listingroutes (6 routes totaal inclusief root) en las **102** listingpagina's.
+- Listingresultaat vóór SKU-dedupe: **1.473** producthits; **1.470** unieke SKU's; **3** dubbele product-URL-hits; **0** cross-category SKU-duplicaten; **0** ongeldige/stale listingkandidaten volgens bestaande bronclassificatie.
+- Collector source errors: **0**; source challenges: **0**; documentnavigatie-404's: **0**. De browsernetwerksamenvatting bevatte **149** HTTP-foutresponses over alle fetch/XHR-resources, niet allemaal als Hoogvliet-catalogusfouten geclassificeerd; de collector legde geen relevante source error vast. Er waren **785** publieke GraphQL-requests.
+- De crawl eindigde **niet** op bronuitputting: `sourceExhausted=false`, `stallReason=category_listing_stagnated`. De categoriebezoeker stopte daardoor vóór het uitlezen van de rest van de routequeue.
+- Betrouwbaarheid: **PARTIAL_COVERAGE**. Van de 20 runtime rootcategorieën zijn minimaal 15 niet bezocht. Candidate records kwamen uit deze vier routes: `/aardappelen-groente-fruit`, `/vlees-vis-vegetarisch`, `/kaas-vleeswaren-tapas`, `/verse-maaltijden-salades`. Er zijn 16 overige rootcategorieën zonder kandidaatregels; de proof bewaarde niet welke ene daarvan wel bezocht is zonder kandidaat, zodat de overige 15 niet exact per naam uit dit artifact zijn te onderscheiden. De overige routes zijn dus onbezocht of niet met kandidaten bevestigd. Er zijn geen productdetailrequests gedaan voor de volledige catalogus; de daily collector/detail-check was een aparte begrensde read-only check van 20 pagina's, 83 unieke kandidaten, 0 stale-detail-404 en 0 source errors.
+- De volledige actuele catalogusgrootte en volledige set A zijn **niet vastgesteld**. De 1.470 zijn uitsluitend de unieke SKU's uit het gedeeltelijk doorlopen listingdeel.
 
 ## Read-only Production-snapshot
-- Supabase Production `pjcqxufvbkkjehituzxz`, uitsluitend met read-only SELECT gecontroleerd op 6 oktober:
-  - productrecords (Hoogvliet): **7.543**
-  - unieke bruikbare SKU's: **7.543**
-  - dubbele SKU-groepen: **0**
-  - records zonder bruikbare SKU: **0**
-  - product_prices-records: **7.543**
-- De bestaande dagjob van 6 oktober was `retry_scheduled`, 0/400, attempt_count 1, recovery_count 0, next_retry_at 08:10:38 UTC. Deze status is alleen gelezen; geen retry, workflowdispatch of import gestart.
+- Productrecords (Hoogvliet): **7.543**.
+- Unieke bruikbare Hoogvliet-SKU's: **7.543**.
+- Duplicate SKU-groepen: **0**.
+- Records zonder bruikbare SKU: **0**.
+- `product_prices`-records: **7.543**.
+- Alleen read-only SELECT gebruikt.
 
-## Catalogusdekking — PARTIAL_COVERAGE
-- `PROJECT_STATE.md` was eerst gelezen. De actuele main-discovery is de Hoogvliet publieke root→runtime-categorieën→listing/GraphQL-paginatie v4; legacy Intershop en Zyte zijn niet gebruikt.
-- De actuele publieke rootpagina toonde 20 hoofdcategorieën. De bestaande bounded proof op PR #53-head rapporteerde 20 dynamische categorieën en 400 unieke kandidaten over 20 pagina's. Dit is begrensd bewijs, geen volledige cataloguscrawl.
-- Deze run heeft geen volledige actuele SKU-set A verzameld: de workspace had geen repository-checkout of lokale discovery-runner en de proofworkflow kon niet gestart worden zonder de verboden handmatige workflowdispatch. Handmatig browsen is geen equivalent bewijs van de vereiste pagination/GraphQL-discoveryflow.
-- Daardoor zijn A, A∩B, A−B, B−A, ontbrekende SKU-lijst en coveragepercentage **niet vastgesteld**. De 7.543 Production-SKU's zijn de snapshot B-grootte; ze mogen niet als actuele catalogusgrootte worden geïnterpreteerd.
-- Betrouwbaarheidsclassificatie: **PARTIAL_COVERAGE**. Er is geen verantwoorde telling van resterende imports of benodigde batches en geen onderbouwde beslissing over de 400-nieuw-per-dag-eis.
-- Eerstvolgende actie: voer in de projectcheckout een expliciet read-only volledige catalogusproof uit via de bestaande main-discoverycode, zonder `workflow_dispatch`, import, databasewrite of wijziging aan parser/scraper. Werk daarna de exacte setvergelijking en importstrategie bij.
+## Setvergelijking — uitsluitend het waargenomen crawldeel
+Laat `A_partial` de 1.470 unieke SKU's uit de bezochte routes zijn; dit is niet de volledige actuele catalogusset A. Laat B de actuele Production-set van 7.543 unieke SKU's zijn.
+- Waargenomen `A_partial ∩ B`: **1.277**.
+- Waargenomen `A_partial − B`: **193** producten die in bezochte listingroutes stonden maar niet in Production.
+- `B − A_partial`: **6.266** Production-SKU's die niet in deze gedeeltelijke crawl zijn gevonden. Dit betekent uitsluitend “niet gevonden in de gedeeltelijke crawl”; geen discontinued/stale-conclusie of cleanup.
+- Overlap op de waargenomen subset: **86,87%**. Dit percentage is **geen** totale Hoogvliet-cataloguscoverage.
+- De 193 bekende ontbrekende kandidaten passen als waargenomen subset in één batch van maximaal 400. Het totale aantal ontbrekende producten en het volledige aantal benodigde batches zijn **onbekend** zolang de crawl PARTIAL is.
+- Volledige ontbrekende kandidaatregels staan in het meetrapport-artifact `hoogvliet-coverage-partial-2026-10-06.xlsx`.
 
-# Checkpoint 36 — daily root-404 hotfix onderzocht en PR voorbereid — 6 oktober 2026
+## 400-nieuw-per-dag en vervolg
+- Deze partiële meting kan niet bepalen of er in de volledige catalogus nog ≥400 ontbreken, of de totale dekking vrijwel compleet is. Daarom is de 400-nieuw-per-dag-regel **niet gewijzigd** en is er geen import gestart.
+- Na een betrouwbare volledige meting verdient dagelijks diffen de voorkeur: actuele SKU's vergelijken, alleen werkelijk nieuwe SKU's toevoegen, bestaande prijzen/beschikbaarheid actualiseren en niet-gevonden SKU's signaleren; geen kunstmatige 400 nieuwe SKU's eisen. Dit is advies, geen gewijzigde projectregel.
+- Eerstvolgende actie: onderzoek in de bestaande discoveryroute het stagnatiesignaal `category_listing_stagnated` en de achterblijvende categoriequeue via een aparte toegestane codewijzigingsopdracht; daarna opnieuw een read-only volledigheidsmeting. Dit werk is hier niet gestart.
+
+ — daily root-404 hotfix onderzocht en PR voorbereid — 6 oktober 2026
 
 ## Exacte oorzaak en minimale fix
 
