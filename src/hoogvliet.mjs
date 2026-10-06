@@ -13,6 +13,58 @@ export const PUBLIC_CATALOG_GRAPHQL_URL = `${BASE_URL}/api/graphql`;
 export const PUBLIC_CATALOG_GRAPHQL_QUERY = `query GetProducts($pageSize: Int! $currentPage: Int! $filters: ProductAttributeFilterInput! $sort: ProductAttributeSortInput) { products(pageSize: $pageSize currentPage: $currentPage filter: $filters sort: $sort) { items { ... on ProductInterface { id id stock_status name url_key is_promotion promotion_meta_data { korting_label raw_discount_label { text price full_label } valid_from valid_to promotion_id prijs promotie_prijs } metadata catch_weight_item_code webshop: metafield(key: "webshop") { value } price_range { maximum_price { final_price { currency value } } minimum_price { regular_price { value currency } final_price { currency value } discount { percent_off } } } } } } }`;
 const NORMAL_SOURCE_READY_TIMEOUT_MS = 12_000;
 const SECURITY_CHECK_READY_TIMEOUT_MS = 45_000;
+const SENSITIVE_QUERY_KEYS = new Set([
+  "authorization", "cookie", "key", "query", "token", "variables",
+]);
+
+function safeSourceURL(raw) {
+  try {
+    const url = new URL(raw, BASE_URL);
+    for (const key of [...url.searchParams.keys()]) {
+      if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) url.searchParams.set(key, "[REDACTED]");
+    }
+    return url.href;
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
+function sourceRequestContext(page, fallback = {}) {
+  const request = page.__hoogvlietLastRequest ?? {};
+  return {
+    routeKey: fallback.routeKey ?? page.__hoogvlietRequestContext?.routeKey ?? "unknown",
+    requestType: request.method ?? fallback.requestType ?? "GET",
+    requestURL: fallback.requestURL ?? request.url ?? null,
+    finalURL: fallback.finalURL ?? request.finalURL ?? page.url?.() ?? null,
+    cursor: fallback.cursor ?? page.__hoogvlietRequestContext?.cursor ?? null,
+    page: fallback.page ?? page.__hoogvlietRequestContext?.page ?? null,
+    categoryURL: fallback.categoryURL ?? page.__hoogvlietRequestContext?.categoryURL ?? null,
+    upstreamStatus: fallback.upstreamStatus ?? request.status ?? page.__hoogvlietLastResponseStatus ?? null,
+    operationName: fallback.operationName ?? null,
+  };
+}
+
+function sourceContextSummary(context, classification) {
+  return [
+    `route=${context.routeKey}`,
+    `request_type=${context.requestType}`,
+    `request_url=${safeSourceURL(context.requestURL ?? context.finalURL)}`,
+    context.finalURL ? `final_url=${safeSourceURL(context.finalURL)}` : null,
+    `cursor=${context.cursor ?? "-"}`,
+    `page=${context.page ?? "-"}`,
+    context.categoryURL ? `category=${safeSourceURL(context.categoryURL)}` : null,
+    `upstream_http_status=${context.upstreamStatus ?? "unknown"}`,
+    context.operationName ? `graphql_operation=${context.operationName}` : null,
+    `classification=${classification}`,
+  ].filter(Boolean).join(" | ");
+}
+
+function sourceUnavailableError(page, message, fallback = {}) {
+  const context = sourceRequestContext(page, fallback);
+  const error = new SourceUnavailableError(`${message} | ${sourceContextSummary(context, "source_unavailable")}`);
+  error.sourceRequest = context;
+  return error;
+}
 
 // One shared serial navigation budget for listing and detail pages. Browser
 // subresources remain normal; no identity/header changes or challenge handling.
@@ -25,14 +77,26 @@ export function createSourcePacer({ delayMs = 2000, now = Date.now,
   };
 }
 const sourcePacers = new WeakMap();
-async function sourceGoto(page, url, options) {
+async function sourceGoto(page, url, options, requestContext = {}) {
+  page.__hoogvlietRequestContext = { ...requestContext, requestURL: url };
   await sourcePacers.get(page)?.();
   try {
     const response = await page.goto(url, options);
     page.__hoogvlietLastResponseStatus = response?.status?.() ?? null;
+    const request = response?.request?.();
+    page.__hoogvlietLastRequest = {
+      method: request?.method?.() ?? "GET",
+      url: request?.url?.() ?? url,
+      finalURL: response?.url?.() ?? page.url?.() ?? url,
+      status: response?.status?.() ?? null,
+    };
     return response;
   } catch (error) {
     page.__hoogvlietLastResponseStatus = null;
+    page.__hoogvlietLastRequest = {
+      method: "GET", url, finalURL: page.url?.() ?? url, status: null,
+    };
+    error.sourceRequest = sourceRequestContext(page);
     throw error;
   }
 }
@@ -348,7 +412,12 @@ async function waitForCatalogSource(page, options = {}) {
   const evidence = await readCatalogPageEvidence(page);
   const classification = classifySourcePageEvidence(evidence);
   if (classification === "challenge") throw new SourceBlockedError("Hoogvliet blokkeert de catalogusbrowser met een toegangscontrole of CAPTCHA.");
-  if (classification === "source_unavailable") throw new SourceUnavailableError(`Hoogvliet gaf een tijdelijke catalogusbronfout (HTTP ${evidence.responseStatus}).`);
+  if (classification === "source_unavailable") {
+    throw sourceUnavailableError(page,
+      `Hoogvliet gaf een tijdelijke catalogusbronfout (HTTP ${evidence.responseStatus}).`,
+      options.requestContext,
+    );
+  }
   if (classification === "parser_structure_changed") {
     throw new CategoryStructureChangedError("Hoogvliet-catalogus bevat geen herkenbare categorie- of productstructuur.");
   }
@@ -384,9 +453,15 @@ async function detectBlocking(page, expectedSelector = null) {
   return evidence;
 }
 
-function throwForSourceEvidence(evidence) {
+function throwForSourceEvidence(evidence, page = null, requestContext = {}) {
   const classification = classifySourcePageEvidence(evidence);
   if (classification === "source_unavailable") {
+    if (page) {
+      throw sourceUnavailableError(page,
+        `Hoogvliet gaf een tijdelijke bronfout (HTTP ${evidence.responseStatus}).`,
+        requestContext,
+      );
+    }
     throw new SourceUnavailableError(`Hoogvliet gaf een tijdelijke bronfout (HTTP ${evidence.responseStatus}).`);
   }
   if (classification === "parser_structure_changed") {
@@ -413,7 +488,7 @@ export async function waitForSourceContent(page, expectedSelector, options = {})
   await waitForExpectedContent(options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS)
     .catch(() => {});
   let evidence = await detectBlocking(page, expectedSelector);
-  let classification = throwForSourceEvidence(evidence);
+  let classification = throwForSourceEvidence(evidence, page, options.requestContext);
   if (classification !== "security_check") {
     return { securityCheckObserved: false, evidence: { ...evidence, classification } };
   }
@@ -422,7 +497,7 @@ export async function waitForSourceContent(page, expectedSelector, options = {})
   await waitForExpectedContent(options.securityTimeoutMs ?? SECURITY_CHECK_READY_TIMEOUT_MS)
     .catch(() => {});
   evidence = await detectBlocking(page, expectedSelector);
-  classification = throwForSourceEvidence(evidence);
+  classification = throwForSourceEvidence(evidence, page, options.requestContext);
   if (classification === "security_check") {
     throw new SourceBlockedError(
       "De normale Hoogvliet-veiligheidscontrole (Incapsula) werd niet binnen de wachttijd afgerond.",
@@ -566,7 +641,7 @@ async function fetchPublicCatalogItems(page, skus) {
       const response = await fetch(url.href, { credentials: "same-origin" });
       let body = null;
       try { body = await response.json(); } catch {}
-      return { status: response.status, body };
+      return { status: response.status, body, requestURL: url.href, finalURL: response.url };
     } catch (error) {
       return { status: 0, error: error?.message ?? "graphql_fetch_failed" };
     }
@@ -579,8 +654,11 @@ async function fetchPublicCatalogItems(page, skus) {
     throw new SourceBlockedError("Hoogvliet blokkeert de openbare catalogus-API.");
   }
   if (response.status >= 400 || response.status === 0) {
-    throw new SourceUnavailableError("Hoogvliet gaf een catalogus-API-fout (HTTP "
-      + (response.status || "onbekend") + ").");
+    throw sourceUnavailableError(page,
+      "Hoogvliet gaf een catalogus-API-fout (HTTP " + (response.status || "onbekend") + ").",
+      { ...page.__hoogvlietRequestContext, requestType: "GET", requestURL: response.requestURL,
+        finalURL: response.finalURL, upstreamStatus: response.status, operationName: "GetProducts" },
+    );
   }
   if (Array.isArray(response.body?.errors) && response.body.errors.length > 0) {
     throw new ParserStructureChangedError("De actuele Hoogvliet-catalogus-API heeft een gewijzigde productschema-respons.");
@@ -640,10 +718,15 @@ export async function collectCatalogListing(page, routeURL, {
   normalTimeoutMs,
 } = {}) {
   await withTransientNavigationRetry(
-    () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+    () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
+      routeKey: "catalog:category", cursor: startWindow, page: startWindow, categoryURL: routeURL,
+    }),
     { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
   );
-  await waitForCatalogSource(page, { normalTimeoutMs });
+  await waitForCatalogSource(page, {
+    normalTimeoutMs,
+    requestContext: { routeKey: "catalog:category", cursor: startWindow, page: startWindow, categoryURL: routeURL },
+  });
   const routeCandidates = new Map();
   const windows = [];
   let loadMoreCycles = 0;
@@ -685,10 +768,16 @@ export async function collectCatalogListing(page, routeURL, {
     const nextURL = await findNextCatalogPageURL(page, page.url());
     if (!nextURL || visitedListingURLs.has(nextURL)) break;
     await withTransientNavigationRetry(
-      () => sourceGoto(page, nextURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+      () => sourceGoto(page, nextURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
+        routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size,
+        categoryURL: routeURL,
+      }),
       { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
     );
-    await waitForCatalogSource(page, { normalTimeoutMs });
+    await waitForCatalogSource(page, {
+      normalTimeoutMs,
+      requestContext: { routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size, categoryURL: routeURL },
+    });
     visitedListingURLs.add(nextURL);
   }
 
@@ -735,12 +824,19 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     if (visitedCategories.has(routeURL)) continue;
     visitedCategories.add(routeURL);
     await withTransientNavigationRetry(
-      () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }),
+      () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
+        routeKey: routeURL === rootURL ? "catalog:root" : "catalog:category",
+        cursor: startWindow, page: startWindow, categoryURL: routeURL === rootURL ? null : routeURL,
+      }),
       { maxRetries: options.navigationRetries ?? 2, onRetry: options.onRetry, wait: ms => page.waitForTimeout(ms) },
     );
     await waitForCatalogSource(page, {
       expectCategoryLinks: routeURL === rootURL,
       normalTimeoutMs: options.normalTimeoutMs,
+      requestContext: {
+        routeKey: routeURL === rootURL ? "catalog:root" : "catalog:category",
+        cursor: startWindow, page: startWindow, categoryURL: routeURL === rootURL ? null : routeURL,
+      },
     });
     const childRoutes = await extractCatalogCategoryLinks(page);
     for (const child of childRoutes) {
@@ -779,7 +875,12 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       if (!normalized) { invalidCandidates += 1; continue; }
       if (seenURLs.has(normalized.sourceURL)) { duplicateCandidates += 1; continue; }
       seenURLs.add(normalized.sourceURL);
-      allCandidates.push(normalized);
+      allCandidates.push({
+        ...normalized,
+        categoryURL: routeURL,
+        discoveryCursor: startWindow + globalWindowCursor,
+        discoveryPage: startWindow + globalWindowCursor,
+      });
     }
     if (!listing.sourceExhausted && pagesFetched >= maxPages) { sourceExhausted = false; break; }
   }
@@ -868,7 +969,9 @@ export async function navigateSearchPage(page, term, pageNumber = 0, options = {
     );
   }
   const route = knownRoute ? resolvedSearchPageURL(knownRoute, pageNumber) : searchURL(term, pageNumber);
-  await sourceGoto(page, route, { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await sourceGoto(page, route, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
+    routeKey: term, cursor: pageNumber, page: pageNumber,
+  });
   const category = categoryDiscoveryRoute(term);
   if (category && new URL(page.url()).pathname !== category.path) verifyCategorySearchRoute(page.url(), category);
   if (routes) {
@@ -891,7 +994,9 @@ async function searchOnce(page, term, pageNumber = 0, options = {}) {
 }
 
 async function searchUsingVisibleForm(page, term, options = {}) {
-  await sourceGoto(page, BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 });
+  await sourceGoto(page, BASE_URL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
+    routeKey: "search:home",
+  });
   await waitForSourceContent(page, "input[name='SearchTerm'], input[placeholder*='Waar ben je' i]", {
     ...options,
     normalTimeoutMs: 5_000,
@@ -1135,8 +1240,26 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     if (diagnostics) diagnostics.reason = reason;
     return null;
   };
-  await sourceGoto(page, candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 });
-  await waitForSourceContent(page, "h1");
+  const requestContext = {
+    routeKey: candidate.searchTerm ?? "catalog:detail",
+    cursor: candidate.discoveryCursor ?? null,
+    page: candidate.discoveryPage ?? null,
+    categoryURL: candidate.categoryURL ?? null,
+  };
+  await sourceGoto(page, candidate.sourceURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, requestContext);
+  // A stale listing card can legitimately outlive its product page. It is an
+  // invalid detail candidate, not a failure of the catalog source. Continue
+  // the bounded discovery window and let the normal invalid-detail ledger
+  // account for it.
+  if (page.__hoogvlietLastResponseStatus === 404) return fail("notFound");
+  try {
+    await waitForSourceContent(page, "h1", { requestContext });
+  } catch (error) {
+    if (error?.code === "source_unavailable" && page.__hoogvlietLastResponseStatus === 404) {
+      return fail("notFound");
+    }
+    throw error;
+  }
   const details = await extractProductDetails(page);
   if (!details) return fail("notFound");
   if (details.sku !== candidate.sku || !isValidSKU(details.sku)) return fail("invalidProduct");

@@ -102,6 +102,21 @@ test("detail validation remains authoritative for SKU, package and positive pric
   }
 });
 
+test("a stale product detail HTTP 404 is a safe invalid-detail rejection", async () => {
+  const product = fixture.products[0];
+  const page = {
+    url: () => product.sourceURL,
+    goto: async url => ({
+      status: () => 404,
+      url: () => url,
+      request: () => ({ method: () => "GET", url: () => url }),
+    }),
+  };
+  const diagnostics = {};
+  assert.equal(await validateCandidate(page, product, diagnostics), null);
+  assert.equal(diagnostics.reason, "notFound");
+});
+
 test("all proven current listing candidates can be validated without persistence", async () => {
   const result = await collectGrowthCandidates(settings, {
     findCandidates: async () => ({ candidates: fixture.products, rawCandidates: 15, pagesFetched: 1, sourceExhausted: true }),

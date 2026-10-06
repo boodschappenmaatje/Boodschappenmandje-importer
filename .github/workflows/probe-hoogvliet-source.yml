@@ -5,9 +5,15 @@ name: TEMPORARY current Hoogvliet catalog probe — READ ONLY
 # authenticated/private endpoint.
 on:
   workflow_dispatch:
+    inputs:
+      max_pages:
+        description: "Begrensd aantal catalogus-listingpagina's voor read-only bewijs"
+        required: false
+        default: "2"
+        type: string
   push:
     branches:
-      - codex/fix-highvliet-root-discovery-20261005
+      - codex/hotfix-daily-root-404-20261006
     paths:
       - .github/workflows/probe-hoogvliet-source.yml
       - scripts/probe-highvliet-current-catalog.mjs
@@ -29,9 +35,9 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      github.ref == 'refs/heads/codex/fix-highvliet-root-discovery-20261005'
+      github.ref == 'refs/heads/codex/hotfix-daily-root-404-20261006'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - name: Checkout exact event commit
         uses: actions/checkout@v4
@@ -55,7 +61,8 @@ jobs:
         id: run_probe
         continue-on-error: true
         env:
-          PROBE_MAX_PAGES: 2
+          PROBE_MAX_PAGES: ${{ inputs.max_pages || '2' }}
+          PROBE_DAILY_MAX_PAGES: ${{ inputs.max_pages || '2' }}
           PROBE_OUTPUT: hoogvliet-current-catalog-proof.json
         run: |
           set -uo pipefail

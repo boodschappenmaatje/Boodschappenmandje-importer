@@ -1,3 +1,24 @@
+# Checkpoint 36 — daily root-404 hotfix onderzocht en PR voorbereid — 6 oktober 2026
+
+## Exacte oorzaak en minimale fix
+
+- Gestart vanaf actuele `origin/main` **33aeb68720397990305e33919a6f5fdfae365f18** op branch `codex/hotfix-daily-root-404-20261006`.
+- De Production-log van daily attempt `21cd0a4d-e34b-4639-a8f3-228aceb53539` bewaart geen request-URL. De tellerbalans **787 raw hits = 380 bestaande + 55 invalid detail + 352 technisch niet verwerkt** bewijst dat de fout ná listingdiscovery ontstond tijdens de volgende **GET product-detailnavigatie**, terwijl de fout alleen met `term=catalog:root` werd gelabeld. De read-only proof valideerde geen details en kon deze request dus niet raken.
+- Een productdetail-HTTP **404** is geen globale bronuitval: de listing kan een stale/verdwenen kaart bevatten. `validateCandidate` boekt die request nu veilig als `notFound`/`invalidDetail` en gaat door. Root-, categorie-, GraphQL- en echte navigatie-404’s blijven `source_unavailable`.
+- Elke toekomstige bronfout bevat nu veilig: route key, request type, gesaniteerde URL, final URL, cursor/page, categorie, upstream-status, classificatie en GraphQL operation. Querywaarden voor `query`, `variables`, tokens, cookies en keys worden geredigeerd.
+
+## Read-only bewijs en gates
+
+- Normale bounded proof Actions-run **37425920472** op head `514b6798f7aa93421c824ec70e3800a2a3e91c7f`: groen; **20** dynamische categorieën, **2** routes, **40** kandidaten, **2** pagina’s, geen legacy discovery.
+- Begrensde 20-page request-audit Actions-run **37425928361**: groen; **20** pagina’s, **400** unieke kandidaten, **20** dynamische categorieën, `navigation404s=[]`; dezelfde daily collector/detail-path: **91** unieke kandidaten, **2** pagina’s, `sourceErrors=0`.
+- Geen Production-import, Supabase-write, recovery, supersede, migration, merge of deploy uitgevoerd. De optionele proofworkflow gebruikt alleen publieke requests, geen Supabase of `onBatch`.
+- Lokale gates: `npm test` **356/356**, `npm run check` groen, `npm run test:postgres` **28/28**, `git diff --check` groen. Nieuwe regressies dekken stale detail-404, requestcontext en bestaande root/category/pagination/dedupe/detail/state-machine-contracten.
+
+## Releasegrens
+
+- Code commits: `732abc31ca8ad75bf1d1e443cb65cbbc8571a5ce` en `514b6798f7aa93421c824ec70e3800a2a3e91c7f`; branch is gepusht, PR volgt. De historische concrete product-slug kan niet eerlijk worden gerapporteerd omdat Production-run 37421689708 die context vóór deze hotfix niet logde; de nieuwe observability maakt een volgende echte bronfout exact reproduceerbaar.
+- Na PR/releasegate stoppen. Geen live import. Alleen na releasegate de normale geplande retry/state-machine beoordelen volgens de expliciete vervolginstructie.
+
 # Checkpoint 35 — PR #52 watchdog Production en daily funnel — 6 oktober 2026
 
 ## Release
