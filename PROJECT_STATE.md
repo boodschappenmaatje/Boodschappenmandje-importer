@@ -1,3 +1,28 @@
+# Checkpoint 30 — PR #51 migration, release en 06:00 scheduler — 6 oktober 2026
+
+## Migration en runner
+
+- PR #51 is via de normale squashstrategie gemerged. Pre-merge head: `bc581febcd50b0cfc46378854b01d1d5f0bedea2`; squashmergecommit: `ef3094aa2688ea8c51840336521419500a2682fa`.
+- De begrensde runner op feature-head `541637b4a1b96be15406163758f3c8b180b1a1f3` voerde run **37417603096** uit. Verse exacte precheck en apply-job waren groen; Supabase CLI **2.119.0** paste uitsluitend `20261005230000_supersede_failed_daily_catalog_job.sql) toe. De runner-postcheck bevestigde lokale/remote migrationhistory als exacte match en RPC, SECURITY DEFINER/search_path, service_role-grants, auditvelden en indexes.
+- Read-only postcheck: migrationversie `20261005230000` staat exact eenmaal; er is geen andere versie vanaf die timestamp. De RPC-signature met 13 argumenten en jsonb-return klopt, `search_path=public` en SECURITY DEFINER zijn actief; EXECUTE is beschikbaar voor service_role en niet voor anon/authenticated. Auditstructuur en alle vier indexes bestaan; audit heeft 0 rijen. Geen product-, prijs- of jobstate-mutatie door de migration.
+- De runner is direct daarna via commit `bc581febcd50b0cfc46378854b01d1d5f0bedea2` weer op `MIGRATION_ARMED=false gezet. Disarmed run **37417675986** faalde read-only bij de precheck omdat de checker na toepassing nog “exact één target local-only” verwacht; de apply-job werd **SKIPPED**. Dit was geen tweede apply of databasewrite. De remote Production-history en runnerconfig zijn afzonderlijk read-only op de toegepaste/disarmed toestand gecontroleerd.
+- PR #51 bevat de bedoelde fresh-daily supersede/state-machinewijziging; de bestaande target **400** en PR #45–#50-functionaliteit zijn behouden.
+
+## Merge en Production
+
+- PR #51 releasegate op disarmed head: volledig core/regression/PostgreSQL/build-CI-run **37417680594** geslaagd, Vercel Preview `dpl_6deQk9vUWuF5ExCxb568QfV7Rigd` READY, mergeable. De disarmed migration-run hierboven was een aparte read-only precheck en geen verplichte core-CI-gate.
+- Main-head na merge: `ef3094aa2688ea8c51840336521419500a2682fa`. Main-CI-run **37418053738** geslaagd.
+- Automatische Vercel Production-deployment `dpl_A1msfMJgg5m2e3NYFejPnsrCPV5v`, exact gekoppeld aan mergecommit `ef3094aa2688ea8c51840336521419500a2682fa`, werd **READY**. Smoke op de deployment-URL: homepage HTTP **200**.
+- Main bevat `catalog:root` met root `/producten`, actuele Hoogvliet root→categorie-discovery en strategy fingerprint `hoogvliet-public-catalog-api-pagination-v4`. Geen legacy Intershop-discovery.
+
+## 06:00 daily scheduler — feitelijke uitkomst
+
+- Voor **2026-10-06** is geen scheduled Actions-run zichtbaar; de workflowrunlijst had geen 6-oktober-schedule. Production heeft voor 6 oktober ook geen `catalog_daily_jobs`-rij.
+- Oude job `53553be0-2158-47b1-92c3-2bc75cd7d0cc` (2026-10-05) blijft `failed_requires_attention`, **0/400**, attempt_count 3, recovery_count 1, geen actieve lock en geen next_retry. Geen recovery, supersede of daily import gestart; geen handmatige importdispatch uitgevoerd.
+- De eerstvolgende normale 06:00-run is **2026-10-07 06:00 Europe/Amsterdam** (04:00 UTC, CEST-kandidaat). De normale schedule blijft actief; er is geen gemiste-run replay of tweede dispatch gestart. Die run gebruikt de gewone dagjob/state-machine op de nieuwe dag.
+
+---
+
 # Checkpoint 32 — main-sync afgerond, GitHub releasegate queued — 5 oktober 2026
 
 - Oorzaak van `mergeable=false`: lokale `git merge-tree origin/main HEAD` vond exact één inhoudelijk conflict in `PROJECT_STATE.md`; er waren geen codeconflicten. De actuele main-root/categorie-wijzigingen zijn behouden en het document bevat nu beide historische lijnen.
