@@ -89,6 +89,8 @@ try {
     // throws globally and is reported below.
     continueAfterCategoryStall: true,
     enqueueCategoryChildren: false,
+    retryStalledLoadMore: true,
+    maxStalledLoadMoreRetries: 2,
     navigationRetries: 1,
   });
 } catch (error) {

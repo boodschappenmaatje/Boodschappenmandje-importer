@@ -52,6 +52,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Volledige openbare coverage-crawl — READ ONLY
+        # Release-candidate marker: rerun the full proof after pagination fixes.
         env:
           COVERAGE_MAX_PAGES: ${{ inputs.max_pages || '800' }}
           COVERAGE_OUTPUT: hoogvliet-coverage-proof.json

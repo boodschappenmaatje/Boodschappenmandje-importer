@@ -597,13 +597,23 @@ async function findNextCatalogPageURL(page, currentURL) {
   return null;
 }
 
-async function waitForListingGrowth(page, previousCount) {
+async function readCatalogListingTotal(page) {
+  return page.evaluate(() => {
+    const text = document.body?.innerText ?? "";
+    const match = text.match(/(?:^|\s)(\d{1,3}(?:[.\s]\d{3})*|\d+)\s+producten\b/i);
+    if (!match) return null;
+    const value = Number(match[1].replace(/[.\s]/g, ""));
+    return Number.isInteger(value) && value >= 0 ? value : null;
+  }).catch(() => null);
+}
+
+async function waitForListingGrowth(page, previousCount, timeoutMs = 20_000) {
   return page.waitForFunction(({ previousCount }) => {
     const current = document.querySelectorAll("a[href*='/product/']").length;
     const text = (document.body?.innerText ?? "").toLowerCase();
     return current > previousCount
       || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
-  }, { previousCount }, { timeout: 20_000 }).then(() => true).catch(() => false);
+  }, { previousCount }, { timeout: timeoutMs }).then(() => true).catch(() => false);
 }
 
 function catalogAPIPrice(item) {
@@ -717,6 +727,9 @@ export async function collectCatalogListing(page, routeURL, {
   onRetry = null,
   onWindow = null,
   onPaginationStep = null,
+  retryStalledLoadMore = false,
+  maxStalledLoadMoreRetries = 1,
+  listingGrowthTimeoutMs = 20_000,
   normalTimeoutMs,
 } = {}) {
   await withTransientNavigationRetry(
@@ -734,12 +747,15 @@ export async function collectCatalogListing(page, routeURL, {
   let loadMoreCycles = 0;
   let stagnated = false;
   let stallWindow = null;
+  let exhaustedByTotal = false;
+  let totalProductCount = null;
   let currentSignature = "";
   const visitedListingURLs = new Set([page.url()]);
 
   const snapshot = async () => {
     const rawDOM = await extractCatalogListingCandidates(page);
     const raw = await hydrateCatalogListingCandidates(page, rawDOM);
+    totalProductCount = await readCatalogListingTotal(page) ?? totalProductCount;
     const fresh = raw.filter(candidate => !routeCandidates.has(candidate.sourceURL));
     for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
     const signature = [...routeCandidates.keys()].sort().join("|");
@@ -750,6 +766,7 @@ export async function collectCatalogListing(page, routeURL, {
       hydratedCandidates: raw,
       freshCandidates: fresh,
       cumulativeCandidateCount: routeCandidates.size,
+      totalProductCount,
       signature,
       repeatedSignature: Boolean(currentSignature && signature === currentSignature),
     });
@@ -759,8 +776,12 @@ export async function collectCatalogListing(page, routeURL, {
   while (!shouldStop() && windows.length < maxWindows) {
     const { fresh, signature } = await snapshot();
     if (signature === currentSignature && currentSignature) {
-      stagnated = true;
-      stallWindow = windows.length;
+      if (Number.isInteger(totalProductCount) && routeCandidates.size >= totalProductCount) {
+        exhaustedByTotal = true;
+      } else {
+        stagnated = true;
+        stallWindow = windows.length;
+      }
       break;
     }
     currentSignature = signature;
@@ -775,14 +796,33 @@ export async function collectCatalogListing(page, routeURL, {
         nextWindow: windows.length,
       });
       const previousCount = routeCandidates.size;
-      await loadMore.click({ timeout: 5_000 }).catch(() => { stagnated = true; });
-      if (stagnated) break;
-      loadMoreCycles += 1;
-      const grew = await waitForListingGrowth(page, previousCount);
+      let grew = false;
+      let attempts = 0;
+      const retryLimit = retryStalledLoadMore ? Math.max(0, Math.trunc(maxStalledLoadMoreRetries)) : 0;
+      while (!grew && attempts <= retryLimit) {
+        attempts += 1;
+        const clicked = await loadMore.click({ timeout: 5_000 }).then(() => true).catch(() => false);
+        if (clicked) {
+          loadMoreCycles += 1;
+          grew = await waitForListingGrowth(page, previousCount, listingGrowthTimeoutMs);
+          if (!grew) {
+            const after = await hydrateCatalogListingCandidates(page, await extractCatalogListingCandidates(page));
+            const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
+            grew = afterCount > previousCount;
+          }
+        }
+        if (!grew && attempts <= retryLimit) {
+          await page.waitForTimeout(250);
+        }
+      }
       if (!grew) {
-        const after = await hydrateCatalogListingCandidates(page, await extractCatalogListingCandidates(page));
-        const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
-        if (afterCount <= previousCount) stagnated = true;
+        totalProductCount = await readCatalogListingTotal(page) ?? totalProductCount;
+        if (Number.isInteger(totalProductCount) && routeCandidates.size >= totalProductCount) {
+          exhaustedByTotal = true;
+        } else {
+          stagnated = true;
+          stallWindow = windows.length;
+        }
       }
       continue;
     }
@@ -813,7 +853,7 @@ export async function collectCatalogListing(page, routeURL, {
   // earlier visible batches, but only emits windows at/after its checkpoint.
   const emitted = windows.slice(Math.max(0, startWindow), Math.max(0, startWindow) + maxWindows)
     .flatMap(window => window);
-  const sourceExhausted = !stagnated && windows.length < maxWindows;
+  const sourceExhausted = !stagnated && (exhaustedByTotal || windows.length < maxWindows);
   return {
     candidates: emitted,
     pagesFetched: windows.length,
@@ -824,6 +864,8 @@ export async function collectCatalogListing(page, routeURL, {
     sourceExhausted,
     stallReason: stagnated ? "category_listing_stagnated" : null,
     stallWindow,
+    totalProductCount,
+    exhaustionReason: exhaustedByTotal ? "total_count_reached" : null,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
     categoryURL: routeURL,
   };
@@ -934,6 +976,8 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
         shouldStop: options.shouldStop,
         navigationRetries: options.navigationRetries,
         onRetry: options.onRetry,
+        retryStalledLoadMore: options.retryStalledLoadMore,
+        maxStalledLoadMoreRetries: options.maxStalledLoadMoreRetries,
         normalTimeoutMs: options.normalTimeoutMs,
       });
     } catch (error) {
@@ -958,6 +1002,9 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     sourceExhausted = listing.sourceExhausted;
     categoryResult.pagesFetched = emittedWindows;
     categoryResult.rawHits = listing.candidates.length;
+    categoryResult.expectedResultCount = listing.totalProductCount ?? null;
+    categoryResult.exhaustionReason = listing.exhaustionReason ?? null;
+    categoryResult.stallReason = listing.stallReason ?? null;
     categoryResult.lastCursor = routeSkip + Math.max(0, listing.windowCount - 1);
     categoryResult.nextCursor = listing.nextPage ?? null;
     if (listing.stallReason) {

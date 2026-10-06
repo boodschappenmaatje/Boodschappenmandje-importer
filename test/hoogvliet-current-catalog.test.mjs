@@ -88,6 +88,40 @@ test("current category load-more traverses beyond the initial visible batch", as
   ]);
 });
 
+test("repeated terminal listing page is exhausted only when the published total is reached", async t => {
+  const body = fixture
+    .replace('<main id="catalog-listing">', '<main id="catalog-listing"><p>3 producten</p>')
+    .replace("document.querySelector('#load-more').remove();", "void 0;");
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingGrowthTimeoutMs: 50,
+  });
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.totalProductCount, 3);
+  assert.equal(result.exhaustionReason, "total_count_reached");
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.stallReason, null);
+});
+
+test("repeated listing page remains partial when the published total is not reached", async t => {
+  const body = fixture
+    .replace('<main id="catalog-listing">', '<main id="catalog-listing"><p>4 producten</p>')
+    .replace("document.querySelector('#load-more').remove();", "void 0;");
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingGrowthTimeoutMs: 50,
+  });
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.totalProductCount, 4);
+  assert.equal(result.exhaustionReason, null);
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+});
+
 test("current category Next pagination traverses a second public listing page", async t => {
   const h = await browserFor({ body: paginationFixture });
   t.after(() => h.browser.close());
