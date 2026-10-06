@@ -715,6 +715,8 @@ export async function collectCatalogListing(page, routeURL, {
   shouldStop = () => false,
   navigationRetries = 2,
   onRetry = null,
+  onWindow = null,
+  onPaginationStep = null,
   normalTimeoutMs,
 } = {}) {
   await withTransientNavigationRetry(
@@ -731,6 +733,7 @@ export async function collectCatalogListing(page, routeURL, {
   const windows = [];
   let loadMoreCycles = 0;
   let stagnated = false;
+  let stallWindow = null;
   let currentSignature = "";
   const visitedListingURLs = new Set([page.url()]);
 
@@ -740,6 +743,16 @@ export async function collectCatalogListing(page, routeURL, {
     const fresh = raw.filter(candidate => !routeCandidates.has(candidate.sourceURL));
     for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
     const signature = [...routeCandidates.keys()].sort().join("|");
+    await onWindow?.({
+      windowIndex: windows.length,
+      pageURL: page.url(),
+      rawCandidates: rawDOM,
+      hydratedCandidates: raw,
+      freshCandidates: fresh,
+      cumulativeCandidateCount: routeCandidates.size,
+      signature,
+      repeatedSignature: Boolean(currentSignature && signature === currentSignature),
+    });
     return { fresh, signature };
   };
 
@@ -747,12 +760,20 @@ export async function collectCatalogListing(page, routeURL, {
     const { fresh, signature } = await snapshot();
     if (signature === currentSignature && currentSignature) {
       stagnated = true;
+      stallWindow = windows.length;
       break;
     }
     currentSignature = signature;
     windows.push(fresh);
     const loadMore = await findLoadMoreControl(page);
     if (loadMore) {
+      await onPaginationStep?.({
+        windowIndex: windows.length - 1,
+        pageURL: page.url(),
+        action: "load_more",
+        nextURL: null,
+        nextWindow: windows.length,
+      });
       const previousCount = routeCandidates.size;
       await loadMore.click({ timeout: 5_000 }).catch(() => { stagnated = true; });
       if (stagnated) break;
@@ -766,6 +787,13 @@ export async function collectCatalogListing(page, routeURL, {
       continue;
     }
     const nextURL = await findNextCatalogPageURL(page, page.url());
+    await onPaginationStep?.({
+      windowIndex: windows.length - 1,
+      pageURL: page.url(),
+      action: nextURL ? "next_page" : "end",
+      nextURL,
+      nextWindow: nextURL ? windows.length : null,
+    });
     if (!nextURL || visitedListingURLs.has(nextURL)) break;
     await withTransientNavigationRetry(
       () => sourceGoto(page, nextURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
@@ -795,6 +823,7 @@ export async function collectCatalogListing(page, routeURL, {
     loadMoreCycles,
     sourceExhausted,
     stallReason: stagnated ? "category_listing_stagnated" : null,
+    stallWindow,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
     categoryURL: routeURL,
   };

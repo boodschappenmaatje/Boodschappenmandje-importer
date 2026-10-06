@@ -9,7 +9,6 @@ on:
     paths:
       - .github/workflows/probe-hoogvliet-coverage.yml
       - scripts/probe-highvliet-coverage.mjs
-      - src/hoogvliet.mjs
   workflow_dispatch:
     inputs:
       max_pages:
@@ -28,6 +27,9 @@ concurrency:
 jobs:
   coverage:
     name: Full public Hoogvliet coverage — READ ONLY
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[full-coverage]')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
