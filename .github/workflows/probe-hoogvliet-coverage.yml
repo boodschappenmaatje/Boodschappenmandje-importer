@@ -3,6 +3,13 @@ name: TEMPORARY Hoogvliet full catalog coverage — READ ONLY
 # Public catalog listing coverage only. This workflow never imports products,
 # reads/writes Supabase, runs recovery/supersede, or validates product details.
 on:
+  push:
+    branches:
+      - codex/docs-pr53-production-partial-coverage-20261006
+    paths:
+      - .github/workflows/probe-hoogvliet-coverage.yml
+      - scripts/probe-highvliet-coverage.mjs
+      - src/hoogvliet.mjs
   workflow_dispatch:
     inputs:
       max_pages:
