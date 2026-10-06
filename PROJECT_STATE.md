@@ -1,3 +1,27 @@
+# Checkpoint 32 — main-sync afgerond, GitHub releasegate queued — 5 oktober 2026
+
+- Oorzaak van `mergeable=false`: lokale `git merge-tree origin/main HEAD` vond exact één inhoudelijk conflict in `PROJECT_STATE.md`; er waren geen codeconflicten. De actuele main-root/categorie-wijzigingen zijn behouden en het document bevat nu beide historische lijnen.
+- `origin/main` is `6cfcb01e02a82a7c0ed0fedbd33be01c1d520d2d`. De gesynchroniseerde PR-head is `741cd951ba9e4804a168cc5ce40f198dbc1b38d5`.
+- Lokale volledige gate op de gesynchroniseerde tree: `npm test` **353/353**, `npm run check` groen, `npm run test:postgres` **28/28**, recovery guards **9/9**, history guards **8/8**, supersede-runner **3/3**, YAML/embedded shellsyntax groen, `git diff --check` groen.
+- Oude runner-run **37367248965** was op head `5ec19fd` en eindigde `cancelled`; precheck was cancelled en apply was skipped. Hij is geen releasebewijs. Op de nieuwe head is exact één disarmed runner-run behouden: **37369019615**, status `queued`; de per ongeluk dubbel aangemaakte tweede run **37368978737** is cancelled.
+- Vercel Preview voor `741cd951` rapporteert success (`F3XDTKpmmjHvEdCBpwByNCRpmZeu`). Volledige PR-CI **37368895170** (#257) staat nog `queued`; daardoor is de releasegate nog niet volledig groen.
+- `MIGRATION_ARMED=false` blijft hard-coded; migration `20261005230000` is niet toegepast. Geen databasewrite, supersede, daily import, merge of Production-deploy uitgevoerd.
+- Volgende stap: Work wacht op GitHub-run **37368895170** en disarmed runner **37369019615**; accepteert alleen een groene CI en succesvolle disarmed precheck op de actuele head. Daarna pas migration/merge volgens de expliciete Work-volgorde.
+
+# Checkpoint 31 — PR #51 main-sync en releasegate voorbereid — 5 oktober 2026
+
+## Main-sync
+
+- `origin/main` is opnieuw gecontroleerd op `6cfcb01e02a82a7c0ed0fedbd33be01c1d520d2d`. PR #51 stond op `5ec19fdbcaffc133ded339d04c86ebc901cd68a1`; GitHub rapporteerde `mergeable=false`/`dirty`.
+- Lokale `git merge-tree` vond exact één inhoudelijk conflict: `PROJECT_STATE.md`. Er waren geen codeconflicten. Het document is opgelost met behoud van de actuele main-checkpoints én de PR #51 supersede/migrationrunner-historie.
+- De main-sync nam de actuele root→categorie Hoogvliet-wijzigingen mee; supersede-RPC, migration `20261005230000`, runner, target 400, retries, dedupe en bestaande PR #45–#50-functionaliteit zijn behouden.
+
+## Disarmed releasegrens
+
+- Run **37367248965** hoort bij de oude branch-head `5ec19fd` en stond bij controle nog `queued`; hij wordt niet als releasebewijs gebruikt. Er is geen tweede migrationprecheck gestart.
+- `MIGRATION_ARMED=false` blijft hard-coded. De runner kent uitsluitend `20261005230000_supersede_failed_daily_catalog_job.sql`; er is geen migration, databasewrite, supersede, import, merge of deploy uitgevoerd.
+- Na de merge-resolutie volgen opnieuw de volledige lokale gates, push naar dezelfde PR-branch, CI/Preview-controle en uitsluitend een nieuwe disarmed runnercontrole indien de oude run achterhaald is.
+
 # Checkpoint 29 — PR #50 Production en dagjobstatus — 5 oktober 2026
 
 ## Merge en Production

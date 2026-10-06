@@ -8,10 +8,12 @@ import {
   dailyRetryAt,
   dailyRetryDelayMinutes,
   failedDailyRecoveryDecision,
+  failedDailySupersedeDecision,
   inspectDailyCatalogAttempt,
   isDailyImportWindowOpen,
   formatDailyAttemptSummary,
   runFailedDailyRecovery,
+  runFreshDailySupersede,
   runDailyCatalogAttempt,
   shouldRunDailyImport,
 } from "../src/daily-catalog-growth.mjs";
@@ -20,6 +22,7 @@ import {
   claimCatalogDailyAttempt,
   finishCatalogDailyAttempt,
   recoverCatalogDailyAttempt,
+  supersedeFailedCatalogDailyJob,
   rpcURL,
 } from "../src/supabase.mjs";
 
@@ -61,6 +64,15 @@ function failedRecoveryJob(overrides = {}) {
   return job;
 }
 
+function failedSupersedeJob(overrides = {}) {
+  return failedRecoveryJob({
+    recoveryCount: 1,
+    updatedAt: '2026-10-05T08:05:00.000Z',
+    jobDate: '2026-10-05',
+    ...overrides,
+  });
+}
+
 const endedFailureAttempt = [{
   attempt_number: 1, status: 'non_retryable_failure',
   error_code: 'non_retryable_import_error', completed_at: '2026-09-17T08:05:00.000Z',
@@ -99,6 +111,39 @@ test('failed daily recovery wijst status-, target-, lock- en attemptguards af', 
   );
 });
 
+test('definitief failed job met verbruikte recovery is exact één keer supersede-eligible', () => {
+  assert.deepEqual(
+    failedDailySupersedeDecision(failedSupersedeJob(), endedFailureAttempt),
+    { allowed: true, reason: 'failed_daily_supersede_eligible' },
+  );
+});
+
+test('verse supersede weigert running, retry, lock, ongebruikte recovery en bestaande opvolger', () => {
+  const cases = [
+    [{ status: 'running' }, 'failed_daily_supersede_status_not_eligible'],
+    [{ status: 'retry_scheduled' }, 'failed_daily_supersede_status_not_eligible'],
+    [{ lockExpiresAt: '2026-10-05T10:00:00.000Z' }, 'failed_daily_supersede_lock_present'],
+    [{ recoveryCount: 0 }, 'failed_daily_supersede_recovery_not_consumed'],
+    [{ supersededByJobId: 'daily-successor-1' }, 'failed_daily_supersede_successor_exists'],
+    [{ nextRetryAt: '2026-10-05T12:00:00.000Z' }, 'failed_daily_supersede_retry_scheduled'],
+  ];
+  for (const [overrides, reason] of cases) {
+    assert.equal(failedDailySupersedeDecision(failedSupersedeJob(overrides), endedFailureAttempt).reason, reason);
+  }
+  assert.equal(
+    failedDailySupersedeDecision(failedSupersedeJob(), [{
+      status: 'running', completed_at: null,
+    }]).reason,
+    'failed_daily_supersede_attempt_running',
+  );
+  assert.equal(
+    failedDailySupersedeDecision(failedSupersedeJob(), [{
+      status: 'retryable_failure', completed_at: '2026-10-05T08:05:00.000Z',
+    }]).reason,
+    'failed_daily_supersede_previous_attempt_open',
+  );
+});
+
 test('failed daily recovery claim is explicit, single-use and does not reset state', async () => {
   const harness = createHarness([{ new: 400 }]);
   harness.state.status = 'failed_requires_attention';
@@ -130,6 +175,43 @@ test('failed daily recovery claim is explicit, single-use and does not reset sta
     /failed_daily_recovery_already_used/,
   );
   assert.equal(recoveryCalls, 1);
+});
+
+test('maintenance supersede krijgt een nieuwe dailyImportId en start normale attempt #1', async () => {
+  const h = createHarness([{ new: 400 }]);
+  h.state.status = 'failed_requires_attention';
+  h.state.recoveryCount = 1;
+  h.state.updatedAt = '2026-09-17T08:05:00.000Z';
+  h.dependencies.fetchJob = async () => ({ ...h.state, recoveryCount: 1 });
+  h.dependencies.fetchAttempts = async () => endedFailureAttempt;
+  let supersedeCalls = 0;
+  h.dependencies.supersede = async (_config, input) => {
+    supersedeCalls += 1;
+    assert.equal(input.job.id, 'daily-job-1');
+    assert.equal(input.job.status, 'failed_requires_attention');
+    assert.equal(input.job.recoveryCount, 1);
+    assert.equal(input.supersedeReason, 'software_fix_verified');
+    assert.equal(input.actorContext, 'github_actions:test:123:abc');
+    h.state.id = 'daily-job-2';
+    h.state.status = 'running';
+    h.state.attemptCount = 1;
+    h.state.recoveryCount = 0;
+    return {
+      claimed: true, superseded: true, supersedeId: 'supersede-1',
+      previousDailyImportId: 'daily-job-1', attemptId: 'attempt-1',
+      lockToken: 'lock-1', job: { ...h.state },
+    };
+  };
+  const result = await runFreshDailySupersede({
+    ...config,
+    dailySupersedeReason: 'software_fix_verified',
+    dailySupersedeActorContext: 'github_actions:test:123:abc',
+  }, logger, h.dependencies);
+  assert.equal(result.job.id, 'daily-job-2');
+  assert.equal(result.job.targetNewProducts, 400);
+  assert.equal(result.job.newProductsCollected, 400);
+  assert.equal(result.job.remainingTarget, 0);
+  assert.equal(supersedeCalls, 1);
 });
 
 test('challenge after 100 preserves remaining, releases via finish and schedules bounded 15/30/60 cooldowns', async () => {
@@ -426,7 +508,11 @@ test("dagjobmigratie is additief, server-locked en browser read-only", async () 
     new URL("../supabase/migrations/20261005220000_recover_failed_daily_catalog_growth.sql", import.meta.url),
     "utf8",
   );
-  const allMigrations = `${migration}\n${recoveryMigration}`;
+  const supersedeMigration = await readFile(
+    new URL("../supabase/migrations/20261005230000_supersede_failed_daily_catalog_job.sql", import.meta.url),
+    "utf8",
+  );
+  const allMigrations = `${migration}\n${recoveryMigration}\n${supersedeMigration}`;
   assert.match(migration, /create table if not exists public\.catalog_daily_jobs/i);
   assert.match(migration, /create table if not exists public\.catalog_daily_attempts/i);
   assert.match(migration, /claim_catalog_daily_attempt/i);
@@ -436,11 +522,20 @@ test("dagjobmigratie is additief, server-locked en browser read-only", async () 
   assert.match(allMigrations, /p_expected_updated_at/i);
   assert.match(allMigrations, /original_failure_reason/i);
   assert.match(allMigrations, /new_attempt_id/i);
+  assert.match(supersedeMigration, /supersede_failed_catalog_daily_job/i);
+  assert.match(supersedeMigration, /catalog_daily_supersedes_day_once_idx/i);
+  assert.match(supersedeMigration, /catalog_daily_jobs_current_day_idx/i);
+  assert.match(supersedeMigration, /supersede_reason in \('software_fix_verified', 'importer_updated'\)/i);
+  assert.match(supersedeMigration, /superseded_at/i);
+  assert.match(supersedeMigration, /p_expected_recovery_count/i);
+  assert.match(supersedeMigration, /p_actor_context/i);
   assert.match(migration, /for update/i);
   assert.match(migration, /catalog_daily_jobs_single_running_idx/i);
   assert.match(migration, /grant select on public\.catalog_daily_jobs to anon, authenticated/i);
   assert.match(migration, /revoke all on public\.catalog_daily_attempts from anon, authenticated/i);
   assert.doesNotMatch(migration, /drop\s+(table|column)|delete\s+from|truncate/i);
+  assert.doesNotMatch(supersedeMigration, /delete\s+from|truncate/i);
+  assert.doesNotMatch(supersedeMigration, /public\.(products|product_prices|catalog_discovery_state)\b/i);
 });
 
 test("daily job-RPC's gebruiken typed claims en locktokens", async () => {
@@ -539,6 +634,50 @@ test('daily recovery RPC krijgt expected state/CAS en maakt geen directe status-
   assert.equal(request.body.p_expected_new_products_collected, 137);
   assert.equal(request.body.p_expected_remaining_target, 263);
   assert.equal(request.body.p_recovery_reason, 'software_fix_verified');
+});
+
+test('daily supersede RPC krijgt volledige expected state en actorcontext', async () => {
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, options) => {
+    request = { url: String(url), body: JSON.parse(options.body) };
+    return new Response(JSON.stringify({
+      claimed: true, superseded: true, reason: 'superseded_and_claimed',
+      supersedeId: 'supersede-1', previousDailyImportId: 'daily-recovery-1',
+      attemptId: 'attempt-1', lockToken: 'lock-1',
+      job: {
+        id: 'daily-fresh-1', state_key: 'daily-catalog-growth-test', job_date: '2026-09-17',
+        timezone: 'Europe/Amsterdam', target_new_products: 400,
+        new_products_collected: 0, status: 'running', attempt_count: 1,
+        recovery_count: 0, updated_at: '2026-09-17T08:10:00.000Z',
+      },
+    }), { status: 200 });
+  };
+  try {
+    const result = await supersedeFailedCatalogDailyJob({
+      supabaseURL: 'https://voorbeeld.supabase.co', supabaseSecret: 'secret',
+    }, {
+      job: failedSupersedeJob({ id: 'daily-recovery-1', updatedAt: '2026-09-17T08:05:00.000Z' }),
+      supersedeReason: 'software_fix_verified',
+      actorContext: 'github_actions:test:123:abc',
+      now: new Date('2026-09-17T08:10:00.000Z'),
+    });
+    assert.equal(result.superseded, true);
+    assert.equal(result.job.id, 'daily-fresh-1');
+    assert.equal(result.job.targetNewProducts, 400);
+    assert.equal(result.job.newProductsCollected, 0);
+    assert.equal(result.job.remainingTarget, 400);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(request.url, 'https://voorbeeld.supabase.co/rest/v1/rpc/supersede_failed_catalog_daily_job');
+  assert.equal(request.body.p_expected_status, 'failed_requires_attention');
+  assert.equal(request.body.p_expected_attempt_count, 1);
+  assert.equal(request.body.p_expected_new_products_collected, 0);
+  assert.equal(request.body.p_expected_remaining_target, 400);
+  assert.equal(request.body.p_expected_recovery_count, 1);
+  assert.equal(request.body.p_supersede_reason, 'software_fix_verified');
+  assert.equal(request.body.p_actor_context, 'github_actions:test:123:abc');
 });
 
 test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenlange sleep", async () => {

@@ -14,6 +14,7 @@ import {
   fetchCatalogAcceptanceSnapshot,
   fetchCatalogDailyAttempts,
   recoverCatalogDailyAttempt,
+  supersedeFailedCatalogDailyJob,
   requeueSourceChallenge,
 } from "./supabase.mjs";
 
@@ -137,6 +138,37 @@ export function failedDailyRecoveryDecision(job, attempts = []) {
     return { allowed: false, reason: "failed_daily_recovery_previous_attempt_open" };
   }
   return { allowed: true, reason: "failed_daily_recovery_eligible" };
+}
+
+export function failedDailySupersedeDecision(job, attempts = []) {
+  if (!job) return { allowed: false, reason: "failed_daily_supersede_requires_existing_day" };
+  if (job.status !== "failed_requires_attention") {
+    return { allowed: false, reason: "failed_daily_supersede_status_not_eligible" };
+  }
+  if (job.supersededAt != null || job.supersededByJobId != null) {
+    return { allowed: false, reason: "failed_daily_supersede_successor_exists" };
+  }
+  if (Number(job.recoveryCount ?? 0) !== 1) {
+    return { allowed: false, reason: "failed_daily_supersede_recovery_not_consumed" };
+  }
+  if (job.targetNewProducts !== 400 || job.newProductsCollected >= job.targetNewProducts
+      || job.remainingTarget <= 0) {
+    return { allowed: false, reason: "failed_daily_supersede_target_not_remaining" };
+  }
+  if (job.lockExpiresAt != null) {
+    return { allowed: false, reason: "failed_daily_supersede_lock_present" };
+  }
+  if (job.nextRetryAt != null) {
+    return { allowed: false, reason: "failed_daily_supersede_retry_scheduled" };
+  }
+  if (attempts.some(attempt => attempt.status === "running")) {
+    return { allowed: false, reason: "failed_daily_supersede_attempt_running" };
+  }
+  const previous = attempts.at(-1);
+  if (!previous || previous.status !== "non_retryable_failure" || !previous.completed_at) {
+    return { allowed: false, reason: "failed_daily_supersede_previous_attempt_open" };
+  }
+  return { allowed: true, reason: "failed_daily_supersede_eligible" };
 }
 
 function resultCounts(result = {}) {
@@ -485,6 +517,39 @@ export async function runFailedDailyRecovery(config, logger = console, dependenc
   });
 }
 
+export async function runFreshDailySupersede(config, logger = console, dependencies = {}) {
+  const now = dependencies.now?.() ?? new Date();
+  const jobDate = amsterdamDateKey(now);
+  if (!isDailyImportWindowOpen(now, { endHour: config.dailyEndHour })) {
+    return { attempted: false, superseded: false, reason: "outside_daily_window", job: null };
+  }
+  const job = await (dependencies.fetchJob ?? fetchCatalogDailyJob)(config, {
+    stateKey: config.dailyImportStateKey,
+    jobDate,
+  });
+  if (!job) throw new Error("failed_daily_supersede_requires_existing_day");
+  const attempts = await (dependencies.fetchAttempts ?? fetchCatalogDailyAttempts)(config, job.id);
+  const decision = failedDailySupersedeDecision(job, attempts);
+  if (!decision.allowed) throw new Error(decision.reason);
+  const superseded = await (dependencies.supersede ?? supersedeFailedCatalogDailyJob)(config, {
+    job,
+    supersedeReason: config.dailySupersedeReason,
+    actorContext: config.dailySupersedeActorContext,
+    now,
+    lockTTLMinutes: 130,
+  });
+  logger.info(
+    `Daily maintenance-supersede geaccepteerd: supersedeId=${superseded.supersedeId}, `
+      + `oude_dailyImportId=${superseded.previousDailyImportId}, nieuwe_dailyImportId=${superseded.job.id}, `
+      + `nieuwe_attempt=${superseded.attemptId}, reden=${config.dailySupersedeReason}.`,
+  );
+  return runDailyCatalogAttempt(config, logger, {
+    ...dependencies,
+    now: () => now,
+    preclaimedClaim: superseded,
+  });
+}
+
 export async function mainDailyCatalogGrowth(env = process.env) {
   const config = loadConfig(env);
   if (config.updateMode !== "growth") {
@@ -493,6 +558,7 @@ export async function mainDailyCatalogGrowth(env = process.env) {
   if (config.dryRun) throw new Error("De dagelijkse catalogusjob ondersteunt geen DRY_RUN.");
   const logger = safeLogger(config.supabaseSecret);
   if (config.resumeSourceChallenge) return resumeSourceChallenge(config, logger);
+  if (config.supersedeFailedDaily) return runFreshDailySupersede(config, logger);
   if (config.recoverFailedDaily) return runFailedDailyRecovery(config, logger);
   return config.dailyAcceptanceGate ? runDailyAcceptance(config, logger) : runDailyCatalogAttempt(config, logger);
 }

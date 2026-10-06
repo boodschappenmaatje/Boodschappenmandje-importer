@@ -102,6 +102,37 @@ test("failed daily recovery vereist expliciete daily growth-configuratie en cate
   );
 });
 
+test("fresh daily supersede vereist maintenance-reden en actorcontext", () => {
+  const supersede = loadConfig({
+    DRY_RUN: "1", UPDATE_MODE: "growth", DAILY_IMPORT_JOB: "1",
+    DAILY_NEW_PRODUCT_TARGET: "400", SUPERSEDE_FAILED_DAILY: "1",
+    DAILY_SUPERSEDE_REASON: "importer_updated",
+    DAILY_SUPERSEDE_ACTOR_CONTEXT: "github_actions:test:123:abc",
+  });
+  assert.equal(supersede.supersedeFailedDaily, true);
+  assert.equal(supersede.dailySupersedeReason, "importer_updated");
+  assert.equal(supersede.dailySupersedeActorContext, "github_actions:test:123:abc");
+  for (const missing of [
+    { DAILY_SUPERSEDE_REASON: "operator_override" },
+    { DAILY_SUPERSEDE_ACTOR_CONTEXT: "" },
+  ]) {
+    assert.throws(() => loadConfig({
+      DRY_RUN: "1", UPDATE_MODE: "growth", DAILY_IMPORT_JOB: "1",
+      DAILY_NEW_PRODUCT_TARGET: "400", SUPERSEDE_FAILED_DAILY: "1",
+      DAILY_SUPERSEDE_REASON: "software_fix_verified",
+      DAILY_SUPERSEDE_ACTOR_CONTEXT: "github_actions:test:123:abc",
+      ...missing,
+    }), /Failed daily supersede vereist/);
+  }
+  assert.throws(() => loadConfig({
+    DRY_RUN: "1", UPDATE_MODE: "growth", DAILY_IMPORT_JOB: "1",
+    DAILY_NEW_PRODUCT_TARGET: "400", SUPERSEDE_FAILED_DAILY: "1",
+    DAILY_SUPERSEDE_REASON: "software_fix_verified",
+    DAILY_SUPERSEDE_ACTOR_CONTEXT: "github_actions:test:123:abc",
+    RECOVER_FAILED_DAILY: "1", DAILY_RECOVERY_REASON: "software_fix_verified",
+  }), /Failed daily supersede vereist/);
+});
+
 test("catalogusbatches zijn selecteerbaar en SEARCH_TERMS blijft een override", () => {
   const fresh = loadConfig({ DRY_RUN: "1", CATALOG_BATCH: "fresh" });
   assert.equal(fresh.catalogBatch, "fresh");

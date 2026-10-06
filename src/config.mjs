@@ -73,6 +73,10 @@ const DAILY_RECOVERY_REASONS = new Set([
   "software_fix_verified",
   "infrastructure_fix_verified",
 ]);
+const DAILY_SUPERSEDE_REASONS = new Set([
+  "software_fix_verified",
+  "importer_updated",
+]);
 
 function positiveInteger(value, fallback) {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -88,6 +92,9 @@ export function loadConfig(env = process.env) {
   const resumeSourceChallenge = env.RESUME_SOURCE_CHALLENGE === '1';
   const recoverFailedDaily = env.RECOVER_FAILED_DAILY === "1";
   const dailyRecoveryReason = (env.DAILY_RECOVERY_REASON ?? "").trim();
+  const supersedeFailedDaily = env.SUPERSEDE_FAILED_DAILY === "1";
+  const dailySupersedeReason = (env.DAILY_SUPERSEDE_REASON ?? "").trim();
+  const dailySupersedeActorContext = (env.DAILY_SUPERSEDE_ACTOR_CONTEXT ?? "").trim();
   if (recoverFailedDaily && (
     env.DAILY_IMPORT_JOB !== "1" || env.UPDATE_MODE !== "growth"
       || env.DAILY_NEW_PRODUCT_TARGET !== "400"
@@ -95,6 +102,15 @@ export function loadConfig(env = process.env) {
       || !DAILY_RECOVERY_REASONS.has(dailyRecoveryReason)
   )) {
     throw new Error("Failed daily recovery vereist de expliciete growth-dagjob met doel 400 en een toegestane recoverycategorie.");
+  }
+  if (supersedeFailedDaily && (
+    env.DAILY_IMPORT_JOB !== "1" || env.UPDATE_MODE !== "growth"
+      || env.DAILY_NEW_PRODUCT_TARGET !== "400"
+      || env.DAILY_SINGLE_ATTEMPT === "1" || env.DAILY_ACCEPTANCE_GATE
+      || recoverFailedDaily || !DAILY_SUPERSEDE_REASONS.has(dailySupersedeReason)
+      || !dailySupersedeActorContext
+  )) {
+    throw new Error("Failed daily supersede vereist de expliciete growth-dagjob met doel 400, een toegestane onderhoudsreden en actorcontext.");
   }
   if (resumeSourceChallenge && (env.DAILY_SINGLE_ATTEMPT !== '1' || env.DAILY_NEW_PRODUCT_TARGET !== '400'
       || env.UPDATE_MODE !== 'growth' || env.DAILY_ACCEPTANCE_GATE)) {
@@ -210,6 +226,9 @@ export function loadConfig(env = process.env) {
     resumeSourceChallenge,
     recoverFailedDaily,
     dailyRecoveryReason: recoverFailedDaily ? dailyRecoveryReason : null,
+    supersedeFailedDaily,
+    dailySupersedeReason: supersedeFailedDaily ? dailySupersedeReason : null,
+    dailySupersedeActorContext: supersedeFailedDaily ? dailySupersedeActorContext : null,
     dailyAcceptanceGate: acceptance === "100",
     dailyTargetNewProducts: Math.min(
       positiveInteger(env.DAILY_NEW_PRODUCT_TARGET, DEFAULT_DAILY_GROWTH_TARGET),
