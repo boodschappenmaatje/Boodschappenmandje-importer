@@ -80,7 +80,7 @@ jobs:
             console.log(`unique_skus=${proof.summary?.uniqueSKUs ?? 0}`);
             console.log(`duplicates=${proof.summary?.duplicateSKUGroups ?? 0}`);
             console.log(`source_errors=${proof.summary?.sourceErrors ?? 0};challenges=${proof.summary?.challenges ?? 0}`);
-            NODE
+          NODE
           fi
 
       - name: Coverage-artifacts uploaden
