@@ -17,14 +17,17 @@ const fixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog.htm
 const paginationFixture = await readFile(new URL("./fixtures/hoogvliet-current-pagination.html", import.meta.url), "utf8");
 const rootFixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog-root.html", import.meta.url), "utf8");
 
-async function browserFor({ body = fixture, rootBody = body, status = 200 } = {}) {
+async function browserFor({ body = fixture, rootBody = body, status = 200, bodyForPath, statusForPath } = {}) {
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
-  await context.route("https://hoogvliet.nl/**", route => route.fulfill({
-    status,
-    contentType: "text/html",
-    body: new URL(route.request().url()).pathname === "/producten" ? rootBody : body,
-  }));
+  await context.route("https://hoogvliet.nl/**", route => {
+    const pathname = new URL(route.request().url()).pathname;
+    return route.fulfill({
+      status: statusForPath?.(pathname) ?? status,
+      contentType: "text/html",
+      body: pathname === "/producten" ? rootBody : bodyForPath?.(pathname) ?? body,
+    });
+  });
   await context.route("https://hoogvliet.nl/api/graphql**", async route => {
     const url = new URL(route.request().url());
     const variables = JSON.parse(url.searchParams.get("variables") || "{}");
@@ -113,6 +116,65 @@ test("catalog root discovers multiple public categories and deduplicates cross-l
   assert.equal(result.rootCategoriesDiscovered, 2);
   assert.equal(result.routesVisited, 3);
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
+});
+
+test("coverage mode queues and visits all 20 root categories, then ends with an empty queue", async t => {
+  const rootBody = `<main><nav aria-label="Productcatalogus">${Array.from({ length: 20 }, (_, index) => (
+    `<a href="/coverage-category-${String(index + 1).padStart(2, "0")}">Categorie ${index + 1}</a>`
+  )).join("")}</nav></main>`;
+  const h = await browserFor({ rootBody });
+  t.after(() => h.browser.close());
+  const result = await collectPublicCatalogCandidates(h.page, 100, {
+    continueAfterCategoryStall: true,
+    enqueueCategoryChildren: false,
+  });
+  assert.equal(result.rootCategoriesDiscovered, 20);
+  assert.equal(result.queuedCategories.length, 20);
+  assert.equal(result.rootCategoriesVisited, 20);
+  assert.equal(result.categoriesVisited, 20);
+  assert.equal(result.categoryResults.length, 20);
+  assert.equal(result.queueEmpty, true);
+  assert.equal(result.coverageComplete, true);
+  assert.equal(result.sourceExhausted, true);
+  assert.ok(result.categoryResults.every(category => category.stopReason === "exhausted"));
+  assert.ok(result.categoryResults.every(category => category.pagesFetched === 2));
+});
+
+test("coverage mode treats category stagnation as local and continues with the next queued route", async t => {
+  const stagnatedBody = fixture.replace("document.querySelector('#load-more').remove();", "void 0;");
+  const h = await browserFor({ body: stagnatedBody, rootBody: rootFixture });
+  t.after(() => h.browser.close());
+  const result = await collectPublicCatalogCandidates(h.page, 20, {
+    continueAfterCategoryStall: true,
+    enqueueCategoryChildren: false,
+  });
+  assert.equal(result.rootCategoriesDiscovered, 2);
+  assert.equal(result.categoriesVisited, 2);
+  assert.equal(result.categoryResults.length, 2);
+  assert.deepEqual(result.categoryResults.map(category => category.stopReason), ["stagnated", "stagnated"]);
+  assert.equal(result.queueEmpty, true);
+  assert.equal(result.coverageComplete, false);
+  assert.equal(result.sourceExhausted, false);
+});
+
+test("a category challenge remains a global safe stop and preserves the unvisited queue", async t => {
+  const h = await browserFor({
+    rootBody: rootFixture,
+    statusForPath: pathname => pathname === "/aardappelen-groente-fruit" ? 403 : 200,
+  });
+  t.after(() => h.browser.close());
+  await assert.rejects(
+    collectPublicCatalogCandidates(h.page, 20, {
+      continueAfterCategoryStall: true,
+      enqueueCategoryChildren: false,
+    }),
+    error => {
+      assert.equal(error.code, "source_challenge");
+      assert.equal(error.collectionStats.categoryResults[0].stopReason, "challenge");
+      assert.ok(error.collectionStats.queueRemaining > 0);
+      return true;
+    },
+  );
 });
 
 test("catalog root waits for hydrated navigation and never runs listing pagination on root", async t => {
