@@ -23,6 +23,26 @@
 
 ---
 
+# Checkpoint 33 — 06:00 scheduler-watchdog voorbereid — 6 oktober 2026
+
+## Bewijs van de gemiste trigger
+
+- Actuele remote `main`: `bf16eb18a7e2c334f25141dcf86282f4125b910e`. De primaire workflow `.github/workflows/import-hoogvliet-poc.yml` staat op de default branch, is via GitHub API `active`, bevat geldige YAML en de kandidaten `0 4 * * *` (CEST) en `0 5 * * *` (CET). `workflow_dispatch` blijft aanwezig.
+- Read-only workflowhistorie: op 5 oktober bestaat primary scheduled run **37286939920**, gestart om `2026-10-05T08:57:57Z` op main-code `d083651…`; op 6 oktober bestaat geen primary scheduled run. Er is dus categorie **A: GitHub maakte geen primary workflow-run aan**, niet een job-level `if`-skip. De andere scheduled run **37391772606** is de bestaande retry-workflow, niet de primary daily trigger.
+- De workflow was niet disabled en `main` was de default branch; de cron/DST-gate is lokaal bewezen voor CEST en CET. De concrete storing is daarmee GitHub scheduled-event delivery/timing, niet importer-, parser- of discoverylogica. De 5-oktober-run die bijna vijf uur na de bedoelde UTC-kandidaat startte ondersteunt dezelfde reliability-observatie.
+
+## Kleinste duurzame fix
+
+- In `.github/workflows/retry-daily-catalog-import.yml` zijn vaste watchdog-events toegevoegd op `17 4 * * *` en `17 5 * * *`. Eén kandidaat valt buiten het lokale dagvenster en doet niets; de andere ligt rond 06:17 Europe/Amsterdam. Als de primary event ontbreekt, voert de watchdog dezelfde `inspect:daily` → `import:daily`-flow uit.
+- De normale `claim_catalog_daily_attempt` blijft de enige daily-job/attempt-arbiter: een ontbrekende dagjob krijgt target 400, een bestaande/running/voltooide job wordt veilig overgeslagen. Geen nieuwe RPC, migration, importer- of discoverycode.
+- `workflow_dispatch` van de primary workflow, target 400, remainingTarget, retries, recovery, supersede, locks en dedupe blijven ongewijzigd. `ROADMAP.md` is niet gewijzigd.
+
+## Tests en grens
+
+- `npm test`: **354/354**; `npm run check`: groen; `npm run test:postgres`: **28/28**; YAML/embedded Bash syntax en `git diff --check`: groen.
+- Nieuwe regressies dekken CEST/CET, beide watchdog-crons, missing-day claim, dubbele watchdog-no-op, workflow dispatch, target 400 en bestaande retry/recovery/supersede-contracten. Geen Production import, databasewrite, migration, merge of deploy uitgevoerd.
+- Codex-branch: `codex/fix-daily-scheduler-watchdog-20261006`. Volgende stap: push, PR openen en Work laat de normale scheduler-only releasegate uitvoeren; daarna kan Work controleren of 6 oktober nog geen job heeft en precies één verse daily run starten.
+
 # Checkpoint 32 — main-sync afgerond, GitHub releasegate queued — 5 oktober 2026
 
 - Oorzaak van `mergeable=false`: lokale `git merge-tree origin/main HEAD` vond exact één inhoudelijk conflict in `PROJECT_STATE.md`; er waren geen codeconflicten. De actuele main-root/categorie-wijzigingen zijn behouden en het document bevat nu beide historische lijnen.
