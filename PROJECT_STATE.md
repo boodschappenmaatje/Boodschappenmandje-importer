@@ -1,3 +1,27 @@
+# Checkpoint 37 — PR #53 Production bevestigd; catalogusdekkingmeting begrensd — 6 oktober 2026
+
+## PR #53 / Production
+- PR #53 is gemerged om 07:42 UTC; mergecommit is `3fc161a214bf35d9721d73a31312a004f801ff5d`.
+- Vercel Production deployment `dpl_CjAfdwsLLBPioLJchJfJseybWkBt` staat READY en is gekoppeld aan dezelfde main-commit. De gecombineerde commitstatus toont Vercel success. De Production-homepage is via de Vercel-main-alias opgehaald en leverde de app-HTML; de eerder gebruikte eigen domeinnaam gaf geen bruikbaar antwoord.
+- PR #53 bevat de stale-detail-404-hotfix; die staat dus op main en Production.
+
+## Read-only Production-snapshot
+- Supabase Production `pjcqxufvbkkjehituzxz`, uitsluitend met read-only SELECT gecontroleerd op 6 oktober:
+  - productrecords (Hoogvliet): **7.543**
+  - unieke bruikbare SKU's: **7.543**
+  - dubbele SKU-groepen: **0**
+  - records zonder bruikbare SKU: **0**
+  - product_prices-records: **7.543**
+- De bestaande dagjob van 6 oktober was `retry_scheduled`, 0/400, attempt_count 1, recovery_count 0, next_retry_at 08:10:38 UTC. Deze status is alleen gelezen; geen retry, workflowdispatch of import gestart.
+
+## Catalogusdekking — PARTIAL_COVERAGE
+- `PROJECT_STATE.md` was eerst gelezen. De actuele main-discovery is de Hoogvliet publieke root→runtime-categorieën→listing/GraphQL-paginatie v4; legacy Intershop en Zyte zijn niet gebruikt.
+- De actuele publieke rootpagina toonde 20 hoofdcategorieën. De bestaande bounded proof op PR #53-head rapporteerde 20 dynamische categorieën en 400 unieke kandidaten over 20 pagina's. Dit is begrensd bewijs, geen volledige cataloguscrawl.
+- Deze run heeft geen volledige actuele SKU-set A verzameld: de workspace had geen repository-checkout of lokale discovery-runner en de proofworkflow kon niet gestart worden zonder de verboden handmatige workflowdispatch. Handmatig browsen is geen equivalent bewijs van de vereiste pagination/GraphQL-discoveryflow.
+- Daardoor zijn A, A∩B, A−B, B−A, ontbrekende SKU-lijst en coveragepercentage **niet vastgesteld**. De 7.543 Production-SKU's zijn de snapshot B-grootte; ze mogen niet als actuele catalogusgrootte worden geïnterpreteerd.
+- Betrouwbaarheidsclassificatie: **PARTIAL_COVERAGE**. Er is geen verantwoorde telling van resterende imports of benodigde batches en geen onderbouwde beslissing over de 400-nieuw-per-dag-eis.
+- Eerstvolgende actie: voer in de projectcheckout een expliciet read-only volledige catalogusproof uit via de bestaande main-discoverycode, zonder `workflow_dispatch`, import, databasewrite of wijziging aan parser/scraper. Werk daarna de exacte setvergelijking en importstrategie bij.
+
 # Checkpoint 36 — daily root-404 hotfix onderzocht en PR voorbereid — 6 oktober 2026
 
 ## Exacte oorzaak en minimale fix
