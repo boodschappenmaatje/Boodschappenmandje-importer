@@ -8,7 +8,8 @@ import {
 } from "../src/hoogvliet.mjs";
 
 const outputPath = process.env.PROBE_OUTPUT ?? "hoogvliet-current-catalog-proof.json";
-const maxPages = Math.max(1, Math.min(2, Number(process.env.PROBE_MAX_PAGES ?? 2)));
+const maxPages = Math.max(1, Math.min(20, Number(process.env.PROBE_MAX_PAGES ?? 2)));
+const dailyMaxPages = Math.max(1, Math.min(20, Number(process.env.PROBE_DAILY_MAX_PAGES ?? maxPages)));
 
 function safeURL(raw) {
   try {
@@ -42,11 +43,15 @@ async function rootSnapshot(page) {
 }
 
 const network = [];
+const navigation404s = [];
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
 const rootPage = await context.newPage();
 context.on("response", response => {
   const type = response.request().resourceType();
+  if (response.status() === 404 && type === "document") {
+    navigation404s.push({ type, status: 404, endpoint: safeURL(response.url()) });
+  }
   if (type !== "xhr" && type !== "fetch") return;
   const endpoint = safeURL(response.url());
   const record = { type, status: response.status(), endpoint };
@@ -106,8 +111,8 @@ try {
     maxNewProducts: 400,
     maxProducts: 400,
     maxPerTerm: 40,
-    growthMaxPagesPerTerm: maxPages,
-    growthMaxTotalPages: maxPages,
+    growthMaxPagesPerTerm: dailyMaxPages,
+    growthMaxTotalPages: dailyMaxPages,
     growthMaxCandidates: 1000,
     growthMaxRuntimeMs: 240_000,
     navigationRetries: 1,
@@ -196,6 +201,7 @@ const result = {
   },
   collector,
   network: network.slice(0, 80),
+  navigation404s: navigation404s.slice(0, 20),
   dailyPath,
   proof,
 };
