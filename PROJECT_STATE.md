@@ -1,3 +1,50 @@
+# Checkpoint 39 — coverage-queuefix en volledige read-only crawl — 6 oktober 2026
+
+## Oorzaak en minimale coverage-fix
+
+- Actuele remote waarheid vóór wijziging: `origin/main` **3fc161a214bf35d9721d73a31312a004f801ff5d**; Draft PR **#54** stond op head `090eb05a7a0f7b99569b8a84d2400a535366c40f`.
+- De bestaande `collectPublicCatalogCandidates` verwerkte de root-FIFO-queue correct tot aan een categorie met `listing.stallReason=category_listing_stagnated`, maar deed daarna een globale `break`. Daardoor betekende één lokale listingstagnatie ten onrechte dat de overige gequeue’de rootcategorieën niet werden bezocht.
+- De minimale fix is coverage-only: met `continueAfterCategoryStall=true` wordt de route lokaal als `stagnated` vastgelegd en gaat de queue verder. Echte source challenges/errors blijven globale stops. Met `enqueueCategoryChildren=false` meet de coverage-run precies de 20 actuele rootcategorieën; de production-default is niet gewijzigd.
+- Per categorie wordt nu vastgelegd: route/titel, pagina’s, ruwe hits, unieke SKU’s, laatste cursor, vervolgcursur, stopreden en resterende queue. `coverageComplete` en `sourceExhausted` worden alleen positief wanneer de volledige queue is afgewerkt zonder lokale onvolledigheid.
+
+## Volledige read-only cloudproof
+
+- Actions-run **37441748661** op PR-head **f0b7606217daf33a03993ea57f6aab08baada941** gebruikte uitsluitend publieke Hoogvliet-requests, met veiligheidslimiet **800** listingpagina’s. Geen importer, Supabase-read/write, productwrite, prijswrite, recovery, supersede, migration, Zyte of detailimport.
+- Rootcategorieën gevonden/gequeued/bezocht: **20/20/20**. Queue einde: **leeg**. Categorieën exhausted: **19**. Categorieën partial/stagnated: **1**, exact `https://hoogvliet.nl/zuivel-eieren-boter` (`Zuivel, eieren, boter`), **27** pagina’s, laatste cursor **26**, **540** ruwe hits, stopreden `category_listing_stagnated`.
+- Totaal: **426** listingpagina’s, **8.377** ruwe hits, **8.086** unieke SKU’s, **291** dubbele URL-hits, **0** duplicate-SKU-groepen, **0** ongeldige listingkandidaten, **0** source errors, **0** challenges en **0** document-404’s.
+- Classificatie: **PARTIAL_COVERAGE**. De run bewijst geen globale bronuitputting en geen betrouwbare volledige set A, omdat één relevante categorie lokaal gestagneerd bleef. De overige 19 categorieën zijn afzonderlijk exhausted en de queue is volledig afgewerkt.
+- Artifact in Actions-run **37441748661**, naam `hoogvliet-full-coverage`: `hoogvliet-coverage-proof.json` en `hoogvliet-coverage-skus.csv`. Dit is een partiële coverage-set en mag niet als betrouwbare volledige set A worden gebruikt.
+
+## Per-categorie-resultaat
+
+| Categorie | Route | Pagina’s | Ruwe hits | Unieke SKU’s | Laatste cursor | Stopreden |
+|---|---|---:|---:|---:|---:|---|
+| Aardappelen, Groente, Fruit | `/aardappelen-groente-fruit` | 22 | 440 | 440 | 21 | exhausted |
+| Vlees, vis, vegetarisch | `/vlees-vis-vegetarisch` | 14 | 268 | 268 | 13 | exhausted |
+| Kaas, vleeswaren, tapas | `/kaas-vleeswaren-tapas` | 32 | 625 | 625 | 31 | exhausted |
+| Verse maaltijden, salades | `/verse-maaltijden-salades` | 7 | 140 | 140 | 6 | exhausted |
+| Zuivel, eieren, boter | `/zuivel-eieren-boter` | 27 | 540 | 540 | 26 | stagnated (`category_listing_stagnated`) |
+| Diepvries | `/diepvries` | 24 | 477 | 477 | 23 | exhausted |
+| Bakkerij | `/bakkerij` | 11 | 218 | 218 | 10 | exhausted |
+| Ontbijt, broodbeleg | `/ontbijt-broodbeleg` | 21 | 410 | 410 | 20 | exhausted |
+| Frisdrank, sappen | `/frisdrank-sappen` | 23 | 448 | 448 | 22 | exhausted |
+| Koffie, thee | `/koffie-thee` | 19 | 372 | 372 | 18 | exhausted |
+| Bier, wijn, sterke drank | `/bier-wijn-sterke-drank` | 24 | 469 | 469 | 23 | exhausted |
+| Chips, zoutjes, noten | `/chips-zoutjes-noten` | 15 | 290 | 290 | 14 | exhausted |
+| Koek, snoep, chocolade | `/koek-snoep-chocolade` | 37 | 737 | 737 | 36 | exhausted |
+| Pasta, rijst, oliën, wereldkeuken | `/pasta-rijst-olien-wereldkeuken` | 30 | 594 | 594 | 29 | exhausted |
+| Soepen, conserven, sauzen, kruiden | `/soepen-conserven-sauzen-kruiden` | 41 | 816 | 816 | 40 | exhausted |
+| Huishouden, non food | `/huishouden-non-food` | 25 | 496 | 496 | 24 | exhausted |
+| Huisdier | `/huisdier` | 14 | 264 | 264 | 13 | exhausted |
+| Gezondheid, drogisterij | `/gezondheid-drogisterij` | 23 | 443 | 443 | 22 | exhausted |
+| Baby, kind | `/baby-kind` | 13 | 253 | 253 | 12 | exhausted |
+| Bewuste voeding | `/bewuste-voeding` | 4 | 77 | 77 | 3 | exhausted |
+
+## Vervolggrens
+
+- Geen Production-setvergelijking uitgevoerd, omdat de coverage niet `RELIABLE_COVERAGE` is. Work moet eerst de lokale stagnatie van `zuivel-eieren-boter` afzonderlijk onderzoeken en daarna een nieuwe volledige read-only proof draaien. Alleen bij `RELIABLE_COVERAGE` mag de volledige artifactset als A tegen Production-set B worden vergeleken.
+- `ROADMAP.md` is niet gewijzigd. Geen productie-import of databasewrite is uitgevoerd.
+
 # Checkpoint 38 — Hoogvliet-catalogus gemeten, maar crawl bleef partieel — 6 oktober 2026
 
 ## PR #53 en Production
