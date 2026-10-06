@@ -1,36 +1,39 @@
-# Checkpoint 40 — zuivel-pagination hotfix en betrouwbare volledige coverage — 6 oktober 2026
+# Checkpoint 41 — betrouwbare Hoogvliet-set vergeleken met Production — 6 oktober 2026
 
-## Exacte diagnose van de historische 404
+## Actuele GitHub-status
+- Remote `main` is gecontroleerd en identiek aan **3fc161a214bf35d9721d73a31312a004f801ff5d**.
+- PR **#54** staat **open, Draft en mergeable** tegen `main`. Vóór deze documentatie-update was de head **77a72bf3f01707b5719d3045db70e67d71eae49e**; deze update verandert alleen documentatie. Er is niet gemerged of gedeployed.
+- `ROADMAP.md` is ongewijzigd.
 
-- Actuele `origin/main` vóór deze PR was **3fc161a214bf35d9721d73a31312a004f801ff5d**. PR **#54** staat op head **c9bc67a065300fac8a86cc8cd3f73706b4358250**.
-- De historische daily-log van attempt `21cd0a4d-e34b-4639-a8f3-228aceb53539` bewaart geen exacte URL. De balans **787 listinghits = 380 bestaande SKU's + 55 invalid detailvalidaties + 352 technisch niet verwerkt** bewijst dat de fout ná listingdiscovery in een volgende **GET product-detailnavigatie** viel, hoewel de fout alleen met route key `catalog:root` werd gelabeld. Een exacte historische product-slug kan daarom niet eerlijk worden gereconstrueerd.
-- De nieuwe read-only audit registreerde wel alle actuele requests. De 404's waren `GET` op de statische Logo.png-resource: redirect vanaf `https://www.hoogvliet.com/INTERSHOP/static/WFS/org-webshop-Site/-/org-webshop/nl_NL/Logo/Logo.png` naar `https://hoogvliet.nl/INTERSHOP/static/WFS/org-webshop-Site/-/org-webshop/nl_NL/Logo/Logo.png`, status **404**. Dit zijn website-assets, niet de catalogusroot, categorie-listing of GraphQL-bron.
-- De relevante catalogusrequests waren document-`GET`s op `/producten` en categoriepagina's, plus `GET https://hoogvliet.nl/api/graphql` met operation **`GetProducts`**, `currentPage=1`, SKU-filtervariabelen en HTTP **200**. Geen catalogus-404, redirect of GraphQL-fout werd waargenomen.
+## Betrouwbare actuele set A
+- Alleen het bewezen artifact uit Actions-run **37448122429**, artifact **11405526172** (`hoogvliet-full-coverage`) is gebruikt: `hoogvliet-coverage-proof.json` en `hoogvliet-coverage-skus.csv`.
+- De proof classificeert `RELIABLE_COVERAGE`: 20/20/20 rootcategorieën gevonden/gequeued/bezocht; 20 categorieën compleet, 0 partial/failed; queue leeg.
+- Totaal: **432** listingpagina's, **8.471** ruwe hits, **8.179** unieke actuele SKU's, **292** dubbele URL-hits, **0** duplicate-SKU-groepen, **0** ongeldige listingkandidaten, **0** source errors, **0** challenges en **0** documentnavigatie-404's.
+- Set A is exact de 8.179 SKU's uit het artifact; leading zero's zijn behouden.
 
-## Waarom 540 geen echte categorie-eind was
+## Actuele read-only Production-snapshot en set B
+- Production Supabase is opnieuw uitsluitend met read-only SELECT gecontroleerd.
+- Supermarketwaarden zijn genormaliseerd met trim + case-insensitive vergelijking: `Hoogvliet` had 7.540 records en `hoogvliet` 3, samen **7.543**.
+- Productrecords: **7.543**; unieke bruikbare SKU's: **7.543**; duplicate SKU-groepen: **0**; records zonder bruikbare SKU: **0**; `product_prices`: **7.543**.
+- Set B bevat alle 7.543 unieke bruikbare SKU's uit deze actuele snapshot.
 
-- De vorige full proof stopte op `zuivel-eieren-boter` na cursor **26** / pagina **27** met 540 hits en `category_listing_stagnated`. Het oude artifact bevatte geen `stallWindow`/payload en kan daarom niet onderscheiden of de historische subtrigger click-failure, no-growth of repeated-signature was.
-- De gerichte audit gebruikte dezelfde listingcollector op `https://hoogvliet.nl/zuivel-eieren-boter`. De route volgde zonder querycursor `/q/page/24` t/m `/q/page/29`; pagina 27 (`cursor 26`) had 20 nieuwe SKU's en pagina 28 (`cursor 27`) opnieuw 20 nieuwe SKU's. De bron toonde **642 producten**. De route eindigde op 33 pagina's met **642/642** kandidaten, zonder stall.
+## Exacte setvergelijking
+- A (actuele Hoogvliet-set): **8.179**.
+- B (Production unieke SKU's): **7.543**.
+- A ∩ B: **7.367**.
+- A − B, actueel bij Hoogvliet maar ontbreekt in Production: **812**.
+- B − A, Production-SKU niet gevonden in actuele Hoogvliet-catalogus: **176**. Geen verwijdering, discontinued-classificatie of cleanup uitgevoerd.
+- Coverage: **7.367 / 8.179 = 90,07%**.
+- Resterende catch-up: **812** producten, verdeeld in maximaal-400 batches: **400 + 400 + 12**, dus **3 batches** bij ongewijzigde catalogus en succesvolle nieuwe inserts.
 
-## Kleinste fix en observability
+## Ontbrekende producten en importbeleid
+- De volledige lijst A − B, met SKU, productnaam, categorie, product-URL, listingroute, merk, verpakkingsinfo en getoonde prijs, staat in artifact **`hoogvliet-missing-production-2026-10-06.csv`**.
+- Omdat **812 ≥ 400** ontbreken, is tijdelijk maximaal 400 daadwerkelijk nieuwe, geldige producten per dag nog logisch totdat de achterstand is ingehaald. Dit is alleen een aanbeveling; **geen import is gestart** en de Production-importer/doelinstelling is niet gewijzigd.
+- Na catch-up: dagelijkse cataloguscontrole/diff, werkelijk nieuwe SKU's toevoegen, bestaande prijzen/beschikbaarheid actualiseren en niet-gevonden SKU's signaleren; geen kunstmatige 400 nieuwe producten per dag eisen.
+- Eerstvolgende actie: Work kan de ontbrekende CSV controleren en, uitsluitend na een aparte expliciete importopdracht, de normale catch-up volgens de bestaande Production-state-machine uitvoeren. Production-only SKU's blijven onaangeroerd.
 
-- Coverage-only gebruikt nu maximaal twee begrensde retries bij een niet-groeiende load-more-window en accepteert een herhaalde window alleen als de gepubliceerde producttelling is bereikt. Als de telling niet is bereikt, blijft de route partial met `category_listing_stagnated`; er wordt geen valse exhaustion geclaimd. Production-defaults, v4-discovery, root hydration, categoriequeue, pagination, dedupe, detailvalidatie, target 400, remainingTarget, retries, scheduler, watchdog, recovery en supersede zijn behouden.
-- Bronfouten bevatten nu minimaal route key, request type, gesaneerde request/final URL, cursor/page, categorie, upstream-status, classificatie en GraphQL-operation. Query, variables, cookies, tokens en keys worden niet gelogd.
-
-## Definitieve read-only cloudproof
-
-- Groene Actions-run **37448122429**, head **c9bc67a065300fac8a86cc8cd3f73706b4358250**, gebruikte dezelfde collector en uitsluitend publieke/read-only requests. Artifact **11405526172**, `hoogvliet-full-coverage`.
-- Classificatie: **`RELIABLE_COVERAGE`**. Rootcategorieën gevonden/gequeued/bezocht: **20/20/20**; queue resterend **0**; complete categorieën **20**; partial/failed **0**.
-- Totaal: **432** listingpagina's, **8.471** ruwe hits, **8.179** unieke SKU's, **292** dubbele URL-hits, **0** duplicate-SKU-groepen, **0** invalid listingkandidaten, **0** source errors, **0** challenges en **0** documentnavigatie-404's.
-- `zuivel-eieren-boter`: expected count **642**, **33** pagina's, **642** ruwe/642 unieke SKU's, laatste cursor **32**, `stopReason=exhausted`, geen stall.
-- De eerdere run **37445957331** had inhoudelijk dezelfde succesvolle crawl maar faalde uitsluitend in de GitHub-summary-heredoc; die CI-fout is apart hersteld. De tweede run is volledig groen.
-- De proof deed geen productdetailvalidatie of databasewrite. Bestaande SKU-herkenning en invalid detail-afwijzing zijn lokaal getest, niet als writeflow in de cloud uitgevoerd.
-
-## Gates en releasegrens
-
-- Lokale gates op de fix: `npm test` **361/361**, `npm run check` groen, `npm run test:postgres` **28/28**, `git diff --check` groen. Core CI **37448128201** op de definitieve head is groen. Gerichte zuivel-audit **37445957329** is groen.
-- Branch `codex/docs-pr53-production-partial-coverage-20261006`, head **c9bc67a065300fac8a86cc8cd3f73706b4358250**. PR **#54** is open en Draft tegen actuele main; geen merge, deploy, import, retry, recovery, supersede, migration of databasewrite uitgevoerd.
-- `ROADMAP.md` is niet gewijzigd. Stop hier voor de releasegate. Na releasegate mag Work de bestaande geplande retry alleen volgens de bestaande state-machine beoordelen. Als productie daarna weinig nieuwe producten vindt, meet catalogusdekking/diff en ga terug naar de roadmap; bouw geen verdere scraperfix zolang root, categorieën en pagination technisch betrouwbaar blijven.
+## Wijzigingsgrens
+- Deze update documenteert alleen read-only resultaten op Draft PR #54. Geen workflow/import gestart, geen product-/prijs-/databasewrite, retry, recovery, supersede, migration, verwijdering, merge of deploy uitgevoerd.
 
 # Checkpoint 39 — coverage-queuefix en volledige read-only crawl — 6 oktober 2026
 
