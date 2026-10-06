@@ -23,6 +23,11 @@
 
 ---
 
+# Checkpoint 34 — PR #52 06:00 scheduler-watchdog geopend — 6 oktober 2026
+
+- PR **#52** is geopend: `https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/52`, branch `codex/fix-daily-scheduler-watchdog-20261006`, initial head `c1cb5f48a6669b1b4bb936cdec3d6e48d91043dc`, base `bf16eb18a7e2c334f25141dcf86282f4125b910e`.
+- Dit is uitsluitend scheduler/watchdog/tests/documentatie. Geen migration, Production-write, daily import, supersede, merge of deploy uitgevoerd.
+
 # Checkpoint 33 — 06:00 scheduler-watchdog voorbereid — 6 oktober 2026
 
 ## Bewijs van de gemiste trigger
