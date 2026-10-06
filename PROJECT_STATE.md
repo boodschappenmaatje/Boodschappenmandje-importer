@@ -1,3 +1,28 @@
+# Checkpoint 35 — PR #52 watchdog Production en daily funnel — 6 oktober 2026
+
+## Release
+
+- PR #52 `codex/fix-daily-scheduler-watchdog-20261006` is normaal gesquasht na releasegate: pre-merge head `ba674e5b9118c868a99d33a098dde17b14678c99`, mergecommit en main-head `ae1c999b88846462a120ab1eb129378ea93ab056`.
+- PR-CI `37420498039` en main-CI `37421152488` zijn volledig geslaagd. Preview was READY. Automatische Vercel Production-deployment `dpl_49YsguokycavKZgGn7XywCZWzkxK` is READY op de mergecommit; homepage-smoke HTTP 200.
+- De main-workflow `.github/workflows/retry-daily-catalog-import.yml` bevat watchdogcron `17 4 * * *` en `17 5 * * *`, naast de bestaande retries. GitHub Actions toont zowel de primary workflow als retry/watchdog als ingeschakeld. Voor 7 oktober: primary 06:00 Europe/Amsterdam; watchdog 06:17 CEST.
+
+## Daily run 6 oktober
+
+- Vóór de start was Production-read-only gecontroleerd: geen daily job, attempt of actieve catalog import voor 6 oktober. De primary schedule-run ontbrak; de retryworkflow had wel run `37391772606` om 02:01 lokaal, zonder dagjob/attempt.
+- Exact één dispatch met uitsluitend `daily_import=true`: workflowrun **#115 / 37421689708**, op main `ae1c999`, gestart 08:03 CEST. Geen tweede dispatch, supersede of recovery.
+- Dagjob `0501990b-44cd-4959-b0a4-e3669eee87be`: target 400, cumulatief **0/400**, attempt_count 1, recovery_count 0. Attempt `21cd0a4d-e34b-4639-a8f3-228aceb53539` eindigde `retryable_failure`; lock is vrij. Job staat `retry_scheduled`, next_retry_at `2026-10-06T08:10:38Z` (10:10:38 CEST). Geen handmatige retry gestart; de bestaande normale retrytrigger staat op 10:17 CEST.
+- Production-import-run `3e9ff661-8c52-4754-8bf8-c271c369a46a`: status failed, totaal Hoogvliet-producten bleef 7540, 0 inserts en 0 updates.
+- Strategie `hoogvliet-public-catalog-api-pagination-v4`; discovery-log startte met `dynamic_terms=0`. Enige bezochte route was `catalog:root`; log toont root-cursors 0 en 20, maar geen dynamische categorie-route of category-listing-pagina. Dynamische categorieën **0**, categorieën bezocht **0**, categorie-listingpagina's **0**.
+- Balanced funnel: raw page hits **787**; `uniqueRelevantSKUs=436`; bestaande SKU's **380**; duplicaten **0**; ongeldige detailvalidaties **55**; technisch niet verwerkt **352**; geldige nieuwe kandidaten **0**; werkelijk toegevoegd **0**. De workflow eindigde met stopreden **`source_unavailable`**, één bronfout **HTTP 404**. Log koppelt de fout aan `catalog:root`, maar legt de exacte HTTP-request-URL niet vast. Het rootpad is `https://hoogvliet.nl/producten`.
+- Legacy Intershop-discovery is niet gebruikt. Detailvalidatie, bestaande-SKU-dedupe en de persistente dagboekhouding bleven actief.
+
+## Besluit en vervolg
+
+- Dit is scenario C: de dagelijkse route levert geen dynamische categorieën op en eindigt met een tijdelijke 404-bronclassificatie. Een volledige catalogusdekkingmeting is daarom **niet betrouwbaar en niet uitgevoerd**. Geen importerwijziging in Work en geen wijziging aan ROADMAP.
+- Kleinste Codex-opdracht: vergelijk de dagelijkse `import:daily`-collectorroute vanaf `catalog:root` met de bewezen PR #50 read-only cloudproof. Onderzoek waarom de run twee root-cursorstappen logt (`0`, `20`), nul dynamische categorieën produceert en als `source_unavailable` (HTTP 404) stopt. Maak de dagelijkse productie-intent-regressie aantonen dat root-hydration categorieën enqueue't en dat alleen categorieën listingpagination krijgen. Behoud v4 publieke Hoogvliet-bron, target 400, dedupe, detailvalidatie, retry/state-machine en verbod op Intershop-fallback.
+
+---
+
 # Checkpoint 33 — PR #51 migration, release en 06:00 scheduler — 6 oktober 2026
 
 ## Migration en runner
