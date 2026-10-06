@@ -8,7 +8,7 @@ import {
 } from "../src/hoogvliet.mjs";
 
 const outputPath = process.env.PROBE_OUTPUT ?? "hoogvliet-current-catalog-proof.json";
-const maxPages = Math.max(1, Math.min(20, Number(process.env.PROBE_MAX_PAGES ?? 2)));
+const maxPages = Math.max(1, Math.min(2000, Number(process.env.PROBE_MAX_PAGES ?? 2)));
 const dailyMaxPages = Math.max(1, Math.min(20, Number(process.env.PROBE_DAILY_MAX_PAGES ?? maxPages)));
 
 function safeURL(raw) {
@@ -88,7 +88,19 @@ try {
     rootCategoriesDiscovered: result.rootCategoriesDiscovered,
     categoriesVisited: result.categoriesVisited,
     candidates: result.candidates.length,
+    rawCandidates: result.rawCandidates,
+    duplicateCandidatesByURL: result.duplicateCandidates,
+    invalidCandidates: result.invalidCandidates,
+    crossCategorySKUDuplicates: result.candidates.length - new Set(result.candidates.map(candidate => candidate.sku)).size,
     initialCandidateCount: result.initialCandidateCount,
+    candidateRecords: result.candidates.map(candidate => ({
+      sku: candidate.sku,
+      name: candidate.name,
+      productURL: candidate.sourceURL,
+      category: candidate.category,
+      categoryURL: candidate.categoryURL,
+      listingSource: "hoogvliet.nl publieke categoriepagina + GetProducts",
+    })),
     pagesFetched: result.pagesFetched,
     listingLoadMoreCycles: result.listingLoadMoreCycles,
     sourceExhausted: result.sourceExhausted,
@@ -165,6 +177,15 @@ const proof = {
   dynamicCategories: collector.rootCategoriesDiscovered ?? 0,
   categoriesVisited: collector.categoriesVisited ?? 0,
   candidateCount,
+  rawProductHits: collector.rawCandidates ?? null,
+  uniqueSKUs: collector.uniqueSKUs ?? 0,
+  crossCategorySKUDuplicates: collector.crossCategorySKUDuplicates ?? null,
+  duplicateCandidatesByURL: collector.duplicateCandidatesByURL ?? null,
+  invalidOrStaleListingCandidates: collector.invalidCandidates ?? null,
+  sourceErrors: collector.status === "error" ? 1 : 0,
+  sourceClassificationDetails: collector.error ? String(collector.error).slice(0, 600) : null,
+  sourceExhausted: collector.sourceExhausted ?? false,
+  stallReason: collector.stallReason ?? null,
   uniqueSKUHintCount: collector.uniqueSKUs ?? 0,
   initialCandidateCount: collector.initialCandidateCount ?? 0,
   afterLoadMoreCandidateCount: candidateCount,
@@ -201,6 +222,12 @@ const result = {
   },
   collector,
   network: network.slice(0, 80),
+  networkSummary: {
+    totalFetchXHR: network.length,
+    httpErrors: network.filter(record => record.status >= 400).length,
+    challenges: network.filter(record => record.status === 401 || record.status === 403).length,
+    graphqlRequests: network.filter(record => record.endpoint.pathname === "/api/graphql").length,
+  },
   navigation404s: navigation404s.slice(0, 20),
   dailyPath,
   proof,
