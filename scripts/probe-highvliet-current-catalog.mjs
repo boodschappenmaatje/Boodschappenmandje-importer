@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import {
   CATALOG_ROOT_URL,
+  collectProducts,
   collectPublicCatalogCandidates,
   normalizeCatalogCategoryURL,
 } from "../src/hoogvliet.mjs";
@@ -94,6 +95,51 @@ try {
   collector = { status: "error", error: error?.message ?? "collector_error", code: error?.code ?? null };
 }
 
+// Exercise the same bounded discovery + detail-validation path used by
+// import:daily, without Supabase reads/writes or an onBatch callback.
+let dailyPath = { status: "not_run", error: null, code: null };
+try {
+  const result = await collectProducts({
+    headless: true,
+    updateMode: "growth",
+    searchTerms: ["catalog:root"],
+    maxNewProducts: 400,
+    maxProducts: 400,
+    maxPerTerm: 40,
+    growthMaxPagesPerTerm: maxPages,
+    growthMaxTotalPages: maxPages,
+    growthMaxCandidates: 1000,
+    growthMaxRuntimeMs: 240_000,
+    navigationRetries: 1,
+    preferNewProducts: true,
+    catalogNewOnly: true,
+  }, console, { existingSKUs: new Set() });
+  dailyPath = {
+    status: "ok",
+    pagesFetched: result.stats.pagesFetched,
+    categoriesVisited: result.stats.categoriesVisited,
+    rawCandidates: result.stats.rawCandidatesFound,
+    uniqueCandidates: result.stats.uniqueSKUsDiscovered,
+    validatedProducts: result.stats.validatedProducts,
+    invalidDetails: result.stats.validationFailures?.notFound ?? 0,
+    sourceErrors: result.stats.searchErrors,
+  };
+} catch (error) {
+  dailyPath = {
+    status: "error",
+    error: error?.message ?? "daily_path_error",
+    code: error?.code ?? null,
+    request: error?.sourceRequest ?? null,
+    stats: error?.collectionStats ? {
+      pagesFetched: error.collectionStats.pagesFetched,
+      categoriesVisited: error.collectionStats.categoriesVisited,
+      rawCandidates: error.collectionStats.candidatesExamined,
+      uniqueCandidates: error.collectionStats.uniqueSKUsDiscovered,
+      technicalUnprocessed: error.collectionStats.dispositions?.technicalUnprocessed,
+    } : null,
+  };
+}
+
 const candidateCount = collector.status === "ok" ? collector.candidates : 0;
 const legacyIntershopStaticAssets = network
   .filter(record => /\/INTERSHOP\/static\//i.test(record.endpoint.pathname))
@@ -150,12 +196,13 @@ const result = {
   },
   collector,
   network: network.slice(0, 80),
+  dailyPath,
   proof,
 };
 
 await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`, "utf8");
 console.log(`HOOGVLIET_CURRENT_CATALOG_PROOF ${JSON.stringify(proof)}`);
-console.log(JSON.stringify({ navigation: result.navigation, rootSettled: result.rootSettled, collector, proof, network: result.network }, null, 2));
+console.log(JSON.stringify({ navigation: result.navigation, rootSettled: result.rootSettled, collector, dailyPath, proof, network: result.network }, null, 2));
 await context.close();
 await browser.close();
 
@@ -163,4 +210,8 @@ if (proof.sourceClassification !== "VALID_SOURCE"
   || proof.routesVisited <= 1
   || proof.dynamicCategories < 1
   || proof.candidateCount < 1
+  || dailyPath.status !== "ok"
+  || dailyPath.pagesFetched <= 1
+  || dailyPath.uniqueCandidates < 1
+  || dailyPath.sourceErrors > 0
   || !proof.noLegacyIntershop) process.exitCode = 1;

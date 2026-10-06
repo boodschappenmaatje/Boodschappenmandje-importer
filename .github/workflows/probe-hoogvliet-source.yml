@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - codex/fix-highvliet-root-discovery-20261005
+      - codex/hotfix-daily-root-404-20261006
     paths:
       - .github/workflows/probe-hoogvliet-source.yml
       - scripts/probe-highvliet-current-catalog.mjs
@@ -29,7 +29,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      github.ref == 'refs/heads/codex/fix-highvliet-root-discovery-20261005'
+      github.ref == 'refs/heads/codex/hotfix-daily-root-404-20261006'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:

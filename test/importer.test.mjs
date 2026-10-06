@@ -44,6 +44,7 @@ import {
   selectPriceShard,
   selectPriceShardWindow,
   SourceBlockedError,
+  SourceUnavailableError,
   ParserStructureChangedError,
   SourceNavigationError,
   withTransientNavigationRetry,
@@ -253,6 +254,43 @@ test("bronstatus gebruikt het Playwright page.evaluate-contract met één object
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else delete globalThis.document;
   }
+});
+
+test("HTTP 404 bronfout bevat veilige requestcontext", async () => {
+  const page = {
+    __hoogvlietLastResponseStatus: 404,
+    __hoogvlietLastRequest: {
+      method: "GET",
+      url: "https://hoogvliet.nl/product/stale-123456789",
+      finalURL: "https://hoogvliet.nl/product/stale-123456789",
+      status: 404,
+    },
+    url: () => "https://hoogvliet.nl/product/stale-123456789",
+    waitForFunction: async () => {},
+    evaluate: async () => ({
+      responseStatus: 404, captcha: false, denied: false,
+      hasExpectedContent: false, hasExplicitEmptyState: false,
+      hasSearchStructure: false, hasZeroProductCount: false,
+      hasIncapsula: false, bodyTextLength: 0, htmlLength: 0,
+    }),
+  };
+  await assert.rejects(
+    waitForSourceContent(page, "h1", {
+      requestContext: { routeKey: "catalog:root", cursor: 20, page: 20,
+        categoryURL: "https://hoogvliet.nl/aardappelen-groente-fruit" },
+    }),
+    error => {
+      assert.ok(error instanceof SourceUnavailableError);
+      assert.match(error.message, /route=catalog:root/);
+      assert.match(error.message, /request_type=GET/);
+      assert.match(error.message, /request_url=https:\/\/hoogvliet\.nl\/product\/stale-123456789/);
+      assert.match(error.message, /cursor=20/);
+      assert.match(error.message, /page=20/);
+      assert.match(error.message, /upstream_http_status=404/);
+      assert.match(error.message, /classification=source_unavailable/);
+      return true;
+    },
+  );
 });
 
 test("opeenvolgende lege bronresultaten worden geteld en echte kandidaten resetten de teller", () => {
