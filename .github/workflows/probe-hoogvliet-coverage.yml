@@ -1,0 +1,95 @@
+name: TEMPORARY Hoogvliet full catalog coverage — READ ONLY
+
+# Public catalog listing coverage only. This workflow never imports products,
+# reads/writes Supabase, runs recovery/supersede, or validates product details.
+on:
+  push:
+    branches:
+      - codex/docs-pr53-production-partial-coverage-20261006
+    paths:
+      - .github/workflows/probe-hoogvliet-coverage.yml
+      - scripts/probe-highvliet-coverage.mjs
+  workflow_dispatch:
+    inputs:
+      max_pages:
+        description: "Veiligheidslimiet voor totale listingpagina's"
+        required: false
+        default: "800"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-full-coverage-read-only
+  cancel-in-progress: false
+
+jobs:
+  coverage:
+    name: Full public Hoogvliet coverage — READ ONLY
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.head_commit.message, '[full-coverage]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Exacte PR-head uitchecken
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: Volledige openbare coverage-crawl — READ ONLY
+        # Release-candidate marker: rerun the full proof after pagination fixes.
+        env:
+          COVERAGE_MAX_PAGES: ${{ inputs.max_pages || '800' }}
+          COVERAGE_OUTPUT: hoogvliet-coverage-proof.json
+          COVERAGE_CSV: hoogvliet-coverage-skus.csv
+        run: |
+          set -uo pipefail
+          node scripts/probe-highvliet-coverage.mjs | tee hoogvliet-coverage.log
+          coverage_status=${PIPESTATUS[0]}
+          cat hoogvliet-coverage.log >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' 'Geen importer, Supabase, recovery, productwrite of databasewrite uitgevoerd.' >> "$GITHUB_STEP_SUMMARY"
+          exit "$coverage_status"
+
+      - name: Coverage-resultaat als samenvatting publiceren
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f hoogvliet-coverage-proof.json ]; then
+            node --input-type=module <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+            import { readFileSync } from "node:fs";
+            const proof = JSON.parse(readFileSync("hoogvliet-coverage-proof.json", "utf8"));
+            console.log(`classification=${proof.summary?.classification ?? "unknown"}`);
+            console.log(`root_categories=${proof.summary?.rootCategoriesFound ?? 0}`);
+            console.log(`visited_categories=${proof.summary?.rootCategoriesVisited ?? 0}`);
+            console.log(`listing_pages=${proof.summary?.listingPages ?? 0}`);
+            console.log(`unique_skus=${proof.summary?.uniqueSKUs ?? 0}`);
+            console.log(`duplicates=${proof.summary?.duplicateSKUGroups ?? 0}`);
+            console.log(`source_errors=${proof.summary?.sourceErrors ?? 0};challenges=${proof.summary?.challenges ?? 0}`);
+          NODE
+          fi
+
+      - name: Coverage-artifacts uploaden
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoogvliet-full-coverage
+          path: |
+            hoogvliet-coverage-proof.json
+            hoogvliet-coverage-skus.csv
+            hoogvliet-coverage.log
+          if-no-files-found: error

@@ -1,0 +1,57 @@
+name: TEMPORARY Hoogvliet Zuivel pagination audit — READ ONLY
+
+on:
+  push:
+    branches:
+      - codex/docs-pr53-production-partial-coverage-20261006
+    paths:
+      - .github/workflows/probe-hoogvliet-zuivel-pagination.yml
+      - scripts/probe-highvliet-zuivel-pagination.mjs
+      - src/hoogvliet.mjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-zuivel-pagination-read-only
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Zuivel pagination 24–28 — READ ONLY
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Exacte PR-head uitchecken
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      - name: Zuivel pagination audit — READ ONLY
+        env:
+          DAIRY_OUTPUT: hoogvliet-zuivel-pagination.json
+        run: node scripts/probe-highvliet-zuivel-pagination.mjs | tee hoogvliet-zuivel-pagination.log
+
+      - name: Audit-artifact uploaden
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoogvliet-zuivel-pagination
+          path: |
+            hoogvliet-zuivel-pagination.json
+            hoogvliet-zuivel-pagination.log
+          if-no-files-found: error
