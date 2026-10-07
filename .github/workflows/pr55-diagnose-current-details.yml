@@ -19,7 +19,6 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       HEADLESS: "1"
-      NODE_OPTIONS: --import=./scripts/pr55-readonly-fetch-guard.mjs
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,6 +31,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Run the exact 10 proven SKUs — dry-run only
         shell: bash
+        env:
+          NODE_OPTIONS: --import=./scripts/pr55-readonly-fetch-guard.mjs
         run: |
           set -euo pipefail
           tmp_csv="$RUNNER_TEMP/pr55-first-10.csv"
