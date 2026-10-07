@@ -1077,3 +1077,30 @@ Work controleert eerst Draft PR #55 en CI, levert/controleert daarna de originel
 ## Volgende stap
 
 Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProduct` opleveren en voegt waar passend nauwkeurige diagnostiek toe. Daarna kan Work de read-only 10-SKU-releasegate opnieuw uitvoeren. Pas na PASS een aparte release-opdracht voor PR #55; geen echte catch-upimport in deze releasegate.
+
+# Checkpoint 44 — PR #55 invalidProduct-root-cause opgelost — 7 oktober 2026
+
+## Exacte oorzaak
+
+- De tien detailpagina's waren allemaal bereikbaar en leverden een geldige H1, een exact overeenkomende SKU uit de product-URL en JSON-LD met actuele productnaam, merk en positieve prijs. De oude detail-DOM-selectors voor verpakking én prijs waren op deze actuele pagina's niet aanwezig; JSON-LD bevatte voor deze producten geen verpakkingswaarde.
+- De eerste concrete mislukte invariant was voor **alle 10/10** `missing_package`: de bestaande check `if (!name || !packageText) return fail("invalidProduct")` viel op `packageText`. SKU-leading-zero's, naam en pagina-bereikbaarheid waren niet de oorzaak; prijsvalidatie werd daardoor niet bereikt.
+- Bewijs uit de eerste diagnose-run: Actions **37666811120**, GET-only guard, root `main`, `sku_from_path` gelijk aan de candidate voor alle tien, `package_candidates=[]`, JSON-LD-prijzen aanwezig. De run wijzigde geen database.
+
+## Minimale fix en observability
+
+- `validateCandidate` rapporteert nu concrete bestaande invariant-redenen: `parser_empty`, `missing_sku`, `sku_mismatch`, `invalid_sku`, `missing_name`, `missing_package`, `invalidPrice`, `unreliable_product` en bestaande `notFound`.
+- De veilige parserdiagnostiek registreert alleen root/selectors, SKU-bronnen, kandidaatteksten, JSON-LD productvelden en prijs-/pakketwaarden; geen cookies, tokens of volledige HTML.
+- Als alleen verpakking ontbreekt, hergebruikt de validator de bestaande `fetchPublicCatalogItems`/Hoogvliet GraphQL-parser met een exact geverifieerde SKU. Alleen `catalogAPIPackage` uit de bestaande `metadata.verpakking` wordt overgenomen. Een ontbrekende API-match of ontbrekende metadata blijft `missing_package`; er wordt geen prijs of pakket verzonnen en geen identity geforceerd.
+- JSON-LD blijft de bestaande actuele detailbron voor naam/prijsfallback; `upsertProducts`, dedupe, locks, `catalog_import_runs` en de expliciete-SKU-route zijn verder ongewijzigd. De daily route houdt dezelfde validator en discoveryflow.
+
+## Regressies en bounded proof
+
+- Toegevoegd: regressietest voor actuele detail-JSON-LD + exact-SKU catalogus-API-pakket naar geldige prijsvalidatie; bestaande tests bevestigen SKU-mismatch, ontbrekend pakket en ongeldige prijs blijven blokkeren. De explicit-SKU-tests blijven expliciete bron, max-400, dedupe/leading-zero, existing SKU, invalid/not-found/error, locks en dry-run zonder writes afdekken.
+- Tweede bounded read-only diagnose/proof: Actions **37667212603** op head **`72c0f9e31945eae219aad596eb3772852acc3034`**, exact dezelfde tien bewezen SKU's en product-URL's. Resultaat: **10/10 `valid_new`**, **0 invalid**, **0 not_found**, **0 temporary_error**, **0 already_exists**, alle 10 detailpagina's bereikbaar, alle 10 positieve prijzen gevalideerd. Prijzen: 000685000 1.99; 000958000 0.89; 000959000 1.02; 003026000 1.75; 003189000 1.13; 003191000 1.29; 004155000 2.87; 005291000 18.99; 008582000 1.70; 009681000 2.09.
+- De proof verwerkte uitsluitend de expliciete tien SKU's, startte geen catalogusdiscovery/listingpagination en gebruikte een GET-only fetch guard. Runtime: **26.203 seconden**. Production bleef vóór/na **7.543 producten** en **7.543 prijzen**; productwrites, prijswrites en run-writes waren **0**.
+- De tijdelijke diagnose-workflow en read-only guard zijn na het bewijs verwijderd; ze zijn geen product- of importpad. Geen `--write`, Production-import, deploy of merge uitgevoerd.
+
+## Huidige branch/PR en Work-vervolgstap
+
+- PR #55 blijft open, Draft en mergeable. Branch blijft **`codex/explicit-sku-catch-up-20261007`**, finale head na cleanup **`6ccee6400d48ccc3e5b9f2a42b50e4351e02e0dd`**. `ROADMAP.md` is niet gewijzigd.
+- Work controleert eerst de nieuwe PR-head en CI. Daarna voert Work uitsluitend de releasegate voor de volledige bewezen CSV uit als read-only bounded catch-up, bijvoorbeeld `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 400 --dry-run`, met dezelfde nul-write- en geen-discovery-controles. Alleen na review van die volledige dry-run is een afzonderlijke, expliciet goedgekeurde Work-opdracht voor `--write` toegestaan. Geen merge in deze stap.
