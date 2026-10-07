@@ -1260,6 +1260,7 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     }
     throw error;
   }
+  if (diagnostics) diagnostics.detailReachable = true;
   const details = await extractProductDetails(page);
   if (!details) return fail("notFound");
   if (details.sku !== candidate.sku || !isValidSKU(details.sku)) return fail("invalidProduct");

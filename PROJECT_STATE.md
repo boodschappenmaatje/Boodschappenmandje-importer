@@ -1,3 +1,4 @@
+
 # Checkpoint 36 — daily root-404 hotfix onderzocht en PR voorbereid — 6 oktober 2026
 
 ## Exacte oorzaak en minimale fix
@@ -1033,3 +1034,28 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 - Workflowfix CI op de volledige PR-head `db1264ee142db1ff47b1603e1b83e71481d1bae9`: Actions `36686741289` groen, inclusief importerfixtures/seedchecks, webtests, lint, TypeScript en Production-build; Vercel Preview-check groen. De functionele head `0e6ff5c` had eveneens 275 roottests en 756 webtests groen. Dit bewijst de code/configuratie, niet een geplande live run.
 - PR #36 is conflictvrij met schone diff en groene CI gemerged als `93435b3`. De main-CI `36689014992` en Production-build `dpl_5aDkTgLHigPZuFn1nndf6DH6BT3q` zijn geslaagd; Home/Menu/Lijst/Budget renderen. Op 30 september waren de verwachte automatische primaire en monitortriggers vóór de release niet zichtbaar; hun precieze afwezigheidsreden is niet bewezen. De eerstvolgende geplande primaire run is 1 oktober om 06:07 Europe/Amsterdam, monitor om 08:30; GitHub kan vertragen of een trigger missen. Een volledige primaire dagimport-/monitorcyclus na de release is nog niet waargenomen. De vertraagde automatische prijsshard `36689990758` startte om 10:29 lokaal, voltooide prijsbatch 3/7: 100 gecontroleerd en geschreven, 17 gewijzigd, 83 ongewijzigd, 0 fout. De catalogus bleef 6359 producten/6359 prijzen, 0 nieuwe producten, 100 vandaag bijgewerkte prijsregels; maintenance v4 bleef 0 pending/304 bevestigd. Dit is geen bewijs voor dagelijkse productgroei of de nieuwe monitorplanning. Geen dubbele of handmatige import gestart.
 - Read-only DB-check na merge: 6359 producten, 6359 prijzen, vandaag 0 nieuwe; dagjob `daily_target_partial` 0/400, 2 eerdere pogingen, geen actieve lock of retry; 0 lopende imports of daily attempts. Discovery-state v4, maintenance `confirmed`, 0 pending, `notifiedProducts=304`.
+# Checkpoint 42 — gerichte expliciete-SKU catch-up voorbereid — 7 oktober 2026
+
+## Keuze en scope
+
+- Gestart vanaf actuele `origin/main` **3fc161a214bf35d9721d73a31312a004f801ff5d**.
+- Draft PR #54 is open, mergeable en uitsluitend coverage/documentatie; daarom staat deze productiecode op een aparte branch **`codex/explicit-sku-catch-up-20261007`**. Er is geen merge of deploy uitgevoerd.
+- De normale daily growth-route is niet geschikt voor de bewezen 812 ontbrekende SKU's: die route scant brede catalogusdiscovery en kan tegen de runtimegrens stoppen zonder de gerichte set af te werken. De catch-up verandert alleen de kandidaatbron: expliciete CSV-SKU + gevalideerde product-URL.
+
+## Implementatie
+
+- Nieuwe command **`npm run import:skus -- --file <csv> --max 400 [--dry-run|--write]`** in `scripts/import-explicit-skus.mjs`; default is read-only dry-run en `--write` is verplicht voor writes.
+- `src/explicit-sku-catch-up.mjs` valideert CSV-header/SKU/URL, behoudt leading zero's, dedupliceert input en verwerkt nooit buiten de expliciete lijst. Er is geen discovery-, search- of catalogusroute.
+- Bestaande code blijft leidend voor detailnavigatie, product/prijs parsing, positieve-prijsvalidatie, foutclassificatie en product/prijs-upsert: respectievelijk `validateCandidate` en `upsertProducts`. Elke echte run gebruikt ook de bestaande `catalog_import_runs`-observability.
+- Het safety contract is vastgelegd: bestaande SKU's worden vóór detailvalidatie `already_exists`, ongeldige prijs/productdata wordt niet geschreven, 404 wordt `not_found`, tijdelijke bronfout `temporary_error`, batchlimiet maximaal 400 en dry-run heeft nul writes.
+- Concurrency gebruikt de bestaande shared `catalog_import_runs` unique running-lock plus een read-only controle op running `catalog_daily_jobs`; een actieve daily import of bezette cataloguslock weigert catch-up-write.
+
+## Tests en bewijsgrens
+
+- Nieuwe unit/regressietests in `test/explicit-sku-catch-up.test.mjs` dekken expliciete bron zonder discovery, 400-cap, dedupe/leading zero's, existing SKU, valid new SKU, invalid price/product, detail-404, tijdelijke fout, actieve lock en dry-run zonder writes. De bestaande daily-tests blijven onaangeroerd.
+- De exacte missing CSV is niet aanwezig in de repository of het gedownloade coverage-artifact; dat artifact bevat alleen de 8.179 actuele SKU's. Daarom is nog geen eerlijke live dry-run op de bewezen 812-subset uitgevoerd en is geen Production-read/write gedaan.
+- Lokale gates zijn groen: `npm test` **365/365**, `npm run check`, `npm run test:postgres` **28/28** en `git diff --check`. De read-only bounded live proof op de exacte missing CSV is nog niet uitgevoerd omdat die CSV niet in deze workspace/artifacts aanwezig is. ROADMAP.md is niet gewijzigd.
+
+## Exacte Work-vervolgstap
+
+Work levert/controleert de originele missing CSV, voert uitsluitend `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run` uit tegen read-only Production en publieke Hoogvliet-details, bevestigt nul writes/brede discovery en rapporteert de per-SKU-classificaties. Daarna pas de normale releasegate; geen `--write`, merge of Production-import in deze Codex-stap.

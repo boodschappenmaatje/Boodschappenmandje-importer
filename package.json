@@ -6,6 +6,7 @@
   "description": "Gecontroleerde server-side Hoogvliet-catalogusimporter voor BoodschappenMaatje.",
   "scripts": {
     "import": "node src/importer.mjs",
+    "import:skus": "node scripts/import-explicit-skus.mjs",
     "import:daily": "node src/daily-catalog-growth.mjs",
     "inspect:daily": "node src/daily-catalog-growth.mjs --inspect",
     "monitor:catalog": "node src/catalog-monitor.mjs",
