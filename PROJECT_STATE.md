@@ -1102,5 +1102,5 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 
 ## Huidige branch/PR en Work-vervolgstap
 
-- PR #55 blijft open, Draft en mergeable. Branch blijft **`codex/explicit-sku-catch-up-20261007`**, finale head na cleanup **`9941e9c50519873477f3513b34304dc3a42d5bff`**. `ROADMAP.md` is niet gewijzigd.
+- PR #55 blijft open, Draft en mergeable. Branch blijft **`codex/explicit-sku-catch-up-20261007`**; de actuele finale head wordt door de PR/branchcontrole vastgesteld. `ROADMAP.md` is niet gewijzigd.
 - Work controleert eerst de nieuwe PR-head en CI. Daarna voert Work uitsluitend de releasegate voor de volledige bewezen CSV uit als read-only bounded catch-up, bijvoorbeeld `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 400 --dry-run`, met dezelfde nul-write- en geen-discovery-controles. Alleen na review van die volledige dry-run is een afzonderlijke, expliciet goedgekeurde Work-opdracht voor `--write` toegestaan. Geen merge in deze stap.
