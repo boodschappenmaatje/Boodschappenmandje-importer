@@ -1059,3 +1059,21 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 ## Exacte Work-vervolgstap
 
 Work controleert eerst Draft PR #55 en CI, levert/controleert daarna de originele missing CSV en voert uitsluitend `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run` uit tegen read-only Production en publieke Hoogvliet-details. Work bevestigt nul writes/brede discovery en rapporteert de per-SKU-classificaties. Daarna pas de normale releasegate; geen `--write`, merge of Production-import in deze Codex-stap.
+
+
+# Checkpoint 43 — PR #55 exact-SKU dry-run releasegate — 7 oktober 2026
+
+## Read-only Actions-proof
+
+- PR #55 bleef Draft. De tijdelijke proof liep via Actions-run **37600168710** op PR-head **`8195415fe6ddcd7dbe2eb5824e4a90204b3c189e`**. De originele missing CSV is geverifieerd: **812 rijen, 812 unieke SKU's, 0 leeg**, SHA-256 `a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246`.
+- Precheck: Production had **7.543 producten**, **7.543 unieke Hoogvliet-SKU's**, **7.543 prijzen**, **53 catalog_import_runs** en **39 daily attempts**. Lopende catalog-imports, daily jobs en attempts: **0**. Er stonden **2** jobs op `retry_scheduled`; die zijn niet gestart of afgewacht. De proof gebruikte de bestaande gedeelde Actions-concurrencygroep `hoogvliet-supabase-update`.
+- Exact uitgevoerd: `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run`. De inputbron was alleen de CSV. Geen rootdiscovery, categoriequeue, listingpagination of brede discovery. **10** kandidaten verwerkt en **802** buiten de batch als `skipped/max_batch_size` gelogd.
+- Classificaties: **valid_new 0, already_exists 0, invalid 10, not_found 0, temporary_error 0**. Alle tien detailpagina's waren bereikbaar, maar de bestaande `validateCandidate` gaf `invalidProduct`; geen enkele kandidaat had daardoor een gevalideerde prijs. Importer-output bleef vóór/na op **7.543 producten en 7.543 prijzen**.
+- Onafhankelijke read-only nacontrole Supabase: **7.543 productrecords, 7.543 product_prices, 53 catalog_import_runs, 39 daily attempts**; de tien geselecteerde SKU's waren nog afwezig. Productwrites **0**, prijswrites **0**, catalog_import_runs-writes **0**.
+- De job stapte na de droge import alsnog rood uit door een fout in de tijdelijke report-helper: de JSON-extractie sneed de openingsaccolade van de CLI-uitvoer af. Daardoor is geen Actions-artifactrapport geüpload; de classificaties en tellingen zijn uit de Actions-logs en read-only nacontrole bevestigd.
+- Releasegate: **FAIL**. De tien bereikbaar gevalideerde missing-set-producten eindigden allemaal als `invalidProduct` in plaats van `valid_new`/een specifieker stale/invalid resultaat. De huidige validator registreert voor deze uitkomst geen subreden; exact welke extractiecontrole faalt is dus nog niet bewezen. Codex moet de parser/validator tegen deze actuele productpagina's onderzoeken. Work heeft geen importer- of parserfix gedaan.
+- De tijdelijke workflowjob, CSV-kopie en proof-helperbestanden zijn in de cleanup-commit verwijderd. Alleen dit bewijs blijft in de checkpoint. Geen merge, Production-deploy, product-/prijswrite, ROADMAP-wijziging, recovery of supersede uitgevoerd.
+
+## Volgende stap
+
+Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProduct` opleveren en voegt waar passend nauwkeurige diagnostiek toe. Daarna kan Work de read-only 10-SKU-releasegate opnieuw uitvoeren. Pas na PASS een aparte release-opdracht voor PR #55; geen echte catch-upimport in deze releasegate.
