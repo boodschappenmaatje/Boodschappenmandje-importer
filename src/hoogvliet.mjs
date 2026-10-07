@@ -670,6 +670,11 @@ async function fetchPublicCatalogItems(page, skus) {
   return items;
 }
 
+function catalogAPISKU(item) {
+  const urlKey = clean(item?.url_key);
+  return clean(item?.sku) || (urlKey ? extractSKUFromProductURL(`${BASE_URL}/product/${urlKey}`) : null);
+}
+
 export async function hydrateCatalogListingCandidates(page, candidates) {
   const domBySKU = new Map(candidates
     .map(candidate => [extractSKUFromProductURL(candidate.sourceURL), candidate])
@@ -1317,12 +1322,33 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
   }
   if (diagnostics) diagnostics.detailReachable = true;
   const parsed = await extractProductDetails(page);
-  const details = parsed?.details ?? parsed;
+  let details = parsed?.details ?? parsed;
   if (diagnostics && parsed?.evidence) diagnostics.parser = parsed.evidence;
   if (!details) return fail("parser_empty");
   if (!details.sku) return fail("missing_sku");
   if (details.sku !== candidate.sku) return fail("sku_mismatch");
   if (!isValidSKU(details.sku)) return fail("invalid_sku");
+
+  // Current Hoogvliet detail pages expose identity and price in JSON-LD, but
+  // no longer expose package/contents in the old detail DOM. Reuse the
+  // existing current-catalog GraphQL parser for that one missing field,
+  // queried by the already verified exact SKU. Never accept another identity
+  // or invent a value when the API has no package metadata.
+  if (!clean(details.packageText)) {
+    const catalogItems = await fetchPublicCatalogItems(page, [candidate.sku]);
+    const catalogItem = catalogItems.find(item => catalogAPISKU(item) === candidate.sku);
+    const catalogPackage = catalogAPIPackage(catalogItem);
+    if (diagnostics) diagnostics.parser = {
+      ...(diagnostics.parser ?? {}),
+      catalog_api: {
+        matched_sku: catalogAPISKU(catalogItem),
+        name: clean(catalogItem?.name),
+        package_text: catalogPackage,
+        price: catalogAPIPrice(catalogItem),
+      },
+    };
+    if (catalogPackage) details = { ...details, packageText: catalogPackage };
+  }
 
   const name = clean(details.name);
   const packageText = clean(details.packageText);
