@@ -1321,6 +1321,11 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     throw error;
   }
   if (diagnostics) diagnostics.detailReachable = true;
+  if (diagnostics) diagnostics.page = {
+    http_status: page.__hoogvlietLastResponseStatus ?? null,
+    final_url: typeof page.url === "function" ? page.url() : null,
+    title: typeof page.title === "function" ? await page.title().catch(() => null) : null,
+  };
   const parsed = await extractProductDetails(page);
   let details = parsed?.details ?? parsed;
   if (diagnostics && parsed?.evidence) diagnostics.parser = parsed.evidence;
