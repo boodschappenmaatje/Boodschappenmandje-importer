@@ -81,12 +81,13 @@ async function snapshot() {
   const skuSet = new Set(products.map(p=>p.sku).filter(Boolean));
   const activeRuns = runStatuses.filter(status=>status==="running").length;
   const activeAttempts = attemptStatuses.filter(status=>status==="running").length;
-  const activeDaily = dailyStatuses.filter(status=>["running","retry_scheduled"].includes(status)).length;
+  const activeDaily = dailyStatuses.filter(status=>status==="running").length;
+  const retryScheduledDaily = dailyStatuses.filter(status=>status==="retry_scheduled").length;
   return {
     product_records:totalProducts, unique_hoogvliet_skus:skuSet.size, price_records:totalPrices,
     price_states:priceStates.size, catalog_import_runs:totalRuns, running_catalog_imports:activeRuns,
     daily_attempts:totalAttempts, running_daily_attempts:activeAttempts,
-    running_or_retry_scheduled_daily_jobs:activeDaily, running_daily_jobs:dailyJobs.length,
+    active_daily_jobs:activeDaily, retry_scheduled_daily_jobs:retryScheduledDaily, running_daily_jobs:dailyJobs.length,
     first_10_skus:firstTen.map(p=>p.sku),
     first_10_present:firstTen.filter(p=>skuSet.has(p.sku)).map(p=>p.sku),
   };
@@ -99,7 +100,7 @@ const mode=process.argv[2];
 if (mode==="verify") await verifyCSV();
 else if (mode==="before") {
   const data=await snapshot();
-  if (data.running_catalog_imports || data.running_daily_attempts || data.running_or_retry_scheduled_daily_jobs) throw new Error("FAIL_SAFE_active_import_or_daily_job");
+  if (data.running_catalog_imports || data.running_daily_attempts || data.active_daily_jobs) throw new Error("FAIL_SAFE_active_import_or_daily_job");
   await writeFile("pr55-dry-run-before.json", JSON.stringify(data,null,2));
   console.log("PRODUCTION_BEFORE="+JSON.stringify(data));
 } else if (mode==="after") {
