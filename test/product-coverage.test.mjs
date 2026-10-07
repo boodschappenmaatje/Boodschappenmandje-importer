@@ -97,8 +97,16 @@ test("existing SKU is skipped, valid new detail is retained and invalid detail i
 
 test("detail validation remains authoritative for SKU, package and positive price", async () => {
   const product = fixture.products[0];
-  for (const changes of [{ sku: "123456789" }, { packageText: "" }, { displayPrice: 0 }, { displayPrice: null }]) {
-    assert.equal(await validateCandidate(detailPage({ ...product.detail, ...changes }), product), null);
+  const cases = [
+    [{ sku: "123456789" }, "sku_mismatch"],
+    [{ packageText: "" }, "missing_package"],
+    [{ displayPrice: 0 }, "invalidPrice"],
+    [{ displayPrice: null }, "invalidPrice"],
+  ];
+  for (const [changes, reason] of cases) {
+    const diagnostics = {};
+    assert.equal(await validateCandidate(detailPage({ ...product.detail, ...changes }), product, diagnostics), null);
+    assert.equal(diagnostics.reason, reason);
   }
 });
 

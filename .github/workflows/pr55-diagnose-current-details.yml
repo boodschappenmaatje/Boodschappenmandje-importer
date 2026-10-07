@@ -1,0 +1,51 @@
+name: TEMP PR #55 current detail diagnostics — READ ONLY
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr55-current-detail-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    if: github.event.pull_request.number == 55 && github.event.pull_request.head.ref == 'codex/explicit-sku-catch-up-20261007' && github.event.pull_request.head.repo.full_name == 'boodschappenmaatje/Boodschappenmandje-importer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      HEADLESS: "1"
+      NODE_OPTIONS: --import=./scripts/pr55-readonly-fetch-guard.mjs
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run the exact 10 proven SKUs — dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp_csv="$RUNNER_TEMP/pr55-first-10.csv"
+          printf '%s\n' \
+            'sku,product_url' \
+            '000685000,https://hoogvliet.nl/product/bio-biologische-broccoli-000685000' \
+            '000958000,https://hoogvliet.nl/product/melkan-yoghurtdrink-aardbei-000958000' \
+            '000959000,https://hoogvliet.nl/product/melkan-yoghurtdrink-perzik-000959000' \
+            '003026000,https://hoogvliet.nl/product/pickwick-english-zwarte-thee-voor-pot-003026000' \
+            '003189000,https://hoogvliet.nl/product/westland-rundvleesslaatje-003189000' \
+            '003191000,https://hoogvliet.nl/product/westland-kipslaatje-003191000' \
+            '004155000,https://hoogvliet.nl/product/marmite-gistextract-004155000' \
+            '005291000,https://hoogvliet.nl/product/nivea-sun-spray-spf-20-005291000' \
+            '008582000,https://hoogvliet.nl/product/maggi-smaakmaker-voor-kippensoep-008582000' \
+            '009681000,https://hoogvliet.nl/product/pickwick-spices-zoethout-zwarte-thee-009681000' \
+            > "$tmp_csv"
+          npm run import:skus -- --file "$tmp_csv" --max 10 --dry-run

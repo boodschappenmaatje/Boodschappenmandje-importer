@@ -1194,14 +1194,59 @@ async function findCandidates(page, term, maxPages, options = {}) {
 
 async function extractProductDetails(page) {
   return page.evaluate(() => {
-    const root = document.querySelector(".product-details, [itemtype*='Product' i], main");
-    if (!root) return null;
+    const rootSelectors = [".product-details", "[itemtype*='Product' i]", "main"];
+    const rootSelector = rootSelectors.find(selector => document.querySelector(selector)) ?? null;
+    const root = rootSelector ? document.querySelector(rootSelector) : null;
     const cleanText = (value) => (value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim() || null;
+    const textFor = (scope, selector) => cleanText(scope?.querySelector(selector)?.textContent);
+    const selectorText = (selectors, scope = root) => selectors.map(selector => ({
+      selector,
+      text: textFor(scope, selector),
+    })).filter(item => item.text);
     const price = (element) => {
       if (!element) return null;
       const match = cleanText(element.textContent)?.replace(/\s+/g, "").match(/\d+[.,]\d{2}/);
       return match ? Number(match[0].replace(",", ".")) : null;
     };
+    const jsonLd = [];
+    for (const script of document.querySelectorAll("script[type='application/ld+json']")) {
+      try {
+        const parsed = JSON.parse(script.textContent || "null");
+        const values = Array.isArray(parsed) ? parsed : [parsed];
+        for (const value of values) {
+          const type = Array.isArray(value?.["@type"]) ? value["@type"] : [value?.["@type"]];
+          if (!type.some(item => /product/i.test(String(item || "")))) continue;
+          jsonLd.push({
+            sku: cleanText(value?.sku),
+            name: cleanText(value?.name),
+            brand: cleanText(typeof value?.brand === "string" ? value.brand : value?.brand?.name),
+            price: Number.isFinite(Number(value?.offers?.price)) ? Number(value.offers.price) : null,
+            packageText: cleanText(value?.weight?.value && value?.weight?.unitCode
+              ? `${value.weight.value} ${value.weight.unitCode}` : value?.size),
+          });
+        }
+      } catch {}
+    }
+    const evidence = {
+      root_selector: rootSelector,
+      root_found: Boolean(root),
+      sku_from_form: root?.querySelector("form[id^='productDetailForm_']")?.id?.replace("productDetailForm_", "") || null,
+      sku_from_path: location.pathname.match(/(?:^|-)(\d{9})\/?$/)?.[1] || null,
+      name_candidates: selectorText(["h1", "[itemprop='name']", "[data-testid*='name' i]"]),
+      package_candidates: selectorText([
+        ".unitPrice .ratio-base-packing-unit", ".ratio-base-packing-unit", ".package-size",
+        "[itemprop='weight']", "[data-testid*='package' i]", "[class*='package' i]",
+      ]),
+      price_candidates: [
+        ".price-display-container", ".kor-product-sale-price-value", ".product-promo-price",
+        "[itemprop='price']", "[data-testid*='price' i]", "[class*='price' i]",
+      ].flatMap(selector => {
+        const element = root?.querySelector(selector);
+        return element ? [{ selector, text: cleanText(element.textContent), value: price(element) }] : [];
+      }),
+      json_ld_products: jsonLd,
+    };
+    if (!root) return { details: null, evidence };
     const form = root.querySelector("form[id^='productDetailForm_']");
     const offerPeriod = Array.from(document.querySelectorAll("h3"))
       .map((element) => cleanText(element.textContent))
@@ -1210,19 +1255,29 @@ async function extractProductDetails(page) {
       .map((element) => cleanText(element.textContent)).filter(Boolean);
 
     return {
-      sku: (form?.id || "").replace("productDetailForm_", "")
-        || location.pathname.match(/(?:^|-)(\d{9})\/?$/)?.[1] || null,
-      name: cleanText(root.querySelector("h1")?.textContent),
+      details: {
+        sku: (form?.id || "").replace("productDetailForm_", "")
+          || location.pathname.match(/(?:^|-)(\d{9})\/?$/)?.[1] || null,
+        name: cleanText(root.querySelector("h1")?.textContent)
+          || cleanText(root.querySelector("[itemprop='name']")?.textContent)
+          || jsonLd[0]?.name || null,
       packageText: cleanText(root.querySelector(".unitPrice .ratio-base-packing-unit")?.textContent)
-        || cleanText(root.querySelector(".ratio-base-packing-unit")?.textContent),
+          || cleanText(root.querySelector(".ratio-base-packing-unit")?.textContent)
+          || cleanText(root.querySelector(".package-size")?.textContent)
+          || cleanText(root.querySelector("[itemprop='weight']")?.textContent)
+          || jsonLd[0]?.packageText || null,
       displayPrice: price(root.querySelector(".price-display-container"))
-        || price(root.querySelector(".kor-product-sale-price-value")),
+          || price(root.querySelector(".kor-product-sale-price-value"))
+          || price(root.querySelector("[itemprop='price']"))
+          || jsonLd[0]?.price || null,
       regularPrice: price(root.querySelector(".kor-product-sale-price-value")),
       offerPrice: price(root.querySelector(".product-promo-price")),
       promotionText: cleanText(root.querySelector(".promotion-short-title")?.textContent),
       offerPeriod,
       imageURL: root.querySelector("img.product-image")?.src || null,
       category: breadcrumbs.length > 1 ? breadcrumbs.at(-1) : null,
+      },
+      evidence,
     };
   });
 }
@@ -1261,13 +1316,18 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     throw error;
   }
   if (diagnostics) diagnostics.detailReachable = true;
-  const details = await extractProductDetails(page);
-  if (!details) return fail("notFound");
-  if (details.sku !== candidate.sku || !isValidSKU(details.sku)) return fail("invalidProduct");
+  const parsed = await extractProductDetails(page);
+  const details = parsed?.details ?? parsed;
+  if (diagnostics && parsed?.evidence) diagnostics.parser = parsed.evidence;
+  if (!details) return fail("parser_empty");
+  if (!details.sku) return fail("missing_sku");
+  if (details.sku !== candidate.sku) return fail("sku_mismatch");
+  if (!isValidSKU(details.sku)) return fail("invalid_sku");
 
   const name = clean(details.name);
   const packageText = clean(details.packageText);
-  if (!name || !packageText) return fail("invalidProduct");
+  if (!name) return fail("missing_name");
+  if (!packageText) return fail("missing_package");
 
   const promotionText = clean(details.promotionText);
   const offerText = clean(details.offerPeriod);
@@ -1307,7 +1367,7 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
     candidate.productType,
     candidate.searchTerm,
   );
-  return isReliableCatalogProduct(product) ? product : fail("invalidProduct");
+  return isReliableCatalogProduct(product) ? product : fail("unreliable_product");
 }
 
 export function claimCandidateSKU(candidate, seenSKUs, stats, termStats = null) {

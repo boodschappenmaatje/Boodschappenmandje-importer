@@ -254,11 +254,14 @@ export async function runExplicitSKUImport(config, input, logger = console, depe
       if (!product) {
         const status = validationStatus(diagnostics);
         results.push({ sku: candidate.sku, status, reason: diagnostics.reason ?? "invalidProduct",
-          detail_reachable: diagnostics.detailReachable === true, source_row: candidate.sourceRow });
+          detail_reachable: diagnostics.detailReachable === true,
+          parser: diagnostics.parser ?? null,
+          source_row: candidate.sourceRow });
         continue;
       }
       if (dryRun) {
-        results.push({ sku: candidate.sku, status: "valid", price: product.price, source_row: candidate.sourceRow });
+        results.push({ sku: candidate.sku, status: "valid", classification: "valid_new",
+          price: product.price, source_row: candidate.sourceRow });
         continue;
       }
       try {
