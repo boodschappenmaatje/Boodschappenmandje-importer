@@ -41,7 +41,8 @@ async function readSource() {
 }
 async function exactCount(table, filters = "") {
   const base = config.supabaseURL.replace(/\/$/, "");
-  const url = new URL(`${base}/rest/v1/${table}?select=id&limit=1${filters}`);
+  const keyColumn = table === "product_prices" ? "product_id" : "id";
+  const url = new URL(`${base}/rest/v1/${table}?select=${keyColumn}&limit=1${filters}`);
   const response = await fetch(url, { method:"GET", headers:{ ...requestHeaders(secret, "count=exact"), Range:"0-0" } });
   if (!response.ok) throw new Error(`read_only_count_failed:${table}:${response.status}`);
   const value = response.headers.get("content-range")?.split("/").at(-1);
