@@ -48,27 +48,44 @@ async function exactCount(table, filters = "") {
   if (!value || value === "*") throw new Error(`count_unavailable:${table}`);
   return Number(value);
 }
+async function readStatuses(table) {
+  const base = config.supabaseURL.replace(/\/$/, "");
+  const rows = [];
+  for (let offset = 0; offset < 20_000; offset += 1000) {
+    const url = new URL(`${base}/rest/v1/${table}?select=status&limit=1000`);
+    const response = await fetch(url, { method:"GET", headers:{ ...requestHeaders(secret, "count=exact"), Range:`${offset}-${offset+999}` } });
+    if (!response.ok) throw new Error(`read_only_statuses_failed:${table}:${response.status}`);
+    const page = await response.json();
+    if (!Array.isArray(page)) throw new Error(`invalid_status_rows:${table}`);
+    rows.push(...page);
+    if (page.length < 1000) return rows.map(row=>row.status);
+  }
+  throw new Error(`status_read_safety_limit:${table}`);
+}
 async function snapshot() {
-  const [products, priceStates, totalProducts, totalPrices, totalRuns, runningRuns, totalAttempts, runningAttempts, dailyJobs] = await Promise.all([
+  const [products, priceStates, totalProducts, totalPrices, totalRuns, runStatuses, totalAttempts, attemptStatuses, dailyJobs, dailyStatuses] = await Promise.all([
     fetchExistingProducts(config, { supermarketFilter:"ilike.Hoogvliet" }),
     fetchExistingPriceStates(config),
     exactCount("products"),
     exactCount("product_prices"),
     exactCount("catalog_import_runs"),
-    exactCount("catalog_import_runs", "&status=eq.running"),
+    readStatuses("catalog_import_runs"),
     exactCount("catalog_daily_attempts"),
-    exactCount("catalog_daily_attempts", "&status=eq.running"),
+    readStatuses("catalog_daily_attempts"),
     fetchRunningCatalogDailyJobs(config),
+    readStatuses("catalog_daily_jobs"),
   ]);
   const csv = await readSource();
   const firstTen = csv.products.slice(0,10);
   const skuSet = new Set(products.map(p=>p.sku).filter(Boolean));
-  const runningDaily = await exactCount("catalog_daily_jobs", "&status=in.(running,retry_scheduled)");
+  const activeRuns = runStatuses.filter(status=>status==="running").length;
+  const activeAttempts = attemptStatuses.filter(status=>status==="running").length;
+  const activeDaily = dailyStatuses.filter(status=>["running","retry_scheduled"].includes(status)).length;
   return {
     product_records:totalProducts, unique_hoogvliet_skus:skuSet.size, price_records:totalPrices,
-    price_states:priceStates.size, catalog_import_runs:totalRuns, running_catalog_imports:runningRuns,
-    daily_attempts:totalAttempts, running_daily_attempts:runningAttempts,
-    running_or_retry_scheduled_daily_jobs:runningDaily, running_daily_jobs:dailyJobs.length,
+    price_states:priceStates.size, catalog_import_runs:totalRuns, running_catalog_imports:activeRuns,
+    daily_attempts:totalAttempts, running_daily_attempts:activeAttempts,
+    running_or_retry_scheduled_daily_jobs:activeDaily, running_daily_jobs:dailyJobs.length,
     first_10_skus:firstTen.map(p=>p.sku),
     first_10_present:firstTen.filter(p=>skuSet.has(p.sku)).map(p=>p.sku),
   };
