@@ -1039,7 +1039,7 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 ## Keuze en scope
 
 - Gestart vanaf actuele `origin/main` **3fc161a214bf35d9721d73a31312a004f801ff5d**.
-- Draft PR #54 is open, mergeable en uitsluitend coverage/documentatie; daarom staat deze productiecode op een aparte branch **`codex/explicit-sku-catch-up-20261007`**. Er is geen merge of deploy uitgevoerd.
+- Draft PR #54 is open, mergeable en uitsluitend coverage/documentatie; daarom staat deze productiecode op een aparte branch **`codex/explicit-sku-catch-up-20261007`** met Draft PR **#55** tegen `main` (head **`62a977a469c61f96bec3e9333b6f017f1f01ee98`**). Er is geen merge of deploy uitgevoerd.
 - De normale daily growth-route is niet geschikt voor de bewezen 812 ontbrekende SKU's: die route scant brede catalogusdiscovery en kan tegen de runtimegrens stoppen zonder de gerichte set af te werken. De catch-up verandert alleen de kandidaatbron: expliciete CSV-SKU + gevalideerde product-URL.
 
 ## Implementatie
@@ -1058,4 +1058,4 @@ Deze opdracht is uitsluitend vastgelegd, niet uitgevoerd. De bredere roadmapfase
 
 ## Exacte Work-vervolgstap
 
-Work levert/controleert de originele missing CSV, voert uitsluitend `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run` uit tegen read-only Production en publieke Hoogvliet-details, bevestigt nul writes/brede discovery en rapporteert de per-SKU-classificaties. Daarna pas de normale releasegate; geen `--write`, merge of Production-import in deze Codex-stap.
+Work controleert eerst Draft PR #55 en CI, levert/controleert daarna de originele missing CSV en voert uitsluitend `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run` uit tegen read-only Production en publieke Hoogvliet-details. Work bevestigt nul writes/brede discovery en rapporteert de per-SKU-classificaties. Daarna pas de normale releasegate; geen `--write`, merge of Production-import in deze Codex-stap.
