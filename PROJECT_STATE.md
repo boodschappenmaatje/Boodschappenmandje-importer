@@ -1,3 +1,86 @@
+# Checkpoint — volledige dagelijkse catalogus- en prijsonderhoudsflow — 8 oktober 2026
+
+## Implementatie en root gap
+
+- Root gap opgelost: de normale daily route gebruikt nu één `daily-catalog-maintenance`-orchestrator voor de volledig en aantoonbaar uitgelezen actuele Hoogvliet-listingset. Nieuwe SKU's gaan door de bestaande exacte detailvalidator; bestaande SKU's gebruiken exacte SKU-GraphQL-prijs-/aanbiedingsdata en alleen bij ontbrekende/inconsistente bulkdata de bestaande detailfallback.
+- De orchestrator stelt eerst de volledige betrouwbare snapshot en alle benodigde fallbacks vast en schrijft daarna alleen nieuwe SKU's en werkelijk gewijzigde bestaande prijsstatussen via het bestaande `upsertProducts`-pad. Een onvolledige, geblokkeerde of lege snapshot bereikt geen writer. Per-SKU-fouten, 404, ontbrekende of niet-positieve prijs behouden last-known-good; er is geen deletepad voor verdwenen of Production-only SKU's.
+- Aanbiedingsnormalisatie is gecentraliseerd: actief schrijft actieprijs, normale `old_price`, `is_offer=true` en beschikbare periode/tekst; een betrouwbaar beëindigde/verlopen aanbieding schrijft de actuele normale prijs en wist de actieve aanbiedingstatus. Hoogvliet blijft de enige prijsbron; afbeeldingen en gebruikersdata vallen buiten deze route.
+- De bestaande 06:00 Europe/Amsterdam DST-gate, workflowconcurrency, `catalog_import_runs`-lock, watchdog en retryvensters zijn behouden. De monitor en retries beoordelen nu de maintenance-runstatus in plaats van een 400-doelstatus. De 70 globale pending readinessrijen worden niet gelezen of gemuteerd en blokkeren deze onderhoudsroute niet.
+
+## Limits en efficiëntiebewijs
+
+- Normale daily: geen target van 400 nieuwe producten, geen 1/7-prijsshard en geen max-100 prijsrefreshes meer. De oude growth/state-machine met max 400 blijft uitsluitend beschikbaar als expliciete handmatige legacy/catch-up-route via `import:daily-growth`; bestaande handmatige catalog/price/classify-routes zijn niet blind verwijderd.
+- Lokale read-only proof beoordeelt **8.355** actuele bestaande SKU's in één maintenance-assessment: **8.355 bulkprijschecks**, **0 detailfallbacks**, **0 writes** bij ongewijzigde prijzen. Listingfixtures bewijzen één GraphQL-call per vers listingvenster (2 vensters = 2 calls voor 3 SKU's), niet één detailbrowserbezoek per SKU. Dagelijkse aanbiedingstart en -einde zitten voor iedere actuele bestaande SKU in dezelfde bulkbeoordeling.
+- Detailfallback heeft alleen een fail-safe maximum van 500 voor nieuwe/onvolledige/inconsistente kandidaten; dit is geen dekkinglimiet voor betrouwbare bulkprijschecks. Listingtraversal heeft een ruime veiligheidsgrens van 800 vensters en moet bewezen uitputten voordat writes mogelijk zijn.
+
+## Tests, branch en overdracht
+
+- `npm test`: **405/405 groen**. Verplicht afgedekt: normale prijswijziging, aanbieding start/wijzigt/eindigt, expired offer, bronfout/last-known-good, null/€0, nieuwe SKU, verdwenen SKU, Production-only SKU, dedupe, geen 1/7 × 100, geen normale max-400 en geen gebruikersdata-/deletepad.
+- `npm run check`: **groen**. `npm run test:postgres`: **28/28 groen**. `git diff --check`: **groen**. De drie gewijzigde workflow-YAML-bestanden parsen geldig.
+- Branch: `codex/daily-catalog-maintenance-20261008`. Functionele code-head: `ddf61cd` (`Implement full daily catalog maintenance`). Draft PR: [#62](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/62).
+- Database-migratie: **nee**. `ROADMAP.md` is ongewijzigd: dit herstelt bestaand dagelijks onderhoud en introduceert geen apart roadmapdoel.
+- Exacte Work-vervolgstap: review Draft PR #62 en wacht op groene PR-CI; controleer workflowdiff en merge daarna pas via de normale releaseprocedure. Voer na merge maximaal één gecontroleerde scheduled-equivalent maintenance-run uit en controleer read-only runstatus, catalogus-/prijsaantallen, aanbiedingen en duplicates. Geen automatische retry buiten de bestaande watchdog, geen full rebuild en geen database-migratie.
+- In deze Codex-run zijn **geen Production-import, prijsrefresh, workflowdispatch, databasewrite, migratie, deploy of merge** uitgevoerd.
+
+---
+
+# Checkpoint — snelle audit dagelijkse catalogus- en prijsonderhoud — 8 oktober 2026
+
+## Audituitkomst
+
+- Technische basis: actuele `origin/main` en lokale HEAD zijn beide `c4c34a5`. Open Draft-PR's #54, #42, #41 en #21 leveren geen actuele daily-maintenancefix op; remote main blijft de technische waarheid.
+- De 06:00-flow voert dagelijks root→categorie-listingdiscovery uit en valideert nieuwe SKU's via exacte detail-SKU, naam, verpakking, Hoogvliet-URL en positieve prijs. Hij is echter nog een persistente **400-nieuwe-producten-job** en slaat bestaande SKU's tijdens growth-discovery over.
+- Bestaande prijzen lopen apart om 02:17 UTC: één van zeven SKU-shards per dag, met maximaal 100 producten uit een weekcyclusvenster. Bij circa 8.355 producten duurt één volledige ronde daardoor ongeveer 12 weken; dit is niet dagelijks actueel.
+- Voor een daadwerkelijk ververste SKU zijn aanbieding start/einde correct: actieve aanbieding schrijft `price=actieprijs`, `old_price=normale prijs`, `is_offer=true`; na bronvalidatie zonder actieve aanbieding worden `old_price=null` en `is_offer=false`. Een verlopen aanbieding kan door de trage ronde tot de volgende SKU-refresh opgeslagen actief blijven.
+- Last-known-good is veilig voor fetch-/parse-/not-found- en niet-positieve-prijsfouten: zo'n kandidaat wordt overgeslagen en `upsertProducts` weigert iedere niet-eindige of niet-positieve prijs vóór product-/prijswrites. Er is geen deletepad voor verdwenen of Production-only SKU's; beide blijven bestaan. Exacte SKU-dedupe en de database-upsertkey voorkomen productduplicaten.
+- Gerichte read-only regressiegate: `node --test test/importer.test.mjs test/daily-catalog-growth.test.mjs test/catalog-growth-integration.test.mjs` — **138/138 groen**.
+- De gewenste flow past op de bestaande discovery-, detail/GraphQL-validatie-, offernormalisatie- en Supabase-upsertcomponenten. De ontbrekende hoofdcomponent is één dagelijkse catalogusmaintenance-orchestrator die de actuele listingset reconcilieert, nieuwe SKU's veilig toevoegt en alle bestaande prijzen/aanbiedingen dagelijks ververst zonder groeidoel of deletes.
+- De 70 globale `pending` readiness-cacherijen blokkeren catalogus-/prijsmaintenance **niet**; dit blijft een los data-health-item en is niet verder onderzocht.
+
+| Onderdeel | Werkt al? | Belangrijkste bevinding | Wijziging nodig? |
+|---|---|---|---|
+| daily catalogus | Deels | Dagelijkse listingdiscovery bestaat, maar is target-400 growth en geen volledige maintenance-reconciliatie. | Ja |
+| nieuwe SKU | Ja | Exacte SKU/detail/data en positieve prijs zijn verplicht vóór insert; duplicates worden gededupliceerd. | Nee, hergebruiken |
+| bestaande prijs | Nee | Dagelijks slechts 1/7 shard × max. 100; volledige ronde circa 12 weken. | Ja |
+| aanbieding start | Deels | Semantiek is correct bij refresh, maar niet dagelijks voor iedere SKU. | Ja |
+| aanbieding einde | Deels | Refresh zet normale prijs en `is_offer=false`; expired state kan tot de volgende ronde blijven staan. | Ja |
+| last-known-good | Ja | Bron-/validatiefout schrijft geen vervangende prijs. | Nee, behouden |
+| null/€0 bescherming | Ja | Niet-eindige en niet-positieve prijs stopt vóór writes. | Nee, behouden |
+| verdwenen SKU | Ja | Not-found wordt overgeslagen; geen hard delete. | Nee, behouden |
+| Production-only | Ja | Niet in listing aangetroffen records worden niet verwijderd. | Nee, behouden |
+| max-400 | Ja, actief | 400 nieuwe producten is nog hard onderdeel van normale daily job/state machine en strijdt met de onderhoudseis. | Ja |
+| efficiëntie | Deels | Listings/API/GraphQL bestaan, maar prijsmaintenance gebruikt per geselecteerde SKU een detailpagina en bereikt slechts 100/dag. | Ja |
+| 70 pending readiness | N.v.t. | Blokkeert maintenance niet; los data-health-item. | Nee in deze scope |
+
+## BELANGRIJKSTE BEWEZEN HOOFDGAP
+
+- Er ontbreekt één dagelijkse catalogusmaintenance-orchestrator voor de volledige actuele SKU-set.
+- De normale daily flow is nog growth-only met doel 400 en slaat bestaande SKU's over; de aparte prijsflow ververst slechts 100 producten per dag.
+- Daardoor kunnen bestaande prijzen en aanbieding start/einde niet dagelijks actueel zijn.
+- Pas de bestaande daily workflow/orchestratie rond `collectProducts`, `refreshExistingProducts` en `upsertProducts` aan; geen nieuwe prijsbron of database-migratie nodig.
+
+## Implementatiecheckpoints
+
+### Checkpoint 1 — Codex
+
+- Doel: bouw de dagelijkse maintenance-orchestratie op de bestaande listing/API/GraphQL- en upsertlogica; verwijder max-400 als normaal daily doel; voeg nieuwe valide SKU's toe, ververs alle bestaande prijzen/aanbiedingen en behoud records die ontbreken of alleen in Production bestaan.
+- Concrete bestanden/componenten: `.github/workflows/import-hoogvliet-poc.yml`, `.github/workflows/retry-daily-catalog-import.yml`, `package.json`, `src/config.mjs`, `src/daily-catalog-growth.mjs` (of de vervangende daily-maintenance-entrypoint), `src/catalog-growth.mjs`, `src/hoogvliet.mjs`, `src/importer.mjs` en gerichte importer/daily/workflowtests.
+- Database-migratie: **nee**.
+- Tests, uitsluitend: (1) normale prijs verandert; (2) aanbieding start; (3) aanbieding eindigt; (4) fetchfout behoudt geldige prijs; (5) null/€0 overschrijft niets; (6) nieuwe SKU wordt toegevoegd; (7) verdwenen SKU blijft bestaan; (8) Production-only SKU blijft bestaan; (9) duplicates blijven 0.
+
+### Checkpoint 2 — Work
+
+- Doel: review/release van Checkpoint 1 en één gecontroleerde scheduled-equivalent acceptatie op de normale flow; bewijs daarna read-only de negen scenario-uitkomsten en dat de flow geen 400-nieuw-doel of deletepad meer gebruikt.
+- Concrete componenten: PR/CI, beide daily workflows, Actions-runsummary en read-only Production-nacontrole van producten/prijzen/duplicates.
+- Database-migratie: **nee**.
+- Tests: dezelfde negen scenario's; geen extra acceptatie-eisen.
+
+## Uitvoeringsgrens
+
+- In deze audit zijn **geen writes, productimports, prijsrefreshes, workflowdispatches, migraties of databasewijzigingen** uitgevoerd. Alleen `PROJECT_STATE.md` is bijgewerkt; `ROADMAP.md` blijft ongewijzigd omdat dit een correctie van bestaand importer-/maintenancegedrag is en geen nieuw structureel roadmaponderdeel.
+
+---
+
 # Checkpoint — PR #61 gerichte planner-maintenance — 8 oktober 2026
 
 ## Release en annulering check
