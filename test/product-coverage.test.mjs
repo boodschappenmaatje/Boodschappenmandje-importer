@@ -157,6 +157,50 @@ test("current detail JSON-LD plus exact catalog API package data reaches price v
   assert.equal(diagnostics.parser.catalog_api.matched_sku, "000685000");
 });
 
+test("current catalog GraphQL promotion fields map the active offer price pair", async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
+  t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  t.after(() => context.close());
+  await context.route("https://hoogvliet.nl/**", async route => {
+    if (new URL(route.request().url()).pathname === "/api/graphql") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: { products: { items: [{
+          sku: "733741000", url_key: "red-bull-pistache-winter-edition-733741000",
+          name: "Pistache winter edition", is_promotion: true,
+          promotion_meta_data: { raw_discount_label: { full_label: "Actie" } },
+          metadata: JSON.stringify({ verpakking: "Blik" }),
+          price_range: { minimum_price: {
+            regular_price: { value: 1.72 }, final_price: { value: 1.39 },
+            discount: { percent_off: 19.19 },
+          } },
+        }] } } }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><main><h1>Red Bull Pistache winter edition</h1>
+        <script type="application/ld+json">${JSON.stringify({
+          "@type": "Product", sku: "733741000", name: "Red Bull Pistache winter edition",
+          brand: { name: "Red Bull" }, offers: { price: 1.39 },
+        })}</script></main>`,
+    });
+  });
+  const page = await context.newPage();
+  const product = await validateCandidate(page, {
+    sku: "733741000",
+    sourceURL: "https://hoogvliet.nl/product/red-bull-pistache-winter-edition-733741000",
+    available: true, searchTerm: "catch-up:explicit-sku",
+  });
+  assert.deepEqual({ price: product.price, oldPrice: product.oldPrice, isOffer: product.isOffer }, {
+    price: 1.39, oldPrice: 1.72, isOffer: true,
+  });
+});
+
 test("current comparison-price markup detects the Red Bull offer without an offer-period label", async t => {
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   t.after(() => browser.close());

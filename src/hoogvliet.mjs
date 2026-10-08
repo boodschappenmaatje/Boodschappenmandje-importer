@@ -612,6 +612,28 @@ function catalogAPIPrice(item) {
     ?? null;
 }
 
+function catalogAPICurrentOffer(item) {
+  const minimum = item?.price_range?.minimum_price;
+  const currentPrice = Number(minimum?.final_price?.value ?? catalogAPIPrice(item));
+  const regularPrice = Number(minimum?.regular_price?.value);
+  const discountPercent = Number(minimum?.discount?.percent_off);
+  const promotion = item?.is_promotion === true
+    || String(item?.is_promotion ?? "").toLowerCase() === "true";
+  if (!promotion || !Number.isFinite(currentPrice) || currentPrice <= 0
+    || !Number.isFinite(regularPrice) || regularPrice <= currentPrice) return null;
+  const metadata = item?.promotion_meta_data ?? {};
+  return {
+    price: currentPrice,
+    regularPrice,
+    discountPercent: Number.isFinite(discountPercent) ? discountPercent : null,
+    offerText: clean(metadata?.raw_discount_label?.full_label)
+      || clean(metadata?.raw_discount_label?.text)
+      || clean(metadata?.korting_label),
+    validFrom: clean(metadata?.valid_from),
+    validTo: clean(metadata?.valid_to),
+  };
+}
+
 function catalogAPIPackage(item) {
   let metadata = {};
   try { metadata = typeof item?.metadata === "string" ? JSON.parse(item.metadata) : (item?.metadata ?? {}); }
@@ -1350,9 +1372,22 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
         name: clean(catalogItem?.name),
         package_text: catalogPackage,
         price: catalogAPIPrice(catalogItem),
+        current_offer: catalogAPICurrentOffer(catalogItem),
       },
     };
-    if (catalogPackage) details = { ...details, packageText: catalogPackage };
+    const catalogOffer = catalogAPICurrentOffer(catalogItem);
+    if (catalogPackage || catalogOffer) {
+      details = {
+        ...details,
+        ...(catalogPackage ? { packageText: catalogPackage } : {}),
+        ...(catalogOffer ? {
+          displayPrice: catalogOffer.price,
+          offerPrice: catalogOffer.price,
+          regularPrice: catalogOffer.regularPrice,
+          promotionText: catalogOffer.offerText ?? details.promotionText,
+        } : {}),
+      };
+    }
   }
 
   const name = clean(details.name);
