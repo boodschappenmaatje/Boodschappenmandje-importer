@@ -1,3 +1,30 @@
+# Checkpoint — PR #59 aanbiedingfix + final_batch3 read-only gate — 8 oktober 2026
+
+## Releases en CI
+
+- PR #59 `fix: detect current comparison-price offers` is squash-merged. Mergecommit: `3a40ab89f37da93f3fb171cfa388c68d2b3be5b3`. Main-CI run [37758471080](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37758471080) is groen.
+- PR #58 `feat: prepare final 12-SKU catch-up batch 3` is daarna squash-merged op de bijgewerkte main. Mergecommit en main-head tijdens de proof: `5b33fb9ce79e652d874975978b345d1f0a69c347`. Main-CI run [37758875614](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37758875614) is groen. PR #58 branch is niet apart bijgewerkt vóór merge; de merge is clean op de actuele main gemaakt en bevat daardoor PR #59. De final proof is rechtstreeks op die main uitgevoerd.
+- De PR #59 aanbiedingfix staat op main. Geen Vercel-deployment of handmatige Production-mutatie uitgevoerd; de wijzigingen betreffen importer/workflow.
+
+## Verse Production-precheck en final_batch3 proof
+
+- Direct vóór dispatch read-only gecontroleerd: **8.342 producten**, **8.342 unieke SKU's**, **8.342 prijsrecords**, **0 duplicate-SKU-groepen**; actieve daily jobs **0**, attempts **0**, running catalog-imports **0**, relevante locks **0**.
+- Vaste final input op main: `data/hoogvliet-missing-production-2026-10-08-final.csv`; SHA-256 `d5c43b501d4dfbf2498d1765340b354b4b487d47806c0b8683dcfcb748025dd5`; exact 12 SKU's. `727643000` is uitgesloten. Workflow-runner gebruikte alleen deze expliciete CSV en `npm run import:skus`; geen brede discovery.
+- Exact één read-only dispatch [run 37759464444](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37759464444), op main `5b33fb9ce79e652d874975978b345d1f0a69c347`, `source=final_batch3`, `mode=dry-run`, `max=12`. Uitkomst success; requested/processed **12/12**, `valid_new=12`, `already_exists=0`, `invalid=0`, `not_found=0`, `temporary_error=0`, `skipped=0`; importer-runtime **21.040 ms**. Producten **8.342 → 8.342**, prijzen **8.342 → 8.342**, productwrites **0**, prijswrites **0**. Er is geen write-dispatch of productimport gestart.
+- De 12 classificaties zijn exact de 12 toegestane SKU's in de final CSV; elke detailvalidatie was bereikbaar en prijs positief. Runner meldde 12/12 `valid_product_price`.
+
+## Aanbiedingssemantiek en veiligheidsbewijs
+
+- PR #59 bounded read-only audit [run 37751352900](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37751352900) bevestigde voor Red Bull Pistache winter edition (`733741000`) de actuele brondata en normalisatie: prijs **€1,39**, vergelijkingsprijs/`old_price` **€1,72**, `is_offer=true`, label `per blik 1,39`, geldigheid **2026-10-07 t/m 2026-10-13**. De periode is actueel op 8 oktober. Dezelfde audit testte 5/5 aanbiedingen en 5/5 niet-aanbiedingen correct, zonder Production-write.
+- De audit bevestigde ook dat verlopen aanbiedingen niet worden gereactiveerd; onbetrouwbare fetch/lege of niet-positieve prijs wist geen bestaande geldige prijs (last-known-good); er is geen geforceerde SKU-match. Dit is generieke importerlogica, geen SKU-hardcode.
+- Final dry-run gate: **PASS**. Geen brede discovery, parser/sourcefouten, ongeldige prijzen of writes waargenomen.
+
+## Vervolg
+
+- Geen finale write uitgevoerd. De finale 12 zijn technisch kandidaat voor één afzonderlijke expliciet geautoriseerde run. Vóór die run opnieuw Production-counts, duplicates, actieve jobs/attempts/imports/locks en final-CSV-checksum read-only controleren. Alleen bij schone precheck mag Work exact één keer `source=final_batch3`, `mode=write`, `max=12` dispatchen; daarna nacontrole en STOP. Geen automatische retry of volgende batch. `ROADMAP.md` is ongewijzigd.
+
+---
+
 # Checkpoint — aanbiedingenaudit PR #59 — Red Bull 733741000 — 8 oktober 2026
 
 ## Root cause en minimale fix
