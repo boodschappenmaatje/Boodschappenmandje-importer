@@ -1,0 +1,79 @@
+name: Explicit SKU catch-up
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Alleen write kiezen na expliciete Work-release-intentie; default blijft read-only
+        type: choice
+        required: false
+        default: dry-run
+        options:
+          - dry-run
+          - write
+      max:
+        description: Maximum aantal expliciete CSV-SKU's (1 t/m 400)
+        type: number
+        required: false
+        default: 10
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/import-explicit-skus.yml
+      - data/hoogvliet-missing-production-2026-10-06.csv
+      - scripts/run-explicit-sku-catch-up.mjs
+      - scripts/import-explicit-skus.mjs
+      - src/explicit-sku-catch-up.mjs
+      - test/explicit-sku-workflow.test.mjs
+      - package.json
+
+permissions:
+  contents: read
+
+# Share the normal importer mutex: no daily import can overlap a catch-up.
+concurrency:
+  group: hoogvliet-supabase-update
+  cancel-in-progress: false
+
+jobs:
+  explicit-sku-catch-up:
+    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && (github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RUNNER_EVENT_NAME: ${{ github.event_name }}
+      RUNNER_REF: ${{ github.ref }}
+      RUNNER_MODE: ${{ github.event_name == 'pull_request' && 'dry-run' || github.event.inputs.mode || 'dry-run' }}
+      RUNNER_MAX: ${{ github.event_name == 'pull_request' && '10' || github.event.inputs.max || '10' }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      HEADLESS: "1"
+    steps:
+      - name: Checkout triggering ref
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Patch whitespace valideren
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git diff --check "$BASE_SHA...$HEAD_SHA"
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+
+      # This runner invokes only npm run import:skus with the fixed trusted CSV.
+      - name: Explicit SKU integrity, write precheck and bounded import
+        run: node scripts/run-explicit-sku-catch-up.mjs
