@@ -33,11 +33,47 @@ jobs:
             apps/web/package-lock.json
       - run: npm ci
       - run: npm ci --prefix apps/web
-      # Fixtures/syntax only: no importer entry point, DB, secrets or network data.
       - name: Importer fixtures and seed consistency
         run: npm test && npm run check
       - name: PostgreSQL atomic rollback and concurrency gate
         run: npm run test:postgres
-      # Full web suite includes the core subset once, avoiding duplicate runs.
       - name: Web core flows, regressions, lint, TypeScript and build
         run: npm run check --prefix apps/web
+
+  pr55-explicit-sku-dry-run:
+    name: PR #55 explicit SKU 400 dry-run (read-only)
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 55 && github.event.pull_request.head.ref == 'codex/explicit-sku-catch-up-20261007' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    concurrency:
+      group: hoogvliet-supabase-update
+      cancel-in-progress: false
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      PR55_SOURCE_HEAD: 14008f4c0a0de784697a434fcd03c8ad4faef45c
+      HEADLESS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run exact 400-SKU read-only releasegate
+        env:
+          NODE_OPTIONS: --import=./scripts/pr55-readonly-guard.mjs
+        run: node scripts/pr55-400-dry-run-proof.mjs
+      - name: Upload read-only proof report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr55-explicit-sku-400-readonly-proof
+          path: artifacts/pr55-400-readonly-proof/
+          if-no-files-found: warn
+          retention-days: 7
