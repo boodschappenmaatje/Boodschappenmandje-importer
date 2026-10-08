@@ -612,6 +612,19 @@ function catalogAPIPrice(item) {
     ?? null;
 }
 
+function catalogAPIOfferDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const fields = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date).reduce((result, part) => {
+    if (part.type !== "literal") result[part.type] = part.value;
+    return result;
+  }, {});
+  return fields.year && fields.month && fields.day
+    ? `${fields.year}-${fields.month}-${fields.day}` : null;
+}
+
 function catalogAPICurrentOffer(item) {
   const minimum = item?.price_range?.minimum_price;
   const currentPrice = Number(minimum?.final_price?.value ?? catalogAPIPrice(item));
@@ -622,6 +635,9 @@ function catalogAPICurrentOffer(item) {
   if (!promotion || !Number.isFinite(currentPrice) || currentPrice <= 0
     || !Number.isFinite(regularPrice) || regularPrice <= currentPrice) return null;
   const metadata = item?.promotion_meta_data ?? {};
+  const validFrom = catalogAPIOfferDate(metadata?.valid_from);
+  const validUntil = catalogAPIOfferDate(metadata?.valid_to);
+  if (validFrom && validUntil && !isOfferPeriodActive({ validFrom, validUntil })) return null;
   return {
     price: currentPrice,
     regularPrice,
@@ -629,8 +645,8 @@ function catalogAPICurrentOffer(item) {
     offerText: clean(metadata?.raw_discount_label?.full_label)
       || clean(metadata?.raw_discount_label?.text)
       || clean(metadata?.korting_label),
-    validFrom: clean(metadata?.valid_from),
-    validTo: clean(metadata?.valid_to),
+    validFrom,
+    validTo: validUntil,
   };
 }
 
@@ -1385,6 +1401,8 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
           offerPrice: catalogOffer.price,
           regularPrice: catalogOffer.regularPrice,
           promotionText: catalogOffer.offerText ?? details.promotionText,
+          validFrom: catalogOffer.validFrom,
+          validUntil: catalogOffer.validTo,
         } : {}),
       };
     }
@@ -1435,8 +1453,8 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
       : null,
     isOffer: Boolean(simpleOffer),
     offerText: simpleOffer ? [promotionText, offerText].filter(Boolean).join(" · ") : null,
-    validFrom: simpleOffer ? period?.validFrom ?? null : null,
-    validUntil: simpleOffer ? period?.validUntil ?? null : null,
+    validFrom: simpleOffer ? details.validFrom ?? period?.validFrom ?? null : null,
+    validUntil: simpleOffer ? details.validUntil ?? period?.validUntil ?? null : null,
     fetchedAt: checkedAt.toISOString(),
   };
   product.productType = resolvedProductTypeForRefresh(

@@ -71,15 +71,17 @@ export function auditPriceRows(prices) {
 
 function sampleRows(prices, products) {
   const byID = new Map(products.map(product => [product.id, product]));
+  const today = new Date().toISOString().slice(0, 10);
   const usable = prices.filter(price => {
     const product = byID.get(price.product_id);
     return product && validProductURL(product.source_url) && /^\d{9}$/.test(String(product.sku));
   });
-  // A stored comparison pair is the useful audit population even when the
-  // importer previously forgot to set is_offer. Filtering on is_offer here
-  // would hide precisely the suspected regression we need to measure.
+  const activeStoredOffer = price => price.is_offer === true
+    && positive(price.old_price) > positive(price.price)
+    && (!price.valid_from || String(price.valid_from).slice(0, 10) <= today)
+    && (!price.valid_until || String(price.valid_until).slice(0, 10) >= today);
   const offerRows = usable
-    .filter(price => positive(price.old_price) > positive(price.price))
+    .filter(activeStoredOffer)
     .sort((a, b) => String(byID.get(a.product_id).sku).localeCompare(String(byID.get(b.product_id).sku)))
     .slice(0, SAMPLE_SIZE);
   const offerIDs = new Set(offerRows.map(price => price.product_id));
