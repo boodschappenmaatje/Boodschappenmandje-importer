@@ -1517,8 +1517,9 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 
 ## Branch, tests en releasegrens
 
-- Werk vanaf actuele main op branch **`codex/targeted-planner-maintenance-runner-20261008`**. Er is in Codex geen workflowdispatch, Production-call, import, prijsrefresh of merge uitgevoerd. Draft PR en definitieve head worden na de lokale gates geregistreerd.
+- Werk vanaf actuele main op branch **`codex/targeted-planner-maintenance-runner-20261008`**. Draft PR **#61** is open/mergeable op code-head **`2d471d813f61985425506292c37c3f5eec3fea72`**; de bestaande PR-checks zijn nog queued/pending. Er is in Codex geen workflowdispatch, Production-call, import, prijsrefresh of merge uitgevoerd.
 - Regressietests dekken manual-only/source/confirmation, exact 12 en uitsluiting `727643000`, UUID-/prijsvalidatie, actieve importer/advisory lock/current retry, ontbrekende secrets, non-2xx zonder retry, exact één POST, response/full-rebuildscope, geen importer-/writecode en secretredactie.
+- Lokale resultaten: `npm test` groen, `npm run check` groen, `npm run test:postgres` **28/28**, targeted regressies **13/13**, workflow-YAML parse groen en `git diff --check` groen.
 - `ROADMAP.md` blijft ongewijzigd. Work mag pas na Draft-PR-review en groene CI exact één handmatige run vanaf `main` starten, met de bevestigingstekst; bij enige precheckafwijking stopt de runner zonder POST.
 
 ---
