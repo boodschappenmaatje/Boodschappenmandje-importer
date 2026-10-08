@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import { pathToFileURL } from "node:url";
 import { validateCandidate } from "../src/hoogvliet.mjs";
+import { requestHeaders } from "../src/supabase.mjs";
 
 const PAGE_SIZE = 1000;
 const SAMPLE_SIZE = 5;
@@ -40,11 +41,8 @@ async function fetchAllRows(base, key, table, select, order) {
     const response = await fetch(url, {
       method: "GET",
       headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        Accept: "application/json",
+        ...requestHeaders(key, "count=exact"),
         Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        Prefer: "count=exact",
       },
       signal: AbortSignal.timeout(30_000),
     });
