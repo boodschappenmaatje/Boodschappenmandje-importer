@@ -342,7 +342,7 @@ export async function fetchExistingSKUs(config) {
 /// nodig zijn om dezelfde productpagina opnieuw betrouwbaar te valideren.
 /// Prijzen worden bewust niet uit deze read overgenomen: de actuele prijs moet
 /// opnieuw van de bijbehorende Hoogvliet-productpagina komen.
-export async function fetchExistingProducts(config) {
+export async function fetchExistingProducts(config, { supermarketFilter = "eq.Hoogvliet" } = {}) {
   const pageSize = 1000;
   const products = [];
   for (let offset = 0; offset < 20_000; offset += pageSize) {
@@ -353,7 +353,7 @@ export async function fetchExistingProducts(config) {
       {
         select: "id,sku,name,brand,category,package_text,weight_grams,image_url,source_url,is_available"
           + (config.productTypeSupported ? ",product_type" : ""),
-        supermarket: "eq.Hoogvliet",
+        supermarket: supermarketFilter,
         order: "sku.asc",
       },
       offset,
@@ -378,6 +378,34 @@ export async function fetchExistingProducts(config) {
     if (rows.length < pageSize) return products;
   }
   throw new Error("Veiligheidsgrens bereikt bij het ophalen van bestaande Supabase-producten.");
+}
+
+// The daily state-machine owns its own lock, while catalog_import_runs owns
+// the shared importer lock. Catch-up checks both before it requests the
+// existing catalog_import_runs lock.
+export async function fetchRunningCatalogDailyJobs(config) {
+  const rows = await getJSON(
+    config.supabaseURL,
+    "catalog_daily_jobs",
+    config.supabaseSecret,
+    {
+      select: "id,state_key,job_date,status,lock_expires_at",
+      status: "eq.running",
+      order: "job_date.asc",
+    },
+    0,
+    99,
+  );
+  if (!Array.isArray(rows) || rows.length >= 100) {
+    throw new Error("Actieve daily-importlocks overschrijden de veilige inspectiegrens.");
+  }
+  return rows.map((row) => ({
+    id: row?.id ?? null,
+    stateKey: row?.state_key ?? null,
+    jobDate: row?.job_date ?? null,
+    status: row?.status ?? null,
+    lockExpiresAt: row?.lock_expires_at ?? null,
+  }));
 }
 
 export async function fetchExistingPriceStates(config) {

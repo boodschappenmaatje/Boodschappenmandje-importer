@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
+import { chromium } from "playwright";
 import { catalogBatches, loadConfig } from "../src/config.mjs";
 import { DISCOVERY_STRATEGY_VERSION, buildDynamicDiscoveryTerms } from "../src/catalog-growth.mjs";
 import { PUBLIC_CATALOG_ROUTE, categoryDiscoveryRoute } from "../src/discovery-routes.mjs";
@@ -22,9 +23,14 @@ const settings = {
   searchTerms: [category], maxNewProducts: 400, growthMaxTotalPages: 800,
   growthMaxPagesPerTerm: 1, growthMaxCandidates: 5000, growthMaxRuntimeMs: 10000,
 };
-function detailPage(detail) {
+function detailPage(detail, catalogItems = []) {
   return { goto: async () => {}, waitForFunction: async () => {},
-    evaluate: async (_fn, selector) => selector ? { hasExpectedContent: true } : detail };
+    evaluate: async (_fn, argument) => {
+      if (argument?.variables?.filters?.sku) {
+        return { status: 200, body: { data: { products: { items: catalogItems } } } };
+      }
+      return argument?.selector ? { hasExpectedContent: true } : detail;
+    } };
 }
 
 test("the daily route is the current public catalog root and has no keyword fallback", () => {
@@ -97,9 +103,58 @@ test("existing SKU is skipped, valid new detail is retained and invalid detail i
 
 test("detail validation remains authoritative for SKU, package and positive price", async () => {
   const product = fixture.products[0];
-  for (const changes of [{ sku: "123456789" }, { packageText: "" }, { displayPrice: 0 }, { displayPrice: null }]) {
-    assert.equal(await validateCandidate(detailPage({ ...product.detail, ...changes }), product), null);
+  const cases = [
+    [{ sku: "123456789" }, "sku_mismatch"],
+    [{ packageText: "" }, "missing_package"],
+    [{ displayPrice: 0 }, "invalidPrice"],
+    [{ displayPrice: null }, "invalidPrice"],
+  ];
+  for (const [changes, reason] of cases) {
+    const diagnostics = {};
+    assert.equal(await validateCandidate(detailPage({ ...product.detail, ...changes }), product, diagnostics), null);
+    assert.equal(diagnostics.reason, reason);
   }
+});
+
+test("current detail JSON-LD plus exact catalog API package data reaches price validation", async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
+  t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  t.after(() => context.close());
+  await context.route("https://hoogvliet.nl/**", async route => {
+    if (new URL(route.request().url()).pathname === "/api/graphql") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: { products: { items: [{
+          sku: "000685000", url_key: "bio-biologische-broccoli-000685000", name: "Bio+ Biologische broccoli",
+          metadata: JSON.stringify({ verpakking: "Stuks" }),
+          price_range: { minimum_price: { final_price: { value: 1.99 } } },
+        }] } } }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><main><h1>Bio+ Biologische broccoli</h1>
+        <script type="application/ld+json">${JSON.stringify({
+          "@type": "Product", sku: "000685000", name: "Bio+ Biologische broccoli",
+          brand: { name: "Bio+" }, offers: { price: 1.99 },
+        })}</script></main>`,
+    });
+  });
+  const page = await context.newPage();
+  const diagnostics = {};
+  const product = await validateCandidate(page, {
+    sku: "000685000", sourceURL: "https://hoogvliet.nl/product/bio-biologische-broccoli-000685000",
+    available: true, searchTerm: "catch-up:explicit-sku",
+  }, diagnostics);
+  assert.equal(product.sku, "000685000");
+  assert.equal(product.packageText, "Stuks");
+  assert.equal(product.price, 1.99);
+  assert.equal(diagnostics.reason, undefined);
+  assert.equal(diagnostics.parser.catalog_api.matched_sku, "000685000");
 });
 
 test("a stale product detail HTTP 404 is a safe invalid-detail rejection", async () => {
