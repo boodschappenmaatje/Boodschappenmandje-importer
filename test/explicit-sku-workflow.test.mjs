@@ -10,17 +10,22 @@ import {
   TRUSTED_CSV_PATH,
   TRUSTED_CSV_SHA256,
   TRUSTED_CSV_SKU_COUNT,
+  TRUSTED_CSVS,
 } from "../scripts/run-explicit-sku-catch-up.mjs";
 import { parseExplicitSKUCSV } from "../src/explicit-sku-catch-up.mjs";
 
 const rootFile = path => new URL(`../${path}`, import.meta.url);
 
-test("runner is isolated to explicit SKUs and the fixed checksummed CSV", async () => {
+test("runner is isolated to allowlisted explicit-SKU CSVs with checksums", async () => {
   const workflow = await readFile(rootFile(".github/workflows/import-explicit-skus.yml"), "utf8");
   const runner = await readFile(rootFile("scripts/run-explicit-sku-catch-up.mjs"), "utf8");
   assert.equal(TRUSTED_CSV_PATH, "data/hoogvliet-missing-production-2026-10-06.csv");
   assert.equal(TRUSTED_CSV_SHA256, "a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246");
   assert.equal(TRUSTED_CSV_SKU_COUNT, 812);
+  assert.equal(TRUSTED_CSVS.residual_batch2.path, "data/hoogvliet-missing-production-2026-10-08-residual.csv");
+  assert.equal(TRUSTED_CSVS.residual_batch2.sha256, "dd785a974054c257d7c4d2bc6248204ab8fe8e971bd865c16a2c2785b3e57254");
+  assert.equal(TRUSTED_CSVS.residual_batch2.skuCount, 412);
+
   const csvBytes = await readFile(rootFile(TRUSTED_CSV_PATH));
   assert.equal(createHash("sha256").update(csvBytes).digest("hex"), TRUSTED_CSV_SHA256);
   const parsed = parseExplicitSKUCSV(csvBytes.toString("utf8"), { maxBatchSize: 400 });
@@ -30,6 +35,19 @@ test("runner is isolated to explicit SKUs and the fixed checksummed CSV", async 
   assert.equal(parsed.invalidRows.length, 0);
   assert.equal(parsed.duplicateRows.length, 0);
   assert.equal(parsed.candidates[0].sku, "000685000");
+
+  const residualBytes = await readFile(rootFile(TRUSTED_CSVS.residual_batch2.path));
+  assert.equal(createHash("sha256").update(residualBytes).digest("hex"), TRUSTED_CSVS.residual_batch2.sha256);
+  const residual = parseExplicitSKUCSV(residualBytes.toString("utf8"), { maxBatchSize: 400 });
+  const originalSKUs = parsed.candidates.map(candidate => candidate.sku);
+  const residualSKUs = residual.candidates.map(candidate => candidate.sku);
+  assert.equal(residual.inputRows, 412);
+  assert.equal(residual.uniqueSKUs, 412);
+  assert.equal(residual.invalidRows.length, 0);
+  assert.equal(residual.duplicateRows.length, 0);
+  assert.deepEqual(residualSKUs, originalSKUs.slice(400));
+  assert.equal(residualSKUs.some(sku => originalSKUs.slice(0, 400).includes(sku)), false);
+  assert.match(workflow, /residual_batch2/);
   assert.match(runner, /npm run import:skus/);
   assert.doesNotMatch(runner, /import:daily|catalog:root|catalog-growth|collectProducts|findCandidates/);
   assert.match(workflow, /pull_request:/);
@@ -42,7 +60,7 @@ test("missing dispatch mode defaults to read-only dry-run", () => {
     RUNNER_REF: "refs/heads/main",
     RUNNER_MODE: "",
     RUNNER_MAX: "",
-  }), { event: "workflow_dispatch", ref: "refs/heads/main", mode: "dry-run", max: 10 });
+  }), { event: "workflow_dispatch", ref: "refs/heads/main", mode: "dry-run", max: 10, source: "original" });
   assert.equal(needsProductionPrecheck("dry-run"), false);
   assert.deepEqual(buildImporterArgs({ mode: "dry-run", max: 10 }), [
     "run", "import:skus", "--", "--file", TRUSTED_CSV_PATH, "--max", "10", "--dry-run",
@@ -53,7 +71,7 @@ test("write requires workflow_dispatch, main ref, and explicit write intent", ()
   assert.deepEqual(resolveRunnerConfig({
     RUNNER_EVENT_NAME: "workflow_dispatch", RUNNER_REF: "refs/heads/main",
     RUNNER_MODE: "write", RUNNER_MAX: "400",
-  }), { event: "workflow_dispatch", ref: "refs/heads/main", mode: "write", max: 400 });
+  }), { event: "workflow_dispatch", ref: "refs/heads/main", mode: "write", max: 400, source: "original" });
   assert.throws(() => resolveRunnerConfig({
     RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
     RUNNER_MODE: "write", RUNNER_MAX: "10",
@@ -63,6 +81,10 @@ test("write requires workflow_dispatch, main ref, and explicit write intent", ()
     RUNNER_MODE: "write", RUNNER_MAX: "10",
   }), /main/);
   assert.equal(buildImporterArgs({ mode: "write", max: 400 }).at(-1), "--write");
+  assert.deepEqual(buildImporterArgs({ mode: "dry-run", max: 10, source: "residual_batch2" }), [
+    "run", "import:skus", "--", "--file", TRUSTED_CSVS.residual_batch2.path, "--max", "10", "--dry-run",
+  ]);
+  assert.throws(() => buildImporterArgs({ mode: "dry-run", max: 10, source: "../arbitrary.csv" }), /vaste vertrouwde CSV-keuze/);
   assert.equal(needsProductionPrecheck("write"), true);
 });
 
@@ -119,12 +141,20 @@ test("idle read-only precheck passes and exposes no credentials", async () => {
 test("pull request proof is fixed to dry-run max=10; the normal daily workflow stays separate", async () => {
   assert.deepEqual(resolveRunnerConfig({
     RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
-    RUNNER_MODE: "dry-run", RUNNER_MAX: "10",
-  }), { event: "pull_request", ref: "refs/pull/55/merge", mode: "dry-run", max: 10 });
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "10", RUNNER_SOURCE: "residual_batch2",
+  }), { event: "pull_request", ref: "refs/pull/55/merge", mode: "dry-run", max: 10, source: "residual_batch2" });
   assert.throws(() => resolveRunnerConfig({
     RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
-    RUNNER_MODE: "dry-run", RUNNER_MAX: "11",
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "11", RUNNER_SOURCE: "residual_batch2",
   }), /max=10/);
+  assert.throws(() => resolveRunnerConfig({
+    RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "10", RUNNER_SOURCE: "original",
+  }), /residual-bron/);
+  assert.throws(() => resolveRunnerConfig({
+    RUNNER_EVENT_NAME: "workflow_dispatch", RUNNER_REF: "refs/heads/main",
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "10", RUNNER_SOURCE: "../path.csv",
+  }), /vaste vertrouwde CSV-keuze/);
   const daily = await readFile(rootFile(".github/workflows/import-hoogvliet-poc.yml"), "utf8");
   assert.doesNotMatch(daily, /import-explicit-skus|run-explicit-sku-catch-up/);
 });

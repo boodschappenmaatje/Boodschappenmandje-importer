@@ -4,9 +4,23 @@ import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { parseExplicitSKUCSV } from "../src/explicit-sku-catch-up.mjs";
 
-export const TRUSTED_CSV_PATH = "data/hoogvliet-missing-production-2026-10-06.csv";
-export const TRUSTED_CSV_SHA256 = "a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246";
-export const TRUSTED_CSV_SKU_COUNT = 812;
+export const TRUSTED_CSVS = Object.freeze({
+  original: Object.freeze({
+    path: "data/hoogvliet-missing-production-2026-10-06.csv",
+    sha256: "a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246",
+    skuCount: 812,
+    firstSku: "000685000",
+  }),
+  residual_batch2: Object.freeze({
+    path: "data/hoogvliet-missing-production-2026-10-08-residual.csv",
+    sha256: "dd785a974054c257d7c4d2bc6248204ab8fe8e971bd865c16a2c2785b3e57254",
+    skuCount: 412,
+    firstSku: "697042000",
+  }),
+});
+export const TRUSTED_CSV_PATH = TRUSTED_CSVS.original.path;
+export const TRUSTED_CSV_SHA256 = TRUSTED_CSVS.original.sha256;
+export const TRUSTED_CSV_SKU_COUNT = TRUSTED_CSVS.original.skuCount;
 const MAX_BATCH_SIZE = 400;
 const PR_READ_ONLY_MAX = 10;
 
@@ -15,6 +29,7 @@ export function resolveRunnerConfig(env = process.env) {
   const ref = String(env.RUNNER_REF ?? "").trim();
   const rawMode = String(env.RUNNER_MODE ?? "").trim() || "dry-run";
   const rawMax = String(env.RUNNER_MAX ?? "").trim() || "10";
+  const rawSource = String(env.RUNNER_SOURCE ?? "").trim() || "original";
 
   if (!["workflow_dispatch", "pull_request"].includes(event)) {
     throw new Error("Alleen workflow_dispatch en de read-only pull_request-proof zijn toegestaan.");
@@ -25,9 +40,15 @@ export function resolveRunnerConfig(env = process.env) {
   if (!Number.isSafeInteger(max) || max < 1 || max > MAX_BATCH_SIZE) {
     throw new Error("Max moet tussen 1 en 400 liggen.");
   }
+  if (!Object.hasOwn(TRUSTED_CSVS, rawSource)) {
+    throw new Error("Source moet een vaste vertrouwde CSV-keuze zijn.");
+  }
 
   if (event === "pull_request" && (rawMode !== "dry-run" || max !== PR_READ_ONLY_MAX)) {
     throw new Error("Een pull_request mag uitsluitend de vaste read-only proof met max=10 uitvoeren.");
+  }
+  if (event === "pull_request" && rawSource !== "residual_batch2") {
+    throw new Error("Een pull_request mag uitsluitend de vertrouwde residual-bron dry-runnen.");
   }
   if (event === "workflow_dispatch" && ref !== "refs/heads/main") {
     throw new Error("Handmatige importdispatch is alleen toegestaan vanaf main.");
@@ -35,16 +56,18 @@ export function resolveRunnerConfig(env = process.env) {
   if (rawMode === "write" && (event !== "workflow_dispatch" || ref !== "refs/heads/main")) {
     throw new Error("Write vereist expliciete workflow_dispatch met mode=write vanaf main.");
   }
-  return { event, ref, mode: rawMode, max };
+  return { event, ref, mode: rawMode, max, source: rawSource };
 }
 
-export function buildImporterArgs({ mode, max }) {
+export function buildImporterArgs({ mode, max, source = "original" }) {
   if (!["dry-run", "write"].includes(mode)) throw new Error("Ongeldige importmode.");
   if (!Number.isSafeInteger(max) || max < 1 || max > MAX_BATCH_SIZE) {
     throw new Error("Max moet tussen 1 en 400 liggen.");
   }
+  const trusted = TRUSTED_CSVS[source];
+  if (!trusted) throw new Error("Source moet een vaste vertrouwde CSV-keuze zijn.");
   return [
-    "run", "import:skus", "--", "--file", TRUSTED_CSV_PATH,
+    "run", "import:skus", "--", "--file", trusted.path,
     "--max", String(max), mode === "write" ? "--write" : "--dry-run",
   ];
 }
@@ -208,7 +231,7 @@ async function writeStepSummary(config, input, checksum, result) {
     "## Explicit SKU catch-up",
     `- Mode: ${config.mode}`,
     `- Requested max: ${config.max}; requested: ${result.requested}; processed: ${result.processed}`,
-    `- CSV SHA-256: ${checksum}; input SKU count: ${input.uniqueSKUs}`,
+    `- Source: ${config.source}; CSV SHA-256: ${checksum}; input SKU count: ${input.uniqueSKUs}`,
     `- valid_new: ${result.valid_product_price}; imported: ${result.imported}; already_exists: ${result.already_exists}`,
     `- invalid: ${result.invalid}; not_found: ${result.not_found}; temporary_error: ${result.temporary_error}; skipped: ${result.skipped}`,
     `- Runtime: ${result.runtime_duration_ms} ms`,
@@ -220,22 +243,23 @@ async function writeStepSummary(config, input, checksum, result) {
 
 export async function main(env = process.env) {
   const config = resolveRunnerConfig(env);
-  const fileBytes = await readFile(TRUSTED_CSV_PATH);
+  const trusted = TRUSTED_CSVS[config.source];
+  const fileBytes = await readFile(trusted.path);
   const checksum = createHash("sha256").update(fileBytes).digest("hex");
-  if (checksum !== TRUSTED_CSV_SHA256) throw new Error("Trusted CSV SHA-256 wijkt af; import geweigerd.");
+  if (checksum !== trusted.sha256) throw new Error("Trusted CSV SHA-256 wijkt af; import geweigerd.");
 
   const parsed = parseExplicitSKUCSV(fileBytes.toString("utf8"), { maxBatchSize: MAX_BATCH_SIZE });
-  if (parsed.inputRows !== TRUSTED_CSV_SKU_COUNT
-    || parsed.uniqueSKUs !== TRUSTED_CSV_SKU_COUNT
-    || parsed.candidates.length !== TRUSTED_CSV_SKU_COUNT
+  if (parsed.inputRows !== trusted.skuCount
+    || parsed.uniqueSKUs !== trusted.skuCount
+    || parsed.candidates.length !== trusted.skuCount
     || parsed.invalidRows.length !== 0
     || parsed.duplicateRows.length !== 0
-    || parsed.candidates[0]?.sku !== "000685000") {
-    throw new Error("Trusted CSV-set voldoet niet aan de bewezen 812-SKU-integriteitscheck.");
+    || parsed.candidates[0]?.sku !== trusted.firstSku) {
+    throw new Error("Trusted CSV-set voldoet niet aan de vastgelegde integriteitscheck.");
   }
 
-  console.log(`Mode: ${config.mode}; requested max: ${config.max}`);
-  console.log(`Trusted CSV: ${TRUSTED_CSV_PATH}; SHA-256: ${checksum}; input SKU count: ${parsed.uniqueSKUs}`);
+  console.log(`Mode: ${config.mode}; source: ${config.source}; requested max: ${config.max}`);
+  console.log(`Trusted CSV: ${trusted.path}; SHA-256: ${checksum}; input SKU count: ${parsed.uniqueSKUs}`);
 
   if (needsProductionPrecheck(config.mode)) {
     const state = await precheckProductionImportState(env);
