@@ -11,7 +11,7 @@
 - Workflow-run [37734457123](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37734457123) draaide eenmaal via `workflow_dispatch` op `main` / commit `296df858fd63fe469732d73a60bfc3ca76bf4b5e`, `mode=write`, `max=400`. Run-conclusie: success.
 - Exact commando: `npm run import:skus -- --file data/hoogvliet-missing-production-2026-10-06.csv --max 400 --write`. De workflow startte geen brede discovery.
 - Resultaat: requested 400; processed 400; imported/valid_product_price 400; already_exists 0; invalid 0; not_found 0; temporary_error 0; skipped 412, allemaal `max_batch_size`. Input: 812 rijen / 812 uniek. Geen stopreason of post-read-error.
-- Importerruntime: 588.757 ms (9:48,757); totale Actions-run: circa 10:47. De 400 geïmporteerde SKU's zijn exact gelijk aan de eerste 400 CSV-SKU's; de 188 voorloopnul-SKU's in die batch zijn byte-exact behouden en alle geïmporteerde prijzen waren > €0.
+- Importerruntime: 588,757 seconden (9 min 48,757 s; runtime_duration_ms=588757); totale Actions-run: circa 10 min 47 s. De 400 geïmporteerde SKU's zijn exact gelijk aan de eerste 400 CSV-SKU's; de 188 voorloopnul-SKU's in die batch zijn byte-exact behouden en alle geïmporteerde prijzen waren > €0.
 
 ## Production-precheck en nacontrole
 
