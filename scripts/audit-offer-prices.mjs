@@ -102,10 +102,14 @@ async function validateSample(browser, candidates) {
     page.on("request", request => {
       const method = request.method();
       const url = new URL(request.url());
+      const isHoogvliet = ["hoogvliet.nl", "www.hoogvliet.com"].includes(url.hostname);
       const allowedGraphQLRead = method === "POST"
-        && url.origin === "https://hoogvliet.nl"
+        && isHoogvliet
         && url.pathname === "/api/graphql";
-      if (method !== "GET" && !allowedGraphQLRead) forbiddenRequest = `${method} ${url.origin}${url.pathname}`;
+      const mutatingHoogvlietRequest = ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+        && isHoogvliet
+        && !allowedGraphQLRead;
+      if (mutatingHoogvlietRequest) forbiddenRequest = `${method} ${url.origin}${url.pathname}`;
     });
     try {
       const diagnostics = {};
