@@ -1104,3 +1104,35 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 
 - PR #55 blijft open, Draft en mergeable. Branch blijft **`codex/explicit-sku-catch-up-20261007`**; de actuele finale head wordt door de PR/branchcontrole vastgesteld. `ROADMAP.md` is niet gewijzigd.
 - Work controleert eerst de nieuwe PR-head en CI. Daarna voert Work uitsluitend de releasegate voor de volledige bewezen CSV uit als read-only bounded catch-up, bijvoorbeeld `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 400 --dry-run`, met dezelfde nul-write- en geen-discovery-controles. Alleen na review van die volledige dry-run is een afzonderlijke, expliciet goedgekeurde Work-opdracht voor `--write` toegestaan. Geen merge in deze stap.
+
+
+# Checkpoint 45 — finale 400-SKU read-only dry-run — 8 oktober 2026
+
+## Proof en Production-precheck
+
+- PR #55 importerbron: `14008f4c0a0de784697a434fcd03c8ad4faef45c`. Tijdelijke proofcommit: `af01d515873806257c22fdbc231fefc194ee66d0`.
+- Eén GitHub Actions-run: **37725393034**. Exacte opdracht: `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 400 --dry-run`. Geen `--write`.
+- Originele CSV geverifieerd met SHA-256 `a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246`: 812 rijen, 812 unieke SKU's, geen lege/duplicate SKU's; de eerste SKU `000685000` behield de leading zero's.
+- Precheck liet geen actieve catalog-importrun, daily-job of daily-attempt zien; daarom is de ene read-only proof uitgevoerd.
+- De expliciete selectie was de eerste 400 rijen/SKU's (CSV-rijen 2–401). De overige 412 rijen zijn door de importer met `skipped / max_batch_size` gerapporteerd en niet gevalideerd of ontdekt.
+
+## Werkelijke importresultaten
+
+- Requested / processed: **400 / 400**.
+- `valid_new`: **400**; `already_exists`: **0**; `invalid`: **0**; `not_found`: **0**; `temporary_error`: **0**; `skipped`: **412** (uitsluitend buiten de ingestelde max).
+- Alle 400 geselecteerde SKU's kwamen één keer voor en detailvalidatie was bereikbaar voor 400/400. Gevalideerde prijzen: €0,34–€20,99; geen ontbrekende, nul- of negatieve prijs. De bestaande validator controleerde exacte SKU, productnaam, verpakking, positieve prijs en Hoogvliet-productbron/URL; er waren geen invalid reason codes.
+- Importer runtime: **755.496 ms** (12:35,5; gemiddeld **1.888,74 ms per verwerkte SKU**). Proofcommand inclusief Production-snapshots: 764.263 ms.
+- Discovery: **nee** — alleen de CSV-kandidaten; geen rootcategorie-/listingcrawl of listingpagination.
+- Production vóór/na: **7.543 → 7.543** producten en **7.543 → 7.543** prijzen. `catalog_import_runs`: **54 → 54**. Volledige product-, prijs-, import-run-, daily-job- en attempt-snapshothashes bleven gelijk; geselecteerde SKU-membership bleef gelijk. Productwrites **0**, prijswrites **0**, geblokkeerde Node non-GET calls **0**.
+
+## Gate-uitkomst en verifierafwijking
+
+- De importer-dry-run zelf voldoet aan de inhoudelijke 400-SKU-criteria: 400/400 valid nieuw, zonder source/parserfout of write.
+- De tijdelijke Actions-proofstap eindigde formeel **FAIL** door een fout in de tijdelijke proofverifier: die eiste ten onrechte exact 400 resultregels/klassificaties. De bestaande importer retourneert conform zijn contract ook de 412 niet-geselecteerde CSV-rijen als `skipped`; daardoor waren er 812 resultregels en rapporteerde de helper ten onrechte FAIL. Dit is een verifier false negative, geen importer- of bronfout. Normale release-gates in dezelfde run waren groen: `npm test && npm run check`, PostgreSQL gate en web core/regressions/build.
+- Formele releasebeslissing blijft **FAIL / nog niet vrijgeven** totdat deze verifierafwijking is gecorrigeerd of expliciet is afgetekend. De 400-SKU-importerlogica hoeft hiervoor niet aangepast te worden. Er is geen tweede dry-run gestart.
+- Proofartifact: `pr55-explicit-sku-400-readonly-proof` (Actions artifact 11527727986; run 37725393034; 7 dagen geldig vanaf 8 oktober 2026).
+
+## Opruiming en vervolg
+
+- Tijdelijke workflowwijziging, originele CSV-kopie en proofhelperbestanden zijn uit PR #55 verwijderd; de oorspronkelijke `.github/workflows/core-flows.yml` is hersteld. De PR blijft Draft/open en is niet gemerged of gedeployed. Alleen deze documentatie-update blijft als wijziging van deze proofrun over; `ROADMAP.md` is niet gewijzigd.
+- Eerstvolgende actie: corrigeer uitsluitend de tijdelijke verifierassertie zodat `processed=400` en de 412 `max_batch_size`-skips buiten de batch worden verwacht. Geen nieuwe importer-dry-run of echte batch is door deze run gestart. Pas na een groene formele releasegate kan een aparte release-opdracht de Production-deploy en echte catch-up batch 1 beoordelen.
