@@ -1,3 +1,30 @@
+# Checkpoint — geverifieerde residual-input voor catch-up batch 2 — 8 oktober 2026
+
+## Production-gebonden residual
+
+- Gebaseerd op remote main `12ed0f2bb3b33283a7ac9e1d8791d94de6f82fe1`; PR #56 mergecommit `296df858fd63fe469732d73a60bfc3ca76bf4b5e`.
+- Verse read-only Production-snapshot: 7.943 producten, 7.943 unieke Hoogvliet-SKU's, 7.943 prijsrecords, 0 dubbele SKU-groepen, 0 actieve daily jobs, 0 actieve attempts, 0 actieve catalog-imports en 0 actieve locks.
+- De originele CSV `data/hoogvliet-missing-production-2026-10-06.csv` bevat 812 unieke niet-lege SKU's. Production bevatte 400 uit die set, en alle eerste 400 SKU's van batch 1 waren aanwezig. Residual is berekend als de volledige originele set MINUS de actuele Production-SKU's; dus niet op basis van een blinde rij-offset.
+- Residualbestand: `data/hoogvliet-missing-production-2026-10-08-residual.csv`; 412 rijen, 412 uniek, geen lege SKU's, 0 overlap met Production en 0 overlap met batch 1. De 412 SKU's zijn byte-exact de originele CSV-waarden buiten de eerste batch. SHA-256: `dd785a974054c257d7c4d2bc6248204ab8fe8e971bd865c16a2c2785b3e57254`.
+
+## Runnerroute en read-only proof
+
+- PR #57 branch `codex/residual-sku-catch-up-batch2-20261008`; code/data-head die de proof draaide: `4106c51f476b0267c7bf5492a4de492445b36cfe`. PR #57 is Draft; geen merge.
+- De bestaande runner gebruikt een vaste enumeratie `original` / `residual_batch2`; geen vrije pad- of URL-input. Pull-request-runs zijn vastgepind op `residual_batch2`, `dry-run`, max 10. Alleen expliciete workflow_dispatch op main kan write kiezen; max blijft 1–400. Beide routes roepen alleen `npm run import:skus` aan; daily workflow en importerlogica zijn ongewijzigd.
+- Read-only proof [Actions-run 37737744075](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37737744075): source `residual_batch2`, exact commando `npm run import:skus -- --file data/hoogvliet-missing-production-2026-10-08-residual.csv --max 10 --dry-run`; requested/processed 10/10, valid_new 10, imported 0, already_exists/invalid/not_found/temporary_error elk 0, skipped 402 uitsluitend `max_batch_size`; runtime 20.225 ms.
+- De 10 gevalideerde SKU's zijn exact residual-rijen 1–10: `697042000, 697052000, 697147000, 697409000, 697422000, 697501000, 697542000, 697560000, 697957000, 697960000`; allemaal `valid_new`, met positieve prijzen. Geen batch-1 SKU of geforceerde match.
+- Geen brede discovery. Producten en prijzen bleven in de proof 7.943 → 7.943; productwrites 0 en prijswrites 0.
+- Core-CI [run 37737744074](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37737744074) is groen: `npm test`, `npm run check`, `npm run test:postgres` en webchecks/build. Proof-workflow valideerde YAML door uitvoering en `git diff --check` slaagde. Normale daily workflow is niet gewijzigd.
+- In deze voorbereiding geen importwrite, merge of deploy uitgevoerd. `ROADMAP.md` is ongewijzigd.
+
+## Eerstvolgende Work-stap
+
+- Controleer de actuele PR #57-head en groene checks; markeer de Draft PR ready en merge alleen na expliciete releasebeslissing. Controleer daarna de actuele main-head en main-CI.
+- Vlak vóór batch 2: verse Production read-only precheck op product-/SKU-/prijstellingen, duplicaten, actieve daily jobs/attempts/imports en locks. Bij enige concurrerende run of lock stoppen.
+- Na geslaagde precheck dispatch op main exact één keer `.github/workflows/import-explicit-skus.yml` met `source=residual_batch2`, `mode=write`, `max=400`. Dit zal maximaal 400 van de 412 residual-SKU's verwerken. Geen discovery, geen tweede batch, geen migration/recovery/supersede. Controleer run en Production-nacontrole en stop daarna; de resterende SKU's vereisen een afzonderlijke berekening en opdracht.
+
+---
+
 # Checkpoint — PR #56 release en catch-up batch 1 — 8 oktober 2026
 
 ## Release
