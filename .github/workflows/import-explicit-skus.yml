@@ -16,11 +16,20 @@ on:
         type: number
         required: false
         default: 10
+      source:
+        description: Alleen een vaste vertrouwde SKU-set kiezen
+        type: choice
+        required: false
+        default: original
+        options:
+          - original
+          - residual_batch2
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/import-explicit-skus.yml
       - data/hoogvliet-missing-production-2026-10-06.csv
+      - data/hoogvliet-missing-production-2026-10-08-residual.csv
       - scripts/run-explicit-sku-catch-up.mjs
       - scripts/import-explicit-skus.mjs
       - src/explicit-sku-catch-up.mjs
@@ -45,6 +54,7 @@ jobs:
       RUNNER_REF: ${{ github.ref }}
       RUNNER_MODE: ${{ github.event_name == 'pull_request' && 'dry-run' || github.event.inputs.mode || 'dry-run' }}
       RUNNER_MAX: ${{ github.event_name == 'pull_request' && '10' || github.event.inputs.max || '10' }}
+      RUNNER_SOURCE: ${{ github.event_name == 'pull_request' && 'residual_batch2' || github.event.inputs.source || 'original' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       HEADLESS: "1"
@@ -74,6 +84,6 @@ jobs:
       - name: Chromium installeren
         run: npx playwright install --with-deps chromium
 
-      # This runner invokes only npm run import:skus with the fixed trusted CSV.
+      # This runner invokes only npm run import:skus with an allowlisted trusted CSV source.
       - name: Explicit SKU integrity, write precheck and bounded import
         run: node scripts/run-explicit-sku-catch-up.mjs
