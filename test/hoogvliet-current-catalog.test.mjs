@@ -18,6 +18,7 @@ const paginationFixture = await readFile(new URL("./fixtures/hoogvliet-current-p
 const rootFixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog-root.html", import.meta.url), "utf8");
 
 async function browserFor({ body = fixture, rootBody = body, status = 200 } = {}) {
+  const graphqlRequests = [];
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   await context.route("https://hoogvliet.nl/**", route => route.fulfill({
@@ -29,6 +30,7 @@ async function browserFor({ body = fixture, rootBody = body, status = 200 } = {}
     const url = new URL(route.request().url());
     const variables = JSON.parse(url.searchParams.get("variables") || "{}");
     const requested = variables.filters?.sku?.in ?? [];
+    graphqlRequests.push([...requested]);
     const catalog = new Map([
       ["064786000", { name: "Hoogvliet Komkommer", url_key: "hoogvliet-komkommer-064786000", package: "Stuks", price: 0.69 }],
       ["081222000", { name: "Blauwe bessen", url_key: "blauwe-bessen-081222000", package: "300 gram", price: 4.39 }],
@@ -49,7 +51,7 @@ async function browserFor({ body = fixture, rootBody = body, status = 200 } = {}
     });
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { products: { items } } }) });
   });
-  return { browser, context, page: await context.newPage() };
+  return { browser, context, page: await context.newPage(), graphqlRequests };
 }
 
 test("current listing fixture yields SKU, product identity, package, price and image", async t => {
@@ -79,6 +81,8 @@ test("current category load-more traverses beyond the initial visible batch", as
   assert.equal(result.stallReason, null);
   assert.equal(result.pagesFetched, 2);
   assert.equal(result.loadMoreCycles, 1);
+  assert.equal(result.catalogAPICalls, 2);
+  assert.deepEqual(h.graphqlRequests.map(request => request.length), [2, 1]);
   assert.equal(result.candidates.length, 3);
   assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
     "064786000", "081222000", "060936000",
@@ -107,6 +111,8 @@ test("catalog root discovers multiple public categories and deduplicates cross-l
   assert.equal(result.sourceExhausted, true);
   assert.equal(result.categoriesVisited, 2);
   assert.equal(result.listingLoadMoreCycles, 2);
+  assert.equal(result.catalogAPICalls, 4);
+  assert.deepEqual(h.graphqlRequests.map(request => request.length), [2, 1, 2, 1]);
   assert.equal(result.rawCandidates, 6);
   assert.equal(result.duplicateCandidates, 3);
   assert.equal(result.uniqueListingSKUs, 3);

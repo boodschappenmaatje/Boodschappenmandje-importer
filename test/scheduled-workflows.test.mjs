@@ -13,15 +13,14 @@ function cronEntries(workflow) {
 }
 
 test('primary workflow uses valid UTC cron entries and keeps the existing jobs', () => {
-  assert.deepEqual(cronEntries(primary), ['0 4 * * *', '0 5 * * *', '17 2 * * *', '43 3 * * 0']);
+  assert.deepEqual(cronEntries(primary), ['0 4 * * *', '0 5 * * *']);
   assert.doesNotMatch(primary, /^\s+timezone:/m);
   assert.match(primary, /SCHEDULE_CRON: \$\{\{ github\.event\.schedule \}\}/);
   assert.match(primary, /src\/daily-schedule-gate\.mjs/);
   assert.match(primary, /DAILY_IMPORT_STATE_KEY=daily-catalog-growth/);
-  assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
   assert.match(primary, /DAILY_IMPORT_END_HOUR=23/);
   assert.match(primary, /group: hoogvliet-supabase-update/);
-  assert.match(primary, /daily_import:\n        description: Start exact de persistente dagelijkse 400-job/);
+  assert.match(primary, /daily_import:\n        description: Start alleen handmatig de legacy 400-growthjob/);
   assert.match(primary, /recover_failed_daily:\n        description: Herstel exact één aantoonbaar opgeloste/);
   assert.match(primary, /RECOVER_FAILED_DAILY=\$recover_failed_daily/);
   assert.match(primary, /DAILY_RECOVERY_REASON=\$\{\{ inputs\.recovery_reason \}\}/);
@@ -31,13 +30,15 @@ test('primary workflow uses valid UTC cron entries and keeps the existing jobs',
   assert.match(primary, /DAILY_SUPERSEDE_REASON=\$\{\{ inputs\.supersede_reason \}\}/);
   assert.match(primary, /DAILY_SUPERSEDE_ACTOR_CONTEXT=github_actions/);
   assert.match(primary, /inputs\.daily_import.*true/);
-  assert.match(primary, /update_mode="growth"/);
+  assert.match(primary, /update_mode="maintenance"/);
   assert.match(primary, /catalog_batch="growth"/);
+  // De 400-state-machine blijft uitsluitend in het expliciete handmatige legacypad.
   assert.match(primary, /max_products="400"/);
   assert.match(primary, /daily_import_job="1"/);
   assert.match(primary, /DAILY_IMPORT_JOB=\$daily_import_job/);
   assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
   assert.match(primary, /npm run import:daily/);
+  assert.match(primary, /npm run import:daily-growth/);
   assert.match(primary, /update_mode="\$\{\{ inputs\.update_mode \}\}"/);
   assert.match(primary, /workflow_dispatch:/);
 });
@@ -88,22 +89,24 @@ test('three valid empty searches do not become a global source failure', () => {
   assert.equal(consecutive, 0);
 });
 
-test('daily cap, persistent day state, retries, price and weekly schedules stay intact', () => {
-  assert.match(primary, /daily_import_job="1"/);
-  assert.match(primary, /MAX_NEW_PRODUCTS=.*max_products/);
-  assert.match(primary, /DAILY_IMPORT_STATE_KEY=daily-catalog-growth/);
-  assert.match(primary, /DAILY_NEW_PRODUCT_TARGET=\$max_products/);
-  assert.match(primary, /npm run import:daily/);
+test('normale daily maintenance heeft volledige dekking; legacy cap blijft alleen handmatig', () => {
+  const scheduled = primary.slice(primary.indexOf('if [[ "${{ github.event_name }}" == "schedule" ]]'),
+    primary.indexOf('else\n            if [[ ("${{ inputs.recover_failed_daily }}"'));
+  assert.match(scheduled, /update_mode="maintenance"/);
+  assert.doesNotMatch(scheduled, /max_products="400"|DAILY_NEW_PRODUCT_TARGET|PRICE_SHARD_COUNT/);
+  assert.match(primary, /npm run import:daily-growth/);
 
   assert.deepEqual(cronEntries(retry), ['17 4 * * *', '17 5 * * *', '17 8,13,18 * * *']);
   assert.match(retry, /Vaste UTC-watchdogkandidaten/);
   assert.match(retry, /npm run --silent inspect:daily/);
   assert.match(retry, /npm run import:daily/);
-  assert.match(retry, /DAILY_NEW_PRODUCT_TARGET: "400"/);
+  assert.match(retry, /UPDATE_MODE: maintenance/);
+  assert.doesNotMatch(retry, /DAILY_NEW_PRODUCT_TARGET|MAX_NEW_PRODUCTS|PRICE_SHARD_COUNT|PRICE_SHARD_INDEX/);
   assert.match(retry, /group: hoogvliet-supabase-update/);
 
-  assert.match(primary, /- cron: "17 2 \* \* \*"/);
-  assert.match(primary, /- cron: "43 3 \* \* 0"/);
+  assert.doesNotMatch(primary, /- cron: "17 2 \* \* \*"|- cron: "43 3 \* \* 0"/);
   assert.match(monitor, /npm run monitor:catalog/);
+  assert.match(monitor, /UPDATE_MODE: maintenance/);
+  assert.doesNotMatch(monitor, /CATALOG_MONITOR_GROWTH_TARGET|DAILY_NEW_PRODUCT_TARGET/);
   assert.match(monitor, /group: hoogvliet-catalog-monitor/);
 });

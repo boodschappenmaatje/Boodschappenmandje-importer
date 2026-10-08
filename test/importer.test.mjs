@@ -1419,10 +1419,9 @@ test("classificatiestatistieken tonen dekking en fallback compact", () => {
 test("workflow behoudt handmatig starten en plant veilige automatische updates", async () => {
   const workflow = await readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8");
   assert.match(workflow, /workflow_dispatch:/);
-  assert.match(workflow, /cron: "17 2 \* \* \*"/);
-  assert.match(workflow, /cron: "43 3 \* \* 0"/);
   assert.match(workflow, /cron: "0 4 \* \* \*"/);
   assert.match(workflow, /cron: "0 5 \* \* \*"/);
+  assert.doesNotMatch(workflow, /cron: "17 2 \* \* \*"|cron: "43 3 \* \* 0"/);
   assert.doesNotMatch(workflow, /^\s+timezone:/m);
   assert.match(workflow, /src\/daily-schedule-gate\.mjs/);
   assert.match(workflow, /group: hoogvliet-supabase-update/);
@@ -1435,9 +1434,10 @@ test("workflow behoudt handmatig starten en plant veilige automatische updates",
   assert.match(workflow, /GROWTH_MAX_TOTAL_PAGES=800/);
   assert.match(workflow, /GROWTH_MAX_CANDIDATES=6000/);
   assert.match(workflow, /GROWTH_MAX_RUNTIME_MINUTES=105/);
+  assert.match(workflow, /MAINTENANCE_MAX_LISTING_WINDOWS=800/);
+  assert.match(workflow, /MAINTENANCE_MAX_DETAIL_FALLBACKS=500/);
   assert.match(workflow, /NAVIGATION_RETRIES=2/);
   assert.match(workflow, /CATALOG_NEW_ONLY=1/);
-  assert.match(workflow, /batches=\(core fresh world pantry\)/);
   assert.match(workflow, /PRICE_CYCLE_INDEX=\$\(\(10#\$\(date -u \+%V\) - 1\)\)/);
   assert.match(workflow, /- classify/);
   assert.match(workflow, /- growth/);
@@ -1453,7 +1453,8 @@ test("dagelijkse bewakingsworkflow controleert een vertraagde 06:07-run DST-veil
   assert.doesNotMatch(workflow, /RUN_MONITOR|local_hour|TZ=Europe\/Amsterdam date \+%H/);
   assert.match(workflow, /npm run monitor:catalog/);
   assert.match(workflow, /SUPABASE_SECRET_KEY: \$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/);
-  assert.match(workflow, /CATALOG_MONITOR_GROWTH_TARGET: "400"/);
+  assert.match(workflow, /UPDATE_MODE: maintenance/);
+  assert.doesNotMatch(workflow, /CATALOG_MONITOR_GROWTH_TARGET|DAILY_NEW_PRODUCT_TARGET/);
   assert.doesNotMatch(workflow, /NEXT_PUBLIC_|continue-on-error:\s*true/);
 });
 

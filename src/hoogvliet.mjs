@@ -8,8 +8,8 @@ export const CATALOG_ROOT_PATH = "/producten";
 export const CATALOG_ROOT_URL = `${BASE_URL}${CATALOG_ROOT_PATH}`;
 export const PUBLIC_CATALOG_GRAPHQL_URL = `${BASE_URL}/api/graphql`;
 // This is the public GetProducts shape observed in the current site's own
-// hydration request. The query is deliberately limited to listing fields;
-// product detail validation remains the authority before persistence.
+// hydration request. Exact-SKU bulk price/offer state is authoritative for
+// existing products; new or incomplete identities still use detail fallback.
 export const PUBLIC_CATALOG_GRAPHQL_QUERY = `query GetProducts($pageSize: Int! $currentPage: Int! $filters: ProductAttributeFilterInput! $sort: ProductAttributeSortInput) { products(pageSize: $pageSize currentPage: $currentPage filter: $filters sort: $sort) { items { ... on ProductInterface { id id stock_status name url_key is_promotion promotion_meta_data { korting_label raw_discount_label { text price full_label } valid_from valid_to promotion_id prijs promotie_prijs } metadata catch_weight_item_code webshop: metafield(key: "webshop") { value } price_range { maximum_price { final_price { currency value } } minimum_price { regular_price { value currency } final_price { currency value } discount { percent_off } } } } } } }`;
 const NORMAL_SOURCE_READY_TIMEOUT_MS = 12_000;
 const SECURITY_CHECK_READY_TIMEOUT_MS = 45_000;
@@ -625,28 +625,75 @@ function catalogAPIOfferDate(value) {
     ? `${fields.year}-${fields.month}-${fields.day}` : null;
 }
 
-function catalogAPICurrentOffer(item) {
+export function catalogAPIPriceState(item, referenceDate = new Date()) {
   const minimum = item?.price_range?.minimum_price;
   const currentPrice = Number(minimum?.final_price?.value ?? catalogAPIPrice(item));
   const regularPrice = Number(minimum?.regular_price?.value);
   const discountPercent = Number(minimum?.discount?.percent_off);
   const promotion = item?.is_promotion === true
     || String(item?.is_promotion ?? "").toLowerCase() === "true";
-  if (!promotion || !Number.isFinite(currentPrice) || currentPrice <= 0
-    || !Number.isFinite(regularPrice) || regularPrice <= currentPrice) return null;
+  if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
   const metadata = item?.promotion_meta_data ?? {};
   const validFrom = catalogAPIOfferDate(metadata?.valid_from);
   const validUntil = catalogAPIOfferDate(metadata?.valid_to);
-  if (validFrom && validUntil && !isOfferPeriodActive({ validFrom, validUntil })) return null;
+  const comparisonPrice = Number.isFinite(regularPrice) && regularPrice > currentPrice
+    ? regularPrice : null;
+  const periodKnown = Boolean(validFrom && validUntil);
+  const periodActive = periodKnown
+    ? isOfferPeriodActive({ validFrom, validUntil }, referenceDate)
+    : null;
+  const offerText = clean(metadata?.raw_discount_label?.full_label)
+    || clean(metadata?.raw_discount_label?.text)
+    || clean(metadata?.korting_label);
+
+  // An explicitly expired promotion is authoritative. Return the current
+  // normal comparison price instead of retaining the old active offer state.
+  if (promotion && periodKnown && !periodActive) {
+    if (!comparisonPrice) return null;
+    return {
+      price: comparisonPrice,
+      oldPrice: null,
+      isOffer: false,
+      offerText: null,
+      validFrom: null,
+      validUntil: null,
+      sourceState: "expired_offer",
+    };
+  }
+  if (promotion || comparisonPrice) {
+    if (!comparisonPrice || (periodKnown && !periodActive)) return null;
+    return {
+      price: currentPrice,
+      oldPrice: comparisonPrice,
+      isOffer: true,
+      offerText,
+      validFrom,
+      validUntil,
+      discountPercent: Number.isFinite(discountPercent) ? discountPercent : null,
+      sourceState: "active_offer",
+    };
+  }
   return {
     price: currentPrice,
-    regularPrice,
-    discountPercent: Number.isFinite(discountPercent) ? discountPercent : null,
-    offerText: clean(metadata?.raw_discount_label?.full_label)
-      || clean(metadata?.raw_discount_label?.text)
-      || clean(metadata?.korting_label),
-    validFrom,
-    validTo: validUntil,
+    oldPrice: null,
+    isOffer: false,
+    offerText: null,
+    validFrom: null,
+    validUntil: null,
+    sourceState: "normal_price",
+  };
+}
+
+function catalogAPICurrentOffer(item, referenceDate = new Date()) {
+  const state = catalogAPIPriceState(item, referenceDate);
+  if (!state?.isOffer) return null;
+  return {
+    price: state.price,
+    regularPrice: state.oldPrice,
+    discountPercent: state.discountPercent ?? null,
+    offerText: state.offerText,
+    validFrom: state.validFrom,
+    validTo: state.validUntil,
   };
 }
 
@@ -722,7 +769,7 @@ export async function hydrateCatalogListingCandidates(page, candidates) {
     const urlKey = clean(item?.url_key);
     const sku = clean(item?.sku) || (urlKey ? extractSKUFromProductURL(BASE_URL + "/product/" + urlKey) : null);
     return [sku, item];
-  }).filter(([sku]) => sku));
+  }).filter(([sku]) => sku && domBySKU.has(sku)));
   if (apiBySKU.size === 0 && domBySKU.size > 0) {
     throw new ParserStructureChangedError("De actuele Hoogvliet-catalogus-API leverde geen zichtbare productitems.");
   }
@@ -731,6 +778,7 @@ export async function hydrateCatalogListingCandidates(page, candidates) {
     const urlKey = clean(item?.url_key);
     const sourceURL = domCandidate?.sourceURL
       ?? (urlKey ? BASE_URL + "/product/" + urlKey : null);
+    const catalogPriceState = catalogAPIPriceState(item);
     return {
       ...domCandidate,
       sku,
@@ -739,6 +787,8 @@ export async function hydrateCatalogListingCandidates(page, candidates) {
       category: catalogAPICategory(item) || domCandidate?.category,
       packageText: domCandidate?.packageText || catalogAPIPackage(item),
       displayedPrice: catalogAPIPrice(item) ?? domCandidate?.displayedPrice,
+      catalogAPIValidated: true,
+      catalogPriceState,
       sourceURL,
       imageURL: clean(item?.small_image?.url) || domCandidate?.imageURL,
       available: item?.stock_status ? item.stock_status === "IN_STOCK" : domCandidate?.available,
@@ -749,7 +799,7 @@ export async function hydrateCatalogListingCandidates(page, candidates) {
   // candidate; detail validation still decides whether it is usable.
   return [...hydrated, ...candidates.filter(candidate => (
     !apiBySKU.has(extractSKUFromProductURL(candidate.sourceURL))
-  ))];
+  )).map(candidate => ({ ...candidate, catalogAPIValidated: false, catalogPriceState: null }))];
 }
 
 export async function collectCatalogListing(page, routeURL, {
@@ -773,14 +823,18 @@ export async function collectCatalogListing(page, routeURL, {
   const routeCandidates = new Map();
   const windows = [];
   let loadMoreCycles = 0;
+  let catalogAPICalls = 0;
   let stagnated = false;
   let currentSignature = "";
   const visitedListingURLs = new Set([page.url()]);
 
   const snapshot = async () => {
     const rawDOM = await extractCatalogListingCandidates(page);
-    const raw = await hydrateCatalogListingCandidates(page, rawDOM);
-    const fresh = raw.filter(candidate => !routeCandidates.has(candidate.sourceURL));
+    const freshDOM = rawDOM.filter(candidate => !routeCandidates.has(candidate.sourceURL));
+    const fresh = freshDOM.length > 0
+      ? await hydrateCatalogListingCandidates(page, freshDOM)
+      : [];
+    if (freshDOM.length > 0) catalogAPICalls += 1;
     for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
     const signature = [...routeCandidates.keys()].sort().join("|");
     return { fresh, signature };
@@ -836,6 +890,7 @@ export async function collectCatalogListing(page, routeURL, {
     emittedWindowCount: Math.min(maxWindows, Math.max(0, windows.length - startWindow)),
     initialCandidateCount: windows[0]?.length ?? 0,
     loadMoreCycles,
+    catalogAPICalls,
     sourceExhausted,
     stallReason: stagnated ? "category_listing_stagnated" : null,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
@@ -854,6 +909,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   let globalWindowCursor = 0;
   let pagesFetched = 0;
   let loadMoreCycles = 0;
+  let catalogAPICalls = 0;
   let sourceExhausted = true;
   let stallReason = null;
   let rootCategoryCount = 0;
@@ -910,6 +966,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     globalWindowCursor += listing.windowCount;
     pagesFetched += emittedWindows;
     loadMoreCycles += listing.loadMoreCycles;
+    catalogAPICalls += listing.catalogAPICalls;
     sourceExhausted = listing.sourceExhausted;
     if (listing.stallReason) { stallReason = listing.stallReason; break; }
     for (const candidate of listing.candidates) {
@@ -944,6 +1001,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     routesVisited: visitedCategories.size,
     initialCandidateCount,
     listingLoadMoreCycles: loadMoreCycles,
+    catalogAPICalls,
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
     sourceExhausted: sourceExhausted && queue.length === 0,
     stallReason,
@@ -1401,18 +1459,26 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
         current_offer: catalogAPICurrentOffer(catalogItem),
       },
     };
-    const catalogOffer = catalogAPICurrentOffer(catalogItem);
-    if (catalogPackage || catalogOffer) {
+    const catalogPriceState = catalogAPIPriceState(catalogItem);
+    if (catalogPackage || catalogPriceState) {
       details = {
         ...details,
         ...(catalogPackage ? { packageText: catalogPackage } : {}),
-        ...(catalogOffer ? {
-          displayPrice: catalogOffer.price,
-          offerPrice: catalogOffer.price,
-          regularPrice: catalogOffer.regularPrice,
-          promotionText: catalogOffer.offerText ?? details.promotionText,
-          validFrom: catalogOffer.validFrom,
-          validUntil: catalogOffer.validTo,
+        ...(catalogPriceState?.isOffer ? {
+          displayPrice: catalogPriceState.price,
+          offerPrice: catalogPriceState.price,
+          regularPrice: catalogPriceState.oldPrice,
+          promotionText: catalogPriceState.offerText ?? details.promotionText,
+          validFrom: catalogPriceState.validFrom,
+          validUntil: catalogPriceState.validUntil,
+        } : catalogPriceState ? {
+          displayPrice: catalogPriceState.price,
+          offerPrice: null,
+          regularPrice: catalogPriceState.price,
+          promotionText: null,
+          offerPeriod: null,
+          validFrom: null,
+          validUntil: null,
         } : {}),
       };
     }
@@ -1693,6 +1759,43 @@ export async function refreshExistingProducts(config, candidates, logger = conso
   }
   stats.durationMs = Date.now() - startedAt;
   return { products, stats };
+}
+
+// Opens one paced source session for the complete daily catalog snapshot.
+// The handler only runs after root/category traversal proves source exhaustion;
+// incomplete/challenged scans therefore cannot reach any database writer.
+export async function withDailyCatalogSource(config, handler) {
+  if (typeof handler !== "function") throw new Error("Daily catalog handler ontbreekt.");
+  const browser = await chromium.launch({ headless: config.headless });
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  const listingPage = await context.newPage();
+  const detailPage = await context.newPage();
+  const pace = createSourcePacer();
+  sourcePacers.set(listingPage, pace);
+  sourcePacers.set(detailPage, pace);
+  try {
+    const snapshot = await collectPublicCatalogCandidates(
+      listingPage,
+      config.maintenanceMaxListingWindows,
+      { navigationRetries: config.navigationRetries },
+    );
+    if (!snapshot.sourceExhausted || snapshot.stallReason) {
+      throw new SourceUnavailableError(
+        `Dagelijkse catalogussnapshot is onvolledig; stopreden=${snapshot.stallReason ?? "listing_window_limit"}.`,
+      );
+    }
+    if (!Array.isArray(snapshot.candidates) || snapshot.candidates.length === 0) {
+      throw new SourceUnavailableError("Dagelijkse catalogussnapshot bevat geen productkandidaten.");
+    }
+    return await handler({
+      candidates: snapshot.candidates,
+      snapshot,
+      validateFallback: (candidate, diagnostics = {}) => validateCandidate(detailPage, candidate, diagnostics),
+    });
+  } finally {
+    await context.close();
+    await browser.close();
+  }
 }
 
 export async function collectProducts(config, logger = console, options = {}) {
