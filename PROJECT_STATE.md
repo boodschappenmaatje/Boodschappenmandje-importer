@@ -1,3 +1,31 @@
+# Checkpoint — aanbiedingenaudit PR #59 — Red Bull 733741000 — 8 oktober 2026
+
+## Root cause en minimale fix
+
+- Actuele Red Bull-detailpagina: HTTP **200**, final URL `https://hoogvliet.nl/product/red-bull-pistache-winter-edition-733741000`, title `Red Bull Pistache winter edition online bestellen | Hoogvliet`. De pagina levert in JSON-LD alleen Product `offers.price=1.39`; de oude DOM-prijsselectors `.kor-product-sale-price-value` en `.product-promo-price` zijn leeg.
+- De bestaande exacte-SKU GraphQL-route leverde wél de beslissende velden: `is_promotion=true`, `price_range.minimum_price.final_price.value=1.39`, `regular_price.value=1.72`, `discount.percent_off=19.19`, `promotion_meta_data.raw_discount_label.full_label="per blik 1,39"`, `valid_from=2026-10-06T22:00:00+00:00` en `valid_to=2026-10-13T21:59:00+00:00`.
+- De validator gebruikte die GraphQL-call voor ontbrekende verpakking, maar mapte de promotion-/regular-price-velden niet naar de prijssemantiek. Daardoor bleef `regularPrice` leeg, werd `oldPrice` null en was `isOffer=false`; de oude `simpleOffer`-check vereiste bovendien een DOM-aanbiedingsperiode plus tekst die met `per ` begint. Dit is de concrete eerste falende invariant: **actuele GraphQL-aanbieding werd niet doorgegeven aan de bestaande offer-normalisatie**.
+- Minimale generieke fix in `src/hoogvliet.mjs`: de bestaande exacte-SKU GraphQL-response gebruikt nu `is_promotion`, positieve `final_price`, positieve en hogere `regular_price`, promotion label en geldigheidsperiode. Een aangeboden periode wordt alleen geaccepteerd zolang die actueel is; verlopen data wordt niet gereanimeerd. Geen SKU-hardcode, geen geforceerde match, geen fictieve prijs.
+- Het bestaande prijscontract blijft gelijk: `price` is de actuele prijs, `old_price` de vergelijkingsprijs, `is_offer=true` voor een actuele aanbieding, met bestaande geldigheidsvelden. De bestaande upsert/PWA-resolutie en positieve-prijs-/last-known-good-bescherming zijn hergebruikt; een ongeldige prijs start geen write en wist de bestaande geldige prijs niet.
+
+## Bounded read-only proof
+
+- PR #59 [fix: detect current comparison-price offers](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/59), branch `codex/audit-offer-prices-20261008`, definitieve head `476f43a02c72dea2aea0d20788dec57bc37c4991`, blijft Draft/open en is niet gemerged.
+- Read-only aanbiedingenaudit [Actions-run 37749926814](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37749926814) is groen. De audit gebruikte alleen bestaande Production-URL's plus de expliciete Red Bull-URL; geen catalogusdiscovery. De bekende offerpool was begrensd op 80 records en stopte na vijf actuele aanbiedingen.
+- Red Bull normaliseerde exact naar `price=1.39`, `old_price=1.72`, `is_offer=true`, `offer_text="per blik 1,39"`, `valid_from=2026-10-07`, `valid_until=2026-10-13`; geen forced match. De vijf offer-proofregels waren Red Bull plus vier aanvullende actuele Production-SKU's: `000737000` Pitloze witte druiven (€1,99 / €2,39), `049673000` Almhof Halfvolle yoghurt perzik (€1,49 / €2,56), `058289000` Almhof Halfvolle yoghurt kers (€1,49 / €2,15) en `060335000` Lay's Mama Mia's Cheese & Paprika (€1,49 / €2,34). Aanbiedingen correct **5/5**. Van de 80 bekende candidates waren 76 historische/inactieve records; die zijn niet als actieve aanbieding geteld.
+- Niet-aanbiedingen correct **5/5**: `000016000`, `000062000`, `000167000`, `000310000`, `000418000`; alle vijf hadden een positieve actuele prijs, `old_price=null` en `is_offer=false`.
+- Production read-only prijsaudit: **8.342** price records; **383** `is_offer=true`; **376** records met `price < old_price`; **0** verdachte records met `old_price > price` en `is_offer=false`; **7** `is_offer=true` zonder geldige vergelijkingsprijs; **0** ongeldige/niet-positieve prijzen. De audit deed **0 productwrites** en **0 prijswrites** en zag geen muterende Hoogvliet-request. Dit is een audit, geen databasecorrectie.
+
+## Tests, releasegrens en vervolg
+
+- Definitieve lokale gates: `npm test` **377/377**, `npm run check` groen, `npm run test:postgres` **28/28**, `git diff --check` groen. Nieuwe regressies testen GraphQL-aanbiedingvelden, Red Bull `1.39/1.72/is_offer=true`, geldige/non-offer- en verlopen-aanbiedingen, positieve prijs en bestaande auditclassificatie. Normale daily/importerregressies blijven groen.
+- PR #59 Actions op de definitieve head zijn groen: core run **37749926807**, expliciete-SKU run **37749926830** en aanbiedingenaudit **37749926814**. Er is geen Production-write, merge, deploy of dagelijkse 8K-prijsrefresh uitgevoerd.
+- PR #58 [feat: prepare final 12-SKU catch-up batch 3](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/58) blijft Draft/open op head `c3f2e3d75d5e569d132b5cac1d115e5f99834025`; de final explicit-SKU proof **37744701592** en core run **37744701563** zijn groen. Dat maakt PR #58 technisch groen, maar niet vrijgegeven voor merge/write.
+- Finale batch 3 is in deze stap **niet gestart** en is nog niet vrijgegeven: PR #59 moet eerst gereviewd en regulier gemerged worden, met verse main-CI en een nieuwe Production-precheck. `ROADMAP.md` is ongewijzigd.
+- Exacte Work-vervolgstap: review PR #59 en merge alleen na expliciete releasebeslissing; controleer verse main-head/main-CI; voer daarna read-only Production-precheck uit op counts, duplicate SKU's, actieve daily jobs/attempts/imports/locks en prijsstaat; voer op main eerst de vaste `source=final_batch3`, `mode=dry-run`, `max=12` proof uit; alleen bij exact 12 `valid_new`, 0 overige classificaties en 0 writes mag Work een afzonderlijke expliciete write-opdracht uitvoeren met `source=final_batch3`, `mode=write`, `max=12`, gevolgd door Production-nacontrole en STOP. Geen batch 3 in Codex.
+
+---
+
 # Checkpoint — finale read-only Hoogvliet-broncontrole van 13 SKU's — 8 oktober 2026
 
 - Gebaseerd op remote main `082ccfd9c1d9df29b74ed832bc500eeab639bab9`. De gecontroleerde selectie is exact de 13 SKU's die na batch 2 nog ontbreken; er is geen importcommand, workflowdispatch, discoverycrawl of databasewrite uitgevoerd.
