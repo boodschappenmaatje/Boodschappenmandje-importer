@@ -25,6 +25,9 @@ test("runner is isolated to allowlisted explicit-SKU CSVs with checksums", async
   assert.equal(TRUSTED_CSVS.residual_batch2.path, "data/hoogvliet-missing-production-2026-10-08-residual.csv");
   assert.equal(TRUSTED_CSVS.residual_batch2.sha256, "dd785a974054c257d7c4d2bc6248204ab8fe8e971bd865c16a2c2785b3e57254");
   assert.equal(TRUSTED_CSVS.residual_batch2.skuCount, 412);
+  assert.equal(TRUSTED_CSVS.final_batch3.path, "data/hoogvliet-missing-production-2026-10-08-final.csv");
+  assert.equal(TRUSTED_CSVS.final_batch3.sha256, "d5c43b501d4dfbf2498d1765340b354b4b487d47806c0b8683dcfcb748025dd5");
+  assert.equal(TRUSTED_CSVS.final_batch3.skuCount, 12);
 
   const csvBytes = await readFile(rootFile(TRUSTED_CSV_PATH));
   assert.equal(createHash("sha256").update(csvBytes).digest("hex"), TRUSTED_CSV_SHA256);
@@ -47,7 +50,20 @@ test("runner is isolated to allowlisted explicit-SKU CSVs with checksums", async
   assert.equal(residual.duplicateRows.length, 0);
   assert.deepEqual(residualSKUs, originalSKUs.slice(400));
   assert.equal(residualSKUs.some(sku => originalSKUs.slice(0, 400).includes(sku)), false);
+  const finalBytes = await readFile(rootFile(TRUSTED_CSVS.final_batch3.path));
+  assert.equal(createHash("sha256").update(finalBytes).digest("hex"), TRUSTED_CSVS.final_batch3.sha256);
+  const final = parseExplicitSKUCSV(finalBytes.toString("utf8"), { maxBatchSize: 400 });
+  assert.deepEqual(final.candidates.map(candidate => candidate.sku), [
+    "733574000", "733575000", "733741000", "770787000", "770809000", "777641000",
+    "905631000", "921742000", "926108000", "926876000", "927082000", "927120000",
+  ]);
+  assert.equal(final.inputRows, 12);
+  assert.equal(final.uniqueSKUs, 12);
+  assert.equal(final.invalidRows.length, 0);
+  assert.equal(final.duplicateRows.length, 0);
+  assert.equal(final.candidates.some(candidate => candidate.sku === "727643000"), false);
   assert.match(workflow, /residual_batch2/);
+  assert.match(workflow, /final_batch3/);
   assert.match(runner, /npm run import:skus/);
   assert.doesNotMatch(runner, /import:daily|catalog:root|catalog-growth|collectProducts|findCandidates/);
   assert.match(workflow, /pull_request:/);
@@ -138,19 +154,19 @@ test("idle read-only precheck passes and exposes no credentials", async () => {
   assert.ok(calls.every(call => call.method === "GET"));
 });
 
-test("pull request proof is fixed to dry-run max=10; the normal daily workflow stays separate", async () => {
+test("pull request proof is fixed to final_batch3 dry-run max=12; the normal daily workflow stays separate", async () => {
   assert.deepEqual(resolveRunnerConfig({
     RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
-    RUNNER_MODE: "dry-run", RUNNER_MAX: "10", RUNNER_SOURCE: "residual_batch2",
-  }), { event: "pull_request", ref: "refs/pull/55/merge", mode: "dry-run", max: 10, source: "residual_batch2" });
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "12", RUNNER_SOURCE: "final_batch3",
+  }), { event: "pull_request", ref: "refs/pull/55/merge", mode: "dry-run", max: 12, source: "final_batch3" });
   assert.throws(() => resolveRunnerConfig({
     RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
-    RUNNER_MODE: "dry-run", RUNNER_MAX: "11", RUNNER_SOURCE: "residual_batch2",
-  }), /max=10/);
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "11", RUNNER_SOURCE: "final_batch3",
+  }), /max=12/);
   assert.throws(() => resolveRunnerConfig({
     RUNNER_EVENT_NAME: "pull_request", RUNNER_REF: "refs/pull/55/merge",
-    RUNNER_MODE: "dry-run", RUNNER_MAX: "10", RUNNER_SOURCE: "original",
-  }), /residual-bron/);
+    RUNNER_MODE: "dry-run", RUNNER_MAX: "12", RUNNER_SOURCE: "residual_batch2",
+  }), /final_batch3/);
   assert.throws(() => resolveRunnerConfig({
     RUNNER_EVENT_NAME: "workflow_dispatch", RUNNER_REF: "refs/heads/main",
     RUNNER_MODE: "dry-run", RUNNER_MAX: "10", RUNNER_SOURCE: "../path.csv",
