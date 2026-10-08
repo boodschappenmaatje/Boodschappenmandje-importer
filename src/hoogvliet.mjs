@@ -1377,8 +1377,18 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
   // existing current-catalog GraphQL parser for that one missing field,
   // queried by the already verified exact SKU. Never accept another identity
   // or invent a value when the API has no package metadata.
-  if (!clean(details.packageText)) {
-    const catalogItems = await fetchPublicCatalogItems(page, [candidate.sku]);
+  if (!clean(details.packageText)
+    || (!Number.isFinite(details.regularPrice) && !Number.isFinite(details.offerPrice))) {
+    let catalogItems = [];
+    try {
+      catalogItems = await fetchPublicCatalogItems(page, [candidate.sku]);
+    } catch (error) {
+      // A legacy detail page may already have a valid package and positive
+      // detail price. Keep that safe normal-product path usable when the
+      // optional offer enrichment is unavailable; missing package data still
+      // fails closed through the existing validation below.
+      if (!(clean(details.packageText) && Number.isFinite(details.displayPrice) && details.displayPrice > 0)) throw error;
+    }
     const catalogItem = catalogItems.find(item => catalogAPISKU(item) === candidate.sku);
     const catalogPackage = catalogAPIPackage(catalogItem);
     if (diagnostics) diagnostics.parser = {

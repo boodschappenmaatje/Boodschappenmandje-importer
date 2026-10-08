@@ -183,7 +183,7 @@ test("current catalog GraphQL promotion fields map the active offer price pair",
     await route.fulfill({
       status: 200,
       contentType: "text/html",
-      body: `<!doctype html><main><h1>Red Bull Pistache winter edition</h1>
+      body: `<!doctype html><main><h1>Red Bull Pistache winter edition</h1><span class="package-size">Blik</span>
         <script type="application/ld+json">${JSON.stringify({
           "@type": "Product", sku: "733741000", name: "Red Bull Pistache winter edition",
           brand: { name: "Red Bull" }, offers: { price: 1.39 },
