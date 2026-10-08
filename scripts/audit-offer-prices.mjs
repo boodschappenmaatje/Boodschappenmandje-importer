@@ -5,6 +5,7 @@ import { requestHeaders } from "../src/supabase.mjs";
 
 const PAGE_SIZE = 1000;
 const SAMPLE_SIZE = 5;
+const OFFER_CANDIDATE_LIMIT = 30;
 const RED_BULL = Object.freeze({
   sku: "733741000",
   name: "Red Bull Pistache winter edition",
@@ -71,19 +72,16 @@ export function auditPriceRows(prices) {
 
 function sampleRows(prices, products) {
   const byID = new Map(products.map(product => [product.id, product]));
-  const today = new Date().toISOString().slice(0, 10);
   const usable = prices.filter(price => {
     const product = byID.get(price.product_id);
     return product && validProductURL(product.source_url) && /^\d{9}$/.test(String(product.sku));
   });
-  const activeStoredOffer = price => price.is_offer === true
-    && positive(price.old_price) > positive(price.price)
-    && (!price.valid_from || String(price.valid_from).slice(0, 10) <= today)
-    && (!price.valid_until || String(price.valid_until).slice(0, 10) >= today);
+  // These are known Production offer records, not discovery candidates. The
+  // source is revalidated below because stored offer dates may be historical.
   const offerRows = usable
-    .filter(activeStoredOffer)
+    .filter(price => price.is_offer === true && positive(price.old_price) > positive(price.price))
     .sort((a, b) => String(byID.get(a.product_id).sku).localeCompare(String(byID.get(b.product_id).sku)))
-    .slice(0, SAMPLE_SIZE);
+    .slice(0, OFFER_CANDIDATE_LIMIT);
   const offerIDs = new Set(offerRows.map(price => price.product_id));
   const regularRows = usable
     .filter(price => price.is_offer !== true && positive(price.old_price) == null && !offerIDs.has(price.product_id))
@@ -95,7 +93,7 @@ function sampleRows(prices, products) {
   };
 }
 
-async function validateSample(browser, candidates) {
+async function validateSample(browser, candidates, { stopWhen = () => false } = {}) {
   const results = [];
   for (const candidate of candidates) {
     const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
@@ -137,6 +135,7 @@ async function validateSample(browser, candidates) {
         reason: diagnostics.reason ?? null,
         forbiddenRequest,
       });
+      if (stopWhen(results)) break;
     } finally {
       await context.close();
     }
@@ -156,6 +155,11 @@ function outcomeCounts(results, expectedOffer) {
   }, { total: 0, correct: 0 });
 }
 
+function isCurrentOffer(result) {
+  return Boolean(result.observed?.isOffer
+    && positive(result.observed.oldPrice) > positive(result.observed.price));
+}
+
 export async function runOfferPriceAudit(env = process.env) {
   const base = String(env.SUPABASE_URL ?? "").trim();
   const key = String(env.SUPABASE_SECRET_KEY ?? "").trim();
@@ -166,13 +170,16 @@ export async function runOfferPriceAudit(env = process.env) {
   ]);
   const database = auditPriceRows(prices);
   const samples = sampleRows(prices, products);
-  if (samples.offers.length < SAMPLE_SIZE || samples.regular.length < SAMPLE_SIZE) {
-    throw new Error(`Read-only offer-audit kon geen 5+5 representatieve Production-SKU's selecteren (offers=${samples.offers.length}, regular=${samples.regular.length}, database=${JSON.stringify(database)}).`);
+  if (samples.regular.length < SAMPLE_SIZE) {
+    throw new Error(`Read-only offer-audit kon geen 5 representatieve Production-SKU's voor de regular-steekproef selecteren (regular=${samples.regular.length}, database=${JSON.stringify(database)}).`);
   }
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   try {
     const redBull = await validateSample(browser, [{ ...RED_BULL, source_url: RED_BULL.sourceURL }]);
-    const offers = await validateSample(browser, samples.offers);
+    const offerPool = await validateSample(browser, samples.offers, {
+      stopWhen: results => results.filter(isCurrentOffer).length >= SAMPLE_SIZE,
+    });
+    const offers = offerPool.filter(isCurrentOffer).slice(0, SAMPLE_SIZE);
     const regular = await validateSample(browser, samples.regular);
     return {
       mode: "read-only",
@@ -181,11 +188,13 @@ export async function runOfferPriceAudit(env = process.env) {
       samples: {
         offers,
         regular,
+        offerCandidatesChecked: offerPool.length,
+        inactiveOfferCandidates: offerPool.filter(result => !isCurrentOffer(result)).length,
         offersCorrect: outcomeCounts(offers, true),
         regularCorrect: outcomeCounts(regular, false),
       },
       writes: { product: 0, price: 0 },
-      forbiddenRequests: [...redBull, ...offers, ...regular].filter(result => result.forbiddenRequest),
+      forbiddenRequests: [...redBull, ...offerPool, ...regular].filter(result => result.forbiddenRequest),
     };
   } finally {
     await browser.close();
@@ -198,7 +207,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (!result.redBull.observed?.isOffer
       || result.redBull.observed.price !== 1.39
       || result.redBull.observed.oldPrice !== 1.72
-      || result.samples.offersCorrect.correct !== result.samples.offersCorrect.total
+      || result.samples.offersCorrect.total !== SAMPLE_SIZE
+      || result.samples.offersCorrect.correct !== SAMPLE_SIZE
       || result.samples.regularCorrect.correct !== result.samples.regularCorrect.total
       || result.forbiddenRequests.length > 0) {
       process.exitCode = 1;
