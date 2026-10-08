@@ -1,3 +1,33 @@
+# Checkpoint — PR #57 release en catch-up batch 2 — 8 oktober 2026
+
+## Release
+
+- PR #57 [feat: add verified residual SKU source for catch-up batch 2](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/57) is ready en squash-merged.
+- Mergecommit en main-head vóór deze documentatie-update: `cffbc18b23423d158f00785be418d2d547c452a6`.
+- Main-CI [run 37739622762](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37739622762): groen. Dit was een importer/workflow-update; geen Vercel Production-deployment nodig.
+
+## Verse precheck en residual op main
+
+- Direct vóór de write: 7.943 Hoogvliet-producten, 7.943 unieke SKU's en 7.943 prijsrecords; 0 dubbele SKU-groepen, 0 actieve daily jobs, 0 actieve attempts, 0 actieve catalog-imports en 0 actieve locks.
+- Residualbestand `data/hoogvliet-missing-production-2026-10-08-residual.csv`: 412 unieke, niet-lege SKU's; SHA-256 `dd785a974054c257d7c4d2bc6248204ab8fe8e971bd865c16a2c2785b3e57254`. Vóór de run waren 0 van deze 412 aanwezig.
+- Op main bestaat de vaste `original` / `residual_batch2` bronkeuze. De write-route vereist expliciete `workflow_dispatch`, `mode=write`, en gebruikt uitsluitend `npm run import:skus` met harde `max=400`; geen brede discovery.
+
+## Batch 2
+
+- Exact één write-dispatch: [Actions-run 37740056187](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37740056187), main `cffbc18b23423d158f00785be418d2d547c452a6`, source `residual_batch2`, mode `write`, max 400.
+- Gevalideerde command: `npm run import:skus -- --file data/hoogvliet-missing-production-2026-10-08-residual.csv --max 400 --write`. De run startte geen brede discovery en verwerkte uitsluitend de residualset.
+- Resultaat: requested 400; processed 400; imported/valid_product_price 399; already_exists 0; invalid 0; not_found 1 (`727643000`, reason `notFound`); temporary_error 0; skipped 12, alle `max_batch_size`. Geen stopreason of post-read-error.
+- Importerruntime `835395 ms` (13 min 55,395 s); totale Actions-run circa 14 min 44 s. CSV checksum en alle verwerkte SKU's kwamen overeen met de vertrouwde residualbron.
+- Alle 399 geïmporteerde records hebben een positieve prijs, naam, verpakking en geldige Hoogvliet-detail-URL. 0 productrecords zonder prijs, 0 niet-positieve prijzen, 0 dubbele SKU-groepen. Import-runstatus `success`, `new_count=399`, `error_count=0`; er zijn na afloop 0 actieve imports/locks.
+
+## Production nacontrole en volgende stap
+
+- Producten/unieke Hoogvliet-SKU's: 7.943 → 8.342 (werkelijk toegevoegd 399). Prijsrecords: 7.943 → 8.342. Dubbele SKU-groepen: 0.
+- Van de 412 residual-SKU's zijn er nu 399 aanwezig en 13 ontbreken: 1 `not_found` (`727643000`) plus 12 wegens `max_batch_size`. Op basis van de oorspronkelijke 812-SKU-set zijn nu 799 aanwezig en 13 afwezig.
+- Geen batch 3 gestart. Eerstvolgende veilige stap: bereken read-only de actuele resterende 13 tegen Production en beoordeel de ene `not_found`; vraag daarna een aparte expliciete uitvoeringsopdracht voor een volgende write.
+
+---
+
 # Checkpoint — geverifieerde residual-input voor catch-up batch 2 — 8 oktober 2026
 
 ## Production-gebonden residual
