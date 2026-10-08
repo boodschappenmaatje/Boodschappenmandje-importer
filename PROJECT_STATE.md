@@ -1,3 +1,28 @@
+# Checkpoint — expliciete SKU Actions-runner PR #56 — 8 oktober 2026
+
+## Runner en begrenzing
+
+- Vanaf actuele main 618e5bda8dc2b5d0fac2bafe14962d12a485786c is branch codex/explicit-sku-actions-runner-20261008 gemaakt. PR #56 staat Draft/open; geen merge of Production-import uitgevoerd.
+- Nieuwe workflow: .github/workflows/import-explicit-skus.yml; vaste runner: scripts/run-explicit-sku-catch-up.mjs. De runner roept uitsluitend npm run import:skus aan met de vaste file data/hoogvliet-missing-production-2026-10-06.csv. Geen brede catalog discovery, daily import of tweede batch.
+- De CSV is byte-voor-byte hersteld uit de bestaande proof-bron; SHA-256 a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246. In runner gevalideerd: 812 rijen, 812 unieke SKU’s, geen lege/duplicaat/ongeldige rijen en leading-zero SKU’s behouden.
+- Inputs zijn alleen mode (choice dry-run / write, standaard dry-run) en max (1–400). Pad, shell command en URL zijn niet invoerbaar. Dispatch wordt alleen op main geaccepteerd; write vereist expliciet workflow_dispatch met mode=write.
+- PR-event dwingt dry-run --max 10 af. Workflow heeft geen schedule/push-trigger, deelt de bestaande importer-concurrencygroep, en doet vóór write uitsluitend GET-prechecks op actieve daily jobs, attempts, catalog import runs en locks. Bij onleesbare/conflicterende status stopt write; geen recovery/supersede of migration.
+- De eerste PR-run 37730988418 stopte vóór npm-install/import omdat standaard git diff --check de oorspronkelijke CSV-CRLF als whitespace markeerde. CSV is ongewijzigd gebleven; commit 1635012ca0446b6b5c50ab73fd62c3d0b7b6560c gebruikt core.whitespace=cr-at-eol, terwijl normale trailing whitespace nog steeds faalt. De daaropvolgende proof-run slaagde.
+
+## Checks en live read-only proof
+
+- Explicit SKU workflow-run 37731107102 op head 1635012ca0446b6b5c50ab73fd62c3d0b7b6560c: succesvol, PR-event, mode dry-run, max 10. Exact commando: npm run import:skus -- --file data/hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run.
+- Resultaat: requested 10, processed 10, valid_new=10, imported 0, already_exists=0, invalid=0, not_found=0, temporary_error=0, skipped 802 (alleen max_batch_size). Importerruntime 15 264 ms (circa 15,3 seconden); workflowjob circa 47 seconden. Alle 10 hadden positieve gevalideerde prijzen; eerste SKU 000685000 behield voorloopnullen en werd als valid_new met €1,99 gerapporteerd.
+- Dry-run productcount 7.543 → 7.543 en pricecount 7.543 → 7.543; productwrites 0 en prijswrites 0. Geen discovery gestart; de geteste commandroute gebruikte uitsluitend de expliciete CSV.
+- Normale regressie-CI 37731107103 doorliep importer-fixtures/seed consistency, PostgreSQL atomic rollback/concurrency gate en web core flows/regressions/lint/TypeScript/build succesvol. Daarmee zijn npm test, npm run check en npm run test:postgres op deze PR-head via de normale CI gevalideerd. git diff --check plus YAML-/JS-validatie slaagden op de PR-route.
+- Normale daily workflow is niet aangepast. ROADMAP.md is ongewijzigd.
+
+## Releasegrens en Work-vervolgstap
+
+- Huidige uitvoering is featurebranch + Draft PR #56; geen merge, deployment of write. Branch-head vóór deze documentatiecommit: 1635012ca0446b6b5c50ab73fd62c3d0b7b6560c.
+- Work: controleer de actuele PR #56-head en vereiste checks; markeer na review ready en merge via normale repositorystrategie. Controleer main-CI en Production READY/smoke waar van toepassing. Voer daarna verse read-only Production-precheck uit en dispatch deze workflow éénmaal met mode=write, max=400. Dit is batch 1; start geen tweede batch automatisch en houd de resterende set apart voor een volgende expliciete opdracht.
+
+---
 
 # Checkpoint 36 — daily root-404 hotfix onderzocht en PR voorbereid — 6 oktober 2026
 
