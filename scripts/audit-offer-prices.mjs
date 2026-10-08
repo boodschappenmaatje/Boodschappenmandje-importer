@@ -5,7 +5,7 @@ import { requestHeaders } from "../src/supabase.mjs";
 
 const PAGE_SIZE = 1000;
 const SAMPLE_SIZE = 5;
-const OFFER_CANDIDATE_LIMIT = 30;
+const OFFER_CANDIDATE_LIMIT = 80;
 const RED_BULL = Object.freeze({
   sku: "733741000",
   name: "Red Bull Pistache winter edition",
