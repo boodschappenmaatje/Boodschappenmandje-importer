@@ -1320,3 +1320,22 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 
 - Na de beslissing om geen ongeschikte brede workflow te dispatchen is de originele CSV-set opnieuw exact gecontroleerd: **812/812** SKU's zijn nog afwezig in Hoogvliet Production. Production staat op **7.543 producten / unieke SKU's** en **7.543 prijzen**; geen duplicates of actieve importerlocks/jobs/attempts.
 - Batch 1 heeft dus geen producten toegevoegd. De laatst betrouwbaar volledig berekende Hoogvliet-dekking blijft **7.367 / 8.179 = 90,07%**; er is geen nieuwe volledige bronsetvergelijking uitgevoerd in deze stap. De 812 ontbrekende CSV-SKU's zijn actueel opnieuw bevestigd.
+
+# Checkpoint — finale catch-up batch 3 voorbereid — 8 oktober 2026
+
+## Scope en vaste bron
+
+- Gestart vanaf actuele `origin/main` **fc7eedaf1ac31d69521f2ff46667ec0ab9dfe183** op branch **`codex/final-catch-up-batch3-20261008`**. Geen merge, deploy of Production-write uitgevoerd.
+- Nieuwe vaste bron: `data/hoogvliet-missing-production-2026-10-08-final.csv` met exact **12** unieke SKU's: `733574000, 733575000, 733741000, 770787000, 770809000, 777641000, 905631000, 921742000, 926108000, 926876000, 927082000, 927120000`.
+- SHA-256: `d5c43b501d4dfbf2498d1765340b354b4b487d47806c0b8683dcfcb748025dd5`. `727643000` (Verspakket cajun kip) is bewust uitgesloten: actuele detailroute is not-found en er is geen vervangende match.
+- De vaste source-enum bevat nu uitsluitend `original`, `residual_batch2` en `final_batch3`; `final_batch3` verwijst exact naar deze CSV. Er is geen vrije filepath-, URL- of shell-source-input toegevoegd.
+
+## Safety en verificatie
+
+- De bestaande `scripts/run-explicit-sku-catch-up.mjs` blijft de enige Actions-runner: hij controleert de allowlisted checksum/CSV-set en roept alleen `npm run import:skus` aan. Pull-request runs zijn vastgezet op `final_batch3`, `dry-run`, `max=12`; write blijft uitsluitend expliciete `workflow_dispatch` vanaf `main`, met Production-precheck en de gedeelde `hoogvliet-supabase-update` concurrencygroep.
+- De vaste CSV is lokaal geverifieerd op 12 rijen, 12 unieke SKU's, geen lege/ongeldige rijen en geen `727643000`. Lokale gates zijn groen: `npm test` **373/373**, `npm run check`, `npm run test:postgres` **28/28** en `git diff --check`.
+- De bounded read-only Actions-proof op `source=final_batch3`, `mode=dry-run`, `max=12` is uitgevoerd als Actions-run **37744489526**; deze eerste poging stopte vóór dependencies door EOF-whitespace in dit document. De herhaalde proof is nog pending in run **37744489526**'s opvolgende branch event; er is in geen van beide pogingen een importer gestart en product-/prijswrites zijn **0**.
+
+## Exacte Work-vervolgstap
+
+- Controleer Draft PR en groene Actions-proof. Voer pas daarna een verse Production read-only precheck uit. Alleen bij 0 actieve jobs/attempts/imports/locks en ongewijzigde bron: merge naar `main`, wacht op main-CI/Production readiness, herhaal de verse precheck, dispatch exact één keer `source=final_batch3`, `mode=write`, `max=12`, controleer per SKU de write- en Production-nacontrole en stop direct. Geen discovery, recovery, supersede, migration of automatische volgende batch.

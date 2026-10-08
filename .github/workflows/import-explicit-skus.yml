@@ -24,12 +24,14 @@ on:
         options:
           - original
           - residual_batch2
+          - final_batch3
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/import-explicit-skus.yml
       - data/hoogvliet-missing-production-2026-10-06.csv
       - data/hoogvliet-missing-production-2026-10-08-residual.csv
+      - data/hoogvliet-missing-production-2026-10-08-final.csv
       - scripts/run-explicit-sku-catch-up.mjs
       - scripts/import-explicit-skus.mjs
       - src/explicit-sku-catch-up.mjs
@@ -53,8 +55,8 @@ jobs:
       RUNNER_EVENT_NAME: ${{ github.event_name }}
       RUNNER_REF: ${{ github.ref }}
       RUNNER_MODE: ${{ github.event_name == 'pull_request' && 'dry-run' || github.event.inputs.mode || 'dry-run' }}
-      RUNNER_MAX: ${{ github.event_name == 'pull_request' && '10' || github.event.inputs.max || '10' }}
-      RUNNER_SOURCE: ${{ github.event_name == 'pull_request' && 'residual_batch2' || github.event.inputs.source || 'original' }}
+      RUNNER_MAX: ${{ github.event_name == 'pull_request' && '12' || github.event.inputs.max || '10' }}
+      RUNNER_SOURCE: ${{ github.event_name == 'pull_request' && 'final_batch3' || github.event.inputs.source || 'original' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       HEADLESS: "1"

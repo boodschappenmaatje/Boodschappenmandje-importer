@@ -17,12 +17,18 @@ export const TRUSTED_CSVS = Object.freeze({
     skuCount: 412,
     firstSku: "697042000",
   }),
+  final_batch3: Object.freeze({
+    path: "data/hoogvliet-missing-production-2026-10-08-final.csv",
+    sha256: "d5c43b501d4dfbf2498d1765340b354b4b487d47806c0b8683dcfcb748025dd5",
+    skuCount: 12,
+    firstSku: "733574000",
+  }),
 });
 export const TRUSTED_CSV_PATH = TRUSTED_CSVS.original.path;
 export const TRUSTED_CSV_SHA256 = TRUSTED_CSVS.original.sha256;
 export const TRUSTED_CSV_SKU_COUNT = TRUSTED_CSVS.original.skuCount;
 const MAX_BATCH_SIZE = 400;
-const PR_READ_ONLY_MAX = 10;
+const PR_READ_ONLY_MAX = 12;
 
 export function resolveRunnerConfig(env = process.env) {
   const event = String(env.RUNNER_EVENT_NAME ?? "").trim();
@@ -45,10 +51,10 @@ export function resolveRunnerConfig(env = process.env) {
   }
 
   if (event === "pull_request" && (rawMode !== "dry-run" || max !== PR_READ_ONLY_MAX)) {
-    throw new Error("Een pull_request mag uitsluitend de vaste read-only proof met max=10 uitvoeren.");
+    throw new Error(`Een pull_request mag uitsluitend de vaste read-only proof met max=${PR_READ_ONLY_MAX} uitvoeren.`);
   }
-  if (event === "pull_request" && rawSource !== "residual_batch2") {
-    throw new Error("Een pull_request mag uitsluitend de vertrouwde residual-bron dry-runnen.");
+  if (event === "pull_request" && rawSource !== "final_batch3") {
+    throw new Error("Een pull_request mag uitsluitend de vaste final_batch3-bron dry-runnen.");
   }
   if (event === "workflow_dispatch" && ref !== "refs/heads/main") {
     throw new Error("Handmatige importdispatch is alleen toegestaan vanaf main.");
