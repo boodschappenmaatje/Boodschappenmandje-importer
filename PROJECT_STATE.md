@@ -1,3 +1,29 @@
+# Checkpoint — planner-cache herstel hervat; POST geblokkeerd door ontbrekende request-capability — 8 oktober 2026
+
+## Main/CI en schedulerstatus
+
+- Actuele main vóór deze checkpoint-update: `f5145822e68b9714342333c4fafd8ba32dadc555`; PR #60 mergecommit `9483da35399c987146e4501c71645c1d884db1b1` staat erop.
+- Main Core-CI is groen op actuele main (Core flows, regressions & production build; check run `37768583490`). De PR-mergecheck `37768188977` is eveneens groen.
+- Read-only schedulerbeoordeling: `inspect:daily` haalt uitsluitend de job op voor de huidige Amsterdamse datum. De twee `retry_scheduled` records horen bij 2026-10-06 en 2026-09-29 en zijn daarom niet claimbaar door de normale retry-workflow voor 2026-10-08. Geen job/attempt/lock is verwijderd, geannuleerd of geforceerd.
+- Laatste Production-precheck: running daily jobs **0**, running attempts **0**, running catalog_import_runs **0**, actieve importerlocks **0**, granted advisory locks **0**; retry_scheduled **2**, beide niet claimbaar door de huidige scheduler.
+
+## Configuratie en Production-data
+
+- Expliciete SKU-workflow op main bevat de Production-origin `https://boodschappenmaatje-pwa.vercel.app`; het domein staat bij het Vercel-project `boodschappenmaatje-pwa`, waarvan de laatste deployment `READY/production` is.
+- Vereiste secretnamen zijn aanwezig in GitHub Actions; `PLANNER_CACHE_ADMIN_TOKEN` is ook aanwezig als sensitive Vercel Production-env-var. Secretwaarden zijn niet uitgelezen of getoond. GitHub/Vercel token-gelijkheid is niet zelfstandig leesbaar en kon zonder endpointcall niet functioneel bevestigd worden.
+- Laatste read-only Production-meting: **8.355 producten**, **8.355 unieke SKU's**, **8.355 prijsrecords**, **0 duplicate-SKU-groepen**. Dit is één hoger dan het vorige checkpoint door de afzonderlijke geplande catalog-import `ab2c14ad-891b-4bd7-987c-974191e9f0f1` (`trigger=schedule`, status `partial`, `new_count=1`, foutcount 0; product `731552000`, prijs €2,29). Deze run was niet door planner-maintenance gestart.
+- De 12 final_batch3-SKU's zijn read-only opnieuw bevestigd: **12 SKU's / 12 unieke product-ID's**, alle 12 met positieve prijs, naam, verpakking en Hoogvliet-product-URL. `727643000` blijft afwezig. Bestaande match-cache-rijen gekoppeld aan deze product-ID's: 0 vóór herstel.
+
+## Maintenance-call
+
+- Er is **geen** POST naar `/api/internal/planner-readiness/new-products` uitgevoerd; dus HTTP-status, processed/notified count en uitkomst bestaan niet. Geen productimport, prijsrefresh of database-/cachewijziging is door deze sessie gestart.
+- Blokkade is uitvoertechnisch: de beschikbare connectors bieden read-only HTTP-fetch, maar geen geauthenticeerde POST met JSON-body en headers. De expliciete SKU Actions-workflow is niet als alternatief gestart omdat die ook de importer uitvoert. Geen credentials zijn gereconstrueerd of naar een andere bestemming doorgestuurd.
+- `pending_requires_attention` is daardoor niet bevestigd opgelost; geen full cache rebuild is uitgevoerd.
+- Volgende stap: voer na een nieuwe read-only concurrentieprecheck exact één geauthenticeerde POST uit via een goedgekeurde runner die uitsluitend de 12 gecontroleerde product-UUID's aanbiedt; doe daarna de gevraagde read-only cache- en count-nacontrole. Geen importerdispatch, retry of full rebuild.
+- `ROADMAP.md` is ongewijzigd.
+
+---
+
 # Checkpoint — PR #60 planner-maintenance release; targeted repair blocked by active importer — 8 oktober 2026
 
 ## PR #60 release
