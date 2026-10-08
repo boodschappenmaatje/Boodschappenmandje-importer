@@ -1419,7 +1419,7 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 ## Onderzoek en root cause
 
 - Actuele technische basis: remote `main` **8e02444**; actuele open PR's zijn #54, #42, #41 en #21. Geen daarvan raakt deze planner-cachefix. De werkbranch voor deze minimale wijziging is **`codex/fix-planner-cache-maintenance-config-20261008`**.
-- Draft PR **#60** is geopend op head **`546a0218f6c80bfbb26b2fb0e689e844eddad34a`**, base `main`, mergeable; de Vercel Preview-status was bij deze controle nog `PENDING`. Er is niet gemerged.
+- Draft PR **#60** is geopend op actuele head **`c925c62`** (`c925c6281e8a0e38b4ed239fe048ea8a28c33c78`), base `main`, mergeable; de vereiste Actions-checks staan nog queued/in progress en Vercel Preview is nog `PENDING`. Er is niet gemerged.
 - De finale 12-SKU write liep via `.github/workflows/import-explicit-skus.yml` met `source=final_batch3`, `mode=write`, `max=12`. De workflow gaf `SUPABASE_URL` en `SUPABASE_SECRET_KEY` door, maar niet de drie planner-maintenancevariabelen.
 - `loadConfig()` leest de plannerinstellingen uitsluitend uit `PLANNER_CACHE_BASE_URL`, `PLANNER_CACHE_ADMIN_TOKEN` en optioneel `VERCEL_AUTOMATION_BYPASS_SECRET`. Zonder base-URL én admin-token retourneert `plannerMaintenanceSettings()` bewust `null`. De hook registreert dan `planner-maintenance-not-configured`, `notifiedProducts=0` en `pending_requires_attention`.
 - Dit is dus een **repository/workflow-configuratieprobleem**, niet een parser-, endpoint-, auth- of databaseprobleem. De bestaande `upsertProducts`-flow roept onderhoud pas aan na bevestigde product- én prijsopslag, bewaart de import als geslaagd en rolt geen producten terug. Er was geen maintenance-HTTP-call en geen automatische importretry.
