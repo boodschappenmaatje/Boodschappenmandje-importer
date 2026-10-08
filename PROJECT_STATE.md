@@ -1145,3 +1145,22 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 - Handmatige beoordeling van proof **37725393034** bevestigt de inhoudelijke gate: exact 400 expliciete CSV-SKU's verwerkt; 400 `valid_new`; overige classificaties 0; 412 extra rijen buiten de limiet met `max_batch_size`; geen source/parserfout of brede discovery. De run's FAIL was uitsluitend de tijdelijke proofverifier die ten onrechte 400 totaalresultaatrijen eiste, hoewel het importercontract 812 bronrijen rapporteert. Dit checkpoint tekent die bewezen false-negative expliciet af; importer- of scrapercode is niet aangepast.
 - Production-read-only: proof-snapshots vóór/na waren gelijk (7.543 totale producten, 7.543 prijzen, 54 catalog_import_runs; volledige product-, prijs-, import-, daily-job- en attempt-hashes gelijk). Aparte actuele read-only controle: 7.543 totale producten/prijzen, 7.540 Hoogvliet-producten met 7.540 unieke SKU's, 0 dubbele SKU-groepen, 0 actieve catalogruns/daily-jobs/attempts/locks.
 - **RELEASEGATE PASS.** PR #55 is technisch klaar voor release, daarna Production READY en een afzonderlijk expliciet geautoriseerde catch-up batch 1 van maximaal 400 SKU's. In deze gate zijn geen merge, deploy of Production-write uitgevoerd. `ROADMAP.md` is ongewijzigd.
+
+# Checkpoint 47 — PR #55 release en Production catch-upbatch 1 geblokkeerd — 8 oktober 2026
+
+## Release
+
+- PR #55 is na verse controle van de ongewijzigde head `ec1c77d193858960bac9380aae4ceeae36694044` als squash gemerged. Mergecommit en main-head vóór deze documentatie-update: `776ef2d66d8289098c911f0a7511c17ac1c46d9c`.
+- Main-CI-run **37728930581** (#301) is groen. Vercel Production-deployment `dpl_9qMMwHwvBnSR8Vi5P2jUftsdGgae` op die commit is **READY**; homepage-smoke HTTP **200**.
+- De finale read-only proof blijft run **37725393034** (Checkpoint 46): requested/processed 400/400, valid_new 400, alle overige batchclassificaties 0, 412 buiten de cap overgeslagen; runtime 12:35,5; geen discovery of writes.
+
+## Verse Production-precheck en stop vóór write
+
+- Read-only momentopname: **7.543** producten, **7.543** unieke SKU's, **7.543** prijzen; Hoogvliet **7.540** producten / **7.540** unieke SKU's; duplicate-SKU-groepen **0**.
+- Running daily jobs **0**, running daily attempts **0**, actieve catalog_import_runs **0**, actieve daily locks **0**.
+- Batch 1 is **niet gestart**: repository-workflow `.github/workflows/import-hoogvliet-poc.yml` heeft geen expliciete CSV-SKU-runmodus; dispatch ervan zou de normale catalogus/discovery-import uitvoeren. Er is geen veilige Actions-runnerdispatch voor exact `npm run import:skus -- --file hoogvliet-missing-production-2026-10-06.csv --max 400 --write` beschikbaar. Daarom is geen batchrun-ID aangemaakt en zijn geen classificaties/runtime of after-counts voor een writebatch beschikbaar.
+- Productwrites **0**, prijswrites **0**; Production bleef in de gecontroleerde precheck op **7.543 / 7.543**. Geen tweede run, batch 2, daily import, recovery, merge van een andere PR of handmatige databasewijziging gestart.
+
+## Eerstvolgende veilige stap
+
+- PR #55 is gereleased en de importercode staat op Production. Batch 1 blijft pending totdat een expliciete, exact-SKU runnerroute met de originele CSV beschikbaar is. Daarna opnieuw vlak vóór dispatch alle Production-concurrency/counts read-only controleren en uitsluitend één batch van maximaal 400 starten. Geen batch 2. `ROADMAP.md` is ongewijzigd.
