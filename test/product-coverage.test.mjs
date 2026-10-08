@@ -157,6 +157,117 @@ test("current detail JSON-LD plus exact catalog API package data reaches price v
   assert.equal(diagnostics.parser.catalog_api.matched_sku, "000685000");
 });
 
+test("current catalog GraphQL promotion fields map the active offer price pair", async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
+  t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  t.after(() => context.close());
+  await context.route("https://hoogvliet.nl/**", async route => {
+    if (new URL(route.request().url()).pathname === "/api/graphql") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: { products: { items: [{
+          sku: "733741000", url_key: "red-bull-pistache-winter-edition-733741000",
+          name: "Pistache winter edition", is_promotion: true,
+          promotion_meta_data: { raw_discount_label: { full_label: "Actie" } },
+          metadata: JSON.stringify({ verpakking: "Blik" }),
+          price_range: { minimum_price: {
+            regular_price: { value: 1.72 }, final_price: { value: 1.39 },
+            discount: { percent_off: 19.19 },
+          } },
+        }] } } }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><main><h1>Red Bull Pistache winter edition</h1><span class="package-size">Blik</span>
+        <script type="application/ld+json">${JSON.stringify({
+          "@type": "Product", sku: "733741000", name: "Red Bull Pistache winter edition",
+          brand: { name: "Red Bull" }, offers: { price: 1.39 },
+        })}</script></main>`,
+    });
+  });
+  const page = await context.newPage();
+  const product = await validateCandidate(page, {
+    sku: "733741000",
+    sourceURL: "https://hoogvliet.nl/product/red-bull-pistache-winter-edition-733741000",
+    available: true, searchTerm: "catch-up:explicit-sku",
+  });
+  assert.deepEqual({ price: product.price, oldPrice: product.oldPrice, isOffer: product.isOffer }, {
+    price: 1.39, oldPrice: 1.72, isOffer: true,
+  });
+});
+
+test("current comparison-price markup detects the Red Bull offer without an offer-period label", async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
+  t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  t.after(() => context.close());
+  await context.route("https://hoogvliet.nl/**", async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: `<!doctype html><main>
+        <h1>Red Bull Pistache winter edition</h1>
+        <span class="package-size">250 milliliter</span>
+        <span class="price-display-container">€ 1,39</span>
+        <span class="kor-product-sale-price-value">€ 1,72</span>
+        <script type="application/ld+json">${JSON.stringify({
+          "@type": "Product", sku: "733741000", name: "Red Bull Pistache winter edition",
+          brand: { name: "Red Bull" }, offers: { price: 1.39 },
+        })}</script>
+      </main>`,
+    });
+  });
+  const page = await context.newPage();
+  const product = await validateCandidate(page, {
+    sku: "733741000",
+    sourceURL: "https://hoogvliet.nl/product/red-bull-pistache-winter-edition-733741000",
+    available: true,
+    searchTerm: "catch-up:explicit-sku",
+  });
+  assert.equal(product.price, 1.39);
+  assert.equal(product.oldPrice, 1.72);
+  assert.equal(product.isOffer, true);
+  assert.equal(product.validFrom, null);
+  assert.equal(product.validUntil, null);
+});
+
+test("comparison markup does not revive an expired offer and a regular page stays regular", async t => {
+  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
+  t.after(() => browser.close());
+  const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
+  t.after(() => context.close());
+  const markup = ({ sku, name, current, comparison = null, period = null }) => `<!doctype html><main>
+    <h1>${name}</h1><span class="package-size">1 stuk</span>
+    <span class="price-display-container">€ ${current}</span>
+    ${comparison ? `<span class="kor-product-sale-price-value">€ ${comparison}</span>` : ""}
+    ${period ? `<h3>${period}</h3>` : ""}
+    <script type="application/ld+json">${JSON.stringify({
+      "@type": "Product", sku, name, offers: { price: Number(current.replace(",", ".")) },
+    })}</script>
+  </main>`;
+  await context.route("https://hoogvliet.nl/**", async route => {
+    const sku = new URL(route.request().url()).pathname.match(/(\d{9})$/)?.[1];
+    const body = sku === "733741001"
+      ? markup({ sku, name: "Verlopen aanbieding", current: "1,39", comparison: "1,72", period: "Aanbieding is geldig van 1 september t/m 7 september" })
+      : markup({ sku, name: "Normaal product", current: "2,49" });
+    await route.fulfill({ status: 200, contentType: "text/html", body });
+  });
+  const page = await context.newPage();
+  const expired = await validateCandidate(page, {
+    sku: "733741001", sourceURL: "https://hoogvliet.nl/product/verlopen-aanbieding-733741001", available: true,
+  });
+  const regular = await validateCandidate(page, {
+    sku: "733741002", sourceURL: "https://hoogvliet.nl/product/normaal-product-733741002", available: true,
+  });
+  assert.deepEqual({ price: expired.price, oldPrice: expired.oldPrice, isOffer: expired.isOffer }, { price: 1.72, oldPrice: null, isOffer: false });
+  assert.deepEqual({ price: regular.price, oldPrice: regular.oldPrice, isOffer: regular.isOffer }, { price: 2.49, oldPrice: null, isOffer: false });
+});
+
 test("a stale product detail HTTP 404 is a safe invalid-detail rejection", async () => {
   const product = fixture.products[0];
   const page = {

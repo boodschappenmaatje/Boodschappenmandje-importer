@@ -612,6 +612,44 @@ function catalogAPIPrice(item) {
     ?? null;
 }
 
+function catalogAPIOfferDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const fields = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(date).reduce((result, part) => {
+    if (part.type !== "literal") result[part.type] = part.value;
+    return result;
+  }, {});
+  return fields.year && fields.month && fields.day
+    ? `${fields.year}-${fields.month}-${fields.day}` : null;
+}
+
+function catalogAPICurrentOffer(item) {
+  const minimum = item?.price_range?.minimum_price;
+  const currentPrice = Number(minimum?.final_price?.value ?? catalogAPIPrice(item));
+  const regularPrice = Number(minimum?.regular_price?.value);
+  const discountPercent = Number(minimum?.discount?.percent_off);
+  const promotion = item?.is_promotion === true
+    || String(item?.is_promotion ?? "").toLowerCase() === "true";
+  if (!promotion || !Number.isFinite(currentPrice) || currentPrice <= 0
+    || !Number.isFinite(regularPrice) || regularPrice <= currentPrice) return null;
+  const metadata = item?.promotion_meta_data ?? {};
+  const validFrom = catalogAPIOfferDate(metadata?.valid_from);
+  const validUntil = catalogAPIOfferDate(metadata?.valid_to);
+  if (validFrom && validUntil && !isOfferPeriodActive({ validFrom, validUntil })) return null;
+  return {
+    price: currentPrice,
+    regularPrice,
+    discountPercent: Number.isFinite(discountPercent) ? discountPercent : null,
+    offerText: clean(metadata?.raw_discount_label?.full_label)
+      || clean(metadata?.raw_discount_label?.text)
+      || clean(metadata?.korting_label),
+    validFrom,
+    validTo: validUntil,
+  };
+}
+
 function catalogAPIPackage(item) {
   let metadata = {};
   try { metadata = typeof item?.metadata === "string" ? JSON.parse(item.metadata) : (item?.metadata ?? {}); }
@@ -1339,8 +1377,18 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
   // existing current-catalog GraphQL parser for that one missing field,
   // queried by the already verified exact SKU. Never accept another identity
   // or invent a value when the API has no package metadata.
-  if (!clean(details.packageText)) {
-    const catalogItems = await fetchPublicCatalogItems(page, [candidate.sku]);
+  if (!clean(details.packageText)
+    || (!Number.isFinite(details.regularPrice) && !Number.isFinite(details.offerPrice))) {
+    let catalogItems = [];
+    try {
+      catalogItems = await fetchPublicCatalogItems(page, [candidate.sku]);
+    } catch (error) {
+      // A legacy detail page may already have a valid package and positive
+      // detail price. Keep that safe normal-product path usable when the
+      // optional offer enrichment is unavailable; missing package data still
+      // fails closed through the existing validation below.
+      if (!(clean(details.packageText) && Number.isFinite(details.displayPrice) && details.displayPrice > 0)) throw error;
+    }
     const catalogItem = catalogItems.find(item => catalogAPISKU(item) === candidate.sku);
     const catalogPackage = catalogAPIPackage(catalogItem);
     if (diagnostics) diagnostics.parser = {
@@ -1350,9 +1398,24 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
         name: clean(catalogItem?.name),
         package_text: catalogPackage,
         price: catalogAPIPrice(catalogItem),
+        current_offer: catalogAPICurrentOffer(catalogItem),
       },
     };
-    if (catalogPackage) details = { ...details, packageText: catalogPackage };
+    const catalogOffer = catalogAPICurrentOffer(catalogItem);
+    if (catalogPackage || catalogOffer) {
+      details = {
+        ...details,
+        ...(catalogPackage ? { packageText: catalogPackage } : {}),
+        ...(catalogOffer ? {
+          displayPrice: catalogOffer.price,
+          offerPrice: catalogOffer.price,
+          regularPrice: catalogOffer.regularPrice,
+          promotionText: catalogOffer.offerText ?? details.promotionText,
+          validFrom: catalogOffer.validFrom,
+          validUntil: catalogOffer.validTo,
+        } : {}),
+      };
+    }
   }
 
   const name = clean(details.name);
@@ -1364,9 +1427,20 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
   const offerText = clean(details.offerPeriod);
   const checkedAt = new Date();
   const period = parseOfferPeriod(offerText, checkedAt);
+  const activePeriod = isOfferPeriodActive(period, checkedAt);
+  const priceComparisonOffer = Boolean(
+    Number.isFinite(details.regularPrice)
+      && details.regularPrice > 0
+      && Number.isFinite(details.offerPrice ?? details.displayPrice)
+      && (details.offerPrice ?? details.displayPrice) > 0
+      && details.regularPrice > (details.offerPrice ?? details.displayPrice)
+      // A parsed but expired period is authoritative: never revive it merely
+      // because stale comparison markup remains in the page.
+      && (!period || activePeriod),
+  );
   const simpleOffer = Boolean(
-    isOfferPeriodActive(period, checkedAt)
-      && promotionText?.toLowerCase().startsWith("per "),
+    (activePeriod && promotionText?.toLowerCase().startsWith("per "))
+      || priceComparisonOffer,
   );
   const regularPrice = details.regularPrice ?? (!simpleOffer ? details.displayPrice : null);
   const currentPrice = simpleOffer ? (details.offerPrice ?? details.displayPrice) : regularPrice;
@@ -1389,8 +1463,8 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
       : null,
     isOffer: Boolean(simpleOffer),
     offerText: simpleOffer ? [promotionText, offerText].filter(Boolean).join(" · ") : null,
-    validFrom: simpleOffer ? period.validFrom : null,
-    validUntil: simpleOffer ? period.validUntil : null,
+    validFrom: simpleOffer ? details.validFrom ?? period?.validFrom ?? null : null,
+    validUntil: simpleOffer ? details.validUntil ?? period?.validUntil ?? null : null,
     fetchedAt: checkedAt.toISOString(),
   };
   product.productType = resolvedProductTypeForRefresh(
