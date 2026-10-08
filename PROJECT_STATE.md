@@ -12,7 +12,7 @@
 ## Checks en live read-only proof
 
 - Explicit SKU workflow-run 37731107102 op head 1635012ca0446b6b5c50ab73fd62c3d0b7b6560c: succesvol, PR-event, mode dry-run, max 10. Exact commando: npm run import:skus -- --file data/hoogvliet-missing-production-2026-10-06.csv --max 10 --dry-run.
-- Resultaat: requested 10, processed 10, valid_new=10, imported 0, already_exists=0, invalid=0, not_found=0, temporary_error=0, skipped 802 (alleen max_batch_size). Importerruntime 15.264 ms (15,264 ms); workflowjob circa 47 seconden. Alle 10 hadden positieve gevalideerde prijzen; eerste SKU 000685000 behield voorloopnullen en werd als valid_new met €1,99 gerapporteerd.
+- Resultaat: requested 10, processed 10, valid_new=10, imported 0, already_exists=0, invalid=0, not_found=0, temporary_error=0, skipped 802 (alleen max_batch_size). Importerruntime 15.264 ms-seconden (15.264 ms; circa 15,3 seconden); workflowjob circa 47 seconden. Alle 10 hadden positieve gevalideerde prijzen; eerste SKU 000685000 behield voorloopnullen en werd als valid_new met €1,99 gerapporteerd.
 - Dry-run productcount 7.543 → 7.543 en pricecount 7.543 → 7.543; productwrites 0 en prijswrites 0. Geen discovery gestart; de geteste commandroute gebruikte uitsluitend de expliciete CSV.
 - Normale regressie-CI 37731107103 doorliep importer-fixtures/seed consistency, PostgreSQL atomic rollback/concurrency gate en web core flows/regressions/lint/TypeScript/build succesvol. Daarmee zijn npm test, npm run check en npm run test:postgres op deze PR-head via de normale CI gevalideerd. git diff --check plus YAML-/JS-validatie slaagden op de PR-route.
 - Normale daily workflow is niet aangepast. ROADMAP.md is ongewijzigd.
