@@ -181,16 +181,17 @@ export async function runOfferPriceAudit(env = process.env) {
     });
     const offers = offerPool.filter(isCurrentOffer).slice(0, SAMPLE_SIZE);
     const regular = await validateSample(browser, samples.regular);
+    const offerProof = [redBull[0], ...offers].slice(0, SAMPLE_SIZE);
     return {
       mode: "read-only",
       database,
       redBull: redBull[0],
       samples: {
-        offers,
+        offers: offerProof,
         regular,
         offerCandidatesChecked: offerPool.length,
         inactiveOfferCandidates: offerPool.filter(result => !isCurrentOffer(result)).length,
-        offersCorrect: outcomeCounts(offers, true),
+        offersCorrect: outcomeCounts(offerProof, true),
         regularCorrect: outcomeCounts(regular, false),
       },
       writes: { product: 0, price: 0 },
