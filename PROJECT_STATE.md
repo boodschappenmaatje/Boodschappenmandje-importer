@@ -1,3 +1,14 @@
+# Checkpoint — read-only controle resterende catch-up SKU's — 8 oktober 2026
+
+- Remote main vóór deze documentatie-update: `5c8126b7d12467130374e778717d45f175979638`.
+- Verse read-only vergelijking van de oorspronkelijke CSV met Production: 812 SKU's, alle uniek; 799 aanwezig en exact 13 nog afwezig.
+- Residual van batch 2: 412 uniek; 399 aanwezig en 13 afwezig. Production staat op 8.342 producten, 8.342 unieke Hoogvliet-SKU's en 8.342 prijzen; dubbele SKU-groepen 0; actieve daily jobs, attempts, catalog-imports en locks 0.
+- Resterende SKU's: `727643000`, `733574000`, `733575000`, `733741000`, `770787000`, `770809000`, `777641000`, `905631000`, `921742000`, `926108000`, `926876000`, `927082000`, `927120000`.
+- De enige batch-2 `not_found` is `727643000`, CSV-naam “Verspakket cajun kip”. De run classificeerde deze als `notFound`; de oorspronkelijke detail-URL kon niet betrouwbaar als detailpagina worden bevestigd. De actuele [Hoogvliet-lijst met maaltijdpakketten](https://hoogvliet.nl/aardappelen-groente-fruit/verspakketten/maaltijdpakketten) toont 17 producten en noemt dit product niet. Een oudere zoekindexweergave (2 dagen eerder) noemde “Verspakket cajun kip” als “Alleen in winkel”. Dit ondersteunt de inferentie dat de detailbron/online beschikbaarheid is gewijzigd; er is geen bewijs voor een structurele parserfout. Geen vervangende match geforceerd.
+- In deze controle geen write, importdispatch, herstel of discovery gestart. Geen batch 3. Volgende veilige stap: vóór een eventuele aparte catch-up opnieuw de 13 SKU's read-only controleren en voor `727643000` eerst actuele detailbronbeschikbaarheid bevestigen.
+
+---
+
 # Checkpoint — PR #57 release en catch-up batch 2 — 8 oktober 2026
 
 ## Release
