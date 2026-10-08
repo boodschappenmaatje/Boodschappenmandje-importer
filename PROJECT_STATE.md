@@ -1164,3 +1164,8 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 ## Eerstvolgende veilige stap
 
 - PR #55 is gereleased en de importercode staat op Production. Batch 1 blijft pending totdat een expliciete, exact-SKU runnerroute met de originele CSV beschikbaar is. Daarna opnieuw vlak vóór dispatch alle Production-concurrency/counts read-only controleren en uitsluitend één batch van maximaal 400 starten. Geen batch 2. `ROADMAP.md` is ongewijzigd.
+
+## Actuele missing-setcontrole na release — 8 oktober 2026
+
+- Na de beslissing om geen ongeschikte brede workflow te dispatchen is de originele CSV-set opnieuw exact gecontroleerd: **812/812** SKU's zijn nog afwezig in Hoogvliet Production. Production staat op **7.543 producten / unieke SKU's** en **7.543 prijzen**; geen duplicates of actieve importerlocks/jobs/attempts.
+- Batch 1 heeft dus geen producten toegevoegd. De laatst betrouwbaar volledig berekende Hoogvliet-dekking blijft **7.367 / 8.179 = 90,07%**; er is geen nieuwe volledige bronsetvergelijking uitgevoerd in deze stap. De 812 ontbrekende CSV-SKU's zijn actueel opnieuw bevestigd.
