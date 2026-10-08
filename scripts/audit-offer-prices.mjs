@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import { pathToFileURL } from "node:url";
-import { validateCandidate } from "../src/hoogvliet.mjs";
+import { isValidProductURL, validateCandidate } from "../src/hoogvliet.mjs";
 import { requestHeaders } from "../src/supabase.mjs";
 
 const PAGE_SIZE = 1000;
@@ -17,14 +17,7 @@ function positive(value) {
 }
 
 function validProductURL(value) {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:"
-      && ["hoogvliet.nl", "www.hoogvliet.com"].includes(url.hostname)
-      && /(?:^|-)(\d{9})\/?$/.test(url.pathname);
-  } catch {
-    return false;
-  }
+  return isValidProductURL(value);
 }
 
 function apiURL(base, table, select) {
