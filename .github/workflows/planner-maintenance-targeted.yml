@@ -1,0 +1,55 @@
+name: Targeted planner maintenance — final batch 3
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Alleen de vaste final_batch3-bron
+        type: choice
+        required: true
+        default: final_batch3
+        options:
+          - final_batch3
+      confirm:
+        description: Typ exact RUN_TARGETED_MAINTENANCE om de ene maintenance-call vrij te geven
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Share the existing importer mutex. This workflow never starts the importer.
+concurrency:
+  group: hoogvliet-supabase-update
+  cancel-in-progress: false
+
+jobs:
+  targeted-planner-maintenance:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/main'
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GITHUB_EVENT_NAME: ${{ github.event_name }}
+      GITHUB_REPOSITORY: ${{ github.repository }}
+      GITHUB_REF: ${{ github.ref }}
+      TARGETED_SOURCE: ${{ inputs.source }}
+      TARGETED_CONFIRM: ${{ inputs.confirm }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
+      PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Run one bounded targeted maintenance call
+        run: node scripts/run-targeted-planner-maintenance.mjs

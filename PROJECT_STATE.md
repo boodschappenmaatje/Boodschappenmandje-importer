@@ -1498,3 +1498,27 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 - Daarna is een afzonderlijk begrensde live maintenance-call voor deze 12 nodig volgens bovenstaand herstelpad. Geen volledige cache rebuild en geen productimport zijn nodig. Dagelijkse prijsrefresh blijft een later checkpoint.
 
 ---
+
+# Checkpoint — targeted planner-maintenance runner voorbereid — 8 oktober 2026
+
+## Contract en scope
+
+- Actuele technische waarheid is remote `main` **`2841b5220f761c708436e253ef9bbf33a6b07a88`**; PR #60 is daarop squash-gemerged. De bestaande endpointimplementatie is bevestigd: alleen `POST /api/internal/planner-readiness/new-products`, JSON `{ "productIds": [UUID] }`, 1–20 unieke UUID's, `Authorization: Bearer PLANNER_CACHE_ADMIN_TOKEN`, optioneel de bestaande `x-vercel-protection-bypass`-header, en response `{ productCount, changedMatchKeys, affectedRecipeIds, refreshedReadinessCount }`.
+- De endpoint fail-closedt op ontbrekende/ongeldige auth, ontbrekende Supabase-client, ongeldige IDs of niet-prijs-ready producten. Hij werkt alleen bestaande afgeleide match/readiness-cache-rijen bij met bestaande compare-and-set guards; er is geen full-rebuildparameter. Herhaalde calls zijn idempotent voor al bevestigde matches/readiness-rijen, maar blijven een write-capability en worden daarom door deze runner tot exact één POST beperkt.
+- Nieuw bestand: `.github/workflows/planner-maintenance-targeted.yml`. De workflow ondersteunt uitsluitend `workflow_dispatch` vanaf `main`, vaste `source=final_batch3` en exacte bevestiging `RUN_TARGETED_MAINTENANCE`. Er is geen schedule-, push- of PR-trigger, geen importercommand, geen discovery, geen prijsrefresh, geen migration en geen automatische retry.
+- Runner: `scripts/run-targeted-planner-maintenance.mjs`. Hij leest en SHA-256-verifieert uitsluitend `data/hoogvliet-missing-production-2026-10-08-final.csv`, resolveert de 12 SKU's read-only via Production `products`/`product_prices`, vereist exact 12 unieke UUID's en positieve prijzen, en sluit `727643000` expliciet uit. UUID's zijn niet gehardcodeerd.
+
+## Veiligheidsgrenzen
+
+- Vóór POST worden read-only `catalog_daily_jobs`, `catalog_daily_attempts`, `catalog_import_runs` en actieve lockvelden gecontroleerd. Alleen een `retry_scheduled`-job van de huidige Amsterdamse datum die volgens dezelfde dagvenster-/due-logica claimbaar is, blokkeert; oudere retryrecords blokkeren niet.
+- De runner controleert granted advisory locks via uitsluitend `SELECT count(*) FROM pg_locks WHERE locktype='advisory' AND granted` over het bestaande Production Session-poolerpad. `SUPABASE_DB_PASSWORD` wordt alleen hiervoor gebruikt; alle foutpaden stoppen fail-safe. De bestaande GitHub Actions planner-secrets worden uitsluitend als headers gebruikt en nooit gelogd.
+- Er wordt exact één planner-POST uitgevoerd, zonder retry-loop of redirect. De response wordt strikt tegen het bestaande contract gevalideerd; full-rebuildvelden, onverwachte recipe-UUID's, non-2xx of malformed JSON falen. Daarna volgen uitsluitend read-only catalogus-/prijs-/duplicate-/importer-/lock- en linked match/readiness-nacontroles.
+- De workflow deelt de bestaande `hoogvliet-supabase-update` concurrencygroep met de importer. Er wordt geen lock verwijderd, job geannuleerd, retry gestart of status geforceerd.
+
+## Branch, tests en releasegrens
+
+- Werk vanaf actuele main op branch **`codex/targeted-planner-maintenance-runner-20261008`**. Er is in Codex geen workflowdispatch, Production-call, import, prijsrefresh of merge uitgevoerd. Draft PR en definitieve head worden na de lokale gates geregistreerd.
+- Regressietests dekken manual-only/source/confirmation, exact 12 en uitsluiting `727643000`, UUID-/prijsvalidatie, actieve importer/advisory lock/current retry, ontbrekende secrets, non-2xx zonder retry, exact één POST, response/full-rebuildscope, geen importer-/writecode en secretredactie.
+- `ROADMAP.md` blijft ongewijzigd. Work mag pas na Draft-PR-review en groene CI exact één handmatige run vanaf `main` starten, met de bevestigingstekst; bij enige precheckafwijking stopt de runner zonder POST.
+
+---
