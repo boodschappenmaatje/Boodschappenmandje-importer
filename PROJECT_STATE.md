@@ -1,3 +1,32 @@
+# Checkpoint — PR #56 release en catch-up batch 1 — 8 oktober 2026
+
+## Release
+
+- PR #56 is via squash gemerged. Mergecommit en main-head direct na merge: `296df858fd63fe469732d73a60bfc3ca76bf4b5e`; PR-head was `67faefd6e6d10514f641df3db4ffc91a3bc523e8`.
+- Main-CI `37733779160` is groen, inclusief importerfixtures, PostgreSQL atomic rollback/concurrency en web core flows/build. De runner is Actions-only; er was geen Vercel-deployment of database-migration nodig.
+- Workflow op main: `.github/workflows/import-explicit-skus.yml`; vaste bron `data/hoogvliet-missing-production-2026-10-06.csv`, SHA-256 `a24da369b15d4ddf0d8741f7aeb4d3fee2f733e74e2d448ec1ffcd1b8ab30246` (812 unieke SKU's).
+
+## Batch 1 — exact één write-dispatch
+
+- Workflow-run [37734457123](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37734457123) draaide eenmaal via `workflow_dispatch` op `main` / commit `296df858fd63fe469732d73a60bfc3ca76bf4b5e`, `mode=write`, `max=400`. Run-conclusie: success.
+- Exact commando: `npm run import:skus -- --file data/hoogvliet-missing-production-2026-10-06.csv --max 400 --write`. De workflow startte geen brede discovery.
+- Resultaat: requested 400; processed 400; imported/valid_product_price 400; already_exists 0; invalid 0; not_found 0; temporary_error 0; skipped 412, allemaal `max_batch_size`. Input: 812 rijen / 812 uniek. Geen stopreason of post-read-error.
+- Importerruntime: 588.757 ms (9:48,757); totale Actions-run: circa 10:47. De 400 geïmporteerde SKU's zijn exact gelijk aan de eerste 400 CSV-SKU's; de 188 voorloopnul-SKU's in die batch zijn byte-exact behouden en alle geïmporteerde prijzen waren > €0.
+
+## Production-precheck en nacontrole
+
+- Directe read-only precheck vóór dispatch: 7.543 producten, 7.543 unieke SKU's, 7.543 prijsrecords, 0 duplicate SKU-groepen, 0 running daily jobs, 0 running attempts, 0 actieve catalog_import_runs en 0 actieve locks. De actuele dag had 0 verschuldigde retry-jobs. Er waren 2 oudere `retry_scheduled` records die niet draaiden; geen bijbehorende actieve attempt of Actions-run.
+- Directe read-only nacontrole: 7.943 producten, 7.943 unieke SKU's en 7.943 prijsrecords; werkelijk toegevoegd: 400 producten en 400 prijzen. Duplicate SKU-groepen: 0; writes buiten de CSV: 0; 400/400 batch-SKU's exact aanwezig; ontbrekende naam, verpakking, geldige detail-URL of positieve prijs: 0.
+- Van de oorspronkelijke 812-SKU-set zijn nu 400 aanwezig en 412 nog afwezig. `catalog_import_runs`: status `success`, trigger `manual`, processed 400, new 400, errors 0; na afloop geen actieve import of lock.
+- Telemetrie-aantekening: het `catalog_import_runs.total_unique_products_before`-veld meldt 7.540, terwijl de directe Production-telling en importer-samenvatting 7.543 melden. De tabel bevatte vóór de run 7.540 `Hoogvliet`- en 3 `hoogvliet`-records; de werkelijke tabeldelta is ondubbelzinnig 7.543 → 7.943 = 400. Gebruik de directe tabeltelling als autoritatief en onderzoek de casing-afhankelijke telemetrie vóór een volgende batch.
+
+## Eerstvolgende veilige stap
+
+- Batch 1 is afgerond; er is geen tweede dispatch gestart. De huidige workflow met dezelfde CSV en `max=400` selecteert opnieuw de eerste 400 rijen. Start die workflow niet opnieuw om de resterende 412 te bereiken.
+- Bereid voor een afzonderlijke, expliciet goedgekeurde vervolgstap een geverifieerde residual-input/offset voor de nog ontbrekende 412 SKU's voor. Voer vóór die stap opnieuw een Production-precheck uit. `ROADMAP.md` is ongewijzigd.
+
+---
+
 # Checkpoint — expliciete SKU Actions-runner PR #56 — 8 oktober 2026
 
 ## Runner en begrenzing
