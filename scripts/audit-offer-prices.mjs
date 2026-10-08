@@ -121,6 +121,8 @@ async function validateSample(browser, candidates) {
       results.push({
         sku: String(candidate.sku),
         name: candidate.name,
+        page: diagnostics.page ?? null,
+        parser: diagnostics.parser ?? null,
         database: candidate.databasePrice,
         observed: product ? {
           price: product.price,
