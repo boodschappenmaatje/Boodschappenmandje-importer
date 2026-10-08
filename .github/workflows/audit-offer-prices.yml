@@ -1,0 +1,46 @@
+name: Read-only offer price audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/audit-offer-prices.yml
+      - scripts/audit-offer-prices.mjs
+      - src/hoogvliet.mjs
+      - src/supabase.mjs
+      - test/product-coverage.test.mjs
+      - test/importer.test.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-price-audit-read-only
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      HEADLESS: "1"
+    steps:
+      - name: Checkout triggering ref
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Dependencies installeren
+        run: npm ci
+      - name: Chromium installeren
+        run: npx playwright install --with-deps chromium
+      - name: Read-only aanbiedingenaudit
+        run: node scripts/audit-offer-prices.mjs

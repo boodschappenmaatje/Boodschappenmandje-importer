@@ -1364,9 +1364,20 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
   const offerText = clean(details.offerPeriod);
   const checkedAt = new Date();
   const period = parseOfferPeriod(offerText, checkedAt);
+  const activePeriod = isOfferPeriodActive(period, checkedAt);
+  const priceComparisonOffer = Boolean(
+    Number.isFinite(details.regularPrice)
+      && details.regularPrice > 0
+      && Number.isFinite(details.offerPrice ?? details.displayPrice)
+      && (details.offerPrice ?? details.displayPrice) > 0
+      && details.regularPrice > (details.offerPrice ?? details.displayPrice)
+      // A parsed but expired period is authoritative: never revive it merely
+      // because stale comparison markup remains in the page.
+      && (!period || activePeriod),
+  );
   const simpleOffer = Boolean(
-    isOfferPeriodActive(period, checkedAt)
-      && promotionText?.toLowerCase().startsWith("per "),
+    (activePeriod && promotionText?.toLowerCase().startsWith("per "))
+      || priceComparisonOffer,
   );
   const regularPrice = details.regularPrice ?? (!simpleOffer ? details.displayPrice : null);
   const currentPrice = simpleOffer ? (details.offerPrice ?? details.displayPrice) : regularPrice;
@@ -1389,8 +1400,8 @@ export async function validateCandidate(page, candidate, diagnostics = null) {
       : null,
     isOffer: Boolean(simpleOffer),
     offerText: simpleOffer ? [promotionText, offerText].filter(Boolean).join(" · ") : null,
-    validFrom: simpleOffer ? period.validFrom : null,
-    validUntil: simpleOffer ? period.validUntil : null,
+    validFrom: simpleOffer ? period?.validFrom ?? null : null,
+    validUntil: simpleOffer ? period?.validUntil ?? null : null,
     fetchedAt: checkedAt.toISOString(),
   };
   product.productType = resolvedProductTypeForRefresh(
