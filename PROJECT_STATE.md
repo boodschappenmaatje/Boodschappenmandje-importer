@@ -1,3 +1,28 @@
+# Checkpoint — PR #61 gerichte planner-maintenance — 8 oktober 2026
+
+## Release en annulering check
+- PR #61 is squash-gemerged als b3de9ea447da08e6bb178f751853c8837839b53c; actuele main-head bij deze checkpoint is dezelfde SHA.
+- Main-CI Stability & core flows run 37808629960 is groen. De workflow .github/workflows/planner-maintenance-targeted.yml staat op main.
+- PR-head Core-CI run 37801863524 was groen. PR-check Explicit SKU catch-up run 37801863422 was cancelled met GitHub-annotatie: "Canceling since a higher priority waiting request for hoogvliet-supabase-update exists". Het runrecord heeft nul jobs; dit was concurrency-supersede, geen testfailure en geen Production-import.
+- Scope-review: alleen handmatige workflow_dispatch vanaf main, vaste final_batch3-bron, exacte bevestiging, exact-12-guard, Production-prechecks en maximaal één POST. Geen importer-, prijsrefresh-, schedule/push-, discovery-, migration-, retry- of full-rebuildpad.
+
+## Verse Production-precheck en dispatch
+- Final CSV op main: data/hoogvliet-missing-production-2026-10-08-final.csv; SHA-256 d5c43b501d4dfbf2498d1765340b354b4b487d47806c0b8683dcfcb748025dd5.
+- Vlak vóór dispatch read-only gemeten: **8.355 producten**, **8.355 unieke SKU's**, **8.355 prijzen**, **0 duplicate-SKU-groepen**; running daily jobs **0**, attempts **0**, catalog-imports **0**, actieve importerlocks **0**, granted advisory locks **0**. Er waren **2** oude retry_scheduled records maar **0 huidige claimbare retries**.
+- Exact 12 doel-SKU's waren aanwezig met 12 unieke interne UUID's en alle prijzen > €0. 727643000 was afwezig. Geen actieve concurrentie.
+- Exact één handmatige run vanaf main: [Targeted planner maintenance run 37809361387](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37809361387), commit b3de9ea447da08e6bb178f751853c8837839b53c, inputs source=final_batch3 en confirm=RUN_TARGETED_MAINTENANCE. Conclusion **success**; runtime circa **20 seconden**. Runner voerde exact **1 POST** uit met 12 product-UUID's.
+- Endpoint accepteerde de aanvraag (HTTP **2xx**, route-default **200**); runnerstatus confirmed, response productCount=12, changedMatchKeys=0, affectedRecipeIds=0, refreshedReadinessCount=0, linked matchrows **0**, affected readinessrows **0**. Geen retry of full rebuild; er is geen importer gestart.
+
+## Read-only nacontrole en conclusie
+- Production na de run bleef **8.355 producten / 8.355 unieke SKU's / 8.355 prijzen**, **0 duplicates**; alle 12 doelproducten bleven aanwezig en 727643000 afwezig. Geen product-/prijsmutatie.
+- Na afloop: running jobs/attempts/imports **0**, actieve locks **0**, granted advisory locks **0**.
+- De persistente catalog_discovery_state toont plannerMaintenance.status=confirmed, pendingProductIds=[], notifiedProducts=1489; recordtijd **2026-10-08 12:37:34 UTC**, dus deze bevestigde state bestond al vóór de targeted POST. Er zijn geen ingredient_product_matches gekoppeld aan de 12 doelproducten. De POST was daarom een geaccepteerde, begrensde no-op: er waren geen target-relevante matches/recept-readinessrijen om te wijzigen. De call zelf heeft geen cache/readinessrijen vernieuwd.
+- Globaal waren read-only **70** readiness-cache-rijen pending en **1.300** current; door nul target-matchkeys zijn die 70 niet aan deze 12 toe te schrijven. Claim daarom geen algemene planner-cache-clean status.
+- Planner-maintenance voor deze 12: **SUCCESS / bevestigd zonder targetwijzigingen**; pending_requires_attention is in de actuele persistente state afwezig, maar was al opgelost vóór deze call. Geen tweede call.
+- Volgende checkpoint kan de dagelijkse catalogus-/prijsverversing en last-known-good afzonderlijk oppakken; beoordeel daarbij de 70 globale pending-readinessrijen expliciet. Geen nieuwe import of prijsrefresh is in deze run gestart. ROADMAP.md is ongewijzigd.
+
+---
+
 # Checkpoint — planner-cache herstel hervat; POST geblokkeerd door ontbrekende request-capability — 8 oktober 2026
 
 ## Main/CI en schedulerstatus
