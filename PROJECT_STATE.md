@@ -1,3 +1,29 @@
+# Checkpoint — PR #60 planner-maintenance release; targeted repair blocked by active importer — 8 oktober 2026
+
+## PR #60 release
+
+- PR #60 is squash-merged. Mergecommit / main-head at release: `9483da35399c987146e4501c71645c1d884db1b1`.
+- Main-CI run [37768188977](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37768188977) was still `in_progress` at the latest check; green status is not yet confirmed.
+- The merged explicit SKU workflow sets `PLANNER_CACHE_BASE_URL=https://boodschappenmaatje-pwa.vercel.app` and passes the GitHub Actions secrets `PLANNER_CACHE_ADMIN_TOKEN` and `VERCEL_AUTOMATION_BYPASS_SECRET`.
+- The Vercel project `boodschappenmaatje-pwa` lists `boodschappenmaatje-pwa.vercel.app` as its Production domain. Vercel Production has a sensitive `PLANNER_CACHE_ADMIN_TOKEN`; GitHub Actions lists both requested secrets. Secret values were not read or disclosed. Exact value equality between the write-only GitHub secret and Vercel Production configuration could not be independently verified.
+
+## Read-only Production check; maintenance call NOT made
+
+- Production counts: **8,354 products**, **8,354 unique SKUs**, **8,354 price records**, **0 duplicate-SKU groups**.
+- All 12 final_batch3 SKUs are present with positive prices. Excluded SKU `727643000` is absent.
+- The safety precheck found a running daily job, a running daily attempt, and an active unexpired importer lock. It also found two older `retry_scheduled` daily-job records. Running catalog_import_runs: **0**; granted advisory locks: **0**.
+- The running job/attempt and active lock violate the no-concurrent-import requirement. Fail-safe applied: **no planner-maintenance POST was issued**. No product import, price refresh, cache maintenance, migration, or database mutation was started by this checkpoint.
+- Since the maintenance endpoint was not called, cache/readiness status remains unverified; `pending_requires_attention` is not confirmed resolved.
+
+## Result and safe next step
+
+- PR #60 release: merged; mergecommit above.
+- Targeted planner-cache repair: **BLOCKED**, not failed at the endpoint. No response status or processed/notified count exists because the call was deliberately withheld.
+- Resume only from a newly authorized checkpoint after main-CI is green, all running daily jobs/attempts/imports and relevant locks are absent, and the secret configuration can be safely validated. Then re-check the exact 12 Production UUIDs and send at most one bounded maintenance request. Do not retry or run a full rebuild automatically.
+- `ROADMAP.md` is unchanged.
+
+---
+
 # Checkpoint — finale catch-up batch 3 write — 8 oktober 2026
 
 ## Write-run en scope
