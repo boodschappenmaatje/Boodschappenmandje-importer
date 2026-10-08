@@ -68,6 +68,9 @@ test("runner is isolated to allowlisted explicit-SKU CSVs with checksums", async
   assert.doesNotMatch(runner, /import:daily|catalog:root|catalog-growth|collectProducts|findCandidates/);
   assert.match(workflow, /pull_request:/);
   assert.doesNotMatch(workflow, /^\s*(schedule|push):/m);
+  assert.match(workflow, /PLANNER_CACHE_BASE_URL:\s+https:\/\/boodschappenmaatje-pwa\.vercel\.app/);
+  assert.match(workflow, /PLANNER_CACHE_ADMIN_TOKEN:\s+\$\{\{ secrets\.PLANNER_CACHE_ADMIN_TOKEN \}\}/);
+  assert.match(workflow, /VERCEL_AUTOMATION_BYPASS_SECRET:\s+\$\{\{ secrets\.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/);
 });
 
 test("missing dispatch mode defaults to read-only dry-run", () => {

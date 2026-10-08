@@ -1414,3 +1414,33 @@ Codex onderzoekt waarom de tien bereikbare detailpagina's generiek `invalidProdu
 ## Exacte Work-vervolgstap
 
 - Controleer Draft PR en groene Actions-proof. Voer pas daarna een verse Production read-only precheck uit. Alleen bij 0 actieve jobs/attempts/imports/locks en ongewijzigde bron: merge naar `main`, wacht op main-CI/Production readiness, herhaal de verse precheck, dispatch exact één keer `source=final_batch3`, `mode=write`, `max=12`, controleer per SKU de write- en Production-nacontrole en stop direct. Geen discovery, recovery, supersede, migration of automatische volgende batch.
+# Checkpoint — planner-cache maintenance na finale batch 3 — 8 oktober 2026
+
+## Onderzoek en root cause
+
+- Actuele technische basis: remote `main` **8e02444**; actuele open PR's zijn #54, #42, #41 en #21. Geen daarvan raakt deze planner-cachefix. De werkbranch voor deze minimale wijziging is **`codex/fix-planner-cache-maintenance-config-20261008`**.
+- De finale 12-SKU write liep via `.github/workflows/import-explicit-skus.yml` met `source=final_batch3`, `mode=write`, `max=12`. De workflow gaf `SUPABASE_URL` en `SUPABASE_SECRET_KEY` door, maar niet de drie planner-maintenancevariabelen.
+- `loadConfig()` leest de plannerinstellingen uitsluitend uit `PLANNER_CACHE_BASE_URL`, `PLANNER_CACHE_ADMIN_TOKEN` en optioneel `VERCEL_AUTOMATION_BYPASS_SECRET`. Zonder base-URL én admin-token retourneert `plannerMaintenanceSettings()` bewust `null`. De hook registreert dan `planner-maintenance-not-configured`, `notifiedProducts=0` en `pending_requires_attention`.
+- Dit is dus een **repository/workflow-configuratieprobleem**, niet een parser-, endpoint-, auth- of databaseprobleem. De bestaande `upsertProducts`-flow roept onderhoud pas aan na bevestigde product- én prijsopslag, bewaart de import als geslaagd en rolt geen producten terug. Er was geen maintenance-HTTP-call en geen automatische importretry.
+- De bestaande onderhoudsroute is beschikbaar: `POST /api/internal/planner-readiness/new-products`, met maximaal 20 exacte product-UUID's, `Authorization: Bearer <PLANNER_CACHE_ADMIN_TOKEN>` en bij beschermde Vercel-deployment `x-vercel-protection-bypass: <VERCEL_AUTOMATION_BYPASS_SECRET>`. De endpoint controleert product/prijs-readiness en gebruikt bestaande gerichte match-/readiness-CAS-updates.
+
+## Minimale fix
+
+- In `.github/workflows/import-explicit-skus.yml` zijn dezelfde plannerinstellingen toegevoegd als in de normale importerroute: `PLANNER_CACHE_BASE_URL=https://boodschappenmaatje-pwa.vercel.app`, `secrets.PLANNER_CACHE_ADMIN_TOKEN` en `secrets.VERCEL_AUTOMATION_BYPASS_SECRET`.
+- De fix is generiek voor alle expliciete, begrensde SKU-runs; er is geen SKU-, batch- of product-ID-hardcode toegevoegd. De bestaande import-, dedupe-, prijs- en failure-isolationlogica is ongewijzigd.
+- Een workflow-regressietest controleert nu dat de expliciete runner alle drie de instellingen doorgeeft. Bestaande planner-maintenance-tests dekken al correct geconfigureerde onderhoudsrequests, ontbrekende config, endpoint/auth-fouten zonder importrollback, responsevalidatie, batching en retrygedrag.
+
+## Veilig herstelpad voor final batch 3
+
+- Niet opnieuw importeren en geen prijsrefresh starten. Work controleert read-only in Production dat exact de 12 final-SKU's bestaan, elk één Hoogvliet-product-ID hebben en een positieve prijsrecord hebben; controleer tevens geen duplicates/locks/running imports.
+- Work POST daarna één keer naar `/api/internal/planner-readiness/new-products` met uitsluitend die 12 product-ID's. De request blijft onder de bestaande limiet van 20; gebruik de Production admin-token en, indien Deployment Protection actief is, de bypass-secret. Geen redirect volgen en geen volledige backfill/rebuild.
+- Bevestig de response met `productCount=12`, arrays `changedMatchKeys`/`affectedRecipeIds` en integer `refreshedReadinessCount`, plus read-only nacontrole dat alleen afhankelijke afgeleide cache/match/readiness-rijen zijn geraakt. Een succesvolle call is de onderhoudsbevestiging (`confirmed`); bij fout stoppen en exact rapporteren, zonder importretry.
+- De 12 UUID's moeten door Work read-only uit Production op SKU worden opgehaald en niet uit aannames worden afgeleid. Handmatige gebruikersdata blijft buiten scope. Er is geen migration of destructive cache reset nodig.
+
+## Configuratiegrens / Work-vervolgstap
+
+- Vereist in GitHub Actions: repository/environment variable of vaste Production-origin `PLANNER_CACHE_BASE_URL` zoals hierboven, secret `PLANNER_CACHE_ADMIN_TOKEN`, en secret `VERCEL_AUTOMATION_BYPASS_SECRET` wanneer Vercel Deployment Protection dit vereist. De admin-token moet exact overeenkomen met de server-side `PLANNER_CACHE_ADMIN_TOKEN` van de Production-app; waarden niet loggen.
+- Work moet eerst de secret/variable-aanwezigheid en Production-origin read-only controleren, daarna de fixbranch-PR-CI laten draaien en een Draft PR openen. Pas na review kan Work de branch releasen/mergen; Codex doet geen merge of Production-write.
+- Daarna is een afzonderlijk begrensde live maintenance-call voor deze 12 nodig volgens bovenstaand herstelpad. Geen volledige cache rebuild en geen productimport zijn nodig. Dagelijkse prijsrefresh blijft een later checkpoint.
+
+---

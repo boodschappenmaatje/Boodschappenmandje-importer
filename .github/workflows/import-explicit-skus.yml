@@ -59,6 +59,12 @@ jobs:
       RUNNER_SOURCE: ${{ github.event_name == 'pull_request' && 'final_batch3' || github.event.inputs.source || 'original' }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      # Keep explicit-SKU imports on the same guarded planner-maintenance path
+      # as the normal importer. Missing these values makes the import succeed
+      # while every new product remains pending for planner maintenance.
+      PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
+      PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       HEADLESS: "1"
     steps:
       - name: Checkout triggering ref
