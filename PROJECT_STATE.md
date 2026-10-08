@@ -1,3 +1,23 @@
+# Checkpoint — finale catch-up batch 3 write — 8 oktober 2026
+
+## Write-run en scope
+
+- Vanaf main `a4820cf70cb4c18e22815067b8a3ff90f9dba0bd` is exact één dispatch gedaan: [Explicit SKU catch-up run 37760954697](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37760954697), `source=final_batch3`, `mode=write`, `max=12`.
+- Vóór de dispatch: 8.342 producten, 8.342 unieke SKU's, 8.342 prijsrecords; 0 duplicate-SKU-groepen; final-SKU's aanwezig 0/12; running daily jobs 0, attempts 0, catalog-imports 0, relevante locks 0 en granted advisory locks 0.
+- De vaste CSV is opnieuw gecontroleerd: 12 SKU's, 12 uniek, geen lege SKU's; SHA-256 `d5c43b501d4dfbf2498d1765340b354b4b487d47806c0b8683dcfcb748025dd5`. `727643000` is niet opgenomen en was vóór/na de run afwezig. De workflow gebruikte uitsluitend deze allowlisted CSV en `npm run import:skus`; geen brede discovery.
+- Runresultaat: requested/processed/imported **12/12/12**; `already_exists=0`, `invalid=0`, `not_found=0`, `temporary_error=0`, `skipped=0`; `stop_reason=null`, `post_read_error=null`; importer-runtime **19.308 ms**. Catalog-import-runstatus `success`, processed 12, new 12, errors 0.
+- Alle 12 aangemaakte records zijn exact de final CSV-SKU's, met productnaam, verpakking, exacte Hoogvliet-detail-URL en positieve prijs. De 12 productrecords die sinds dispatch zijn aangemaakt komen exact overeen met de opgegeven set; buiten de set is niets toegevoegd. Prijsrecords bestaan voor alle 12; geen niet-positieve prijs en geen duplicate SKU-groep.
+- Production: producten **8.342 → 8.354**, unieke SKU's **8.342 → 8.354**, prijsrecords **8.342 → 8.354**. Nacontrole: alle 12 final SKU's aanwezig, duplicate-SKU-groepen 0, actieve daily jobs/attempts/imports/locks 0, `727643000` afwezig.
+- Red Bull `733741000` is opgeslagen met actuele prijs **€1,39**, `old_price=€1,72`, `is_offer=true`, label `per blik 1,39` en aanbiedingperiode **2026-10-07 t/m 2026-10-13**; dit volgt de actuele bron-/GraphQL-aanbiedingsvelden uit de generieke PR #59-fix.
+
+## Catch-up eindstatus en aandachtspunt
+
+- Read-only vergelijking van de oorspronkelijke CSV (812 uniek) met Production: **811 aanwezig**, **1 ontbrekend**. De enige ontbrekende SKU is `727643000` (Verspakket cajun kip), bewust uitgesloten na actuele Hoogvliet-detail-404; geen vervanging of geforceerde match. De oorspronkelijke catch-up is daarmee afgerond voor alle nu valideerbare/importeerbare items; dit is geen claim van 100% actuele live catalogusdekking.
+- De bestaande planner-cache-na-import-hook meldde voor deze 12 nieuwe producten `pending_requires_attention` met `planner-maintenance-not-configured` (notifiedProducts 0). Product-/prijsimport zelf en Production-nacontrole zijn succesvol; dit onderhoud is geen reden voor een importretry.
+- Geen tweede dispatch, retry, daily import, brede discovery, migration, recovery of supersede uitgevoerd. Geen batch 4. Eerstvolgende stap: geen verdere catch-up import; planner-cacheconfiguratie kan afzonderlijk worden nagekeken. `ROADMAP.md` is ongewijzigd.
+
+---
+
 # Checkpoint — PR #59 aanbiedingfix + final_batch3 read-only gate — 8 oktober 2026
 
 ## Releases en CI
