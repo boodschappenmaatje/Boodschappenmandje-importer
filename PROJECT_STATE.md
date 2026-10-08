@@ -1,3 +1,32 @@
+# Checkpoint — finale read-only Hoogvliet-broncontrole van 13 SKU's — 8 oktober 2026
+
+- Gebaseerd op remote main `082ccfd9c1d9df29b74ed832bc500eeab639bab9`. De gecontroleerde selectie is exact de 13 SKU's die na batch 2 nog ontbreken; er is geen importcommand, workflowdispatch, discoverycrawl of databasewrite uitgevoerd.
+- Production read-only vóór en na broncontrole: **8.342 producten**, **8.342 unieke Hoogvliet-SKU's**, **8.342 prijsrecords**, **0 duplicate-SKU-groepen**. Alle 13 gecontroleerde SKU's zijn afwezig gebleven. Lopende daily jobs **0**, attempts **0**, import runs **0**, zichtbare granted advisory locks **0**. Productwrites **0**, prijswrites **0**.
+- Methode: alleen de 13 vaste detail-URL's uit de vertrouwde residual-CSV en vijf bijbehorende afdelingsroutes zijn gecontroleerd. De listingpagina's laadden elk de eerste 40 productlinks; daarin stond geen van de doel-SKU's. Er is niet gepagineerd of verder gecrawld, dus dit is geen bewijs dat ze buiten die geladen pagina overal ontbreken. De directe detailpagina en haar Product-JSON-LD zijn gebruikt voor de SKU-/naam-/prijsvalidatie. De browser gaf geen numerieke HTTP-responsecode door; voor 12 SKU's was de actuele productdetailpagina volledig gerenderd; voor `727643000` toonde Hoogvliet de applicatie-404 “De pagina … bestaat helaas niet (meer)”.
+- `GraphQL metadata` is niet afzonderlijk opgevraagd: bij alle 12 bereikbare SKU's stond verpakkings-/hoeveelheidsinformatie op de detailpagina, zodat de bestaande verpakkingsfallback niet nodig was. Dit is een read-only broncontrole langs dezelfde velden als de bestaande PR #55-validatie, geen uitvoering van de importer zelf.
+
+| SKU | Actuele detailnaam | Verpakking/hoeveelheid op detail | Actuele prijs | Detail-JSON-LD SKU/prijsvak | Classificatie |
+|---|---|---|---:|---|---|
+| `727643000` | — | — | — | Geen Product-JSON-LD; pagina toont 404 | `not_found` |
+| `733574000` | Snelle Jelle Kruidkoek | 455 gram | €1,99 | exact / positief | `valid_new` |
+| `733575000` | Snelle Jelle Kruidkoek rozijnen | 455 gram | €1,99 | exact / positief | `valid_new` |
+| `733741000` | Red Bull Pistache winter edition | 250 milliliter | €1,39 (actuele Product-JSON-LD prijs; detail toont ook €1,72) | exact / positief | `valid_new` |
+| `770787000` | Odorex Natuurlijk fris | 50 milliliter | €2,99 | exact / positief | `valid_new` |
+| `770809000` | Odorex Deospray marine fris | 150 milliliter | €3,99 | exact / positief | `valid_new` |
+| `777641000` | Trida Luxe zeep | 300 gram | €1,39 | exact / positief | `valid_new` |
+| `905631000` | Hoogvliet Runderlever gelardeerd | ca. 120 gram | €3,02 | exact / positief | `valid_new` |
+| `921742000` | Hoogvliet Bacon | ca. 110 gram | €2,96 | exact / positief | `valid_new` |
+| `926108000` | Eyssen 25+ plakken | ca. 120 gram | €1,88 | exact / positief | `valid_new` |
+| `926876000` | Hoogvliet Geitenkaas | ca. 141 gram | €2,89 | exact / positief | `valid_new` |
+| `927082000` | Hoogvliet Port Salut | ca. 180 gram | €4,23 | exact / positief | `valid_new` |
+| `927120000` | Hoogvliet Roquefort | ca. 136 gram | €3,53 | exact / positief | `valid_new` |
+
+- Voor alle 12 `valid_new`-SKU's bleven de final URL's op de exacte SKU-detailroute; productnaam, exacte SKU in Product-JSON-LD, positieve EUR-prijs en hoeveelheid stonden op de pagina. Hoogvliet labelde de pagina's `Alleen in winkel`; dat verandert deze bronvalidatie niet in een online-bestelbaarheidsclaim. Geen fuzzy/slug-alternatief gebruikt.
+- Classificaties: **valid_new 12** (`733574000, 733575000, 733741000, 770787000, 770809000, 777641000, 905631000, 921742000, 926108000, 926876000, 927082000, 927120000`); **not_found 1** (`727643000`); **invalid 0**; **temporary_error 0**.
+- Geen brede discovery gestart. Production-counts vóór/na onveranderd. Exacte kandidaat voor een eventueel later, afzonderlijk geautoriseerd laatste mini-batch: **12 SKU's** (alleen de 12 `valid_new`-SKU's). Er is in deze run geen write of batch 3 gestart.
+
+---
+
 # Checkpoint — read-only controle resterende catch-up SKU's — 8 oktober 2026
 
 - Remote main vóór deze documentatie-update: `5c8126b7d12467130374e778717d45f175979638`.
