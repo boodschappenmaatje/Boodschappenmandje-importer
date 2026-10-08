@@ -84,15 +84,13 @@ function sampleRows(prices, products) {
     const product = byID.get(price.product_id);
     return product && validProductURL(product.source_url) && /^\d{9}$/.test(String(product.sku));
   });
-  const activeOfferRows = usable
-    .filter(price => price.is_offer === true && positive(price.old_price) > positive(price.price))
+  // A stored comparison pair is the useful audit population even when the
+  // importer previously forgot to set is_offer. Filtering on is_offer here
+  // would hide precisely the suspected regression we need to measure.
+  const offerRows = usable
+    .filter(price => positive(price.old_price) > positive(price.price))
     .sort((a, b) => String(byID.get(a.product_id).sku).localeCompare(String(byID.get(b.product_id).sku)))
     .slice(0, SAMPLE_SIZE);
-  const offerRows = activeOfferRows.length === SAMPLE_SIZE
-    ? activeOfferRows
-    : usable.filter(price => price.is_offer === true && positive(price.old_price) > positive(price.price))
-      .sort((a, b) => String(byID.get(a.product_id).sku).localeCompare(String(byID.get(b.product_id).sku)))
-      .slice(0, SAMPLE_SIZE);
   const offerIDs = new Set(offerRows.map(price => price.product_id));
   const regularRows = usable
     .filter(price => price.is_offer !== true && positive(price.old_price) == null && !offerIDs.has(price.product_id))
@@ -170,7 +168,7 @@ export async function runOfferPriceAudit(env = process.env) {
   const database = auditPriceRows(prices);
   const samples = sampleRows(prices, products);
   if (samples.offers.length < SAMPLE_SIZE || samples.regular.length < SAMPLE_SIZE) {
-    throw new Error(`Read-only offer-audit kon geen 5+5 representatieve Production-SKU's selecteren (offers=${samples.offers.length}, regular=${samples.regular.length}).`);
+    throw new Error(`Read-only offer-audit kon geen 5+5 representatieve Production-SKU's selecteren (offers=${samples.offers.length}, regular=${samples.regular.length}, database=${JSON.stringify(database)}).`);
   }
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   try {
