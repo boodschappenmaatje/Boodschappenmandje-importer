@@ -171,6 +171,10 @@ test("root discovery failure, category structure changes and challenge have expl
 test("catalog URL guard accepts only current public category paths", () => {
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/aardappelen-groente-fruit"),
     "https://hoogvliet.nl/aardappelen-groente-fruit");
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/Hoogvliet.nl"), null);
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/Hoogvliet%2Enl"), null);
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/aardappelen-groente-fruit/fruit"),
+    "https://hoogvliet.nl/aardappelen-groente-fruit/fruit");
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/product/trostomaten-verpakt-060936000"), null);
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/INTERSHOP/web/WFS/catalog"), null);
   assert.equal(normalizeCatalogCategoryURL("https://evil.example/aardappelen-groente-fruit"), null);
