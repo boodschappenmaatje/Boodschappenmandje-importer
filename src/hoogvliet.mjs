@@ -318,11 +318,15 @@ export function extractSKUFromProductURL(value) {
 export function normalizeCatalogCategoryURL(value) {
   try {
     const url = new URL(value, BASE_URL);
-    const firstSegment = url.pathname.split("/").filter(Boolean)[0] ?? "";
+    const pathSegments = url.pathname.split("/").filter(Boolean).map(segment => decodeURIComponent(segment));
+    const firstSegment = pathSegments[0] ?? "";
     if (url.protocol !== "https:" || url.hostname !== "hoogvliet.nl"
       || url.username || url.password || url.search || url.hash
       || url.pathname === CATALOG_ROOT_PATH || url.pathname.startsWith("/product/")
-      || !firstSegment || NON_CATALOG_PATHS.has(firstSegment.toLowerCase())) return null;
+      // A URL-shaped segment (for example /Hoogvliet.nl) is a domain/link,
+      // not a public catalog category. Decode first so encoded dots fail too.
+      || !firstSegment || pathSegments.some(segment => !segment || segment.includes("."))
+      || NON_CATALOG_PATHS.has(firstSegment.toLowerCase())) return null;
     return `${BASE_URL}${url.pathname.replace(/\/$/, "")}`;
   } catch {
     return null;
@@ -405,11 +409,13 @@ async function waitForCatalogSource(page, options = {}) {
     const hasCategoryLink = [...document.querySelectorAll("a[href]")].some(link => {
       try {
         const url = new URL(link.href, document.location.href);
-        const firstSegment = url.pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
+        const segments = url.pathname.split("/").filter(Boolean).map(segment => decodeURIComponent(segment));
+        const firstSegment = segments[0]?.toLowerCase() ?? "";
         return url.origin === document.location.origin
           && url.pathname !== "/producten"
           && !url.pathname.startsWith("/product/")
           && !url.search && !url.hash
+          && segments.every(segment => !segment.includes("."))
           && !nonCatalogPaths.includes(firstSegment);
       } catch { return false; }
     });

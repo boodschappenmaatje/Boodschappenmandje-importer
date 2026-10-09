@@ -1,3 +1,19 @@
+# Checkpoint — PR #63 Hoogvliet category-URL hotfix — 9 oktober 2026
+
+## Bewezen oorzaak en fix
+
+- Actuele basis was remote `main` `8a9a6d2dca0f65b4e8f9f3d87d0b879d1cad7eff`; PR #62 is daarop gemerged. Handmatige volledige-maintenance-run `37879813707` op die main faalde met de gemelde `GET https://hoogvliet.nl/Hoogvliet.nl` / `route=catalog:category` / HTTP 404.
+- `collectPublicCatalogCandidates` ontdekte categorieën uit publieke `a[href]`-links. `normalizeCatalogCategoryURL` eiste eerst alleen de juiste host en sloot bekende niet-catalogpaden uit; daardoor werd `/Hoogvliet.nl` ten onrechte als categorie geaccepteerd. De collector zette dit ontdekte pad vervolgens zelf als `categoryURL` in de requestcontext vóór navigatie. De echte HTTP 404-classificatie `source_unavailable` was correct en is behouden. De parser gebruikt geen canonical-tag om deze URL te vormen; de zichtbare request is de ontdekte linkroute, geen aangetoonde canonical/redirectroute.
+- Hetzelfde toelatingsgat gold voor andere URL-paden met een domeinachtig puntsegment. Normalisatie en de readiness-check wijzen nu elk pad met een punt in een decoded segment af, ook `%2E`; geldige root- en geneste categorieën blijven toegelaten. Regressiefixture bevat zowel geldige categorieën als `/Hoogvliet.nl` en bewijst dat alleen de geldige routes ontdekt/bezocht worden.
+
+## Verificatie en releasegate
+
+- Gerichte discovery/importer-tests: **112/112 groen**, inclusief de bestaande 404-bronfoutregressie. `npm test`: **407/407 groen**. `npm run check`: groen. `git diff --check`: groen.
+- Live read-only dry-run niet uitgevoerd: directe Hoogvliet-toegang vanuit deze omgeving wordt door de network proxy geweigerd; lokale Chromium-fixturetests verifiëren de discoveryfilter. Geen retry, workflowdispatch, Production-write, databasewrite of migratie uitgevoerd.
+- Hotfix branch `codex/hotfix-catalog-category-url-20261009`, functionele codecommit `e34addaaaf2fec95471f386a646de93b1f9115a0`; PR #63: https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/63. Op de laatste code/test-head `ab85315813a6e0fbdce61f20bc28040f1ba37c5d` zijn Core-CI run `37886169402`, read-only offer-audit `37886169362`, explicit-SKU run `37886169415` en Vercel Preview **allemaal groen**. De lokale volledige suite (407/407), gerichte suite (112/112), `npm run check` en `git diff --check` zijn eveneens groen. PR is open en mergeable; niet gemerged.
+
+---
+
 # Checkpoint — PR #62 workflowfix en finale releasegate — 9 oktober 2026
 
 ## Actuele basis en bewezen blokkade

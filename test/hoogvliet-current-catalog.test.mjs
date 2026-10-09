@@ -121,9 +121,10 @@ test("catalog root discovers multiple public categories and deduplicates cross-l
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
 });
 
-test("catalog root waits for hydrated navigation and never runs listing pagination on root", async t => {
+test("catalog root waits for hydrated navigation, filters domain links and never paginates root", async t => {
   const h = await browserFor({ rootBody: rootFixture });
   t.after(() => h.browser.close());
+  assert.match(rootFixture, /<a href="\/Hoogvliet\.nl">Hoogvliet\.nl<\/a>/);
   const result = await collectPublicCatalogCandidates(h.page, 1);
   assert.equal(result.rootCategoriesDiscovered, 2);
   assert.equal(result.categoriesVisited, 1);
@@ -171,6 +172,10 @@ test("root discovery failure, category structure changes and challenge have expl
 test("catalog URL guard accepts only current public category paths", () => {
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/aardappelen-groente-fruit"),
     "https://hoogvliet.nl/aardappelen-groente-fruit");
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/Hoogvliet.nl"), null);
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/Hoogvliet%2Enl"), null);
+  assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/aardappelen-groente-fruit/fruit"),
+    "https://hoogvliet.nl/aardappelen-groente-fruit/fruit");
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/product/trostomaten-verpakt-060936000"), null);
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/INTERSHOP/web/WFS/catalog"), null);
   assert.equal(normalizeCatalogCategoryURL("https://evil.example/aardappelen-groente-fruit"), null);
