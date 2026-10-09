@@ -577,9 +577,10 @@ async function extractCatalogCategoryLinks(page) {
       title: (link.textContent || "").replace(/\s+/g, " ").trim() || null,
     }])).values()];
   });
-  return links
+  const normalized = links
     .map(({ href, title }) => ({ url: normalizeCatalogCategoryURL(href), title }))
     .filter(route => route.url);
+  return [...new Map(normalized.map(route => [route.url, route])).values()];
 }
 
 async function findLoadMoreControl(page) {
@@ -825,6 +826,7 @@ export async function collectCatalogListing(page, routeURL, {
   shouldStop = () => false,
   navigationRetries = 2,
   onRetry = null,
+  captureDiagnostics = false,
   normalTimeoutMs,
 } = {}) {
   await withTransientNavigationRetry(
@@ -844,6 +846,29 @@ export async function collectCatalogListing(page, routeURL, {
   let stagnated = false;
   let currentSignature = "";
   const visitedListingURLs = new Set([page.url()]);
+  const windowDiagnostics = [];
+  const seenWindowFingerprints = new Set();
+  const canonicalListingURLs = new Map();
+  let repeatedSKUWindows = 0;
+  let pageAliasCount = 0;
+  let transition = "initial";
+
+  const canonicalListingURL = value => {
+    try {
+      const url = new URL(value);
+      const pathPage = url.pathname.match(/^(.*)\/q\/page\/(\d+)\/?$/i);
+      if (pathPage && Number(pathPage[2]) <= 1) url.pathname = pathPage[1] || "/";
+      const queryPage = Number(url.searchParams.get("page"));
+      if (url.searchParams.has("page") && Number.isInteger(queryPage) && queryPage <= 1) {
+        url.searchParams.delete("page");
+      }
+      url.pathname = url.pathname.replace(/\/$/, "") || "/";
+      url.searchParams.sort();
+      return url.href;
+    } catch {
+      return value;
+    }
+  };
 
   const snapshot = async () => {
     const rawDOM = await extractCatalogListingCandidates(page);
@@ -854,17 +879,40 @@ export async function collectCatalogListing(page, routeURL, {
     if (freshDOM.length > 0) catalogAPICalls += 1;
     for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
     const signature = [...routeCandidates.keys()].sort().join("|");
-    return { fresh, signature };
+    return { fresh, rawDOM, signature };
   };
 
   while (!shouldStop() && windows.length < maxWindows) {
-    const { fresh, signature } = await snapshot();
+    const { fresh, rawDOM, signature } = await snapshot();
     if (signature === currentSignature && currentSignature) {
       stagnated = true;
       break;
     }
     currentSignature = signature;
     windows.push(fresh);
+    if (captureDiagnostics) {
+      const rawSKUs = [...new Set(rawDOM.map(candidate => extractSKUFromProductURL(candidate.sourceURL)).filter(Boolean))].sort();
+      const freshSKUs = [...new Set(fresh.map(candidate => extractSKUFromProductURL(candidate.sourceURL)).filter(Boolean))].sort();
+      const fingerprint = rawSKUs.join("|");
+      if (fingerprint && seenWindowFingerprints.has(fingerprint)) repeatedSKUWindows += 1;
+      if (fingerprint) seenWindowFingerprints.add(fingerprint);
+      const currentURL = page.url();
+      const canonicalURL = canonicalListingURL(currentURL);
+      const previousAlias = canonicalListingURLs.get(canonicalURL);
+      if (transition === "next" && previousAlias && previousAlias !== currentURL) pageAliasCount += 1;
+      canonicalListingURLs.set(canonicalURL, currentURL);
+      windowDiagnostics.push({
+        index: windows.length - 1,
+        transition,
+        pageURL: currentURL,
+        canonicalPageURL: canonicalURL,
+        rawCandidateCount: rawDOM.length,
+        freshCandidateCount: fresh.length,
+        rawSKUs,
+        freshSKUs,
+        fingerprint,
+      });
+    }
     const loadMore = await findLoadMoreControl(page);
     if (loadMore) {
       const previousCount = routeCandidates.size;
@@ -877,6 +925,7 @@ export async function collectCatalogListing(page, routeURL, {
         const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
         if (afterCount <= previousCount) stagnated = true;
       }
+      transition = "load_more";
       continue;
     }
     const nextURL = await findNextCatalogPageURL(page, page.url());
@@ -893,6 +942,7 @@ export async function collectCatalogListing(page, routeURL, {
       requestContext: { routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size, categoryURL: routeURL },
     });
     visitedListingURLs.add(nextURL);
+    transition = "next";
   }
 
   // `windows` is a deterministic global cursor: a resumed segment can replay
@@ -908,6 +958,10 @@ export async function collectCatalogListing(page, routeURL, {
     initialCandidateCount: windows[0]?.length ?? 0,
     loadMoreCycles,
     catalogAPICalls,
+    windowDiagnostics,
+    repeatedSKUWindows,
+    pageAliasCount,
+    listingURLsVisited: visitedListingURLs.size,
     sourceExhausted,
     stallReason: stagnated ? "category_listing_stagnated" : null,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
@@ -934,6 +988,13 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   let rawCandidates = 0;
   let duplicateCandidates = 0;
   let invalidCandidates = 0;
+  let duplicateRouteDiscoveries = 0;
+  const categoryDiagnostics = [];
+  const globalWindowFingerprints = new Map();
+  const globallySeenSKUs = new Set();
+  let repeatedWindows = 0;
+  let windowsWithoutNewSKUs = 0;
+  let pageAliases = 0;
 
   while (queue.length && !options.shouldStop?.()) {
     const routeURL = queue.shift();
@@ -957,6 +1018,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     const childRoutes = await extractCatalogCategoryLinks(page);
     for (const child of childRoutes) {
       if (!queued.has(child.url)) { queued.add(child.url); queue.push(child.url); }
+      else duplicateRouteDiscoveries += 1;
     }
     if (routeURL === rootURL) {
       rootCategoryCount = childRoutes.length;
@@ -974,6 +1036,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       shouldStop: options.shouldStop,
       navigationRetries: options.navigationRetries,
       onRetry: options.onRetry,
+      captureDiagnostics: options.captureDiagnostics === true,
       normalTimeoutMs: options.normalTimeoutMs,
     });
     // A fresh page starts at window zero. Replay enough load-more clicks to
@@ -984,6 +1047,45 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     pagesFetched += emittedWindows;
     loadMoreCycles += listing.loadMoreCycles;
     catalogAPICalls += listing.catalogAPICalls;
+    pageAliases += listing.pageAliasCount;
+    if (options.captureDiagnostics === true) {
+      let routeNewSKUs = 0;
+      let routeRepeatedWindows = 0;
+      let routeWindowsWithoutNewSKUs = 0;
+      const routeSKUs = new Set();
+      for (const window of listing.windowDiagnostics) {
+        for (const sku of window.rawSKUs) routeSKUs.add(sku);
+        const previousRoute = window.fingerprint ? globalWindowFingerprints.get(window.fingerprint) : null;
+        if (previousRoute) {
+          repeatedWindows += 1;
+          routeRepeatedWindows += 1;
+        } else if (window.fingerprint) {
+          globalWindowFingerprints.set(window.fingerprint, routeURL);
+        }
+        const newSKUs = window.rawSKUs.filter(sku => !globallySeenSKUs.has(sku));
+        if (newSKUs.length === 0) {
+          windowsWithoutNewSKUs += 1;
+          routeWindowsWithoutNewSKUs += 1;
+        }
+        for (const sku of newSKUs) globallySeenSKUs.add(sku);
+        routeNewSKUs += newSKUs.length;
+      }
+      categoryDiagnostics.push({
+        routeURL,
+        pathDepth: new URL(routeURL).pathname.split("/").filter(Boolean).length,
+        windowsVisited: listing.windowCount,
+        windowsEmitted: listing.emittedWindowCount,
+        uniqueSKUs: routeSKUs.size,
+        newGlobalSKUs: routeNewSKUs,
+        repeatedWindows: routeRepeatedWindows,
+        windowsWithoutNewSKUs: routeWindowsWithoutNewSKUs,
+        loadMoreCycles: listing.loadMoreCycles,
+        listingURLsVisited: listing.listingURLsVisited,
+        pageAliases: listing.pageAliasCount,
+        sourceExhausted: listing.sourceExhausted,
+        windows: listing.windowDiagnostics,
+      });
+    }
     sourceExhausted = listing.sourceExhausted;
     if (listing.stallReason) { stallReason = listing.stallReason; break; }
     for (const candidate of listing.candidates) {
@@ -1019,6 +1121,12 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     initialCandidateCount,
     listingLoadMoreCycles: loadMoreCycles,
     catalogAPICalls,
+    duplicateRouteDiscoveries,
+    repeatedWindows,
+    windowsWithoutNewSKUs,
+    pageAliases,
+    categoryDiagnostics,
+    diagnosticUniqueSKUs: globallySeenSKUs.size,
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
     sourceExhausted: sourceExhausted && queue.length === 0,
     stallReason,

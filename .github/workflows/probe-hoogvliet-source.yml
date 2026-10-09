@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - codex/hotfix-daily-root-404-20261006
+      - codex/debug-listing-window-limit-20261009
     paths:
       - .github/workflows/probe-hoogvliet-source.yml
       - scripts/probe-highvliet-current-catalog.mjs
@@ -35,7 +36,8 @@ jobs:
     if: >-
       (github.event_name == 'workflow_dispatch' || github.event_name == 'push') &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      github.ref == 'refs/heads/codex/hotfix-daily-root-404-20261006'
+      (github.ref == 'refs/heads/codex/hotfix-daily-root-404-20261006' ||
+       github.ref == 'refs/heads/codex/debug-listing-window-limit-20261009')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -54,15 +56,25 @@ jobs:
       - name: Dependencies installeren
         run: npm ci
 
-      - name: Chromium installeren
-        run: npx playwright install --with-deps chromium
+      - name: Bestaande runner-Chrome selecteren
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
 
       - name: Eén actuele openbare bronroute onderzoeken — READ ONLY
         id: run_probe
         continue-on-error: true
         env:
-          PROBE_MAX_PAGES: ${{ inputs.max_pages || '2' }}
+          PROBE_MAX_PAGES: ${{ github.ref == 'refs/heads/codex/debug-listing-window-limit-20261009' && '1500' || inputs.max_pages || '2' }}
           PROBE_DAILY_MAX_PAGES: ${{ inputs.max_pages || '2' }}
+          PROBE_SKIP_DAILY: ${{ github.ref == 'refs/heads/codex/debug-listing-window-limit-20261009' && '1' || '0' }}
           PROBE_OUTPUT: hoogvliet-current-catalog-proof.json
         run: |
           set -uo pipefail
@@ -86,7 +98,7 @@ jobs:
             const navigation = proof.navigation ?? {};
             const legacy = (proof.proof?.legacyDiscoveryEndpoints ?? []).map(endpoint => endpoint.pathname).join(",") || "none";
             const staticAssets = (proof.proof?.legacyIntershopStaticAssets ?? []).length;
-            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};routes=${proof.proof?.routesVisited ?? 0};categories=${proof.proof?.dynamicCategories ?? 0};candidates=${proof.proof?.candidateCount ?? 0};initial=${proof.proof?.initialCandidateCount ?? 0};pages=${proof.proof?.pagesFetched ?? 0};load_more_cycles=${proof.proof?.loadMoreCycles ?? 0};legacy_discovery=${legacy};legacy_static_assets=${staticAssets};status=${navigation.rootStatus ?? "unknown"};network=${network}`;
+            const label = `classification=${proof.proof?.sourceClassification ?? "unknown"};routes=${proof.proof?.routesVisited ?? 0};categories=${proof.proof?.dynamicCategories ?? 0};candidates=${proof.proof?.candidateCount ?? 0};pages=${proof.proof?.pagesFetched ?? 0};repeat_windows=${proof.proof?.repeatedWindows ?? 0};zero_new_windows=${proof.proof?.windowsWithoutNewSKUs ?? 0};aliases=${proof.proof?.pageAliases ?? 0};status=${navigation.rootStatus ?? "unknown"};network=${network}`;
             process.stdout.write(label.replace(/[\r\n]/g, " ").slice(0, 240));
           } catch {
             process.stdout.write("classification=NO_PROOF;candidates=0");
