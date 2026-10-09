@@ -2,6 +2,7 @@ import { collectGrowthCandidates } from "./growth-collector.mjs";
 import { categoryDiscoveryRoute, isPublicCatalogDiscoveryTerm } from "./discovery-routes.mjs";
 import { chromium } from "playwright";
 import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
+import { createHash } from "node:crypto";
 
 export const BASE_URL = "https://hoogvliet.nl";
 export const CATALOG_ROOT_PATH = "/producten";
@@ -674,6 +675,31 @@ async function waitForListingGrowth(page, previousCount) {
   }, { previousCount }, { timeout: 20_000 }).then(() => true).catch(() => false);
 }
 
+async function waitForCatalogListingAdvance(page, knownCandidateURLs, timeoutMs) {
+  return page.waitForFunction(({ knownURLs }) => {
+    const known = new Set(knownURLs);
+    const hasNewProduct = [...document.querySelectorAll("a[href*='/product/']")]
+      .some(link => /-\d{9}\/?(?:[?#].*)?$/i.test(new URL(link.href).pathname) && !known.has(link.href));
+    const text = (document.body?.innerText ?? "").toLowerCase();
+    return hasNewProduct
+      || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten|captcha|verify you are human|controleer of je een mens bent|access denied|toegang geweigerd|forbidden/.test(text);
+  }, { knownURLs: [...knownCandidateURLs] }, {
+    timeout: timeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS,
+  }).then(() => true).catch(() => false);
+}
+
+function catalogWindowFingerprint(candidates) {
+  return [...new Set(candidates
+    .map(candidate => extractSKUFromProductURL(candidate.sourceURL))
+    .filter(Boolean))].sort().join("|");
+}
+
+function catalogWindowFingerprintDigest(fingerprint) {
+  return fingerprint
+    ? createHash("sha256").update(fingerprint).digest("hex")
+    : "empty";
+}
+
 function catalogAPIPrice(item) {
   return item?.price_range?.minimum_price?.final_price?.value
     ?? item?.price_range?.maximum_price?.final_price?.value
@@ -898,6 +924,7 @@ export async function collectCatalogListing(page, routeURL, {
   let naturalExhaustion = false;
   let currentSignature = "";
   let stallReason = null;
+  let stallDiagnostics = null;
   const visitedListingURLs = new Set([page.url()]);
   const visitedListingIdentities = new Set([catalogListingPageIdentity(page.url())]);
   const seenFreshSKUFingerprints = new Set();
@@ -921,7 +948,13 @@ export async function collectCatalogListing(page, routeURL, {
   };
 
   while (!shouldStop() && windows.length < maxWindows) {
-    const { fresh, rawDOM, signature } = await snapshot();
+    let observation = await snapshot();
+    if (transition === "next" && observation.signature === currentSignature && currentSignature) {
+      await waitForCatalogListingAdvance(page, routeCandidates.keys(), normalTimeoutMs);
+      await waitForCatalogSource(page, { normalTimeoutMs: 1, allowCategoryOnly: false });
+      observation = await snapshot();
+    }
+    const { fresh, rawDOM, signature } = observation;
     if (windows.length === 0 && fresh.length === 0
       && (await extractCatalogCategoryLinks(page)).length > 0) {
       naturalExhaustion = true;
@@ -930,6 +963,15 @@ export async function collectCatalogListing(page, routeURL, {
     if (signature === currentSignature && currentSignature) {
       stagnated = true;
       stallReason = "category_listing_stagnated";
+      const fingerprint = catalogWindowFingerprint(rawDOM);
+      stallDiagnostics = {
+        routeURL,
+        pageURL: page.url(),
+        windowIndex: windows.length,
+        transition,
+        rawCandidateCount: rawDOM.length,
+        fingerprint: catalogWindowFingerprintDigest(fingerprint),
+      };
       break;
     }
     const freshSKUFingerprint = [...new Set(fresh
@@ -938,6 +980,14 @@ export async function collectCatalogListing(page, routeURL, {
     if (freshSKUFingerprint && seenFreshSKUFingerprints.has(freshSKUFingerprint)) {
       stagnated = true;
       stallReason = "category_listing_repeated_sku_window";
+      stallDiagnostics = {
+        routeURL,
+        pageURL: page.url(),
+        windowIndex: windows.length,
+        transition,
+        rawCandidateCount: rawDOM.length,
+        fingerprint: catalogWindowFingerprintDigest(catalogWindowFingerprint(rawDOM)),
+      };
       break;
     }
     if (freshSKUFingerprint) seenFreshSKUFingerprints.add(freshSKUFingerprint);
@@ -976,8 +1026,21 @@ export async function collectCatalogListing(page, routeURL, {
       if (!grew) {
         const after = await hydrateCatalogListingCandidates(page, await extractCatalogListingCandidates(page));
         const afterCount = new Set(after.map(candidate => candidate.sourceURL)).size;
-        if (afterCount <= previousCount) stagnated = true;
+        if (afterCount <= previousCount) {
+          stagnated = true;
+          stallReason = "category_listing_stagnated";
+          const fingerprint = catalogWindowFingerprint(after);
+          stallDiagnostics = {
+            routeURL,
+            pageURL: page.url(),
+            windowIndex: windows.length,
+            transition: "load_more",
+            rawCandidateCount: after.length,
+            fingerprint: catalogWindowFingerprintDigest(fingerprint),
+          };
+        }
       }
+      if (stagnated) break;
       transition = "load_more";
       continue;
     }
@@ -1022,6 +1085,7 @@ export async function collectCatalogListing(page, routeURL, {
     listingURLsVisited: visitedListingURLs.size,
     sourceExhausted,
     stallReason: stagnated ? stallReason ?? "category_listing_stagnated" : null,
+    stallDiagnostics,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
     categoryURL: routeURL,
   };
@@ -1041,6 +1105,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   let catalogAPICalls = 0;
   let sourceExhausted = true;
   let stallReason = null;
+  let stallDiagnostics = null;
   let rootCategoryCount = 0;
   let rootListingRouteCount = 0;
   let nestedRoutesSkipped = 0;
@@ -1147,7 +1212,11 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       });
     }
     sourceExhausted = listing.sourceExhausted;
-    if (listing.stallReason) { stallReason = listing.stallReason; break; }
+    if (listing.stallReason) {
+      stallReason = listing.stallReason;
+      stallDiagnostics = listing.stallDiagnostics;
+      break;
+    }
     if (listing.initialCandidateCount === 0) {
       const childRoutes = await extractCatalogCategoryLinks(page);
       const fallbackRoutes = selectCatalogListingRoutes(childRoutes, routeURL);
@@ -1202,6 +1271,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
     sourceExhausted: sourceExhausted && queue.length === 0,
     stallReason,
+    stallDiagnostics,
     nextPage: sourceExhausted && queue.length === 0 ? 0 : nextPage,
   };
 }
@@ -1977,6 +2047,7 @@ export async function withDailyCatalogSource(config, handler) {
       { navigationRetries: config.navigationRetries },
     );
     if (!snapshot.sourceExhausted || snapshot.stallReason) {
+      const stall = snapshot.stallDiagnostics;
       throw new SourceUnavailableError(
         `Dagelijkse catalogussnapshot is onvolledig; stopreden=${snapshot.stallReason ?? "listing_window_limit"}`
         + ` | root_categorieen=${snapshot.rootCategoriesDiscovered}`
@@ -1984,7 +2055,11 @@ export async function withDailyCatalogSource(config, handler) {
         + ` | bezochte_routes=${snapshot.categoriesVisited}`
         + ` | listing_windows=${snapshot.pagesFetched}`
         + ` | unieke_SKUs=${snapshot.uniqueListingSKUs}`
-        + ` | duplicate_kandidaten=${snapshot.duplicateCandidates}.`,
+        + ` | duplicate_kandidaten=${snapshot.duplicateCandidates}`
+        + (stall ? ` | stagnatie_route=${stall.routeURL} | stagnatie_window=${stall.windowIndex}`
+          + ` | stagnatie_url=${stall.pageURL} | stagnatie_transition=${stall.transition}`
+          + ` | stagnatie_raw_SKUs=${stall.rawCandidateCount} | stagnatie_fingerprint=${stall.fingerprint}` : "")
+        + ".",
       );
     }
     if (!Array.isArray(snapshot.candidates) || snapshot.candidates.length === 0) {

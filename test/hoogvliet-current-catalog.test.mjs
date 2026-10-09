@@ -154,10 +154,11 @@ test("category navigation shell waits for delayed product hydration before decid
   </main>`;
   const delayedSecondPage = `<!doctype html><main>
     <a href="/producten/kaas">Kaas</a>
+    <article id="stale"><a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a></article>
     <script>
       setTimeout(() => {
-        document.querySelector('main').insertAdjacentHTML('beforeend',
-          '<article><a href="/product/trostomaten-verpakt-060936000"><h2>Trostomaten verpakt</h2></a></article>');
+        document.querySelector('#stale').outerHTML =
+          '<article><a href="/product/trostomaten-verpakt-060936000"><h2>Trostomaten verpakt</h2></a></article>';
       }, 100);
     </script>
   </main>`;
@@ -196,6 +197,33 @@ test("category shell that never hydrates remains fail-closed", async t => {
   assert.equal(result.stallReason, "category_listing_stagnated");
   assert.equal(result.pagesFetched, 1);
   assert.equal(result.catalogAPICalls, 1);
+  assert.deepEqual(result.stallDiagnostics, {
+    routeURL: "https://hoogvliet.nl/aardappelen-groente-fruit",
+    pageURL: "https://hoogvliet.nl/aardappelen-groente-fruit/q/page/2",
+    windowIndex: 1,
+    transition: "next",
+    rawCandidateCount: 0,
+    fingerprint: "empty",
+  });
+});
+
+test("Next page that remains an identical product window still fails closed", async t => {
+  const repeated = `<!doctype html><main>
+    <article><a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a></article>
+    <a href="/aardappelen-groente-fruit/q/page/2">Volgende</a>
+  </main>`;
+  const h = await browserFor({ body: repeated });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    normalTimeoutMs: 100,
+  });
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(result.pagesFetched, 1);
+  assert.equal(result.stallDiagnostics?.windowIndex, 1);
+  assert.equal(result.stallDiagnostics?.rawCandidateCount, 1);
+  assert.match(result.stallDiagnostics?.fingerprint, /^[a-f0-9]{64}$/);
 });
 
 test("catalog root waits for hydrated navigation, filters domain links and never paginates root", async t => {
