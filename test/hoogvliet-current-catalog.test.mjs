@@ -121,9 +121,10 @@ test("catalog root discovers multiple public categories and deduplicates cross-l
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
 });
 
-test("catalog root waits for hydrated navigation and never runs listing pagination on root", async t => {
+test("catalog root waits for hydrated navigation, filters domain links and never paginates root", async t => {
   const h = await browserFor({ rootBody: rootFixture });
   t.after(() => h.browser.close());
+  assert.match(rootFixture, /<a href="\/Hoogvliet\.nl">Hoogvliet\.nl<\/a>/);
   const result = await collectPublicCatalogCandidates(h.page, 1);
   assert.equal(result.rootCategoriesDiscovered, 2);
   assert.equal(result.categoriesVisited, 1);
