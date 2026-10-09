@@ -2,14 +2,17 @@ import { writeFile } from "node:fs/promises";
 import { chromium } from "playwright";
 import {
   CATALOG_ROOT_URL,
+  chromiumLaunchOptions,
   collectProducts,
   collectPublicCatalogCandidates,
   normalizeCatalogCategoryURL,
 } from "../src/hoogvliet.mjs";
 
 const outputPath = process.env.PROBE_OUTPUT ?? "hoogvliet-current-catalog-proof.json";
-const maxPages = Math.max(1, Math.min(20, Number(process.env.PROBE_MAX_PAGES ?? 2)));
+const maxPages = Math.max(1, Math.min(1_500, Number(process.env.PROBE_MAX_PAGES ?? 2)));
 const dailyMaxPages = Math.max(1, Math.min(20, Number(process.env.PROBE_DAILY_MAX_PAGES ?? maxPages)));
+const skipDailyPath = process.env.PROBE_SKIP_DAILY === "1";
+const chromePath = process.env.CHROME_PATH?.trim() || null;
 
 function safeURL(raw) {
   try {
@@ -44,7 +47,7 @@ async function rootSnapshot(page) {
 
 const network = [];
 const navigation404s = [];
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch(chromiumLaunchOptions({ headless: true, chromePath }));
 const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
 const rootPage = await context.newPage();
 context.on("response", response => {
@@ -81,7 +84,7 @@ try {
 const collectorPage = await context.newPage();
 let collector = { status: "not_run", error: null, code: null };
 try {
-  const result = await collectPublicCatalogCandidates(collectorPage, maxPages);
+  const result = await collectPublicCatalogCandidates(collectorPage, maxPages, { captureDiagnostics: true });
   collector = {
     status: "ok",
     routesVisited: result.routesVisited,
@@ -94,6 +97,13 @@ try {
     sourceExhausted: result.sourceExhausted,
     stallReason: result.stallReason,
     uniqueSKUs: result.uniqueListingSKUs,
+    diagnosticUniqueSKUs: result.diagnosticUniqueSKUs,
+    duplicateCandidates: result.duplicateCandidates,
+    duplicateRouteDiscoveries: result.duplicateRouteDiscoveries,
+    repeatedWindows: result.repeatedWindows,
+    windowsWithoutNewSKUs: result.windowsWithoutNewSKUs,
+    pageAliases: result.pageAliases,
+    categoryDiagnostics: result.categoryDiagnostics,
     skuExamples: result.candidates.map(candidate => candidate.sku).slice(0, 10),
   };
 } catch (error) {
@@ -102,8 +112,9 @@ try {
 
 // Exercise the same bounded discovery + detail-validation path used by
 // import:daily, without Supabase reads/writes or an onBatch callback.
-let dailyPath = { status: "not_run", error: null, code: null };
+let dailyPath = { status: skipDailyPath ? "skipped" : "not_run", error: null, code: null };
 try {
+  if (skipDailyPath) throw Object.assign(new Error("probe_daily_path_skipped"), { skip: true });
   const result = await collectProducts({
     headless: true,
     updateMode: "growth",
@@ -116,6 +127,7 @@ try {
     growthMaxCandidates: 1000,
     growthMaxRuntimeMs: 240_000,
     navigationRetries: 1,
+    chromePath,
     preferNewProducts: true,
     catalogNewOnly: true,
   }, console, { existingSKUs: new Set() });
@@ -130,19 +142,23 @@ try {
     sourceErrors: result.stats.searchErrors,
   };
 } catch (error) {
-  dailyPath = {
-    status: "error",
-    error: error?.message ?? "daily_path_error",
-    code: error?.code ?? null,
-    request: error?.sourceRequest ?? null,
-    stats: error?.collectionStats ? {
-      pagesFetched: error.collectionStats.pagesFetched,
-      categoriesVisited: error.collectionStats.categoriesVisited,
-      rawCandidates: error.collectionStats.candidatesExamined,
-      uniqueCandidates: error.collectionStats.uniqueSKUsDiscovered,
-      technicalUnprocessed: error.collectionStats.dispositions?.technicalUnprocessed,
-    } : null,
-  };
+  if (error?.skip === true) {
+    dailyPath = { status: "skipped", error: null, code: null };
+  } else {
+    dailyPath = {
+      status: "error",
+      error: error?.message ?? "daily_path_error",
+      code: error?.code ?? null,
+      request: error?.sourceRequest ?? null,
+      stats: error?.collectionStats ? {
+        pagesFetched: error.collectionStats.pagesFetched,
+        categoriesVisited: error.collectionStats.categoriesVisited,
+        rawCandidates: error.collectionStats.candidatesExamined,
+        uniqueCandidates: error.collectionStats.uniqueSKUsDiscovered,
+        technicalUnprocessed: error.collectionStats.dispositions?.technicalUnprocessed,
+      } : null,
+    };
+  }
 }
 
 const candidateCount = collector.status === "ok" ? collector.candidates : 0;
@@ -172,6 +188,11 @@ const proof = {
   proofBeyondInitialBatch: (collector.pagesFetched ?? 0) > 1
     || candidateCount > (collector.initialCandidateCount ?? 0),
   loadMoreCycles: collector.listingLoadMoreCycles ?? 0,
+  duplicateCandidates: collector.duplicateCandidates ?? 0,
+  duplicateRouteDiscoveries: collector.duplicateRouteDiscoveries ?? 0,
+  repeatedWindows: collector.repeatedWindows ?? 0,
+  windowsWithoutNewSKUs: collector.windowsWithoutNewSKUs ?? 0,
+  pageAliases: collector.pageAliases ?? 0,
   noLegacyIntershop: legacyDiscoveryEndpoints.length === 0,
   legacyDiscoveryEndpoints,
   legacyIntershopStaticAssets,
@@ -216,8 +237,8 @@ if (proof.sourceClassification !== "VALID_SOURCE"
   || proof.routesVisited <= 1
   || proof.dynamicCategories < 1
   || proof.candidateCount < 1
-  || dailyPath.status !== "ok"
-  || dailyPath.pagesFetched <= 1
-  || dailyPath.uniqueCandidates < 1
-  || dailyPath.sourceErrors > 0
+  || (!skipDailyPath && dailyPath.status !== "ok")
+  || (!skipDailyPath && dailyPath.pagesFetched <= 1)
+  || (!skipDailyPath && dailyPath.uniqueCandidates < 1)
+  || (!skipDailyPath && dailyPath.sourceErrors > 0)
   || !proof.noLegacyIntershop) process.exitCode = 1;

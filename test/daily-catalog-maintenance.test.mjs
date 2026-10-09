@@ -162,8 +162,9 @@ test("expliciet verlopen GraphQL-aanbieding normaliseert naar de normale prijs",
   });
 });
 
-test("tijdelijke bronfout tijdens aanbieding bereikt geen prijswriter", async () => {
+test("onvolledige listing-window snapshot blijft fail-closed en bereikt geen writer of retry", async () => {
   let writes = 0;
+  let sourceCalls = 0;
   await assert.rejects(runDailyCatalogMaintenance({ importTrigger: "schedule", maintenanceMaxDetailFallbacks: 500 },
     { info() {}, error() {} }, {
       fetchExistingProducts: async () => [existing()],
@@ -171,10 +172,14 @@ test("tijdelijke bronfout tijdens aanbieding bereikt geen prijswriter", async ()
       fetchExistingSKUs: async () => new Set(["123456789"]),
       startCatalogImportRun: async () => ({ id: "run", started_at: now.toISOString() }),
       finishCatalogImportRun: async () => ({}),
-      withDailyCatalogSource: async () => { throw new SourceUnavailableError("tijdelijke bronfout"); },
+      withDailyCatalogSource: async () => {
+        sourceCalls += 1;
+        throw new SourceUnavailableError("Dagelijkse catalogussnapshot is onvolledig; stopreden=listing_window_limit");
+      },
       upsertProducts: async () => { writes += 1; return { imported: [], errors: [], duplicateSKUsSkipped: 0 }; },
-    }), /tijdelijke bronfout/);
+    }), /listing_window_limit/);
   assert.equal(writes, 0);
+  assert.equal(sourceCalls, 1);
 });
 
 test("handmatige maintenance-dry-run beoordeelt dezelfde volledige flow zonder run- of datawrites", async () => {

@@ -6,26 +6,31 @@ import {
   CATALOG_ROOT_URL,
   collectCatalogListing,
   collectPublicCatalogCandidates,
+  catalogListingPageIdentity,
   extractCatalogListingCandidates,
   extractSKUFromProductURL,
   normalizeCatalogCategoryURL,
   normalizeCatalogListingCandidate,
   RootCategoryDiscoveryError,
+  selectCatalogListingRoutes,
 } from "../src/hoogvliet.mjs";
 
 const fixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog.html", import.meta.url), "utf8");
 const paginationFixture = await readFile(new URL("./fixtures/hoogvliet-current-pagination.html", import.meta.url), "utf8");
 const rootFixture = await readFile(new URL("./fixtures/hoogvliet-current-catalog-root.html", import.meta.url), "utf8");
 
-async function browserFor({ body = fixture, rootBody = body, status = 200 } = {}) {
+async function browserFor({ body = fixture, rootBody = body, bodyForURL = null, status = 200 } = {}) {
   const graphqlRequests = [];
   const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
-  await context.route("https://hoogvliet.nl/**", route => route.fulfill({
-    status,
-    contentType: "text/html",
-    body: new URL(route.request().url()).pathname === "/producten" ? rootBody : body,
-  }));
+  await context.route("https://hoogvliet.nl/**", route => {
+    const url = new URL(route.request().url());
+    return route.fulfill({
+      status,
+      contentType: "text/html",
+      body: bodyForURL?.(url) ?? (url.pathname === "/producten" ? rootBody : body),
+    });
+  });
   await context.route("https://hoogvliet.nl/api/graphql**", async route => {
     const url = new URL(route.request().url());
     const variables = JSON.parse(url.searchParams.get("variables") || "{}");
@@ -104,20 +109,40 @@ test("current category Next pagination traverses a second public listing page", 
   ]);
 });
 
-test("catalog root discovers multiple public categories and deduplicates cross-listed cards", async t => {
+test("catalog root visits an aggregate parent once and skips overlapping nested routes", async t => {
   const h = await browserFor();
   t.after(() => h.browser.close());
   const result = await collectPublicCatalogCandidates(h.page, 20);
   assert.equal(result.sourceExhausted, true);
-  assert.equal(result.categoriesVisited, 2);
-  assert.equal(result.listingLoadMoreCycles, 2);
-  assert.equal(result.catalogAPICalls, 4);
-  assert.deepEqual(h.graphqlRequests.map(request => request.length), [2, 1, 2, 1]);
-  assert.equal(result.rawCandidates, 6);
-  assert.equal(result.duplicateCandidates, 3);
+  assert.equal(result.categoriesVisited, 1);
+  assert.equal(result.listingLoadMoreCycles, 1);
+  assert.equal(result.catalogAPICalls, 2);
+  assert.deepEqual(h.graphqlRequests.map(request => request.length), [2, 1]);
+  assert.equal(result.rawCandidates, 3);
+  assert.equal(result.duplicateCandidates, 0);
   assert.equal(result.uniqueListingSKUs, 3);
   assert.equal(result.rootCategoriesDiscovered, 2);
-  assert.equal(result.routesVisited, 3);
+  assert.equal(result.rootListingRoutesSelected, 1);
+  assert.equal(result.nestedRoutesSkipped, 1);
+  assert.equal(result.routesVisited, 2);
+  assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
+});
+
+test("navigation-only aggregate category falls back to its real nested category", async t => {
+  const root = `<!doctype html><main><a href="/vers">Vers</a><a href="/vers/fruit">Fruit</a></main>`;
+  const parent = `<!doctype html><main><a href="/vers/fruit">Fruit</a></main>`;
+  const h = await browserFor({
+    rootBody: root,
+    bodyForURL: url => url.pathname === "/producten" ? root : url.pathname === "/vers" ? parent : fixture,
+  });
+  t.after(() => h.browser.close());
+  const result = await collectPublicCatalogCandidates(h.page, 10);
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.rootCategoriesDiscovered, 2);
+  assert.equal(result.rootListingRoutesSelected, 1);
+  assert.equal(result.nestedFallbackRoutes, 1);
+  assert.equal(result.categoriesVisited, 2);
+  assert.equal(result.pagesFetched, 2);
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
 });
 
@@ -144,6 +169,76 @@ test("load-more stagnation is fail-closed and does not claim exhaustion", async 
   });
   assert.equal(result.sourceExhausted, false);
   assert.equal(result.stallReason, "category_listing_stagnated");
+});
+
+test("repeated SKU window stops without recounting or looping", async t => {
+  const body = `<!doctype html><main>
+    <article><a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a></article>
+    <button id="load-more">Producten laden</button>
+    <script>document.querySelector('#load-more').addEventListener('click', () => {
+      document.querySelector('#load-more').insertAdjacentHTML('beforebegin',
+        '<article><a href="/product/hoogvliet-komkommer-064786000?alias=1"><h2>Hoogvliet Komkommer</h2></a></article>');
+      document.querySelector('#load-more').remove();
+    });</script>
+  </main>`;
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+  });
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_repeated_sku_window");
+  assert.equal(result.pagesFetched, 1);
+});
+
+test("page zero/one alias is skipped while a genuine next page remains reachable", async t => {
+  const body = paginationFixture.replace(
+    '<a id="next" href="/aardappelen-groente-fruit?page=2">Next</a>',
+    '<a href="/aardappelen-groente-fruit?page=1">Next</a><a id="next" href="/aardappelen-groente-fruit?page=2">Volgende</a>',
+  );
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+  });
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.listingURLsVisited, 2);
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000", "060936000",
+  ]);
+});
+
+test("a naturally exhausted one-window listing is complete exactly at the safety cap", async t => {
+  const body = fixture.replace('<button type="button" id="load-more">Producten laden</button>', "");
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 1,
+  });
+  assert.equal(result.pagesFetched, 1);
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.stallReason, null);
+});
+
+test("category routes and listing page aliases have deterministic identities", () => {
+  const routes = [
+    { url: "https://hoogvliet.nl/vers" },
+    { url: "https://hoogvliet.nl/vers/fruit" },
+    { url: "https://hoogvliet.nl/dranken" },
+    { url: "https://hoogvliet.nl/vers" },
+  ];
+  assert.deepEqual(selectCatalogListingRoutes(routes).map(route => route.url), [
+    "https://hoogvliet.nl/vers", "https://hoogvliet.nl/dranken",
+  ]);
+  assert.equal(
+    catalogListingPageIdentity("https://hoogvliet.nl/vers?page=1"),
+    catalogListingPageIdentity("https://hoogvliet.nl/vers"),
+  );
+  assert.notEqual(
+    catalogListingPageIdentity("https://hoogvliet.nl/vers?page=2"),
+    catalogListingPageIdentity("https://hoogvliet.nl/vers"),
+  );
 });
 
 test("root discovery failure, category structure changes and challenge have explicit source codes", async t => {

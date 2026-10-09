@@ -1,3 +1,27 @@
+# Checkpoint — listing-window-limit root cause en fix — 9 oktober 2026
+
+## Failure en bewezen hoofdoorzaak
+
+- Remote basis en mislukte run: `main` `0306dda5ad9acd6a6bbc33f6b062892b2fca7a5e` (PR #63 gemerged), handmatige read-only maintenance-run [37889890176](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37889890176). Setup, runner-Chrome en 407/407 regressies waren groen; de maintenance stopte fail-closed op `listing_window_limit` bij `MAINTENANCE_MAX_LISTING_WINDOWS=800`. Er zijn geen writes uitgevoerd en geen retry/maintenance-dispatch gestart.
+- Hoofdoorzaak **B**: de root leverde de geldige hoofdcategorieën, maar `collectPublicCatalogCandidates` ontdekte daarna op iedere categoriepagina opnieuw geneste categorielinks en crawlde zowel de geaggregeerde ouderlisting als alle overlappende kinderen volledig. Bovendien navigeerde iedere niet-rootcategorie eerst voor child discovery en direct daarna opnieuw in `collectCatalogListing`. De 800-cap telde daardoor overlappende nested listingvensters, niet 800 noodzakelijke unieke catalogusvensters.
+- De cap zelf is niet te laag. Read-only openbare-bronproof [37899504710](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/37899504710) op de gefixte code exhaustte natuurlijk met **20 unieke geldige rootcategorieën**, **20 listingroutes** (**21 routes inclusief root**), **359 listingvensters**, **6.766 unieke actuele listing-SKU's**, **0 herhaalde windowfingerprints**, **1 venster zonder nieuwe globale SKU**, **0 page-0/1-aliases** en `sourceExhausted=true`. Marge tot de ongewijzigde 800-cap: **441 vensters**. Er is geen pagination-loop en geen nieuwe cap nodig.
+
+## Minimale fix en veiligheid
+
+- De rootcategorieboom wordt na URL-normalisatie exact gededupliceerd. Alleen minimale geaggregeerde listingroutes worden gecrawld; een geneste route wordt uitsluitend als fallback bezocht wanneer de ouder aantoonbaar een navigatie-only pagina zonder listingproducten is. Elke categorie krijgt één initiële navigatie in plaats van de eerdere dubbele voornavigatie.
+- Page `0`/`1`-aliassen delen één canonical listing-identiteit en blokkeren een echte volgende pagina niet. Een herhaalde verse SKU-set stopt fail-closed als `category_listing_repeated_sku_window` en telt niet als extra venster. Natuurlijke exhaustion op exact de safety-cap wordt correct als compleet herkend; een echte cap met verdere pagination blijft onvolledig en bereikt geen writer.
+- `MAINTENANCE_MAX_LISTING_WINDOWS` blijft **800**. Geen importer-, prijsrefresh-, database-, scheduler-, delete-, full-rebuild- of gebruikersdatapad is toegevoegd of uitgevoerd. Onvolledige snapshots blijven vóór `assessDailyCatalogCandidates`/`upsertProducts` stoppen; er bestaat geen automatische maintenance-importretry in deze flow.
+- Maintenance success/failure-accounting vermeldt voortaan rootcategorieën, geselecteerde/bezochte routes, listingvensters, unieke SKU's en duplicates, zodat een toekomstige bronwijziging direct bewijsbaar is.
+
+## Tests, branch en overdracht
+
+- Gerichte discovery/importer/maintenance-regressies: **167/167 groen**. Toegevoegd/gedekt: category-URL-dedupe, ouder/nested-overlap éénmaal, navigatie-only nested fallback, repeated SKU-window zonder lus/hercount, page-0/1-alias plus echte next, natuurlijke exhaustion exact op cap, echte cap blijft fail-closed en onvolledige snapshot doet nul writes/nul retry.
+- `npm test`: groen. `npm run check`: groen. `git diff --check`: groen. Read-only sourceproof `37899504710`: groen. De eerdere bounded diagnoseprobe `37896952067` stopte op zijn 20-minutengrens bij een experimentele 1.500-window observability-run; hij deed geen writes en is niet herhaald als maintenance.
+- Branch: `codex/debug-listing-window-limit-20261009`. Functionele code-head: `4f65d1465c00a2cc58ceda30fe4dd1e2ddf3fc1d`. Draft PR: [#64](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/64); geen merge.
+- Exacte Work-vervolgstap: review de kleine discoverydiff en groene CI/proof. Merge alleen via de normale releaseprocedure. Voer daarna maximaal één handmatige **dry-run** vanaf `main` uit en controleer in de nieuwe accounting `sourceExhausted`, root/listingroutes, circa 359 listingvensters, unieke SKU's en marge onder 800. Geen write-mode, retry of capverhoging in dit checkpoint.
+
+---
+
 # Checkpoint — PR #63 Hoogvliet category-URL hotfix — 9 oktober 2026
 
 ## Bewezen oorzaak en fix
