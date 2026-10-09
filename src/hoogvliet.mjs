@@ -404,7 +404,10 @@ async function readCatalogPageEvidence(page) {
 
 async function waitForCatalogSource(page, options = {}) {
   const expectCategoryLinks = options.expectCategoryLinks === true;
-  await page.waitForFunction(({ expectCategoryLinks: expect, allowCategoryOnly, nonCatalogPaths }) => {
+  // A category shell is rendered before its product cards. Only root
+  // discovery may use category links as immediate readiness evidence; a
+  // navigation-only listing route is accepted below after the bounded wait.
+  await page.waitForFunction(({ expectCategoryLinks: expect, nonCatalogPaths }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     const hasCategoryLink = [...document.querySelectorAll("a[href]")].some(link => {
       try {
@@ -421,10 +424,9 @@ async function waitForCatalogSource(page, options = {}) {
     });
     return document.querySelectorAll("a[href*='/product/']").length > 0
       || (!expect && document.location.pathname === "/producten")
-      || ((expect || allowCategoryOnly) && hasCategoryLink)
+      || (expect && hasCategoryLink)
       || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten|captcha|verify you are human|controleer of je een mens bent|access denied|toegang geweigerd|forbidden/.test(text);
-  }, { expectCategoryLinks, allowCategoryOnly: options.allowCategoryOnly === true,
-    nonCatalogPaths: [...NON_CATALOG_PATHS] }, {
+  }, { expectCategoryLinks, nonCatalogPaths: [...NON_CATALOG_PATHS] }, {
     timeout: options.normalTimeoutMs ?? NORMAL_SOURCE_READY_TIMEOUT_MS,
   }).catch(() => {});
   const evidence = await readCatalogPageEvidence(page);

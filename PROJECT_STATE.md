@@ -1,3 +1,26 @@
+# Checkpoint — `category_listing_stagnated` hydration-race — 9 oktober 2026
+
+## Bewezen oorzaak en getroffen window
+
+- Actuele remote basis is `main` `f9fef2484ecae2fe588c76819e14005269082d8c` (PR #64 gemerged). Open PR's #54, #42, #41 en #21 zijn oude draft-docs/features en wijzigen deze flow niet. De geslaagde handmatige dry-run `37911839155` en de mislukte handmatige write-run `37918630345` draaiden exact dezelfde commit, runner-Chrome, 800-cap en collectorcode.
+- Hoofdoorzaak **B, fout-positieve stagnatiedetectie door een hydration-race**: PR #64 gaf listingroutes `allowCategoryOnly: true`. `waitForCatalogSource` liet daardoor de vroeg zichtbare categorie-/navigatieshell onmiddellijk als ready gelden, vóór de productkaarten waren gehydrateerd. `collectCatalogListing` zag vervolgens geen nieuwe product-URL in de nog lege shell en zette direct `category_listing_stagnated`; op een initiële route kon dezelfde race een route zelfs ten onrechte als navigation-only behandelen.
+- De write-run stopte afleidbaar op de derde rootroute `https://hoogvliet.nl/kaas-vleeswaren-tapas`, na het eerste venster en tijdens de overgang naar `https://hoogvliet.nl/kaas-vleeswaren-tapas/q/page/2`: de eerdere volledige bronproof toont exact 22 vensters voor route 1 en 14 voor route 2; de failure telde 37 vensters (= 22 + 14 + 1) en 3 bezochte routes. Er was geen load-more: de gezonde proof toont voor deze route `loadMoreCycles=0` en echte `/q/page/N`-navigatie.
+- De oude failurelog bevat alleen de geaggregeerde foutregel en logde het mislukte raw-SKU-fingerprint niet. De gezonde proof legt voor route-window 0 de 20-SKU-fingerprint met SHA-256 `dd97161e8e9095b6fb340e45ce3692b68bf24fc17b113edff34beef5a64572ec` vast en voor de bedoelde page-2-set de afzonderlijke 20-SKU-fingerprint `e7a07f887e1d78b7e1a0980ddab8bb4c0e8dd8af43657cffc0019fcaa0454697`. De foutcode bewijst dat de failure-snapshot geen nieuwe product-URL aan de cumulatieve set toevoegde; de exacte lege/overlappende raw-set is achteraf niet uit de toenmalige summary te reconstrueren.
+- Bestaande, niet door deze diagnose gestarte schedule/retry-runs faalden later op dezelfde code en stopreden, maar op wisselende dieptes: 9 routes/165 windows, 9/135, 9/137 en 12/234. Dat variabele patroon plus de eerdere volledige 20-route/359-window-success sluit een vaste cap, canonical page-0/1-loop, GraphQL-fout, vaste kapotte categorie en structurele bronwijziging uit en bevestigt timingafhankelijk gedrag.
+
+## Minimale fix en veiligheid
+
+- Branch `codex/fix-category-listing-stagnated-20261009` laat alleen rootdiscovery categorie-links als onmiddellijk readinessbewijs gebruiken. Op een listingroute wacht de collector eerst begrensd op productkaarten/expliciete lege staat/challenge; pas na die bestaande timeout mag een categorie-only pagina als navigation-only fallback gelden.
+- Regressies bewijzen beide kanten: een direct zichtbare categorieshell met vertraagde page-2-producthydratie levert twee geldige vensters zonder stagnatie; een categorieshell die nooit hydrateert blijft fail-closed met `category_listing_stagnated`, één geteld venster en één GraphQL-call. Bestaande repeated-SKU-, load-more-, page-0/1-, cap-, incomplete-snapshot/no-writer- en maintenancebescherming blijven groen.
+- `MAINTENANCE_MAX_LISTING_WINDOWS` blijft 800. Geen workflowdispatch, maintenance write-run/retry, productimport, databasewrite, migratie, delete of capwijziging is uitgevoerd.
+
+## Verificatie en overdracht
+
+- Gerichte discovery/maintenance: **31/31 groen**. Volledige `npm test`: **414/414 groen**. `npm run check`: groen. `git diff --check`: groen.
+- Na review/merge en groene main-CI is precies één nieuwe gecontroleerde write-acceptatie technisch verantwoord, omdat de snapshot nog steeds volledig moet uitputten vóór de writer. Deze diagnose start die acceptatie niet.
+
+---
+
 # Checkpoint — listing-window-limit root cause en fix — 9 oktober 2026
 
 ## Failure en bewezen hoofdoorzaak

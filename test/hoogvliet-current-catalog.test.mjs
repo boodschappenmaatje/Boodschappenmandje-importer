@@ -136,7 +136,7 @@ test("navigation-only aggregate category falls back to its real nested category"
     bodyForURL: url => url.pathname === "/producten" ? root : url.pathname === "/vers" ? parent : fixture,
   });
   t.after(() => h.browser.close());
-  const result = await collectPublicCatalogCandidates(h.page, 10);
+  const result = await collectPublicCatalogCandidates(h.page, 10, { normalTimeoutMs: 50 });
   assert.equal(result.sourceExhausted, true);
   assert.equal(result.rootCategoriesDiscovered, 2);
   assert.equal(result.rootListingRoutesSelected, 1);
@@ -144,6 +144,58 @@ test("navigation-only aggregate category falls back to its real nested category"
   assert.equal(result.categoriesVisited, 2);
   assert.equal(result.pagesFetched, 2);
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
+});
+
+test("category navigation shell waits for delayed product hydration before deciding stagnation", async t => {
+  const firstPage = `<!doctype html><main>
+    <a href="/producten/kaas">Kaas</a>
+    <article><a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a></article>
+    <a href="/aardappelen-groente-fruit/q/page/2">Volgende</a>
+  </main>`;
+  const delayedSecondPage = `<!doctype html><main>
+    <a href="/producten/kaas">Kaas</a>
+    <script>
+      setTimeout(() => {
+        document.querySelector('main').insertAdjacentHTML('beforeend',
+          '<article><a href="/product/trostomaten-verpakt-060936000"><h2>Trostomaten verpakt</h2></a></article>');
+      }, 100);
+    </script>
+  </main>`;
+  const h = await browserFor({
+    bodyForURL: url => url.pathname.endsWith("/q/page/2") ? delayedSecondPage : firstPage,
+  });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    normalTimeoutMs: 1_000,
+  });
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.stallReason, null);
+  assert.equal(result.pagesFetched, 2);
+  assert.equal(result.catalogAPICalls, 2);
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "060936000",
+  ]);
+});
+
+test("category shell that never hydrates remains fail-closed", async t => {
+  const firstPage = `<!doctype html><main>
+    <article><a href="/product/hoogvliet-komkommer-064786000"><h2>Hoogvliet Komkommer</h2></a></article>
+    <a href="/aardappelen-groente-fruit/q/page/2">Volgende</a>
+  </main>`;
+  const stalledSecondPage = `<!doctype html><main><a href="/producten/kaas">Kaas</a></main>`;
+  const h = await browserFor({
+    bodyForURL: url => url.pathname.endsWith("/q/page/2") ? stalledSecondPage : firstPage,
+  });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    normalTimeoutMs: 100,
+  });
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(result.pagesFetched, 1);
+  assert.equal(result.catalogAPICalls, 1);
 });
 
 test("catalog root waits for hydrated navigation, filters domain links and never paginates root", async t => {
