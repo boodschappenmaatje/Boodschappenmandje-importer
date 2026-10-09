@@ -10,7 +10,7 @@
 
 - Gerichte discovery/importer-tests: **112/112 groen**, inclusief de bestaande 404-bronfoutregressie. `npm test`: **407/407 groen**. `npm run check`: groen. `git diff --check`: groen.
 - Live read-only dry-run niet uitgevoerd: directe Hoogvliet-toegang vanuit deze omgeving wordt door de network proxy geweigerd; lokale Chromium-fixturetests verifiëren de discoveryfilter. Geen retry, workflowdispatch, Production-write, databasewrite of migratie uitgevoerd.
-- Hotfix branch `codex/hotfix-catalog-category-url-20261009`, codecommit `e34addaaaf2fec95471f386a646de93b1f9115a0`. PR #63: https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/63. PR-checks en Preview stonden bij eerste controle nog queued/pending; update volgt na afronding van de releasegate.
+- Hotfix branch `codex/hotfix-catalog-category-url-20261009`, functionele codecommit `e34addaaaf2fec95471f386a646de93b1f9115a0`; PR #63: https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/63. Op PR-head `abc521f1553b5f6ee7e8b7a09688a5d5e11ee65b` zijn Core-CI run `37885408319`, read-only offer-audit `37885408324`, explicit-SKU run `37885408321` en Vercel Preview **allemaal groen**. PR is open en mergeable; niet gemerged.
 
 ---
 
