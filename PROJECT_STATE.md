@@ -1,3 +1,33 @@
+# Checkpoint — PR #62 workflowfix en finale releasegate — 9 oktober 2026
+
+## Actuele basis en bewezen blokkade
+
+- Remote `main` is ongewijzigd `c4c34a59cc8dc546a9ffdfe915ae58a57cbd2899`. PR #62 bleef Draft en mergeable; de onderzochte oude PR-head was `b985ff2365e98b2c743df99431318d7eb5b8fa9a`.
+- Op die oude head waren Core-CI, Vercel Preview en de read-only offer-audit groen. Explicit-SKU-run `37832327035`, job `113500774771`, hing exact van 19:30:06 tot 20:30:16 UTC in `npx playwright install --with-deps chromium`; de SKU-validatiestap werd overgeslagen toen de jobtimeout annuleerde.
+- De normale schedule-route gebruikte volledige maintenance, maar Actions bood handmatig alleen legacy/importermodi en geen expliciete full-maintenance dry-run/write-route.
+
+## Uitgevoerde fixes
+
+- Functionele fixcommit: `c102321b7a7bd91242cd260893325b79a600e2f1` (`Fix maintenance workflow release gates`) op bestaande branch `codex/daily-catalog-maintenance-20261008`; geen nieuwe PR.
+- Explicit-SKU, normale schedule en retry selecteren nu de reeds aanwezige GitHub-runner Chrome/Chromium en geven het vaste executable path via `CHROME_PATH` aan dezelfde Playwright-code. Er is in die paden geen `playwright install --with-deps` of Ubuntu-pakketinstallatie meer. Een lokale echte launch via `/usr/bin/chromium` slaagde met Chromium `151.0.7922.173`.
+- Nieuwe handmatige workflow `manual-daily-catalog-maintenance.yml` roept exact dezelfde `npm run import:daily`-orchestrator aan als schedule/retry, deelt concurrencygroep `hoogvliet-supabase-update` en gebruikt dezelfde maintenance-config. Default `dry-run` leest en beoordeelt de volledige flow zonder runregistratie/product-/prijswrites; `write` vereist `refs/heads/main` plus exact `RUN_DAILY_MAINTENANCE_WRITE`.
+- De maintenance-orchestrator rapporteert in dry-run de aantallen nieuwe en bestaande records die hij zou schrijven, maar roept `startCatalogImportRun`, `upsertProducts`, `finishCatalogImportRun` en de nacontrolewriteflow niet aan. Het normale writepad, de bestaande catalogusrun-lock, last-known-good en alle prijs-/aanbiedingslogica zijn ongewijzigd behouden.
+- De scheduled 06:00 DST-route en watchdog/retry blijven volledige maintenance zonder max-400 of 1/7×100. De handmatige legacy-400-route blijft afzonderlijk bestaan en kan niet per ongeluk door de nieuwe handmatige workflow worden gekozen.
+
+## Tests en actuele remote releasegate
+
+- Gerichte workflow-/maintenance-/explicit-SKU-regressies: **52/52 groen**. Volledige `npm test`: **407/407 groen**. `npm run check`: groen. `npm run test:postgres`: **28/28 groen**. `git diff --check`: groen. Vier betrokken YAML-workflows parsen geldig.
+- Nieuwe head `c102321b7a7bd91242cd260893325b79a600e2f1`: Core-CI run `37873837104` **success** in 3m01s; Vercel Preview **success**; offer-audit run `37873837086` **success** in 5m00s.
+- Explicit-SKU-run `37873837109`, job `113637711231`: **success in 34s**. Runner-Chrome-selectie en de daadwerkelijke bounded final_batch3 read-only SKU-validatie zijn beide uitgevoerd en groen; de eerdere 60-minuteninstallatieblokkade is weg.
+- GitHub meldt PR #62 op deze functionele head `CLEAN` en `MERGEABLE`. De handmatige workflow is statisch en via regressies gevalideerd; hij wordt pas na merge vanaf `main` dispatchbaar. Er is in deze Codex-run geen workflowdispatch gedaan.
+- Geen merge, Production-maintenance, productimport, prijsrefresh, Production-databasewrite, migratie of deploy gestart. Alleen branchcode, tests, documentatie, read-only PR-checks en Vercel Preview zijn uitgevoerd.
+
+## Releasebesluit
+
+- PR #62 is functioneel releaseklaar. Volgende stap: Work beoordeelt de kleine workflowdiff en geeft afzonderlijk mergetoestemming. Na merge mag eerst de handmatige **dry-run** vanaf `main` worden gebruikt; een geslaagde dry-run geeft uitdrukkelijk geen toestemming voor `write`.
+
+---
+
 # Checkpoint — volledige dagelijkse catalogus- en prijsonderhoudsflow — 8 oktober 2026
 
 ## Implementatie en root gap
