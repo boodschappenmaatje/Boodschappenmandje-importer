@@ -17,7 +17,7 @@
 
 - Gerichte discovery/importer/maintenance-regressies: **167/167 groen**. Toegevoegd/gedekt: category-URL-dedupe, ouder/nested-overlap éénmaal, navigatie-only nested fallback, repeated SKU-window zonder lus/hercount, page-0/1-alias plus echte next, natuurlijke exhaustion exact op cap, echte cap blijft fail-closed en onvolledige snapshot doet nul writes/nul retry.
 - `npm test`: groen. `npm run check`: groen. `git diff --check`: groen. Read-only sourceproof `37899504710`: groen. De eerdere bounded diagnoseprobe `37896952067` stopte op zijn 20-minutengrens bij een experimentele 1.500-window observability-run; hij deed geen writes en is niet herhaald als maintenance.
-- Branch: `codex/debug-listing-window-limit-20261009`. Functionele code-head: `4f65d1465c00a2cc58ceda30fe4dd1e2ddf3fc1d`. Draft PR: wordt na deze checkpointcommit aangemaakt; geen merge.
+- Branch: `codex/debug-listing-window-limit-20261009`. Functionele code-head: `4f65d1465c00a2cc58ceda30fe4dd1e2ddf3fc1d`. Draft PR: [#64](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/64); geen merge.
 - Exacte Work-vervolgstap: review de kleine discoverydiff en groene CI/proof. Merge alleen via de normale releaseprocedure. Voer daarna maximaal één handmatige **dry-run** vanaf `main` uit en controleer in de nieuwe accounting `sourceExhausted`, root/listingroutes, circa 359 listingvensters, unieke SKU's en marge onder 800. Geen write-mode, retry of capverhoging in dit checkpoint.
 
 ---
