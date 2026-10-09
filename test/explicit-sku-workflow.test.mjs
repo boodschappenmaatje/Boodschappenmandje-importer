@@ -71,6 +71,10 @@ test("runner is isolated to allowlisted explicit-SKU CSVs with checksums", async
   assert.match(workflow, /PLANNER_CACHE_BASE_URL:\s+https:\/\/boodschappenmaatje-pwa\.vercel\.app/);
   assert.match(workflow, /PLANNER_CACHE_ADMIN_TOKEN:\s+\$\{\{ secrets\.PLANNER_CACHE_ADMIN_TOKEN \}\}/);
   assert.match(workflow, /VERCEL_AUTOMATION_BYPASS_SECRET:\s+\$\{\{ secrets\.VERCEL_AUTOMATION_BYPASS_SECRET \}\}/);
+  assert.match(workflow, /command -v google-chrome/);
+  assert.match(workflow, /CHROME_PATH=\$chrome_path/);
+  assert.doesNotMatch(workflow, /playwright install|apt-get|with-deps/);
+  assert.match(await readFile(rootFile("src/explicit-sku-catch-up.mjs"), "utf8"), /chromiumLaunchOptions\(config\)/);
 });
 
 test("missing dispatch mode defaults to read-only dry-run", () => {

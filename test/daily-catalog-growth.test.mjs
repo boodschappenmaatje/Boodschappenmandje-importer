@@ -730,7 +730,7 @@ test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenla
   assert.match(retry, /if: steps\.due\.outputs\.run_attempt == '1'/);
   assert.doesNotMatch(retry, /continue-on-error: true/);
   assert.doesNotMatch(retry, /\bsleep\s+[1-9]\d{2,}/i);
-  assert.match(monitor, /ontbrekende dagjob wordt veilig klaargezet/i);
+  assert.match(monitor, /ontbrekende, partiële of mislukte run blijft zichtbaar/i);
 });
 
 

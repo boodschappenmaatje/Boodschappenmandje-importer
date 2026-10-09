@@ -339,9 +339,10 @@ export async function fetchExistingSKUs(config) {
 }
 
 /// Leest alleen de bestaande Hoogvliet-productidentiteit en bronmetadata die
-/// nodig zijn om dezelfde productpagina opnieuw betrouwbaar te valideren.
-/// Prijzen worden bewust niet uit deze read overgenomen: de actuele prijs moet
-/// opnieuw van de bijbehorende Hoogvliet-productpagina komen.
+/// nodig zijn om dezelfde SKU opnieuw betrouwbaar te valideren.
+/// Prijzen worden bewust niet uit deze read overgenomen: daily maintenance
+/// haalt actuele prijs-/aanbiedingsstatus uit Hoogvliet listing/API en gebruikt
+/// de productdetailpagina alleen als fallback.
 export async function fetchExistingProducts(config, { supermarketFilter = "eq.Hoogvliet" } = {}) {
   const pageSize = 1000;
   const products = [];
@@ -1116,7 +1117,9 @@ export async function upsertProducts(config, products, lifecycle = {}) {
         continue;
       }
       try {
-        const insertionId = maintenance || config.updateMode === "growth" ? randomUUID() : null;
+        const insertionId = maintenance || ["growth", "maintenance"].includes(config.updateMode)
+          ? randomUUID()
+          : null;
         const inserted = insertionId ? await postJSON(
           config.supabaseURL,
           "products",

@@ -4,6 +4,7 @@ import { loadConfig } from "./config.mjs";
 import { amsterdamDateKey } from "./daily-catalog-growth.mjs";
 import {
   ensureCatalogDailyJob,
+  fetchCatalogImportRuns,
   fetchCatalogDailyJob,
 } from "./supabase.mjs";
 
@@ -175,8 +176,49 @@ export async function monitorDailyCatalog(env = process.env, logger = console) {
   return result;
 }
 
+export function evaluateDailyMaintenanceMonitor(runs, {
+  now = new Date(),
+  maxAgeHours = DEFAULT_MAX_AGE_HOURS,
+} = {}) {
+  const latest = Array.isArray(runs) ? runs[0] : null;
+  if (!latest) return { ok: false, state: "missing", message: "Dagelijkse catalogusmaintenance ontbreekt.", run: null };
+  const startedAt = validDate(latest.started_at);
+  const maxAgeMs = Math.max(1, Number(maxAgeHours) || DEFAULT_MAX_AGE_HOURS) * 60 * 60 * 1000;
+  const ageMs = startedAt === null ? Number.POSITIVE_INFINITY : now.getTime() - startedAt;
+  if (ageMs < 0 || ageMs > maxAgeMs) {
+    return { ok: false, state: "overdue", message: "Dagelijkse catalogusmaintenance is te oud.", run: latest };
+  }
+  if (latest.status === "running") {
+    return { ok: true, state: "running", message: "Dagelijkse catalogusmaintenance is bezig.", run: latest };
+  }
+  if (latest.status !== "success") {
+    const detail = latest.error_summary ? ` ${latest.error_summary}` : "";
+    return { ok: false, state: latest.status ?? "invalid", message: `Dagelijkse catalogusmaintenance is ${latest.status ?? "ongeldig"}.${detail}`, run: latest };
+  }
+  return {
+    ok: true,
+    state: "healthy",
+    message: `Dagelijkse catalogusmaintenance geslaagd voor ${Number(latest.processed_count) || 0} actuele SKU's.`,
+    run: latest,
+  };
+}
+
+export async function monitorDailyMaintenance(env = process.env, logger = console, dependencies = {}) {
+  const config = loadConfig(env);
+  const fetchRuns = dependencies.fetchRuns ?? fetchCatalogImportRuns;
+  const now = dependencies.now?.() ?? new Date();
+  const runs = await fetchRuns(config, { trigger: "schedule", limit: 5 });
+  const result = evaluateDailyMaintenanceMonitor(runs, {
+    now,
+    maxAgeHours: Number(env.CATALOG_MONITOR_MAX_AGE_HOURS) || DEFAULT_MAX_AGE_HOURS,
+  });
+  logger.info(`Catalogusbewaking: ${result.message}`);
+  if (!result.ok) throw new Error(result.message);
+  return result;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  monitorDailyCatalog().catch((error) => {
+  monitorDailyMaintenance().catch((error) => {
     console.error(`Catalogusbewaking mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`);
     process.exitCode = 1;
   });

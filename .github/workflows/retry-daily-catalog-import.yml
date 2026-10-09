@@ -4,8 +4,8 @@ on:
   schedule:
     # Vaste UTC-watchdogkandidaten rond 06:00 Europe/Amsterdam. Beide zijn
     # veilig: buiten het lokale dagvenster doet inspect:daily niets; binnen
-    # het venster maakt de gewone claim een ontbrekende dagjob aan en voorkomt
-    # de database een tweede job/attempt.
+    # het venster controleert het de schedule-runregistratie. Workflow-
+    # concurrency en de bestaande catalog_import_runs-lock voorkomen overlap.
     - cron: "17 4 * * *"
     - cron: "17 5 * * *"
     # Drie kansen na de primaire import om 06:00 en bewaking om 08:30 NL.
@@ -32,26 +32,12 @@ jobs:
       PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
       HEADLESS: "1"
-      UPDATE_MODE: growth
+      UPDATE_MODE: maintenance
       CATALOG_BATCH: growth
-      MAX_PRODUCTS: "400"
-      MAX_NEW_PRODUCTS: "400"
-      MAX_PER_TERM: "40"
-      MAX_PAGES_PER_TERM: "8"
-      GROWTH_MAX_PAGES_PER_TERM: "20"
-      GROWTH_MAX_TOTAL_PAGES: "800"
-      GROWTH_MAX_CANDIDATES: "6000"
-      GROWTH_MAX_RUNTIME_MINUTES: "105"
+      MAINTENANCE_MAX_LISTING_WINDOWS: "800"
+      MAINTENANCE_MAX_DETAIL_FALLBACKS: "500"
       NAVIGATION_RETRIES: "2"
-      SATURATION_MIN_CANDIDATES: "40"
-      SATURATION_YIELD_PERCENT: "5"
-      CATALOG_NEW_ONLY: "1"
       IMPORT_TRIGGER: schedule
-      DISCOVERY_STATE_KEY: daily-catalog-growth
-      ADVANCE_DISCOVERY_STATE: "1"
-      PREFER_NEW_PRODUCTS: "1"
-      DAILY_IMPORT_STATE_KEY: daily-catalog-growth
-      DAILY_NEW_PRODUCT_TARGET: "400"
       DAILY_IMPORT_END_HOUR: "23"
 
     steps:
@@ -82,9 +68,18 @@ jobs:
           echo "run_attempt=$run_attempt" >> "$GITHUB_OUTPUT"
           echo "reason=${reason:-unknown}" >> "$GITHUB_OUTPUT"
 
-      - name: Chromium installeren
+      - name: Bestaande runner-Chrome selecteren
         if: steps.due.outputs.run_attempt == '1'
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
 
       - name: Verschuldigde daily attempt uitvoeren
         if: steps.due.outputs.run_attempt == '1'
@@ -94,9 +89,9 @@ jobs:
         if: always()
         run: |
           {
-            echo '## Persistente dagelijkse catalogusgroei'
+            echo '## Dagelijkse volledige catalogusmaintenance'
             echo "Attempt uitgevoerd: ${{ steps.due.outputs.run_attempt }}"
             echo "Beslissing: ${{ steps.due.outputs.reason }}"
-            echo 'Een retry telt uitsluitend werkelijke nieuwe unieke Supabase-producten mee.'
-            echo 'De bestaande catalogus blijft bij een tijdelijke bronstoring beschikbaar.'
+            echo 'Een retry beoordeelt opnieuw de volledige actuele listingset; er is geen nieuw-productdoel.'
+            echo 'Last-known-good blijft bij een tijdelijke bronstoring beschikbaar.'
           } >> "$GITHUB_STEP_SUMMARY"

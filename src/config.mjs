@@ -44,7 +44,7 @@ Object.freeze(catalogBatches);
 
 const DEFAULT_BATCH = "core";
 const DEFAULT_UPDATE_MODE = "catalog";
-const UPDATE_MODES = new Set(["catalog", "prices", "classify", "growth"]);
+const UPDATE_MODES = new Set(["catalog", "prices", "classify", "growth", "maintenance"]);
 const DEFAULT_MAX_PRODUCTS = 10;
 const SAFE_PRODUCT_LIMIT = 500;
 const DEFAULT_MAX_NEW_PRODUCTS = 50;
@@ -61,6 +61,10 @@ const DEFAULT_GROWTH_MAX_TOTAL_PAGES = 800;
 const SAFE_GROWTH_MAX_TOTAL_PAGES = 1_500;
 const DEFAULT_GROWTH_MAX_RUNTIME_MINUTES = 105;
 const SAFE_GROWTH_MAX_RUNTIME_MINUTES = 110;
+const DEFAULT_MAINTENANCE_MAX_LISTING_WINDOWS = 800;
+const SAFE_MAINTENANCE_MAX_LISTING_WINDOWS = 1_500;
+const DEFAULT_MAINTENANCE_MAX_DETAIL_FALLBACKS = 500;
+const SAFE_MAINTENANCE_MAX_DETAIL_FALLBACKS = 1_000;
 const DEFAULT_NAVIGATION_RETRIES = 2;
 const SAFE_NAVIGATION_RETRIES = 4;
 const DEFAULT_SATURATION_MIN_CANDIDATES = 40;
@@ -124,7 +128,7 @@ export function loadConfig(env = process.env) {
   const dryRun = env.DRY_RUN === "1" || env.DRY_RUN === "true";
   const updateMode = (env.UPDATE_MODE ?? DEFAULT_UPDATE_MODE).trim().toLowerCase();
   if (!UPDATE_MODES.has(updateMode)) {
-    throw new Error(`Ongeldige UPDATE_MODE '${updateMode}'. Kies: catalog, prices, classify of growth.`);
+    throw new Error(`Ongeldige UPDATE_MODE '${updateMode}'. Kies: catalog, prices, classify, growth of maintenance.`);
   }
   const catalogBatch = (env.CATALOG_BATCH ?? DEFAULT_BATCH).trim().toLowerCase();
   if (!Object.hasOwn(catalogBatches, catalogBatch)) {
@@ -165,6 +169,7 @@ export function loadConfig(env = process.env) {
   const config = {
     dryRun,
     headless: env.HEADLESS !== "0",
+    chromePath: env.CHROME_PATH?.trim() || null,
     updateMode,
     catalogBatch: hasSearchOverride ? "custom" : catalogBatch,
     maxProducts,
@@ -194,6 +199,20 @@ export function loadConfig(env = process.env) {
       positiveInteger(env.GROWTH_MAX_RUNTIME_MINUTES, DEFAULT_GROWTH_MAX_RUNTIME_MINUTES),
       SAFE_GROWTH_MAX_RUNTIME_MINUTES,
     ) * 60_000,
+    maintenanceMaxListingWindows: Math.min(
+      positiveInteger(
+        env.MAINTENANCE_MAX_LISTING_WINDOWS,
+        DEFAULT_MAINTENANCE_MAX_LISTING_WINDOWS,
+      ),
+      SAFE_MAINTENANCE_MAX_LISTING_WINDOWS,
+    ),
+    maintenanceMaxDetailFallbacks: Math.min(
+      positiveInteger(
+        env.MAINTENANCE_MAX_DETAIL_FALLBACKS,
+        DEFAULT_MAINTENANCE_MAX_DETAIL_FALLBACKS,
+      ),
+      SAFE_MAINTENANCE_MAX_DETAIL_FALLBACKS,
+    ),
     navigationRetries: Math.min(
       nonNegativeInteger(env.NAVIGATION_RETRIES, DEFAULT_NAVIGATION_RETRIES),
       SAFE_NAVIGATION_RETRIES,

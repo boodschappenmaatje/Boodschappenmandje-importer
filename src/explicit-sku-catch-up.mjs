@@ -3,6 +3,7 @@ import { chromium } from "playwright";
 import {
   isValidProductURL,
   isValidSKU,
+  chromiumLaunchOptions,
   validateCandidate,
   withTransientNavigationRetry,
 } from "./hoogvliet.mjs";
@@ -188,7 +189,7 @@ export async function runExplicitSKUImport(config, input, logger = console, depe
   let detailPage = null;
   let validator = dependencies.validateCandidate ?? services.validateCandidate;
   if (!validator) {
-    browser = await chromium.launch({ headless: config.headless !== false });
+    browser = await chromium.launch(chromiumLaunchOptions(config));
     const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
     detailPage = await context.newPage();
     validator = (candidate, diagnostics) => withTransientNavigationRetry(

@@ -12,7 +12,7 @@ on:
         type: boolean
         default: false
       daily_import:
-        description: Start exact de persistente dagelijkse 400-job; gebruikt remainingTarget en import:daily
+        description: Start alleen handmatig de legacy 400-growthjob; normale daily gebruikt volledige maintenance
         type: boolean
         default: false
       recover_failed_daily:
@@ -105,10 +105,6 @@ on:
     # The update-plan step gates the other candidate by the current DST offset.
     - cron: "0 4 * * *"
     - cron: "0 5 * * *"
-    # Dagelijks 02:17 UTC: één van zeven vaste prijsdeelbatches.
-    - cron: "17 2 * * *"
-    # Zondag 03:43 UTC: één catalogusbatch; core/fresh/world/pantry rouleren.
-    - cron: "43 3 * * 0"
 
 permissions:
   contents: read
@@ -292,24 +288,11 @@ jobs:
                 } >> "$GITHUB_STEP_SUMMARY"
                 exit 0
               fi
-              update_mode="growth"
+              update_mode="maintenance"
               catalog_batch="growth"
               price_shard="0"
-              max_products="400"
+              max_products="10"
               import_trigger="schedule"
-              daily_import_job="1"
-            elif [[ "$SCHEDULE_CRON" == "17 2 * * *" ]]; then
-              update_mode="prices"
-              catalog_batch="core"
-              price_shard=$((10#$(date -u +%u) - 1))
-              max_products="100"
-            elif [[ "$SCHEDULE_CRON" == "43 3 * * 0" ]]; then
-              update_mode="catalog"
-              batches=(core fresh world pantry)
-              week=$((10#$(date -u +%V)))
-              catalog_batch="${batches[$((week % ${#batches[@]}))]}"
-              price_shard="0"
-              max_products="180"
             else
               echo "Onbekend automatisch updateschema" >&2
               exit 1
@@ -401,34 +384,45 @@ jobs:
             echo "RUN_IMPORT=$run_import"
             echo "UPDATE_MODE=$update_mode"
             echo "CATALOG_BATCH=$catalog_batch"
-            echo "PRICE_SHARD_COUNT=7"
-            echo "PRICE_SHARD_INDEX=$price_shard"
-            echo "PRICE_CYCLE_INDEX=$((10#$(date -u +%V) - 1))"
-            echo "MAX_PRODUCTS=$max_products"
-            echo "MAX_NEW_PRODUCTS=$([[ "$update_mode" == "growth" ]] && echo "$max_products" || echo "100")"
-            echo "MAX_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "40" || echo "20")"
-            echo "MAX_PAGES_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "8" || echo "4")"
-            echo "GROWTH_MAX_PAGES_PER_TERM=20"
-            echo "GROWTH_MAX_TOTAL_PAGES=800"
-            echo "GROWTH_MAX_CANDIDATES=6000"
-            echo "GROWTH_MAX_RUNTIME_MINUTES=105"
             echo "NAVIGATION_RETRIES=2"
-            echo "SATURATION_MIN_CANDIDATES=40"
-            echo "SATURATION_YIELD_PERCENT=5"
-            echo "CATALOG_NEW_ONLY=1"
             echo "IMPORT_TRIGGER=$([[ "$update_mode" == "growth" && "$import_trigger" == "manual" ]] && echo "test" || echo "$import_trigger")"
-            echo "DISCOVERY_STATE_KEY=$discovery_state_key"
             echo "DAILY_IMPORT_JOB=$daily_import_job"
             echo "RECOVER_FAILED_DAILY=$recover_failed_daily"
             echo "SUPERSEDE_FAILED_DAILY=$supersede_failed_daily"
-            echo "DAILY_IMPORT_STATE_KEY=daily-catalog-growth"
-            echo "DAILY_NEW_PRODUCT_TARGET=$max_products"
             echo "DAILY_IMPORT_END_HOUR=23"
-            echo "ADVANCE_DISCOVERY_STATE=$advance_discovery_state"
-            echo "PREFER_NEW_PRODUCTS=$([[ "$update_mode" == "growth" && "$advance_discovery_state" == "0" ]] && echo "0" || echo "1")"
+            if [[ "$update_mode" == "maintenance" ]]; then
+              echo "MAINTENANCE_MAX_LISTING_WINDOWS=800"
+              echo "MAINTENANCE_MAX_DETAIL_FALLBACKS=500"
+            else
+              echo "PRICE_SHARD_COUNT=7"
+              echo "PRICE_SHARD_INDEX=$price_shard"
+              echo "PRICE_CYCLE_INDEX=$((10#$(date -u +%V) - 1))"
+              echo "MAX_PRODUCTS=$max_products"
+              echo "MAX_NEW_PRODUCTS=$([[ "$update_mode" == "growth" ]] && echo "$max_products" || echo "100")"
+              echo "MAX_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "40" || echo "20")"
+              echo "MAX_PAGES_PER_TERM=$([[ "$update_mode" == "growth" ]] && echo "8" || echo "4")"
+              echo "GROWTH_MAX_PAGES_PER_TERM=20"
+              echo "GROWTH_MAX_TOTAL_PAGES=800"
+              echo "GROWTH_MAX_CANDIDATES=6000"
+              echo "GROWTH_MAX_RUNTIME_MINUTES=105"
+              echo "SATURATION_MIN_CANDIDATES=40"
+              echo "SATURATION_YIELD_PERCENT=5"
+              echo "CATALOG_NEW_ONLY=1"
+              echo "DISCOVERY_STATE_KEY=$discovery_state_key"
+              echo "DAILY_IMPORT_STATE_KEY=daily-catalog-growth"
+              echo "ADVANCE_DISCOVERY_STATE=$advance_discovery_state"
+              echo "PREFER_NEW_PRODUCTS=$([[ "$update_mode" == "growth" && "$advance_discovery_state" == "0" ]] && echo "0" || echo "1")"
+              if [[ "$daily_import_job" == "1" ]]; then
+                echo "DAILY_NEW_PRODUCT_TARGET=$max_products"
+              fi
+            fi
           } >> "$GITHUB_ENV"
 
-          echo "Updateplan: mode=$update_mode, catalogusbatch=$catalog_batch, prijsdeelbatch=$price_shard/6"
+          if [[ "$update_mode" == "maintenance" ]]; then
+            echo "Updateplan: volledige dagelijkse listing/API-catalogusmaintenance"
+          else
+            echo "Updateplan: mode=$update_mode, catalogusbatch=$catalog_batch, prijsdeelbatch=$price_shard/7"
+          fi
 
       - name: Test Supabase verbinding
         if: env.RUN_IMPORT != '0'
@@ -480,9 +474,18 @@ jobs:
         if: env.RUN_IMPORT != '0'
         run: npm ci
 
-      - name: Chromium installeren
+      - name: Bestaande runner-Chrome selecteren
         if: env.RUN_IMPORT != '0'
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
 
       - name: Technische controles
         if: env.RUN_IMPORT != '0'
@@ -491,8 +494,10 @@ jobs:
       - name: Producten en prijzen bijwerken
         if: env.RUN_IMPORT != '0'
         run: |
-          if [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
+          if [[ "$UPDATE_MODE" == "maintenance" ]]; then
             npm run import:daily
+          elif [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
+            npm run import:daily-growth
           else
             npm run import
           fi
@@ -511,7 +516,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Geplande catalogusrun direct controleren
-        if: env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'growth' && env.IMPORT_TRIGGER == 'schedule'
+        if: env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'maintenance' && env.IMPORT_TRIGGER == 'schedule'
         run: npm run monitor:catalog
 
   falafel-e2e:
@@ -540,8 +545,6 @@ jobs:
         run: node scripts/falafel-e2e.mjs --validate-input
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Chromium installeren
-        run: npx --no-install playwright install --with-deps chromium
       - name: Run only the bounded falafel E2E
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
