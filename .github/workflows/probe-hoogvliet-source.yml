@@ -72,7 +72,7 @@ jobs:
         id: run_probe
         continue-on-error: true
         env:
-          PROBE_MAX_PAGES: ${{ github.ref == 'refs/heads/codex/debug-listing-window-limit-20261009' && '1500' || inputs.max_pages || '2' }}
+          PROBE_MAX_PAGES: ${{ github.ref == 'refs/heads/codex/debug-listing-window-limit-20261009' && '800' || inputs.max_pages || '2' }}
           PROBE_DAILY_MAX_PAGES: ${{ inputs.max_pages || '2' }}
           PROBE_SKIP_DAILY: ${{ github.ref == 'refs/heads/codex/debug-listing-window-limit-20261009' && '1' || '0' }}
           PROBE_OUTPUT: hoogvliet-current-catalog-proof.json
