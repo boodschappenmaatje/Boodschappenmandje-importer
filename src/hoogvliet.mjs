@@ -77,6 +77,17 @@ export function createSourcePacer({ delayMs = 2000, now = Date.now,
   };
 }
 const sourcePacers = new WeakMap();
+
+export function chromiumLaunchOptions(config = {}) {
+  const executablePath = typeof config.chromePath === "string" && config.chromePath.trim()
+    ? config.chromePath.trim()
+    : null;
+  return {
+    headless: config.headless !== false,
+    ...(executablePath ? { executablePath } : {}),
+  };
+}
+
 async function sourceGoto(page, url, options, requestContext = {}) {
   page.__hoogvlietRequestContext = { ...requestContext, requestURL: url };
   await sourcePacers.get(page)?.();
@@ -102,7 +113,7 @@ async function sourceGoto(page, url, options, requestContext = {}) {
 }
 
 export async function verifyNormalSourceAccess(config) {
-  const browser = await chromium.launch({ headless: config.headless });
+  const browser = await chromium.launch(chromiumLaunchOptions(config));
   try {
     const context = await browser.newContext({ locale: 'nl-NL', timezoneId: 'Europe/Amsterdam' });
     const page = await context.newPage();
@@ -1683,7 +1694,7 @@ export async function refreshExistingProducts(config, candidates, logger = conso
   const startedAt = Date.now();
   const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
   const persistBatchSize = Math.max(1, Math.min(options.persistBatchSize ?? 10, 25));
-  const browser = await chromium.launch({ headless: config.headless });
+  const browser = await chromium.launch(chromiumLaunchOptions(config));
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const detailPage = await context.newPage();
   const products = [];
@@ -1766,7 +1777,7 @@ export async function refreshExistingProducts(config, candidates, logger = conso
 // incomplete/challenged scans therefore cannot reach any database writer.
 export async function withDailyCatalogSource(config, handler) {
   if (typeof handler !== "function") throw new Error("Daily catalog handler ontbreekt.");
-  const browser = await chromium.launch({ headless: config.headless });
+  const browser = await chromium.launch(chromiumLaunchOptions(config));
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const listingPage = await context.newPage();
   const detailPage = await context.newPage();
@@ -1803,7 +1814,7 @@ export async function collectProducts(config, logger = console, options = {}) {
   const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
   const persistBatchSize = Math.max(1, Math.min(options.persistBatchSize ?? 10, 25));
   const existingSKUs = options.existingSKUs instanceof Set ? options.existingSKUs : new Set();
-  const browser = await chromium.launch({ headless: config.headless });
+  const browser = await chromium.launch(chromiumLaunchOptions(config));
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const searchPage = await context.newPage();
   const detailPage = await context.newPage();

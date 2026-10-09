@@ -474,9 +474,18 @@ jobs:
         if: env.RUN_IMPORT != '0'
         run: npm ci
 
-      - name: Chromium installeren
+      - name: Bestaande runner-Chrome selecteren
         if: env.RUN_IMPORT != '0'
-        run: npx playwright install --with-deps chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
 
       - name: Technische controles
         if: env.RUN_IMPORT != '0'
@@ -536,8 +545,6 @@ jobs:
         run: node scripts/falafel-e2e.mjs --validate-input
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts
-      - name: Chromium installeren
-        run: npx --no-install playwright install --with-deps chromium
       - name: Run only the bounded falafel E2E
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

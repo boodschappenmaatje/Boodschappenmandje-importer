@@ -222,6 +222,8 @@ export function formatDailyMaintenanceSummary(result) {
     `nieuw_gevonden=${stats.newSKUsDetected}`,
     `nieuw_geschreven=${result.newCount}`,
     `bestaande_prijsgewijzigd=${result.updatedCount}`,
+    `nieuw_zou_schrijven=${result.wouldInsertCount}`,
+    `bestaande_prijs_zou_schrijven=${result.wouldUpdateCount}`,
     `bestaande_prijsongewijzigd=${stats.unchangedExistingPrices}`,
     `last_known_good_behouden=${stats.unresolvedExistingPrices}`,
     `Production_only_of_verdwenen_behouden=${stats.productionOnlyOrMissingSKUs}`,
@@ -245,7 +247,8 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
   const existingProducts = await services.fetchExistingProducts(config);
   const existingPrices = await services.fetchExistingPriceStates(config);
   const totalUniqueProductsBefore = existingProducts.length;
-  const run = await services.startCatalogImportRun(config, {
+  const dryRun = config.dryRun === true;
+  const run = dryRun ? null : await services.startCatalogImportRun(config, {
     trigger: config.importTrigger,
     totalUniqueProductsBefore,
   });
@@ -265,21 +268,30 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
       });
     });
     assessment = sourceResult;
-    if (assessment.productsToWrite.length > 0) {
+    if (!dryRun && assessment.productsToWrite.length > 0) {
       writeResult = await services.upsertProducts(config, assessment.productsToWrite);
     }
-    const totalUniqueProductsAfter = (await services.fetchExistingSKUs(config)).size;
+    const existingSKUs = new Set(existingProducts.map(product => product.sku));
+    const wouldInsertCount = assessment.productsToWrite
+      .filter(product => !existingSKUs.has(product.sku)).length;
+    const wouldUpdateCount = assessment.productsToWrite.length - wouldInsertCount;
+    const totalUniqueProductsAfter = dryRun
+      ? totalUniqueProductsBefore
+      : (await services.fetchExistingSKUs(config)).size;
     const newCount = writeResult.imported.filter(product => product.inserted === true).length;
     const updatedCount = writeResult.imported.length - newCount;
     const errorCount = assessment.stats.unresolvedExistingPrices + writeResult.errors.length;
-    const status = errorCount > 0 ? "partial" : "success";
+    const status = dryRun ? "dry-run" : errorCount > 0 ? "partial" : "success";
     const result = {
       status,
+      dryRun,
       stats: assessment.stats,
       snapshot,
       processedCount: assessment.stats.currentCatalogSKUs,
       newCount,
       updatedCount,
+      wouldInsertCount,
+      wouldUpdateCount,
       unchangedCount: assessment.stats.unchangedExistingPrices,
       skippedCount: assessment.stats.invalidNewSKUs + assessment.stats.unresolvedExistingPrices,
       errorCount,
@@ -290,24 +302,26 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
         ? `${assessment.stats.unresolvedExistingPrices} bestaande prijsstatussen behielden last-known-good; ${writeResult.errors.length} schrijffouten.`
         : null,
     };
-    await services.finishCatalogImportRun(config, run, result);
+    if (run) await services.finishCatalogImportRun(config, run, result);
     logger.info(formatDailyMaintenanceSummary(result));
     return result;
   } catch (error) {
     const totalUniqueProductsAfter = await services.fetchExistingSKUs(config)
       .then(skus => skus.size)
       .catch(() => totalUniqueProductsBefore);
-    await services.finishCatalogImportRun(config, run, {
-      status: "failed",
-      processedCount: assessment?.stats?.currentCatalogSKUs ?? 0,
-      newCount: 0,
-      updatedCount: 0,
-      unchangedCount: assessment?.stats?.unchangedExistingPrices ?? 0,
-      skippedCount: assessment?.stats?.invalidNewSKUs ?? 0,
-      errorCount: 1,
-      totalUniqueProductsAfter,
-      errorSummary: error instanceof Error ? error.message : "onbekende maintenancefout",
-    });
+    if (run) {
+      await services.finishCatalogImportRun(config, run, {
+        status: "failed",
+        processedCount: assessment?.stats?.currentCatalogSKUs ?? 0,
+        newCount: 0,
+        updatedCount: 0,
+        unchangedCount: assessment?.stats?.unchangedExistingPrices ?? 0,
+        skippedCount: assessment?.stats?.invalidNewSKUs ?? 0,
+        errorCount: 1,
+        totalUniqueProductsAfter,
+        errorSummary: error instanceof Error ? error.message : "onbekende maintenancefout",
+      });
+    }
     throw error;
   }
 }
@@ -323,7 +337,6 @@ export async function main(argv = process.argv.slice(2)) {
   if (config.updateMode !== "maintenance") {
     throw new Error("Dagelijkse catalogusmaintenance vereist UPDATE_MODE=maintenance.");
   }
-  if (config.dryRun) throw new Error("Dagelijkse catalogusmaintenance ondersteunt geen DRY_RUN.");
   config.productTypeSupported = await hasProductTypeColumn(config);
   return runDailyCatalogMaintenance(config);
 }

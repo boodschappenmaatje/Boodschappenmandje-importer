@@ -7,6 +7,7 @@ import { nextEmptySourceSearchCount } from '../src/hoogvliet.mjs';
 const primary = readFileSync(new URL('../.github/workflows/import-hoogvliet-poc.yml', import.meta.url), 'utf8');
 const monitor = readFileSync(new URL('../.github/workflows/monitor-catalog-import.yml', import.meta.url), 'utf8');
 const retry = readFileSync(new URL('../.github/workflows/retry-daily-catalog-import.yml', import.meta.url), 'utf8');
+const manual = readFileSync(new URL('../.github/workflows/manual-daily-catalog-maintenance.yml', import.meta.url), 'utf8');
 
 function cronEntries(workflow) {
   return [...workflow.matchAll(/^\s+- cron: "([^"]+)"$/gm)].map(([, cron]) => cron);
@@ -103,10 +104,31 @@ test('normale daily maintenance heeft volledige dekking; legacy cap blijft allee
   assert.match(retry, /UPDATE_MODE: maintenance/);
   assert.doesNotMatch(retry, /DAILY_NEW_PRODUCT_TARGET|MAX_NEW_PRODUCTS|PRICE_SHARD_COUNT|PRICE_SHARD_INDEX/);
   assert.match(retry, /group: hoogvliet-supabase-update/);
+  assert.match(primary, /command -v google-chrome/);
+  assert.match(retry, /command -v google-chrome/);
+  assert.doesNotMatch(primary, /playwright install --with-deps chromium/);
+  assert.doesNotMatch(retry, /playwright install --with-deps chromium/);
 
   assert.doesNotMatch(primary, /- cron: "17 2 \* \* \*"|- cron: "43 3 \* \* 0"/);
   assert.match(monitor, /npm run monitor:catalog/);
   assert.match(monitor, /UPDATE_MODE: maintenance/);
   assert.doesNotMatch(monitor, /CATALOG_MONITOR_GROWTH_TARGET|DAILY_NEW_PRODUCT_TARGET/);
   assert.match(monitor, /group: hoogvliet-catalog-monitor/);
+});
+
+test('handmatige full maintenance gebruikt dezelfde orchestrator en is fail-closed voor writes', () => {
+  assert.match(manual, /^on:\n  workflow_dispatch:/m);
+  assert.match(manual, /mode:[\s\S]*?- dry-run[\s\S]*?- write/);
+  assert.match(manual, /DRY_RUN: \$\{\{ inputs\.mode == 'dry-run' && '1' \|\| '0' \}\}/);
+  assert.match(manual, /UPDATE_MODE: maintenance/);
+  assert.match(manual, /CATALOG_BATCH: growth/);
+  assert.match(manual, /IMPORT_TRIGGER: manual/);
+  assert.match(manual, /RUN_DAILY_MAINTENANCE_WRITE/);
+  assert.match(manual, /GITHUB_REF.*refs\/heads\/main/);
+  assert.match(manual, /group: hoogvliet-supabase-update/);
+  assert.match(manual, /cancel-in-progress: false/);
+  assert.match(manual, /npm run import:daily/);
+  assert.match(manual, /command -v google-chrome/);
+  assert.doesNotMatch(manual, /import:daily-growth|DAILY_NEW_PRODUCT_TARGET|MAX_NEW_PRODUCTS|playwright install/);
+  assert.doesNotMatch(manual, /^\s*(schedule|push|pull_request):/m);
 });

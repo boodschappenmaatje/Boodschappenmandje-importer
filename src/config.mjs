@@ -169,6 +169,7 @@ export function loadConfig(env = process.env) {
   const config = {
     dryRun,
     headless: env.HEADLESS !== "0",
+    chromePath: env.CHROME_PATH?.trim() || null,
     updateMode,
     catalogBatch: hasSearchOverride ? "custom" : catalogBatch,
     maxProducts,

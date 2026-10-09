@@ -9,7 +9,11 @@ import {
   runDailyCatalogMaintenance,
 } from "../src/daily-catalog-maintenance.mjs";
 import { loadConfig } from "../src/config.mjs";
-import { catalogAPIPriceState, SourceUnavailableError } from "../src/hoogvliet.mjs";
+import {
+  catalogAPIPriceState,
+  chromiumLaunchOptions,
+  SourceUnavailableError,
+} from "../src/hoogvliet.mjs";
 
 const now = new Date("2026-10-08T08:00:00Z");
 
@@ -173,6 +177,39 @@ test("tijdelijke bronfout tijdens aanbieding bereikt geen prijswriter", async ()
   assert.equal(writes, 0);
 });
 
+test("handmatige maintenance-dry-run beoordeelt dezelfde volledige flow zonder run- of datawrites", async () => {
+  const current = existing();
+  const freshSKU = "987654321";
+  const forbidden = async () => { throw new Error("dry-run writer aangeroepen"); };
+  const result = await runDailyCatalogMaintenance({
+    dryRun: true,
+    importTrigger: "manual",
+    maintenanceMaxDetailFallbacks: 500,
+  }, { info() {}, error() {} }, {
+    fetchExistingProducts: async () => [current],
+    fetchExistingPriceStates: async () => new Map([[current.id, price(current)]]),
+    fetchExistingSKUs: forbidden,
+    startCatalogImportRun: forbidden,
+    finishCatalogImportRun: forbidden,
+    upsertProducts: forbidden,
+    withDailyCatalogSource: async (_config, handler) => handler({
+      candidates: [
+        candidate(current.sku, state({ price: 2.79 })),
+        candidate(freshSKU, null),
+      ],
+      snapshot: { pagesFetched: 2, catalogAPICalls: 2 },
+      validateFallback: async item => item.sku === freshSKU ? validatedNew(freshSKU) : null,
+    }),
+  });
+  assert.equal(result.status, "dry-run");
+  assert.equal(result.dryRun, true);
+  assert.equal(result.newCount, 0);
+  assert.equal(result.updatedCount, 0);
+  assert.equal(result.wouldInsertCount, 1);
+  assert.equal(result.wouldUpdateCount, 1);
+  assert.equal(result.totalUniqueProductsAfter, result.totalUniqueProductsBefore);
+});
+
 test("null en nulprijs overschrijven geen bestaande geldige prijs", async () => {
   const product = existing();
   for (const invalid of [null, state({ price: 0 })]) {
@@ -239,9 +276,19 @@ test("watchdog gebruikt dagelijkse runstatus zonder 400-doel", () => {
 });
 
 test("maintenanceconfig heeft volledige listingdekking en alleen een detail-safetycap", () => {
-  const config = loadConfig({ DRY_RUN: "1", UPDATE_MODE: "maintenance", CATALOG_BATCH: "growth" });
+  const config = loadConfig({
+    DRY_RUN: "1",
+    UPDATE_MODE: "maintenance",
+    CATALOG_BATCH: "growth",
+    CHROME_PATH: "/usr/bin/google-chrome",
+  });
   assert.equal(config.maintenanceMaxListingWindows, 800);
   assert.equal(config.maintenanceMaxDetailFallbacks, 500);
+  assert.equal(config.chromePath, "/usr/bin/google-chrome");
+  assert.deepEqual(chromiumLaunchOptions(config), {
+    headless: true,
+    executablePath: "/usr/bin/google-chrome",
+  });
   assert.deepEqual(config.searchTerms, ["catalog:root"]);
 });
 

@@ -1,0 +1,120 @@
+name: Handmatige volledige Hoogvliet-maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Dry-run is read-only; write vereist main en exacte bevestiging
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - write
+      confirm_write:
+        description: Typ exact RUN_DAILY_MAINTENANCE_WRITE voor write; laat leeg voor dry-run
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Dezelfde mutex als schedule, retry en expliciete SKU-import.
+concurrency:
+  group: hoogvliet-supabase-update
+  cancel-in-progress: false
+
+jobs:
+  full-daily-maintenance:
+    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
+      PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      HEADLESS: "1"
+      UPDATE_MODE: maintenance
+      CATALOG_BATCH: growth
+      MAINTENANCE_MAX_LISTING_WINDOWS: "800"
+      MAINTENANCE_MAX_DETAIL_FALLBACKS: "500"
+      NAVIGATION_RETRIES: "2"
+      IMPORT_TRIGGER: manual
+      DRY_RUN: ${{ inputs.mode == 'dry-run' && '1' || '0' }}
+      MANUAL_MAINTENANCE_MODE: ${{ inputs.mode }}
+      MANUAL_MAINTENANCE_CONFIRM: ${{ inputs.confirm_write }}
+
+    steps:
+      - name: Dispatchintentie fail-closed valideren
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$MANUAL_MAINTENANCE_MODE" == "dry-run" ]]; then
+            if [[ -n "$MANUAL_MAINTENANCE_CONFIRM" ]]; then
+              echo 'Dry-run vereist een lege writebevestiging.' >&2
+              exit 1
+            fi
+          elif [[ "$MANUAL_MAINTENANCE_MODE" == "write" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo 'Maintenance-write is uitsluitend vanaf main toegestaan.' >&2
+              exit 1
+            fi
+            if [[ "$MANUAL_MAINTENANCE_CONFIRM" != "RUN_DAILY_MAINTENANCE_WRITE" ]]; then
+              echo 'Exacte writebevestiging ontbreekt; maintenance-write geweigerd.' >&2
+              exit 1
+            fi
+          else
+            echo 'Onbekende handmatige maintenance-mode.' >&2
+            exit 1
+          fi
+
+      - name: Checkout exact dispatch commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Bestaande runner-Chrome selecteren
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
+
+      - name: Verplichte regressies uitvoeren
+        run: npm test
+
+      # Exact dezelfde orchestrator als schedule en retry. DRY_RUN voorkomt
+      # runregistratie, productwrites en prijswrites in de read-only mode.
+      - name: Volledige dagelijkse maintenance uitvoeren
+        run: npm run import:daily
+
+      - name: Uitkomst samenvatten
+        if: always()
+        run: |
+          {
+            echo '## Handmatige volledige catalogusmaintenance'
+            echo "Mode: $MANUAL_MAINTENANCE_MODE"
+            if [[ "$MANUAL_MAINTENANCE_MODE" == "dry-run" ]]; then
+              echo 'Read-only: geen runregistratie, productwrite of prijswrite.'
+            else
+              echo 'Write is vooraf vanaf main en met exacte bevestiging vrijgegeven.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

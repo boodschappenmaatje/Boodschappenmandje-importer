@@ -29,6 +29,8 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/import-explicit-skus.yml
+      - src/config.mjs
+      - src/hoogvliet.mjs
       - data/hoogvliet-missing-production-2026-10-06.csv
       - data/hoogvliet-missing-production-2026-10-08-residual.csv
       - data/hoogvliet-missing-production-2026-10-08-final.csv
@@ -89,8 +91,17 @@ jobs:
       - name: Dependencies installeren
         run: npm ci
 
-      - name: Chromium installeren
-        run: npx playwright install --with-deps chromium
+      - name: Bestaande runner-Chrome selecteren
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
 
       # This runner invokes only npm run import:skus with an allowlisted trusted CSV source.
       - name: Explicit SKU integrity, write precheck and bounded import
