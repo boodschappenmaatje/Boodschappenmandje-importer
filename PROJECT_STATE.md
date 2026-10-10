@@ -1,3 +1,15 @@
+# Checkpoint — zichtbare Knorr dry-run-uitkomst — 10 oktober 2026
+
+- Basis: remote `main` **`1e8330bd95ed1cbda940a5e7f63211bcaaaab1f9`** bevat gemergede PR #80. PR #70 blijft open/Draft/ongemergd en is niet gewijzigd. GitHub Actions-run `38090505561` / job `114325781790` eindigde succesvol vanaf deze main-SHA, maar na de runnerstap volgde direct cleanup zonder JSON-resultaatregel.
+- Bewezen oorzaak: `runKnorrRecipeLinks` gaf het succesvolle resultaat door aan `dependencies.log`, waarvan de standaardimplementatie `() => {}` was. Het CLI-entrypoint schreef alleen in de `.catch`-fouttak JSON naar stderr. Daardoor kon de succesvolle Promise afronden en Node met exitcode 0 stoppen zonder enige stdout-uitkomst; er was geen bewijs in die joblog dat de zeven kandidaten geldig waren.
+- Reparatie: de kernrunner retourneert uitsluitend zijn resultaat. Het CLI-entrypoint valideert daarna opnieuw het succesvolle preflight-/allowlist-/writecontract en schrijft exact één veilige JSON-regel met `status`, `evaluationMode`, `candidatesChecked`, `validLinks`, uitgesplitste en totale writes en `stopReason`. Een ontbrekend of ongeldig resultaat stopt met `runner_result_missing_or_invalid`; preflight-, timeout- en andere fouten blijven een gestructureerde `stopped`-regel geven en zetten de exitcode op 1.
+- Alle bestaande grenzen blijven intact: zeven vaste mappings, dry-run-default, Production-auth en bypass, vaste 20-seconden-preflightdeadline, geen retries, writeconfirmation, branch-/attemptguard, readinesscontract en partial-write stop. Workflow en Production-code zijn niet gewijzigd.
+- Verificatie: gerichte runner-suite **15/15** groen, inclusief zichtbare succesvolle dry-run, ontbrekend resultaat, ongeldige preflight, timeout en nul databasewrites. Root `npm test` **459/459** groen; `npm run check`, `node --check scripts/run-knorr-recipe-links.mjs` en `git diff --check` groen.
+- Branch `codex/knorr-dry-run-result-output-20261010`; Draft PR [#81](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/81). Lokale fixtures bewijzen het uitvoercontract, niet dat de historische groene run 7/7 was. Definitieve acceptatie vereist na review/merge/deployment één afzonderlijk toegestane dry-run vanaf de nieuwe main; die moet de nieuwe JSON-regel tonen en live 7/7 plus nul writes bewijzen.
+- Production-writes **0**; geen Production-POST, workflowdispatch, recipe-link-write, readiness-refresh, databasewrite, migratie, merge, secretwijziging of Production-deployment uitgevoerd.
+
+---
+
 # Checkpoint — begrensde Knorr Production-preflight — 10 oktober 2026
 
 - Basis: remote main `42401a024b3513299d152bfb157d9690a8103a16` bevat gemergede PR #79. De handmatige dry-run van 21:56 UTC startte correct maar stopte vóór responseheaders met `production_preflight_timeout`, fase `response_headers`, na de vaste 20-seconden-deadline; `changedSkus=[]` en `readinessRefreshedSkus=[]`. PR #70 blijft open/Draft/ongemergd en is niet gewijzigd.
