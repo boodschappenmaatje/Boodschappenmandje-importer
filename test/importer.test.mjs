@@ -244,7 +244,7 @@ test("bronstatus gebruikt het Playwright page.evaluate-contract met één object
       body: { innerText: "Geen producten gevonden" },
       documentElement: { outerHTML: "<main></main>" },
       location: { pathname: "/aardappelen-groente-fruit?page=2" },
-      querySelector: () => ({}),
+      querySelector: selector => selector.includes("catalog-listing") ? {} : null,
       querySelectorAll: selector => selector.includes("empty") ? [emptyMarker] : [],
     },
   });
@@ -260,7 +260,7 @@ test("bronstatus gebruikt het Playwright page.evaluate-contract met één object
       assert.equal(args.length, 2, "page.evaluate accepts one serializable argument after the callback");
       const [callback, argument] = args;
       assert.equal(typeof callback, "function");
-      assert.deepEqual(argument, { selector: ".product-tile", responseStatus: 200 });
+      assert.deepEqual(argument, { responseStatus: 200, expectedSelector: ".product-tile" });
       return callback(argument);
     },
   };
