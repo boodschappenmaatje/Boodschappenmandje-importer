@@ -1294,10 +1294,13 @@ export async function collectCatalogListing(page, routeURL, {
   while (!shouldStop() && windows.length < maxWindows) {
     const windowSnapshot = await snapshot();
     const { fresh, rawDOM, signature } = windowSnapshot;
-    if (windows.length === 0 && fresh.length === 0
-      && (await extractCatalogCategoryLinks(page)).length > 0) {
-      naturalExhaustion = true;
-      break;
+    if (windows.length === 0 && fresh.length === 0) {
+      const initialEvidence = windowSnapshot.pageEvidence ?? await readCatalogPageEvidence(page);
+      if (initialEvidence.hasStrongExplicitEmptyState
+        || (await extractCatalogCategoryLinks(page)).length > 0) {
+        naturalExhaustion = true;
+        break;
+      }
     }
     if (windowSnapshot.explicitEmptyTerminal) {
       naturalExhaustion = true;
