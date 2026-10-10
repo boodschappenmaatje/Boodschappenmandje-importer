@@ -401,19 +401,19 @@ export function classifySourcePageEvidence(evidence = {}) {
   }
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
   if (evidence.hasExpectedContent) return "ready";
-  if (evidence.hasStrongExplicitEmptyState) return "valid_empty_search";
-  if (evidence.hasCatalogStructure) return "ready";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
   // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
   // geldige productresponse; alleen de verwachte inhoud is dat.
   if (evidence.hasIncapsula) return "security_check";
+  if (evidence.hasStrongExplicitEmptyState) return "valid_empty_search";
+  if (evidence.hasCatalogStructure) return "ready";
   if (evidence.hasSearchStructure || evidence.hasCatalogStructure) return "parser_structure_changed";
   return "parser_structure_changed";
 }
 
-async function readCatalogPageEvidence(page) {
-  return page.evaluate(({ responseStatus }) => {
+async function readCatalogPageEvidence(page, expectedSelector = null) {
+  return page.evaluate(({ responseStatus, expectedSelector }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     const listingShellSelector = [
       "main[id*='catalog-listing' i]",
@@ -492,7 +492,9 @@ async function readCatalogPageEvidence(page) {
       responseStatus,
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
-      hasExpectedContent: productLinks > 0,
+      hasExpectedContent: productLinks > 0 || Boolean(expectedSelector && document.querySelector(expectedSelector)),
+      hasSearchStructure: productLinks > 0,
+      hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten" || hasListingShell,
       hasListingShell,
       hasExplicitEmptyState,
@@ -507,7 +509,7 @@ async function readCatalogPageEvidence(page) {
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
-  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null });
+  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null, expectedSelector });
 }
 async function waitForCatalogSource(page, options = {}) {
   const expectCategoryLinks = options.expectCategoryLinks === true;
@@ -572,24 +574,7 @@ async function waitForCatalogSource(page, options = {}) {
 }
 
 async function readSourcePageEvidence(page, expectedSelector = null) {
-  return page.evaluate(({ selector, responseStatus }) => {
-    const text = (document.body?.innerText ?? "").toLowerCase();
-    return {
-      responseStatus,
-      captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
-      denied: /access denied|toegang geweigerd|forbidden/.test(text),
-      hasExpectedContent: Boolean(selector && document.querySelector(selector)),
-      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 resultaten/.test(text),
-      hasSearchStructure: Boolean(document.querySelector("a[href*='/product/']")),
-      hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
-      hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
-      bodyTextLength: text.trim().length,
-      htmlLength: document.documentElement?.outerHTML?.length ?? 0,
-    };
-  }, {
-    selector: expectedSelector,
-    responseStatus: page.__hoogvlietLastResponseStatus ?? null,
-  });
+  return readCatalogPageEvidence(page, expectedSelector);
 }
 
 async function detectBlocking(page, expectedSelector = null) {
