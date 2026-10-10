@@ -401,7 +401,7 @@ export function classifySourcePageEvidence(evidence = {}) {
   }
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
   if (evidence.hasExpectedContent || evidence.hasCatalogStructure) return "ready";
-  if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) return "valid_empty_search";
+  if (evidence.hasStrongExplicitEmptyState) return "valid_empty_search";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
   // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
@@ -463,6 +463,8 @@ async function readCatalogPageEvidence(page) {
     const emptySignalType = emptyMatch?.match === "nul_producten"
       ? "zero_product_count"
       : emptyMatch ? "body_text_phrase" : "none";
+    const hasStrongExplicitEmptyState = hasExplicitEmptyState
+      && emptyStrength === "strong" && emptyVisible === "true";
     const productLinks = document.querySelectorAll("a[href*='/product/']").length;
     const categoryLinks = [...document.querySelectorAll("a[href]")]
       .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
@@ -483,6 +485,7 @@ async function readCatalogPageEvidence(page) {
       hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten" || hasListingShell,
       hasListingShell,
       hasExplicitEmptyState,
+      hasStrongExplicitEmptyState,
       hasZeroProductCount,
       emptySignalType,
       emptyMatch: emptyMatch?.match ?? "none",
@@ -1233,13 +1236,13 @@ export async function collectCatalogListing(page, routeURL, {
       categoryLinkCount = (await extractCatalogCategoryLinks(page)).length;
       shellClassification = evidence.hasListingShell || evidence.hasCatalogStructure || categoryLinkCount > 0
         ? "valid_catalog_shell" : "no_catalog_shell";
-      explicitEmptyClassification = evidence.hasExplicitEmptyState || evidence.hasZeroProductCount
-        ? "explicit_empty" : "not_explicitly_empty";
+      explicitEmptyClassification = evidence.hasStrongExplicitEmptyState
+        ? "explicit_empty"
+        : evidence.emptyStrength === "weak" ? "weak_signal" : "not_explicitly_empty";
       const loadedExpectedShell = Number(evidence.responseStatus) >= 200
         && Number(evidence.responseStatus) < 400
         && (evidence.hasCatalogStructure || categoryLinkCount > 0)
-        && !evidence.hasExplicitEmptyState
-        && !evidence.hasZeroProductCount
+        && !evidence.hasStrongExplicitEmptyState
         && evidence.productLinks === 0;
       fallbackEligible = loadedExpectedShell && Boolean(listingFallback?.attempt);
       if (loadedExpectedShell && !listingFallback?.attempt) eligibilityReason = "fallback_provider_unavailable";
@@ -1247,7 +1250,7 @@ export async function collectCatalogListing(page, routeURL, {
       else if (Number(evidence.responseStatus) < 200 || Number(evidence.responseStatus) >= 400) {
         eligibilityReason = "primary_response_status_not_successful";
       } else if (evidence.productLinks > 0) eligibilityReason = "primary_has_product_links_parser_returned_none";
-      else if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) eligibilityReason = "explicit_empty_status";
+      else if (evidence.hasStrongExplicitEmptyState) eligibilityReason = "explicit_empty_status";
       else if (!(evidence.hasCatalogStructure || categoryLinkCount > 0)) eligibilityReason = "catalog_shell_not_proven";
       else eligibilityReason = "expected_next_not_fallback_eligible";
       if (fallbackEligible) {
@@ -1283,6 +1286,8 @@ export async function collectCatalogListing(page, routeURL, {
       fallbackAttemptReason,
       responseStatus: evidence?.responseStatus ?? page.__hoogvlietLastResponseStatus ?? null,
       pageEvidence: evidence,
+      explicitEmptyTerminal: expectedByNext && evidence?.hasStrongExplicitEmptyState === true
+        && rawDOM.length === 0,
     };
   };
 
@@ -1291,6 +1296,10 @@ export async function collectCatalogListing(page, routeURL, {
     const { fresh, rawDOM, signature } = windowSnapshot;
     if (windows.length === 0 && fresh.length === 0
       && (await extractCatalogCategoryLinks(page)).length > 0) {
+      naturalExhaustion = true;
+      break;
+    }
+    if (windowSnapshot.explicitEmptyTerminal) {
       naturalExhaustion = true;
       break;
     }
@@ -1304,8 +1313,9 @@ export async function collectCatalogListing(page, routeURL, {
           ? "valid_catalog_shell" : "no_catalog_shell");
       const diagnosticExplicitEmpty = windowSnapshot.explicitEmptyClassification !== "not_checked"
         ? windowSnapshot.explicitEmptyClassification
-        : (diagnosticEvidence?.hasExplicitEmptyState || diagnosticEvidence?.hasZeroProductCount
-          ? "explicit_empty" : "not_explicitly_empty");
+        : (diagnosticEvidence?.hasStrongExplicitEmptyState
+          ? "explicit_empty"
+          : diagnosticEvidence?.emptyStrength === "weak" ? "weak_signal" : "not_explicitly_empty");
       const reason = windowSnapshot.eligibilityReason;
       stallDiagnostic = {
         route: normalizeCatalogCategoryURL(routeURL) ?? "[invalid-route]",
