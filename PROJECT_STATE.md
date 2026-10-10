@@ -1,3 +1,43 @@
+# Checkpoint — handmatige Zyte read-only proofworkflow — 10 oktober 2026
+
+## Technische proofstap
+
+- Op branch `codex/hoogvliet-listing-fallback-1a1-20261010` / Draft PR [#66](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/66) staat nu een afzonderlijke `workflow_dispatch`-workflow: `.github/workflows/manual-zyte-listing-proof.yml`. Er is geen schedule, push- of pull-requesttrigger.
+- `scripts/probe-zyte-listing-windows.mjs` doet hard gecodeerd exact zes sequentiële Zyte `browserHtml`-requests: eerst 3× `https://hoogvliet.nl/chips-zoutjes-noten/q/page/4`, daarna 3× `https://hoogvliet.nl/chips-zoutjes-noten/q/page/1`. Iedere call heeft één timeout van maximaal 60 seconden; er is geen retry, extra URL of providerfailover.
+- De provider-HTML wordt offline door de bestaande `extractCatalogListingCandidates`-parser verwerkt. Subresources worden geblokkeerd. Per call worden alleen requestnummer, doel-URL, API-/bronstatus, veilige uiteindelijke Hoogvliet-URL, latency, HTML-bytecount, raw candidates, unieke SKU-count, hydratatiestatus en listingidentiteit gelogd. HTML, API-key en Authorization-header worden niet gelogd.
+- `ZYTE_API_KEY` komt uitsluitend uit GitHub Actions secrets en is alleen beschikbaar in de secretcheck en proofstap. Checkout, dependencyinstallatie en Chrome-selectie krijgen de secret niet. Ontbrekende configuratie stopt vóór browser- of netwerk-I/O.
+
+## Schrijfgrens, verificatie en overdracht
+
+- Het proofscript importeert alleen Playwright en bestaande read-only Hoogvliet-parserhelpers. De workflow bevat geen Supabase-config, databaseverbinding, importer, maintenance-orchestrator, runregistratie, product-/prijswriter, deployment of migratie. Er is nog steeds geen fallbackproductiecode toegevoegd.
+- Verificatie: gerichte proofregressies **5/5 groen**; `npm test` **417/417 groen**; `npm run check` groen; workflow-YAML parse geldig; `git diff --check` groen. PostgreSQL-tests zijn niet geraakt: deze wijziging heeft geen databasepad.
+- De workflow is niet gestart en PR #66 is niet gemerged. `workflow_dispatch` wordt in de GitHub Actions-UI pas bruikbaar nadat deze workflow via een afzonderlijk goedgekeurde merge op default branch `main` staat. Exact volgend Work-checkpoint: review PR #66, geef apart mergebesluit, merge via de normale procedure en start daarna eenmaal **Actions → Handmatige Zyte listingproof → Run workflow → main**. Stop na de zes read-only requests; geen maintenance-run of write-run.
+- `ROADMAP.md` blijft ongewijzigd en 1A.1 blijft open totdat de echte Zyte-proof groen is en de latere fallback afzonderlijk veilig is geïmplementeerd en bewezen.
+
+---
+
+# Checkpoint — roadmap 1A.1 providerbesluit; integratie wacht op live-proof — 10 oktober 2026
+
+## Actuele bronstoring en remote basis
+
+- Remote `main` en lokale basis zijn `f9fef2484ecae2fe588c76819e14005269082d8c` (PR #64 gemerged). Open PR's #54, #42, #41 en #21 raken deze listingfallback niet. PR #65 is gesloten zonder merge en wordt niet heropend.
+- De gezonde proof bewees 20 root/listingroutes, 359 listingwindows, 6.766 unieke actuele listing-SKU's en natuurlijke exhaustion onder de ongewijzigde 800-cap. Run `37989858110` bewees daarna tijdelijke non-hydratatie op `chips-zoutjes-noten/q/page/4`: nul raw SKU's waar een eerdere gezonde proof er 20 zag. Dry-run `38032494407` stopte fail-closed na 12/20 routes, 226 windows en 4.288 SKU's op `category_listing_stagnated`; GraphQL-/prijsfase en writer zijn niet bereikt.
+- Daarmee blijven traversal, cap en writer buiten de bewezen oorzaak. Echte stagnatie, repeated windows, loops, 404's, parserwijzigingen en caps moeten fail-closed blijven.
+
+## Provideronderzoek en besluit
+
+- Bright Data Web Unlocker en Zyte API kunnen beide één exacte URL server-side met JavaScript/anti-botondersteuning ophalen. Bright Data gebruikt voor de kleinste route een API-token plus Web Unlocker-zone en documenteert pay-per-success; Scraping Browser/remote CDP is voor één HTML-window onnodig zwaar. Zyte gebruikt één API-key en één `browserHtml`-POST met response-URL en past daardoor het kleinst vóór de bestaande parser.
+- Voorkeur voor de verplichte live-proof: **Zyte API**. De importer mag pas worden gekoppeld nadat `hoogvliet.nl`-support, actuele domeinprijs, latency en herhaalbare producthydratie met een echt account zijn bewezen. Zonder credentials zijn die feiten niet objectief vast te stellen; daarom is geen gokadapter aan het productiepad toegevoegd.
+- De exacte vergelijking, fallbacktrigger, toekomstige grenzen en maximaal-zes-request Work-proof staan in `docs/hoogvliet-listing-fallback-1a1.md`. Beoogde defaults: provider uit, maximaal 3 fallbackrequests/run (hard maximaal 10), één poging/window, 45 s timeout (hard maximaal 60 s), geen SDK-retry/providerfailover, secret alleen server-side en dezelfde parser/normalisatie/dedupe/GraphQL-pipeline.
+
+## Scope, branch en vervolg
+
+- Branch: `codex/hoogvliet-listing-fallback-1a1-20261010`; documentatiecommit `a5487fe`; Draft PR [#66](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/66). Geen importer-, workflow-, database-, migration-, delete-, budget-, gebruikersdata- of providerconfigwijziging; geen workflowdispatch, maintenance-run, Production-write, deployment of merge.
+- Verificatie op de actuele main-basis: `npm test` **412/412 groen**, `npm run check` groen en `git diff --check` groen. PostgreSQL-tests zijn niet geraakt of nodig voor deze documentatie-only providergate.
+- `ROADMAP.md` blijft ongewijzigd: 1A.1 is nog niet technisch afgerond. Exacte Work-stap: voer alleen de gedocumenteerde Zyte domain-pricing-check en read-only 3× probleemwindow + 3× controlewindow proof uit. Stop daarna zonder maintenance dry-run/write. Bij groen gaat de uitkomst terug naar Codex voor de minimale adapter en de tien regressies.
+
+---
+
 # Checkpoint — listing-window-limit root cause en fix — 9 oktober 2026
 
 ## Failure en bewezen hoofdoorzaak
