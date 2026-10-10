@@ -210,6 +210,11 @@ test("primary leeg en fallback leeg blijft onvolledig", async t => {
     unique_sku_count: 0,
     shell_classification: "valid_catalog_shell",
     explicit_empty_classification: "not_explicitly_empty",
+    empty_signal_type: "none",
+    empty_match: "none",
+    empty_source_selector: "none",
+    empty_visible: "unknown",
+    empty_strength: "none",
     fallback_eligible: true,
     fallback_eligibility_reason: "eligible_expected_next_non_hydrated",
     fallback_attempt_reason: "listing_unusable",
@@ -325,7 +330,7 @@ test("expliciete lege next-window status sluit Zyte uit en wordt diagnostisch va
   assert.equal(result.stallDiagnostic.explicit_empty_classification, "explicit_empty");
   assert.equal(result.stallDiagnostic.empty_signal_type, "body_text_phrase");
   assert.equal(result.stallDiagnostic.empty_match, "geen_producten");
-  assert.equal(result.stallDiagnostic.empty_source_selector, "main");
+  assert.equal(result.stallDiagnostic.empty_source_selector, "p");
   assert.equal(result.stallDiagnostic.empty_visible, "true");
   assert.equal(result.stallDiagnostic.empty_strength, "weak");
   assert.equal(result.stallDiagnostic.fallback_eligible, false);
@@ -347,7 +352,7 @@ test("een zichtbare generieke leegfrase wordt veilig als zwak signaal vastgelegd
   assert.equal(fallback.calls.length, 0);
   assert.equal(result.stallDiagnostic.explicit_empty_classification, "explicit_empty");
   assert.equal(result.stallDiagnostic.empty_match, "geen_producten");
-  assert.equal(result.stallDiagnostic.empty_source_selector, "body");
+  assert.equal(result.stallDiagnostic.empty_source_selector, "aside");
   assert.equal(result.stallDiagnostic.empty_visible, "true");
   assert.equal(result.stallDiagnostic.empty_strength, "weak");
 });
