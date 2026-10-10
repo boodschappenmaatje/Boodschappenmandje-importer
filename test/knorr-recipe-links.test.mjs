@@ -39,6 +39,7 @@ function fixture(options = {}) {
       const payload = JSON.parse(init.body);
       if (payload.preflight === true) {
         preflightCount += 1;
+        if (options.preflightException) throw options.preflightException;
         if (options.preflightError) throw new Error("fixture network failure");
         if (options.preflightStatus) return response({ error: "fixture" }, options.preflightStatus);
         const link = LINKS[0];
@@ -50,7 +51,9 @@ function fixture(options = {}) {
           })),
         };
         if (options.preflightWrongResponse) body.readinessWrites = 1;
-        return response(body);
+        const result = response(body);
+        if (options.preflightBodyException) result.json = async () => { throw options.preflightBodyException; };
+        return result;
       }
       readinessCount += 1;
       if (options.failReadinessAt === readinessCount) return response({ error: "fixture" }, 503);
@@ -142,6 +145,40 @@ test("authentication, route, timeout, and malformed preflight failures stop befo
     assert.equal(writes(testFixture.calls).length, 0);
     assert.equal(posts(testFixture.calls).length, 0);
   }
+});
+
+test("preflight separates timeouts, safe transport causes, HTTP failures, redirects, and invalid JSON without writes or secret output", async () => {
+  const privateMessage = "private-token-and-url-fixture";
+  for (const [options, code, details] of [
+    [{ preflightException: new DOMException(privateMessage, "TimeoutError") }, "production_preflight_timeout", { phase: "response_headers", transportCode: "unknown" }],
+    [{ preflightException: new TypeError(privateMessage, { cause: { code: "ENOTFOUND" } }) }, "production_preflight_network_error", { phase: "response_headers", transportCode: "ENOTFOUND" }],
+    [{ preflightException: new TypeError(privateMessage, { cause: { code: "UND_ERR_CONNECT_TIMEOUT" } }) }, "production_preflight_network_error", { phase: "response_headers", transportCode: "UND_ERR_CONNECT_TIMEOUT" }],
+    [{ preflightException: new TypeError(privateMessage, { cause: { code: privateMessage } }) }, "production_preflight_network_error", { phase: "response_headers", transportCode: "unknown" }],
+    [{ preflightBodyException: new DOMException(privateMessage, "TimeoutError") }, "production_preflight_timeout", { phase: "response_body" }],
+    [{ preflightBodyException: new SyntaxError(privateMessage) }, "production_preflight_invalid_json", { phase: "response_body" }],
+    [{ preflightStatus: 403 }, "production_preflight_http_403", undefined],
+    [{ preflightStatus: 503 }, "production_preflight_http_503", undefined],
+    [{ preflightStatus: 307 }, "production_preflight_redirect_rejected", undefined],
+  ]) {
+    const testFixture = fixture(options);
+    await assert.rejects(runKnorrRecipeLinks(envBase, { fetchImpl: testFixture.fetchImpl }), error => {
+      assert.equal(error.code, code);
+      assert.deepEqual(error.details, details);
+      assert.doesNotMatch(JSON.stringify(error), /private-token-and-url-fixture/);
+      return true;
+    });
+    assert.equal(testFixture.calls.length, 1);
+    assert.equal(writes(testFixture.calls).length, 0);
+    assert.equal(posts(testFixture.calls).length, 0);
+  }
+});
+
+test("an expired preflight deadline is classified as a timeout even when fetch reports AbortError", async (t) => {
+  t.mock.method(AbortSignal, "timeout", () => AbortSignal.abort(new DOMException("deadline", "TimeoutError")));
+  const testFixture = fixture({ preflightException: new DOMException("fixture", "AbortError") });
+  await assert.rejects(runKnorrRecipeLinks(envBase, { fetchImpl: testFixture.fetchImpl }), error =>
+    error.code === "production_preflight_timeout" && error.details.phase === "response_headers");
+  assert.equal(testFixture.calls.length, 1);
 });
 
 test("write links only seven profiles and calls the explicit readiness route once per pair", async () => {

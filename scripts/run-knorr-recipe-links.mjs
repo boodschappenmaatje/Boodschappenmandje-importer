@@ -157,12 +157,13 @@ function validateReadiness(body, link, changed, refreshed) {
 
 async function productionReadinessPreflight(fetchImpl, config) {
   const link = LINKS[0];
+  const signal = AbortSignal.timeout(20_000);
   let response;
   try {
     response = await fetchImpl(new URL(READINESS_PATH, config.planner), {
       method: "POST",
       redirect: "manual",
-      signal: AbortSignal.timeout(20_000),
+      signal,
       headers: {
         authorization: "Bearer " + config.adminToken,
         "x-vercel-protection-bypass": config.bypass,
@@ -171,14 +172,24 @@ async function productionReadinessPreflight(fetchImpl, config) {
       },
       body: JSON.stringify({ sku: link.sku, recipeId: link.recipeId, preflight: true }),
     });
-  } catch {
-    stop("production_preflight_network_or_timeout");
+  } catch (error) {
+    const transportCode = error?.cause?.code;
+    const safeTransportCodes = ["ENOTFOUND", "EAI_AGAIN", "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT",
+      "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_HEADERS_TIMEOUT", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"];
+    stop(signal.aborted || error?.name === "TimeoutError"
+      ? "production_preflight_timeout" : "production_preflight_network_error", [], [], {
+      phase: "response_headers",
+      transportCode: safeTransportCodes.includes(transportCode) ? transportCode : "unknown",
+    });
   }
   if (response.status >= 300 && response.status < 400) stop("production_preflight_redirect_rejected");
   if (!response.ok) stop("production_preflight_http_" + response.status);
   if (!response.headers.get("content-type")?.includes("application/json")) stop("production_preflight_wrong_content_type");
   let body;
-  try { body = await response.json(); } catch { stop("production_preflight_invalid_json"); }
+  try { body = await response.json(); } catch (error) {
+    stop(signal.aborted || error?.name === "TimeoutError"
+      ? "production_preflight_timeout" : "production_preflight_invalid_json", [], [], { phase: "response_body" });
+  }
   if (!body || body.sku !== link.sku || body.recipeId !== link.recipeId ||
       body.profileStatus !== "needs_review" || body.profilePromoted !== false ||
       body.matchCacheWrites !== 0 || body.readinessWrites !== 0 ||

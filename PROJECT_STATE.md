@@ -1,3 +1,15 @@
+# Checkpoint — Knorr preflight network/timeout-diagnose — 10 oktober 2026
+
+- Remote main `02577fef64bf4fd46d4acc125b63ae629531cfe2` bevat gemergede PR #78. De eerste handmatige dry-run `38087794048` draaide vanaf die SHA en faalde met `production_preflight_network_or_timeout`; `changedSkus=[]`, `readinessRefreshedSkus=[]`. PR #70 blijft open/Draft/ongemerged.
+- Request: POST naar `https://boodschappenmaatje-pwa.vercel.app/api/internal/planner-readiness/explicit-recipe-refresh`, `redirect: manual`, deadline 20.000 ms, bestaande Bearer-auth plus Vercel bypass-header, één exact allowlisted paar en `preflight: true`. De route ondersteunt dit met `persist: false`. Production-alias wijst naar Ready-deployment `dpl_FBcZmqr4PWy2Ei85dMKFGTKo8yro` van dezelfde main-SHA.
+- De precieze historische transport-/vertragingsreden is niet bewezen. GitHub runmetadata is beschikbaar, maar ophalen van run-/joblogs geeft HTTP 403. Vercel geeft geen passende runtime-logs/errors in 21:29–21:31 UTC; ontbrekende applicatielogs bewijzen geen ontbrekende invocation. De lokale HEAD-controle werd vóór TLS door de workspaceproxy geweigerd (CONNECT 403); dit is geen bewijs over GitHub→Production. Vercel protection-/redirectblokkade of trage evaluator is niet vastgesteld.
+- Wel bewezen codegebrek: de catch gooide iedere oorspronkelijke fetch-fout weg en voegde netwerkfouten en timeout samen. Een timeout tijdens response-body-read werd bovendien als invalid JSON gemeld.
+- Kleinste diagnostische fix op `codex/knorr-preflight-error-diagnosis-20261010`: aparte timeout-/network-/HTTP-/redirect-/JSON-codes, herkenning van verlopen AbortSignal en TimeoutError, vaste requestfase en uitsluitend allowlisted transportcodes. Geen exceptionmessages, headers, secrets of vrije URLs worden gelogd. Deadline, authketen, preflight-payload, route/service, zeven mappings, write-confirmation en partial-write stop zijn behouden. Geen retry toegevoegd.
+- Gerichte Knorr regressies **11/11** groen, inclusief headers-/body-timeout, AbortError bij verlopen deadline, DNS/connect-timeout, HTTP/redirect, secretredactie en nul writes na falen; `node --check` en `git diff --check` groen. Draft PR [#79](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/79), codecommit `4053fa3`; dit is een diagnosefix en bewijst nog niet de oorzaak van de historische run.
+- Production-writes **0**; geen workflowdispatch, Production POST/readiness-refresh, databasewrite, merge of Production-deployment uitgevoerd. Volgende bewijsstap: read-only Vercel request/invocation-trace voor deze route in het runvenster correleren met ontvangst, status en duur. Geen nieuwe dry-run zonder afzonderlijke toestemming.
+
+---
+
 # Checkpoint — GitHub Actions HTTP 422 Knorr-workflow — 10 oktober 2026
 
 - Basis: remote main `f3498711e6a06c3f8aba42e945f74bd73b6645cc` (PR #77 gemerged). PR #70 blijft open/Draft/ongemerged en is niet gewijzigd.
