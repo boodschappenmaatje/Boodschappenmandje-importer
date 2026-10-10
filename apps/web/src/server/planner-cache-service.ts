@@ -238,8 +238,13 @@ export function rowsForGate(
   return { matchRows, readinessRows };
 }
 
-export async function loadCatalog(client: SupabaseClient): Promise<RecipeCatalog> {
-  const loaded = await new SupabaseRecipeRepository(client).loadCatalog();
+export async function loadCatalog(
+  client: SupabaseClient,
+  includeBlockedRecipeIds: readonly string[] = [],
+): Promise<RecipeCatalog> {
+  const loaded = await new SupabaseRecipeRepository(client).loadCatalog(undefined, {
+    includeBlockedRecipeIds,
+  });
   return {
     ...loaded,
     ingredients: enrichIngredientsForMealMixes(loaded.ingredients, loaded.mealMixProfiles),

@@ -263,6 +263,15 @@ describe("Recipe Readiness Gate", () => {
       origin: "catalogCoverage",
     },
     {
+      label: "nulprijs",
+      products: [product({ id: "product-zero-price", sku: "871000006", name: "Rundergehakt", currentPrice: {
+        productId: "product-zero-price", price: 0, oldPrice: null, isOffer: false, offerText: null,
+        validFrom: null, validUntil: null, fetchedAt: NOW, updatedAt: NOW,
+      } })],
+      reason: "missing_price",
+      origin: "catalogCoverage",
+    },
+    {
       label: "onbekende verpakking",
       products: [product({ id: "product-pieces", sku: "871000005", name: "Rundergehakt", packageText: "8 stuks", weightGrams: null })],
       reason: "package_unknown",
