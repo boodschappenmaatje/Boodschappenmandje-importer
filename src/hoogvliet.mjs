@@ -413,7 +413,7 @@ export function classifySourcePageEvidence(evidence = {}) {
 }
 
 async function readCatalogPageEvidence(page, expectedSelector = null) {
-  return page.evaluate(({ responseStatus, expectedSelector }) => {
+  return page.evaluate(({ responseStatus, selector }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     const listingShellSelector = [
       "main[id*='catalog-listing' i]",
@@ -492,7 +492,7 @@ async function readCatalogPageEvidence(page, expectedSelector = null) {
       responseStatus,
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
-      hasExpectedContent: productLinks > 0 || Boolean(expectedSelector && document.querySelector(expectedSelector)),
+      hasExpectedContent: productLinks > 0 || Boolean(selector && document.querySelector(selector)),
       hasSearchStructure: productLinks > 0,
       hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten" || hasListingShell,
@@ -509,7 +509,7 @@ async function readCatalogPageEvidence(page, expectedSelector = null) {
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
-  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null, expectedSelector });
+  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null, selector: expectedSelector });
 }
 async function waitForCatalogSource(page, options = {}) {
   const expectCategoryLinks = options.expectCategoryLinks === true;
