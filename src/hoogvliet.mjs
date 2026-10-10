@@ -414,6 +414,46 @@ export function classifySourcePageEvidence(evidence = {}) {
 async function readCatalogPageEvidence(page) {
   return page.evaluate(({ responseStatus }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
+    const emptyPhrases = [
+      { match: "geen_resultaten_gevonden", phrase: "geen resultaten gevonden" },
+      { match: "geen_zoekresultaten", phrase: "geen zoekresultaten" },
+      { match: "niks_kunnen_vinden", phrase: "niks kunnen vinden" },
+      { match: "niets_gevonden", phrase: "niets gevonden" },
+      { match: "geen_producten", phrase: "geen producten" },
+      { match: "nul_producten", phrase: "0 producten" },
+    ];
+    const emptyMatch = emptyPhrases.find(signal => text.includes(signal.phrase)) ?? null;
+    const hasExplicitEmptyState = /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
+    const hasZeroProductCount = /(?:^|\s)0\s+producten(?:\s|$)/.test(text);
+    let emptySourceSelector = hasExplicitEmptyState ? "body" : "none";
+    let emptyVisible = hasExplicitEmptyState ? "true" : "unknown";
+    let emptyStrength = hasExplicitEmptyState ? "weak" : "none";
+    if (emptyMatch) {
+      const sourceCandidates = [
+        { selector: "[data-testid*='empty' i]", strength: "strong" },
+        { selector: "[class*='empty' i]", strength: "strong" },
+        { selector: "[id*='empty' i]", strength: "strong" },
+        { selector: "[role='status']", strength: "weak" },
+        { selector: "[role='alert']", strength: "weak" },
+        { selector: "main", strength: "weak" },
+      ];
+      for (const candidate of sourceCandidates) {
+        const matchingElement = [...document.querySelectorAll(candidate.selector)]
+          .find(element => (element.innerText ?? "").toLowerCase().includes(emptyMatch.phrase));
+        if (!matchingElement) continue;
+        emptySourceSelector = candidate.selector;
+        const style = getComputedStyle(matchingElement);
+        const rectsVisible = matchingElement.getClientRects().length > 0;
+        const stylesVisible = style.display !== "none" && style.visibility !== "hidden"
+          && Number(style.opacity || 1) > 0;
+        emptyVisible = rectsVisible && stylesVisible ? "true" : "false";
+        emptyStrength = emptyVisible === "true" ? candidate.strength : "weak";
+        break;
+      }
+    }
+    const emptySignalType = hasZeroProductCount
+      ? "zero_product_count"
+      : hasExplicitEmptyState ? "body_text_phrase" : "none";
     const productLinks = document.querySelectorAll("a[href*='/product/']").length;
     const categoryLinks = [...document.querySelectorAll("a[href]")]
       .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
@@ -433,15 +473,19 @@ async function readCatalogPageEvidence(page) {
       hasExpectedContent: productLinks > 0,
       hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten" || hasListingShell,
       hasListingShell,
-      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text),
-      hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
+      hasExplicitEmptyState,
+      hasZeroProductCount,
+      emptySignalType,
+      emptyMatch: emptyMatch?.match ?? "none",
+      emptySourceSelector,
+      emptyVisible,
+      emptyStrength,
       productLinks,
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
   }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null });
 }
-
 async function waitForCatalogSource(page, options = {}) {
   const expectCategoryLinks = options.expectCategoryLinks === true;
   const immediateStatus = Number(page.__hoogvlietLastResponseStatus);
@@ -1265,6 +1309,11 @@ export async function collectCatalogListing(page, routeURL, {
         unique_sku_count: windowSnapshot.primaryUniqueSKUCount,
         shell_classification: diagnosticShell,
         explicit_empty_classification: diagnosticExplicitEmpty,
+        empty_signal_type: diagnosticEvidence?.emptySignalType ?? "unknown",
+        empty_match: diagnosticEvidence?.emptyMatch ?? "unknown",
+        empty_source_selector: diagnosticEvidence?.emptySourceSelector ?? "unknown",
+        empty_visible: diagnosticEvidence?.emptyVisible ?? "unknown",
+        empty_strength: diagnosticEvidence?.emptyStrength ?? "unknown",
         fallback_eligible: windowSnapshot.fallbackEligible,
         fallback_eligibility_reason: reason,
         fallback_attempt_reason: windowSnapshot.fallbackAttemptReason,
