@@ -21,6 +21,7 @@ beforeEach(() => {
 
 const recipeId = "6593543a-5c8d-409d-8c9e-145632c43f0b";
 const body = { sku: "686060000", recipeId };
+const preflightBody = { ...body, preflight: true };
 const request = (authorization?: string) => new Request("https://preview.example.test/api/internal/planner-readiness/explicit-recipe-refresh", {
   method: "POST", headers: { "content-type": "application/json", ...(authorization ? { authorization } : {}) }, body: JSON.stringify(body),
 });
@@ -54,5 +55,17 @@ describe("explicit recipe readiness route", () => {
     const invalid = new Request("https://app.test", { method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" }, body: JSON.stringify({ sku: body.sku, recipeId: "00000000-0000-4000-8000-000000000001" }) });
     expect((await POST(invalid)).status).toBe(400);
     expect(getSupabaseServerClient).not.toHaveBeenCalled();
+  });
+
+  it("accepts the authenticated Production preflight through the existing evaluator with persistence disabled", async () => {
+    vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "secret");
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.mocked(getSupabaseServerClient).mockReturnValue({} as NonNullable<ReturnType<typeof getSupabaseServerClient>>);
+    const response = await POST(new Request("https://app.test", {
+      method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify(preflightBody),
+    }));
+    expect(response.status).toBe(200);
+    expect(refreshExplicitRecipeReadiness).toHaveBeenCalledExactlyOnceWith(expect.anything(), body, { persist: false });
   });
 });
