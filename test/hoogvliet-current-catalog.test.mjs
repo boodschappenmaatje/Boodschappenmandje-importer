@@ -372,6 +372,21 @@ test("een verborgen leegplaceholder staat niet in rendered body-tekst en wordt a
   assert.equal(result.stallDiagnostic.empty_visible, "unknown");
 });
 
+test("empty diagnostic reports the earliest matched phrase as a stable enum", async t => {
+  const mixedNotice = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><p>Geen zoekresultaten. Geen producten.</p></main>';
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? mixedNotice : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallbackStub(),
+  });
+  assert.equal(result.stallDiagnostic.empty_signal_type, "body_text_phrase");
+  assert.equal(result.stallDiagnostic.empty_match, "geen_zoekresultaten");
+});
+
 test("lege initial category zonder bewezen next-context gebruikt geen Zyte", async t => {
   const emptyInitial = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1></main>';
   const h = await browserFor({ body: emptyInitial });
