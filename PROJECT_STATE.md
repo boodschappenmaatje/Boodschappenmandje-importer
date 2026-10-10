@@ -1,3 +1,21 @@
+# Checkpoint — PR #71 release en actieve 1B-writegate — 10 oktober 2026
+
+## Release op actuele main
+
+- PR [#71](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/71) is gemerged. Actuele remote `main` en mergecommit zijn **`4754d127c8a1edc71f261682dea8c9b3ed20a1d4`**. De finale PR-checks waren groen; de Production-build slaagde op exact deze SHA.
+- Production deployment is **Ready**, deployment-ID `dpl_J2sHLy4LrGGDitUCXEeSJjdV24Lt`. Production smoke gaf HTTP 200 voor `/week-voorbereiden`, `/budget` en `/lijst`.
+- De veilige explicit-recipe readiness-flow voor bewezen links van `needs_review`-profielen staat in Production. De read-only GET is bewust Preview-only; een Production GET geeft daarom verwacht `404 not-found`. Er is geen afzonderlijke GitHub Actions main-run op de mergecommit vastgesteld.
+- Tijdens de release waren recipe_id-writes **0**, readiness-refreshwrites **0** en profielstatuswijzigingen **0**. Er is geen recipe- of profieldata gewijzigd en geen readiness-refresh uitgevoerd.
+- PR [#70](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/70) blijft open, Draft en ongemerged als audit/documentatiecheckpoint.
+
+## 1B-status en volgende gate
+
+- Roadmap 1B blijft actief. De veilige readiness-ondersteuning is gereleased, maar de zeven bewezen Knorr recipe-links en hun gerichte readiness-refresh zijn nog niet uitgevoerd.
+- Previewbewijs vóór release: 6 van de 7 recipes waren READY voor 1–10 personen. SKU `704892000` (Japanse teriyaki) bleef NOT_READY met twee echte readinessproblemen; niets is geforceerd en `needs_review` bleef behouden.
+- Volgende afzonderlijke Production-writegate: alleen de zeven bewezen koppelingen voor SKU's `686060000`, `686150000`, `704884000`, `704888000`, `704892000`, `704897000` en `704898000`, gevolgd door uitsluitend hun gerichte readiness-refresh. SKU `704881000` blijft uitgesloten. Andere NO_RECIPE-profielen vragen daarna nog brongebaseerde beoordeling. Geen van deze Production-writes is in dit checkpoint uitgevoerd.
+
+---
+
 # Checkpoint — 1B expliciete recipe-link readiness-flow — 10 oktober 2026
 
 ## Releasebasis en auditcheckpoint
