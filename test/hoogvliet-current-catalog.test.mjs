@@ -383,8 +383,8 @@ test("empty diagnostic reports the earliest matched phrase as a stable enum", as
   assert.equal(result.stallDiagnostic.empty_match, "geen_zoekresultaten");
 });
 
-test("lege initial category zonder bewezen next-context gebruikt geen Zyte", async t => {
-  const emptyInitial = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1></main>';
+test("sterke lege initial category is natuurlijke exhaustion zonder Zyte", async t => {
+  const emptyInitial = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><div data-testid="empty-state">Geen producten</div></main>';
   const h = await browserFor({ body: emptyInitial });
   t.after(() => h.browser.close());
   const fallback = fallbackStub();
@@ -394,6 +394,7 @@ test("lege initial category zonder bewezen next-context gebruikt geen Zyte", asy
   });
   assert.equal(fallback.calls.length, 0);
   assert.equal(result.initialCandidateCount, 0);
+  assert.equal(result.sourceExhausted, true);
   assert.equal(result.stallReason, null);
 });
 
