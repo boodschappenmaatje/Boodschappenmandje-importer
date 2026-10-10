@@ -491,12 +491,19 @@ jobs:
         if: env.RUN_IMPORT != '0'
         run: npm test
 
-      - name: Producten en prijzen bijwerken
-        if: env.RUN_IMPORT != '0'
+      - name: Volledige maintenance met begrensde Zyte-listingfallback uitvoeren
+        if: env.RUN_IMPORT != '0' && env.UPDATE_MODE == 'maintenance'
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+          ZYTE_LISTING_FALLBACK_ENABLED: "1"
+          ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "3"
+          ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "45000"
+        run: npm run import:daily
+
+      - name: Legacy catalogus-, growth- of prijsmodus uitvoeren
+        if: env.RUN_IMPORT != '0' && env.UPDATE_MODE != 'maintenance'
         run: |
-          if [[ "$UPDATE_MODE" == "maintenance" ]]; then
-            npm run import:daily
-          elif [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
+          if [[ "$DAILY_IMPORT_JOB" == "1" ]]; then
             npm run import:daily-growth
           else
             npm run import

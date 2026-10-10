@@ -232,6 +232,12 @@ export function formatDailyMaintenanceSummary(result) {
     `nested_routes_overgeslagen=${result.snapshot.nestedRoutesSkipped}`,
     `nested_fallback_routes=${result.snapshot.nestedFallbackRoutes}`,
     `listing_paginas=${result.snapshot.pagesFetched}`,
+    `primary_listing_windows=${result.snapshot.primaryListingWindows ?? result.snapshot.pagesFetched}`,
+    `fallback_attempts=${result.snapshot.fallbackAccounting?.fallbackAttempts ?? 0}`,
+    `fallback_successes=${result.snapshot.fallbackAccounting?.fallbackSuccesses ?? 0}`,
+    `fallback_failures=${result.snapshot.fallbackAccounting?.fallbackFailures ?? 0}`,
+    `fallback_provider=${result.snapshot.fallbackAccounting?.fallbackProvider ?? "zyte"}`,
+    `snapshot_complete=${result.snapshot.sourceExhausted === true && !result.snapshot.stallReason}`,
     `GraphQL_bulk_calls=${result.snapshot.catalogAPICalls}`,
     `duplicaten=${stats.duplicateCandidates + result.duplicateSKUsSkipped}`,
   ].join(" | ");
@@ -270,7 +276,7 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
         maxDetailFallbacks: config.maintenanceMaxDetailFallbacks,
         logger,
       });
-    });
+    }, { logger });
     assessment = sourceResult;
     if (!dryRun && assessment.productsToWrite.length > 0) {
       writeResult = await services.upsertProducts(config, assessment.productsToWrite);

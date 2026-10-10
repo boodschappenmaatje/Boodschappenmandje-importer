@@ -185,12 +185,13 @@ test("onvolledige listing-window snapshot blijft fail-closed en bereikt geen wri
 test("handmatige maintenance-dry-run beoordeelt dezelfde volledige flow zonder run- of datawrites", async () => {
   const current = existing();
   const freshSKU = "987654321";
+  const logs = [];
   const forbidden = async () => { throw new Error("dry-run writer aangeroepen"); };
   const result = await runDailyCatalogMaintenance({
     dryRun: true,
     importTrigger: "manual",
     maintenanceMaxDetailFallbacks: 500,
-  }, { info() {}, error() {} }, {
+  }, { info: value => logs.push(value), error() {} }, {
     fetchExistingProducts: async () => [current],
     fetchExistingPriceStates: async () => new Map([[current.id, price(current)]]),
     fetchExistingSKUs: forbidden,
@@ -202,7 +203,19 @@ test("handmatige maintenance-dry-run beoordeelt dezelfde volledige flow zonder r
         candidate(current.sku, state({ price: 2.79 })),
         candidate(freshSKU, null),
       ],
-      snapshot: { pagesFetched: 2, catalogAPICalls: 2 },
+      snapshot: {
+        pagesFetched: 2,
+        primaryListingWindows: 2,
+        catalogAPICalls: 2,
+        sourceExhausted: true,
+        stallReason: null,
+        fallbackAccounting: {
+          fallbackAttempts: 1,
+          fallbackSuccesses: 1,
+          fallbackFailures: 0,
+          fallbackProvider: "zyte",
+        },
+      },
       validateFallback: async item => item.sku === freshSKU ? validatedNew(freshSKU) : null,
     }),
   });
@@ -213,6 +226,42 @@ test("handmatige maintenance-dry-run beoordeelt dezelfde volledige flow zonder r
   assert.equal(result.wouldInsertCount, 1);
   assert.equal(result.wouldUpdateCount, 1);
   assert.equal(result.totalUniqueProductsAfter, result.totalUniqueProductsBefore);
+  assert.match(logs.at(-1), /primary_listing_windows=2/);
+  assert.match(logs.at(-1), /fallback_attempts=1/);
+  assert.match(logs.at(-1), /fallback_successes=1/);
+  assert.match(logs.at(-1), /snapshot_complete=true/);
+});
+
+test("iedere onbruikbare of begrensde fallbackuitkomst blijft vóór de writer", async () => {
+  const reasons = [
+    "listing_unusable",
+    "timeout",
+    "api_error",
+    "invalid_final_response_url",
+    "listing_identity_mismatch",
+    "request_limit_reached",
+  ];
+  for (const reason of reasons) {
+    let writes = 0;
+    await assert.rejects(runDailyCatalogMaintenance({
+      importTrigger: "schedule",
+      maintenanceMaxDetailFallbacks: 500,
+    }, { info() {}, error() {} }, {
+      fetchExistingProducts: async () => [existing()],
+      fetchExistingPriceStates: async () => new Map(),
+      fetchExistingSKUs: async () => new Set(["123456789"]),
+      startCatalogImportRun: async () => ({ id: "run", started_at: now.toISOString() }),
+      finishCatalogImportRun: async () => ({}),
+      withDailyCatalogSource: async () => {
+        throw new SourceUnavailableError(`Zyte-listingfallback faalde: ${reason}`);
+      },
+      upsertProducts: async () => {
+        writes += 1;
+        return { imported: [], errors: [], duplicateSKUsSkipped: 0 };
+      },
+    }), new RegExp(reason));
+    assert.equal(writes, 0, reason);
+  }
 });
 
 test("null en nulprijs overschrijven geen bestaande geldige prijs", async () => {

@@ -1,3 +1,26 @@
+# Checkpoint — Production-ready Zyte-listingfallback in Draft — 10 oktober 2026
+
+## Bewezen provider en actuele basis
+
+- PR #66 is gemerged naar `main` als `71c183261a99350dab74d91257ad0d702b615f34`. De afzonderlijke read-only workflowrun [38046108912](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38046108912) leverde **6/6 succesvolle Zyte `browserHtml`-responses**, nul failures, steeds API-/bronstatus 200, dezelfde listingidentiteit en `hydrated=true` met de bestaande parser.
+- Probleemwindow `/chips-zoutjes-noten/q/page/4`: driemaal 30 SKU's in 7.692 / 5.211 / 6.713 ms. Controlewindow `/chips-zoutjes-noten/q/page/1`: driemaal 30 SKU's in 7.336 / 10.096 / 7.055 ms. Totale latency: minimum 5,21 s, gemiddeld circa 7,35 s, maximum 10,10 s; HTML circa 629–634 KB. Dit bewijst Zyte voor incidentele listingfallback, niet als tweede catalogusbron.
+
+## Geïmplementeerde architectuur en rails
+
+- Nieuwe branch `codex/zyte-listing-fallback-1a1-20261010` en Draft PR [#67](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/67) zijn exact vanaf die actuele `main` gestart. Direct Hoogvliet/Playwright blijft primary. Alleen een concrete geldige listing-URL met HTTP 408/425/429/5xx, of een door een betrouwbare `next`-link verwachte vervolgpagina met geldige catalogusschil maar nul producten en zonder expliciete lege status, kan één Zyte-attempt krijgen.
+- `src/zyte-listing-fallback.mjs` doet één directe `browserHtml`-POST zonder SDK-retry of providerfailover, valideert doel- en response-URL/listingidentiteit, vereist een 2xx bronstatus, begrenst response en HTML op respectievelijk 2,5 MiB en 2 MiB en retourneert alleen gestructureerde veilige statussen. De HTML wordt met JavaScript en subresources uitgeschakeld door dezelfde `extractCatalogListingCandidates`-parser gelezen en gaat daarna door dezelfde normalisatie, dedupe, GraphQL-hydratatie, detailvalidatie en writergate.
+- Fallback is standaard uit. Production-maintenanceworkflows zetten hem alleen op de uitvoerende maintenancestap aan en geven alleen daar `ZYTE_API_KEY` door. Defaults: maximaal 3 providerrequests/run en 45 s/request; hard clamps: 10 requests en 60 s. Eén canonical window krijgt maximaal één poging. `MAINTENANCE_MAX_LISTING_WINDOWS=800` blijft ongewijzigd en providercalls voegen geen listingwindow toe.
+- Geen fallback voor 404, ongeldige URL, parser/schemafout, expliciete lege status, repeated SKU-window, pagination-loop/page-alias, listing-window-limit, load-more-stagnatie zonder eigen URL, navigation-only oudercategorie, productdata-/database-/writer-/lockfouten of ongeclassificeerde exceptions. Disabled/missende key, providerfout/timeout, verkeerde URL/identiteit, lege/ongeldige parseruitkomst of uitgeput budget houdt de snapshot incompleet en vóór de writer.
+- Veilige accounting logt `primary_listing_windows`, attempts/providerrequests/successes/failures, provider, triggerreden, route/window/canonical URL, API-/bronstatus, latency, HTML-bytecount, raw/unique SKU-count en `snapshot_complete`; nooit API-key, Authorization-header, HTML of providerbody.
+
+## Verificatie en resterende releasegate
+
+- Gerichte fallback-/listing-/maintenance-/workflowproof: **63/63 groen**. Volledige `npm test`: **439/439 groen**. `npm run check`: groen. `npm run test:postgres`: **28/28 groen**. De vier betrokken workflow-YAML's parsen geldig; `git diff --check` groen.
+- Geen Zyte-livecall, workflowdispatch, maintenance dry-run/write, productimport, databasewrite, migratie, merge of Production-deployment uitgevoerd. `ROADMAP.md` blijft ongewijzigd en 1A.1 blijft open.
+- Resterende gate: Draft PR review en groene CI, daarna aparte mergegoedkeuring. Pas na merge voert Work één volledige maintenance **dry-run** uit en controleert complete snapshot plus fallbackaccounting; een groene dry-run geeft nog geen writetoestemming. Daarna blijft één afzonderlijk goedgekeurde finale write-acceptatie nodig.
+
+---
+
 # Checkpoint — handmatige Zyte read-only proofworkflow — 10 oktober 2026
 
 ## Technische proofstap

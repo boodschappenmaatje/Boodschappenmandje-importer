@@ -59,6 +59,36 @@ async function browserFor({ body = fixture, rootBody = body, bodyForURL = null, 
   return { browser, context, page: await context.newPage(), graphqlRequests };
 }
 
+function fallbackStub(implementation = async () => ({ ok: false, reason: "fixture_failure" })) {
+  const calls = [];
+  let primaryListingWindows = 0;
+  return {
+    calls,
+    recordPrimaryWindow() { primaryListingWindows += 1; },
+    async attempt(input) {
+      calls.push(input);
+      return implementation(input);
+    },
+    accounting() {
+      return {
+        primaryListingWindows,
+        fallbackAttempts: calls.length,
+        fallbackProviderRequests: calls.length,
+        fallbackSuccesses: 0,
+        fallbackFailures: calls.length,
+        fallbackProvider: "zyte",
+        events: [],
+      };
+    },
+  };
+}
+
+const tomatoesFallback = [{
+  sourceURL: "https://hoogvliet.nl/product/trostomaten-verpakt-060936000",
+  name: "Trostomaten verpakt",
+  packageText: "500 gram",
+}];
+
 test("current listing fixture yields SKU, product identity, package, price and image", async t => {
   const h = await browserFor();
   t.after(() => h.browser.close());
@@ -97,8 +127,10 @@ test("current category load-more traverses beyond the initial visible batch", as
 test("current category Next pagination traverses a second public listing page", async t => {
   const h = await browserFor({ body: paginationFixture });
   t.after(() => h.browser.close());
+  const fallback = fallbackStub();
   const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
     maxWindows: 10,
+    listingFallback: fallback,
   });
   assert.equal(result.sourceExhausted, true);
   assert.equal(result.stallReason, null);
@@ -107,6 +139,80 @@ test("current category Next pagination traverses a second public listing page", 
   assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
     "064786000", "081222000", "060936000",
   ]);
+  assert.equal(fallback.calls.length, 0);
+});
+
+test("verwachte next-window met geldige lege shell gebruikt exact eenmaal dezelfde URL via fallback", async t => {
+  const emptyShell = '<!doctype html><main><a href="/aardappelen-groente-fruit/nested">Subcategorie</a></main>';
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? emptyShell : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({ ok: true, candidates: tomatoesFallback }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.stallReason, null);
+  assert.equal(fallback.calls.length, 1);
+  assert.deepEqual(fallback.calls[0], {
+    targetURL: "https://hoogvliet.nl/aardappelen-groente-fruit?page=2",
+    routeURL: "https://hoogvliet.nl/aardappelen-groente-fruit",
+    windowIndex: 1,
+    triggerReason: "expected_next_non_hydrated",
+  });
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000", "060936000",
+  ]);
+});
+
+for (const status of [408, 425, 429, 503]) {
+  test(`retryable HTTP ${status} gebruikt exact één Zyte-attempt`, async t => {
+    const h = await browserFor({ body: "<!doctype html><main>Tijdelijke bronstoring</main>", status });
+    t.after(() => h.browser.close());
+    const fallback = fallbackStub(async () => ({ ok: true, candidates: tomatoesFallback }));
+    const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+      maxWindows: 10,
+      listingFallback: fallback,
+    });
+    assert.equal(result.sourceExhausted, true);
+    assert.equal(fallback.calls.length, 1);
+    assert.equal(fallback.calls[0].targetURL, "https://hoogvliet.nl/aardappelen-groente-fruit");
+    assert.equal(fallback.calls[0].triggerReason, status >= 500 ? "retryable_http_5xx" : `retryable_http_${status}`);
+  });
+}
+
+test("primary leeg en fallback leeg blijft onvolledig", async t => {
+  const emptyShell = '<!doctype html><main><a href="/aardappelen-groente-fruit/nested">Subcategorie</a></main>';
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? emptyShell : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({ ok: false, reason: "listing_unusable" }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 1);
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+});
+
+test("permanente HTTP 404 gebruikt geen fallback", async t => {
+  const h = await browserFor({ body: "<!doctype html><main>Niet gevonden</main>", status: 404 });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  await assert.rejects(
+    collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+      maxWindows: 10,
+      listingFallback: fallback,
+    }),
+    error => error.code === "source_unavailable",
+  );
+  assert.equal(fallback.calls.length, 0);
 });
 
 test("catalog root visits an aggregate parent once and skips overlapping nested routes", async t => {
@@ -136,7 +242,8 @@ test("navigation-only aggregate category falls back to its real nested category"
     bodyForURL: url => url.pathname === "/producten" ? root : url.pathname === "/vers" ? parent : fixture,
   });
   t.after(() => h.browser.close());
-  const result = await collectPublicCatalogCandidates(h.page, 10);
+  const fallback = fallbackStub();
+  const result = await collectPublicCatalogCandidates(h.page, 10, { listingFallback: fallback });
   assert.equal(result.sourceExhausted, true);
   assert.equal(result.rootCategoriesDiscovered, 2);
   assert.equal(result.rootListingRoutesSelected, 1);
@@ -144,6 +251,7 @@ test("navigation-only aggregate category falls back to its real nested category"
   assert.equal(result.categoriesVisited, 2);
   assert.equal(result.pagesFetched, 2);
   assert.deepEqual(result.candidates.map(candidate => candidate.sku), ["064786000", "081222000", "060936000"]);
+  assert.equal(fallback.calls.length, 0);
 });
 
 test("catalog root waits for hydrated navigation, filters domain links and never paginates root", async t => {
@@ -164,11 +272,14 @@ test("load-more stagnation is fail-closed and does not claim exhaustion", async 
   const body = fixture.replace("document.querySelector('#load-more').remove();", "void 0;");
   const h = await browserFor({ body });
   t.after(() => h.browser.close());
+  const fallback = fallbackStub();
   const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
     maxWindows: 10,
+    listingFallback: fallback,
   });
   assert.equal(result.sourceExhausted, false);
   assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(fallback.calls.length, 0);
 });
 
 test("repeated SKU window stops without recounting or looping", async t => {
@@ -183,12 +294,15 @@ test("repeated SKU window stops without recounting or looping", async t => {
   </main>`;
   const h = await browserFor({ body });
   t.after(() => h.browser.close());
+  const fallback = fallbackStub();
   const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
     maxWindows: 10,
+    listingFallback: fallback,
   });
   assert.equal(result.sourceExhausted, false);
   assert.equal(result.stallReason, "category_listing_repeated_sku_window");
   assert.equal(result.pagesFetched, 1);
+  assert.equal(fallback.calls.length, 0);
 });
 
 test("page zero/one alias is skipped while a genuine next page remains reachable", async t => {
@@ -198,8 +312,10 @@ test("page zero/one alias is skipped while a genuine next page remains reachable
   );
   const h = await browserFor({ body });
   t.after(() => h.browser.close());
+  const fallback = fallbackStub();
   const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
     maxWindows: 10,
+    listingFallback: fallback,
   });
   assert.equal(result.sourceExhausted, true);
   assert.equal(result.pagesFetched, 2);
@@ -207,6 +323,36 @@ test("page zero/one alias is skipped while a genuine next page remains reachable
   assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
     "064786000", "081222000", "060936000",
   ]);
+  assert.equal(fallback.calls.length, 0);
+});
+
+test("pagination-loop gebruikt geen fallback", async t => {
+  const body = paginationFixture.replace(
+    'href="/aardappelen-groente-fruit?page=2"',
+    'href="/aardappelen-groente-fruit?page=1"',
+  );
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(fallback.calls.length, 0);
+});
+
+test("listing-window-limit wordt niet met fallback omzeild", async t => {
+  const h = await browserFor({ body: paginationFixture });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 1,
+    listingFallback: fallback,
+  });
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.pagesFetched, 1);
+  assert.equal(fallback.calls.length, 0);
 });
 
 test("a naturally exhausted one-window listing is complete exactly at the safety cap", async t => {
@@ -258,10 +404,15 @@ test("root discovery failure, category structure changes and challenge have expl
 
   const changedCategory = await browserFor({ body: "<main><h1>Nieuwe categoriepagina</h1></main>" });
   t.after(() => changedCategory.browser.close());
+  const fallback = fallbackStub();
   await assert.rejects(
-    collectCatalogListing(changedCategory.page, "https://hoogvliet.nl/aardappelen-groente-fruit", { normalTimeoutMs: 50 }),
+    collectCatalogListing(changedCategory.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+      normalTimeoutMs: 50,
+      listingFallback: fallback,
+    }),
     error => error.code === "category_structure_changed",
   );
+  assert.equal(fallback.calls.length, 0);
 });
 
 test("catalog URL guard accepts only current public category paths", () => {

@@ -2,6 +2,7 @@ import { collectGrowthCandidates } from "./growth-collector.mjs";
 import { categoryDiscoveryRoute, isPublicCatalogDiscoveryTerm } from "./discovery-routes.mjs";
 import { chromium } from "playwright";
 import { classifyProductType, UNKNOWN_PRODUCT_TYPE } from "./product-type.mjs";
+import { fetchZyteListingHTML } from "./zyte-listing-fallback.mjs";
 
 export const BASE_URL = "https://hoogvliet.nl";
 export const CATALOG_ROOT_PATH = "/producten";
@@ -333,6 +334,33 @@ export function normalizeCatalogCategoryURL(value) {
   }
 }
 
+export function normalizeCatalogListingURL(value) {
+  try {
+    const url = new URL(value, BASE_URL);
+    if (url.protocol !== "https:" || url.hostname !== "hoogvliet.nl"
+      || url.username || url.password || url.hash) return null;
+    const pathPage = url.pathname.match(/^(.*)\/q\/page\/(\d+)\/?$/i);
+    const categoryPath = pathPage ? (pathPage[1] || "/") : url.pathname;
+    if (pathPage && Number.parseInt(pathPage[2], 10) < 1) return null;
+    if (url.search) {
+      if (pathPage || [...url.searchParams.keys()].some(key => key !== "page")
+        || [...url.searchParams.keys()].length !== 1) return null;
+      const page = Number(url.searchParams.get("page"));
+      if (!Number.isInteger(page) || page < 1) return null;
+    }
+    const categoryURL = new URL(url.href);
+    categoryURL.pathname = categoryPath;
+    categoryURL.search = "";
+    categoryURL.hash = "";
+    if (!normalizeCatalogCategoryURL(categoryURL.href)) return null;
+    url.pathname = url.pathname.replace(/\/$/, "");
+    url.searchParams.sort();
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeCatalogListingCandidate(candidate, categoryURL = CATALOG_ROOT_URL) {
   const sourceURLValue = absoluteURL(candidate?.sourceURL);
   let sourceURL = sourceURLValue;
@@ -368,7 +396,9 @@ function isCatalogRouteTerm(term) {
 export function classifySourcePageEvidence(evidence = {}) {
   const responseStatus = Number(evidence.responseStatus);
   if (evidence.navigationError) return "navigation_error";
-  if ([404, 408, 425, 429, 500, 502, 503, 504].includes(responseStatus)) return "source_unavailable";
+  if ([404, 408, 425, 429].includes(responseStatus) || (responseStatus >= 500 && responseStatus <= 599)) {
+    return "source_unavailable";
+  }
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
   if (evidence.hasExpectedContent || evidence.hasCatalogStructure) return "ready";
   if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) return "valid_empty_search";
@@ -404,6 +434,14 @@ async function readCatalogPageEvidence(page) {
 
 async function waitForCatalogSource(page, options = {}) {
   const expectCategoryLinks = options.expectCategoryLinks === true;
+  const immediateStatus = Number(page.__hoogvlietLastResponseStatus);
+  if ([404, 408, 425, 429].includes(immediateStatus)
+    || (immediateStatus >= 500 && immediateStatus <= 599)) {
+    throw sourceUnavailableError(page,
+      `Hoogvliet gaf een tijdelijke catalogusbronfout (HTTP ${immediateStatus}).`,
+      options.requestContext,
+    );
+  }
   await page.waitForFunction(({ expectCategoryLinks: expect, allowCategoryOnly, nonCatalogPaths }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
     const hasCategoryLink = [...document.querySelectorAll("a[href]")].some(link => {
@@ -637,6 +675,158 @@ export function catalogListingPageIdentity(value) {
   identity.pathname = identity.pathname.replace(/\/$/, "") || "/";
   identity.searchParams.sort();
   return identity.href;
+}
+
+function emptyListingFallbackAccounting() {
+  return {
+    primaryListingWindows: 0,
+    fallbackAttempts: 0,
+    fallbackProviderRequests: 0,
+    fallbackSuccesses: 0,
+    fallbackFailures: 0,
+    fallbackProvider: "zyte",
+    events: [],
+  };
+}
+
+function fallbackHTMLWithBaseURL(html, targetURL) {
+  const base = `<base href="${targetURL}">`;
+  return /<head\b[^>]*>/i.test(html)
+    ? html.replace(/<head\b[^>]*>/i, match => `${match}${base}`)
+    : `${base}${html}`;
+}
+
+export function createZyteListingFallback({
+  config = {},
+  browser,
+  logger = console,
+  fetchImpl = globalThis.fetch,
+  requestImpl = fetchZyteListingHTML,
+} = {}) {
+  const accounting = emptyListingFallbackAccounting();
+  const attemptedWindows = new Set();
+  const maxProviderRequests = Math.min(
+    10,
+    Math.max(1, Number.parseInt(config.zyteListingFallbackMaxRequests, 10) || 3),
+  );
+  let parseContext = null;
+
+  const snapshot = () => ({
+    ...accounting,
+    events: accounting.events.map(event => ({ ...event })),
+  });
+  const record = (event, success) => {
+    accounting.fallbackAttempts += 1;
+    if (success) accounting.fallbackSuccesses += 1;
+    else accounting.fallbackFailures += 1;
+    accounting.events.push(event);
+    logger.info(`catalog_listing_fallback=${JSON.stringify(event)}`);
+  };
+  const fail = (base, reason, provider = {}) => {
+    const event = {
+      ...base,
+      outcome: "failure",
+      failure_reason: reason,
+      api_status: provider.apiStatus ?? null,
+      source_status: provider.sourceStatus ?? null,
+      final_response_url: provider.finalResponseURL ?? null,
+      latency_ms: provider.latencyMs ?? 0,
+      html_bytes: provider.htmlBytes ?? 0,
+      fallback_raw_candidate_count: 0,
+      fallback_unique_sku_count: 0,
+    };
+    record(event, false);
+    return { ok: false, reason, event };
+  };
+
+  return {
+    recordPrimaryWindow() {
+      accounting.primaryListingWindows += 1;
+    },
+    accounting: snapshot,
+    async attempt({ targetURL, routeURL, windowIndex, triggerReason }) {
+      const canonicalURL = normalizeCatalogListingURL(targetURL);
+      const base = {
+        fallback_provider: "zyte",
+        fallback_trigger_reason: triggerReason,
+        route_url: normalizeCatalogCategoryURL(routeURL),
+        window_index: windowIndex,
+        canonical_url: canonicalURL,
+      };
+      if (!canonicalURL || !base.route_url) return fail(base, "invalid_listing_url");
+      const identity = catalogListingPageIdentity(canonicalURL);
+      if (attemptedWindows.has(identity)) return fail(base, "window_already_attempted");
+      attemptedWindows.add(identity);
+      if (config.zyteListingFallbackEnabled !== true) return fail(base, "fallback_disabled");
+      if (!config.zyteApiKey) return fail(base, "api_key_missing");
+      if (accounting.fallbackProviderRequests >= maxProviderRequests) {
+        return fail(base, "request_limit_reached");
+      }
+      accounting.fallbackProviderRequests += 1;
+      const provider = await requestImpl({
+        targetURL: canonicalURL,
+        apiKey: config.zyteApiKey,
+        timeoutMs: config.zyteListingFallbackTimeoutMs,
+        normalizeListingURL: normalizeCatalogListingURL,
+        listingIdentity: catalogListingPageIdentity,
+        fetchImpl,
+      });
+      if (!provider?.ok) return fail(base, provider?.reason ?? "provider_error", provider);
+
+      let candidates;
+      try {
+        if (!parseContext) {
+          if (!browser?.newContext) return fail(base, "parser_context_unavailable", provider);
+          parseContext = await browser.newContext({
+            javaScriptEnabled: false,
+            locale: "nl-NL",
+            timezoneId: "Europe/Amsterdam",
+          });
+        }
+        const parsePage = await parseContext.newPage();
+        try {
+          await parsePage.route("**/*", route => route.abort());
+          await parsePage.setContent(fallbackHTMLWithBaseURL(provider.html, canonicalURL), {
+            waitUntil: "domcontentloaded",
+          });
+          candidates = await extractCatalogListingCandidates(parsePage);
+        } finally {
+          await parsePage.close();
+        }
+      } catch {
+        return fail(base, "parser_error", provider);
+      }
+      const uniqueSKUs = new Set(candidates
+        .map(candidate => extractSKUFromProductURL(candidate.sourceURL))
+        .filter(Boolean));
+      if (candidates.length === 0 || uniqueSKUs.size === 0) {
+        return fail(base, "listing_unusable", provider);
+      }
+      const event = {
+        ...base,
+        outcome: "success",
+        failure_reason: null,
+        api_status: provider.apiStatus,
+        source_status: provider.sourceStatus,
+        final_response_url: provider.finalResponseURL,
+        latency_ms: provider.latencyMs,
+        html_bytes: provider.htmlBytes,
+        fallback_raw_candidate_count: candidates.length,
+        fallback_unique_sku_count: uniqueSKUs.size,
+      };
+      record(event, true);
+      return { ok: true, candidates, event };
+    },
+    async close() {
+      if (parseContext) await parseContext.close();
+      parseContext = null;
+    },
+  };
+}
+
+function retryableListingHTTPStatus(error) {
+  const status = Number(error?.sourceRequest?.upstreamStatus);
+  return [408, 425, 429].includes(status) || (status >= 500 && status <= 599) ? status : null;
 }
 
 async function findNextCatalogPageURL(page, currentURL, visitedIdentities = new Set()) {
@@ -876,18 +1066,47 @@ export async function collectCatalogListing(page, routeURL, {
   onRetry = null,
   captureDiagnostics = false,
   normalTimeoutMs,
+  listingFallback = null,
 } = {}) {
-  await withTransientNavigationRetry(
-    () => sourceGoto(page, routeURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
-      routeKey: "catalog:category", cursor: startWindow, page: startWindow, categoryURL: routeURL,
-    }),
-    { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
-  );
-  await waitForCatalogSource(page, {
-    normalTimeoutMs,
-    allowCategoryOnly: true,
-    requestContext: { routeKey: "catalog:category", cursor: startWindow, page: startWindow, categoryURL: routeURL },
-  });
+  let pendingFallbackCandidates = null;
+  let expectedWindowURL = routeURL;
+  let primaryWindowPreRecorded = false;
+  const fallbackForHTTP = async (error, targetURL, windowIndex) => {
+    const status = retryableListingHTTPStatus(error);
+    if (!status || !listingFallback?.attempt || !normalizeCatalogListingURL(targetURL)) return false;
+    const result = await listingFallback.attempt({
+      targetURL,
+      routeURL,
+      windowIndex,
+      triggerReason: status >= 500 ? "retryable_http_5xx" : `retryable_http_${status}`,
+    });
+    if (!result.ok) {
+      error.listingFallbackAccounting = listingFallback.accounting?.();
+      return false;
+    }
+    pendingFallbackCandidates = result.candidates;
+    return true;
+  };
+  const navigateWindow = async (targetURL, requestContext, windowIndex) => {
+    try {
+      await withTransientNavigationRetry(
+        () => sourceGoto(page, targetURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, requestContext),
+        { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
+      );
+      await waitForCatalogSource(page, {
+        normalTimeoutMs,
+        allowCategoryOnly: true,
+        requestContext,
+      });
+    } catch (error) {
+      if (!await fallbackForHTTP(error, targetURL, windowIndex)) throw error;
+    }
+  };
+  listingFallback?.recordPrimaryWindow?.();
+  primaryWindowPreRecorded = true;
+  await navigateWindow(routeURL, {
+    routeKey: "catalog:category", cursor: startWindow, page: startWindow, categoryURL: routeURL,
+  }, startWindow);
   const routeCandidates = new Map();
   const windows = [];
   let loadMoreCycles = 0;
@@ -907,7 +1126,31 @@ export async function collectCatalogListing(page, routeURL, {
   let transition = "initial";
 
   const snapshot = async () => {
-    const rawDOM = await extractCatalogListingCandidates(page);
+    if (primaryWindowPreRecorded) primaryWindowPreRecorded = false;
+    else listingFallback?.recordPrimaryWindow?.();
+    let rawDOM = pendingFallbackCandidates ?? await extractCatalogListingCandidates(page);
+    pendingFallbackCandidates = null;
+    if (rawDOM.length === 0 && transition === "next" && listingFallback?.attempt
+      && normalizeCatalogListingURL(expectedWindowURL)
+      && catalogListingPageIdentity(page.url()) === catalogListingPageIdentity(expectedWindowURL)) {
+      const evidence = await readCatalogPageEvidence(page);
+      const categoryLinkCount = (await extractCatalogCategoryLinks(page)).length;
+      const loadedExpectedShell = Number(evidence.responseStatus) >= 200
+        && Number(evidence.responseStatus) < 400
+        && (evidence.hasCatalogStructure || categoryLinkCount > 0)
+        && !evidence.hasExplicitEmptyState
+        && !evidence.hasZeroProductCount
+        && evidence.productLinks === 0;
+      if (loadedExpectedShell) {
+        const result = await listingFallback.attempt({
+          targetURL: expectedWindowURL,
+          routeURL,
+          windowIndex: windows.length,
+          triggerReason: "expected_next_non_hydrated",
+        });
+        if (result.ok) rawDOM = result.candidates;
+      }
+    }
     const freshDOM = rawDOM.filter(candidate => !routeCandidates.has(candidate.sourceURL));
     const fresh = freshDOM.length > 0
       ? await hydrateCatalogListingCandidates(page, freshDOM)
@@ -984,18 +1227,13 @@ export async function collectCatalogListing(page, routeURL, {
       naturalExhaustion = true;
       break;
     }
-    await withTransientNavigationRetry(
-      () => sourceGoto(page, nextURL, { waitUntil: "domcontentloaded", timeout: 35_000 }, {
-        routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size,
-        categoryURL: routeURL,
-      }),
-      { maxRetries: navigationRetries, onRetry, wait: ms => page.waitForTimeout(ms) },
-    );
-    await waitForCatalogSource(page, {
-      normalTimeoutMs,
-      allowCategoryOnly: true,
-      requestContext: { routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size, categoryURL: routeURL },
-    });
+    expectedWindowURL = nextURL;
+    listingFallback?.recordPrimaryWindow?.();
+    primaryWindowPreRecorded = true;
+    await navigateWindow(nextURL, {
+      routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size,
+      categoryURL: routeURL,
+    }, windows.length);
     visitedListingURLs.add(nextURL);
     visitedListingIdentities.add(catalogListingPageIdentity(nextURL));
     transition = "next";
@@ -1096,6 +1334,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       onRetry: options.onRetry,
       captureDiagnostics: options.captureDiagnostics === true,
       normalTimeoutMs: options.normalTimeoutMs,
+      listingFallback: options.listingFallback,
     });
     // A fresh page starts at window zero. Replay enough load-more clicks to
     // reach the persisted global cursor, then emit only the new window range.
@@ -1198,6 +1437,8 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     categoryDiagnostics,
     diagnosticUniqueSKUs: globallySeenSKUs.size,
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
+    primaryListingWindows: options.listingFallback?.accounting?.().primaryListingWindows ?? pagesFetched,
+    fallbackAccounting: options.listingFallback?.accounting?.() ?? emptyListingFallbackAccounting(),
     sourceExhausted: sourceExhausted && queue.length === 0,
     stallReason,
     nextPage: sourceExhausted && queue.length === 0 ? 0 : nextPage,
@@ -1959,8 +2200,9 @@ export async function refreshExistingProducts(config, candidates, logger = conso
 // Opens one paced source session for the complete daily catalog snapshot.
 // The handler only runs after root/category traversal proves source exhaustion;
 // incomplete/challenged scans therefore cannot reach any database writer.
-export async function withDailyCatalogSource(config, handler) {
+export async function withDailyCatalogSource(config, handler, options = {}) {
   if (typeof handler !== "function") throw new Error("Daily catalog handler ontbreekt.");
+  const logger = options.logger ?? console;
   const browser = await chromium.launch(chromiumLaunchOptions(config));
   const context = await browser.newContext({ locale: "nl-NL", timezoneId: "Europe/Amsterdam" });
   const listingPage = await context.newPage();
@@ -1968,11 +2210,19 @@ export async function withDailyCatalogSource(config, handler) {
   const pace = createSourcePacer();
   sourcePacers.set(listingPage, pace);
   sourcePacers.set(detailPage, pace);
+  const listingFallback = createZyteListingFallback({
+    config,
+    browser,
+    logger,
+    fetchImpl: options.fetchImpl,
+    requestImpl: options.zyteRequestImpl,
+  });
+  let snapshotComplete = false;
   try {
     const snapshot = await collectPublicCatalogCandidates(
       listingPage,
       config.maintenanceMaxListingWindows,
-      { navigationRetries: config.navigationRetries },
+      { navigationRetries: config.navigationRetries, listingFallback },
     );
     if (!snapshot.sourceExhausted || snapshot.stallReason) {
       throw new SourceUnavailableError(
@@ -1988,12 +2238,24 @@ export async function withDailyCatalogSource(config, handler) {
     if (!Array.isArray(snapshot.candidates) || snapshot.candidates.length === 0) {
       throw new SourceUnavailableError("Dagelijkse catalogussnapshot bevat geen productkandidaten.");
     }
+    snapshotComplete = true;
     return await handler({
       candidates: snapshot.candidates,
       snapshot,
       validateFallback: (candidate, diagnostics = {}) => validateCandidate(detailPage, candidate, diagnostics),
     });
   } finally {
+    const fallback = listingFallback.accounting();
+    logger.info(`catalog_listing_fallback_summary=${JSON.stringify({
+      primary_listing_windows: fallback.primaryListingWindows,
+      fallback_attempts: fallback.fallbackAttempts,
+      fallback_provider_requests: fallback.fallbackProviderRequests,
+      fallback_successes: fallback.fallbackSuccesses,
+      fallback_failures: fallback.fallbackFailures,
+      fallback_provider: fallback.fallbackProvider,
+      snapshot_complete: snapshotComplete,
+    })}`);
+    await listingFallback.close();
     await context.close();
     await browser.close();
   }
