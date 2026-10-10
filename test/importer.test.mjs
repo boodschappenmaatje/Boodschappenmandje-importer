@@ -210,12 +210,18 @@ test("bronclassificatie onderscheidt challenge, lege zoekroute, parserwijziging 
     hasExpectedContent: false,
     hasExplicitEmptyState: true,
     hasIncapsula: true,
+  }), "security_check");
+  assert.equal(classifySourcePageEvidence({
+    hasExpectedContent: false,
+    hasStrongExplicitEmptyState: true,
+    hasIncapsula: true,
   }), "valid_empty_search");
   assert.equal(classifySourcePageEvidence({
     hasSearchStructure: true,
     hasIncapsula: true,
   }), "security_check");
-  assert.equal(classifySourcePageEvidence({ hasSearchStructure: true, hasZeroProductCount: true }), "valid_empty_search");
+  assert.equal(classifySourcePageEvidence({ hasSearchStructure: true, hasZeroProductCount: true }), "parser_structure_changed");
+  assert.equal(classifySourcePageEvidence({ hasSearchStructure: true, hasStrongExplicitEmptyState: true }), "valid_empty_search");
   assert.equal(classifySourcePageEvidence({ hasSearchStructure: true }), "parser_structure_changed");
   assert.equal(classifySourcePageEvidence({ htmlLength: 200_000 }), "parser_structure_changed");
   assert.equal(classifySourcePageEvidence({ responseStatus: 404 }), "source_unavailable");
@@ -225,13 +231,26 @@ test("bronclassificatie onderscheidt challenge, lege zoekroute, parserwijziging 
 
 test("bronstatus gebruikt het Playwright page.evaluate-contract met één objectargument", async () => {
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
+  const previousGetComputedStyle = Object.getOwnPropertyDescriptor(globalThis, "getComputedStyle");
+  const emptyMarker = {
+    innerText: "Geen producten gevonden",
+    getClientRects: () => [{}],
+    parentElement: null,
+    closest: () => ({}),
+  };
   Object.defineProperty(globalThis, "document", {
     configurable: true,
     value: {
       body: { innerText: "Geen producten gevonden" },
       documentElement: { outerHTML: "<main></main>" },
-      querySelector: () => null,
+      location: { pathname: "/aardappelen-groente-fruit?page=2" },
+      querySelector: () => ({}),
+      querySelectorAll: selector => selector.includes("empty") ? [emptyMarker] : [],
     },
+  });
+  Object.defineProperty(globalThis, "getComputedStyle", {
+    configurable: true,
+    value: () => ({ display: "block", visibility: "visible", opacity: "1" }),
   });
 
   const page = {
@@ -253,6 +272,8 @@ test("bronstatus gebruikt het Playwright page.evaluate-contract met één object
   } finally {
     if (previousDocument) Object.defineProperty(globalThis, "document", previousDocument);
     else delete globalThis.document;
+    if (previousGetComputedStyle) Object.defineProperty(globalThis, "getComputedStyle", previousGetComputedStyle);
+    else delete globalThis.getComputedStyle;
   }
 });
 
