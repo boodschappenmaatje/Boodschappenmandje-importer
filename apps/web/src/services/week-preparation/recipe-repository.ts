@@ -23,7 +23,7 @@ export interface RecipeCatalog {
 }
 
 export interface RecipeRepository {
-  loadCatalog(signal?: AbortSignal): Promise<RecipeCatalog>;
+  loadCatalog(signal?: AbortSignal, options?: { includeBlockedRecipeIds?: readonly string[] }): Promise<RecipeCatalog>;
 }
 
 export type RecipeReadErrorCode =
@@ -152,7 +152,10 @@ function mapRelation(value: unknown): RecipeIngredient | null {
 export class SupabaseRecipeRepository implements RecipeRepository {
   constructor(private readonly client: SupabaseClient) {}
 
-  async loadCatalog(signal?: AbortSignal): Promise<RecipeCatalog> {
+  async loadCatalog(
+    signal?: AbortSignal,
+    options: { includeBlockedRecipeIds?: readonly string[] } = {},
+  ): Promise<RecipeCatalog> {
     let recipesQuery = this.client
       .from("recipes")
       .select(
@@ -261,13 +264,14 @@ export class SupabaseRecipeRepository implements RecipeRepository {
     });
     const blocked = (profilesResult.data ?? []).filter(row => row.status !== "verified");
     const blockedRecipeIds = new Set(blocked.map(row => row.recipe_id));
+    const explicitlyIncluded = new Set(options.includeBlockedRecipeIds ?? []);
     return {
       mealMixProfiles,
       unavailableMealMixes: blocked.flatMap(row => {
         const product = row.products as unknown as { name: string; sku: string } | null;
         return product ? [{ id: `unavailable-${row.product_id}`, sourceKey: `catalog-mix-${product.sku}`, name: product.name, brand: row.brand }] : [];
       }),
-      recipes: recipes.filter(recipe => !blockedRecipeIds.has(recipe.id)),
+      recipes: recipes.filter(recipe => !blockedRecipeIds.has(recipe.id) || explicitlyIncluded.has(recipe.id)),
       ingredients: enrichIngredientsForMealMixes(ingredients.map((ingredient) => ({
         ...ingredient,
         aliases: [...new Set([

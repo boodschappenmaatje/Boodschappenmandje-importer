@@ -1,3 +1,28 @@
+# Checkpoint — 1B expliciete recipe-link readiness-flow — 10 oktober 2026
+
+## Releasebasis en auditcheckpoint
+
+- Deze codebranch is gebaseerd op remote `main` **`9922b4b666c89fed42104b0700e5cd690e6b6459`**. PR [#70](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/70) blijft een aparte open Draft PR voor de 1B audit/documentatie; de code in dit checkpoint wordt apart ingediend.
+- De release-/maintenancebasis uit PR #70 is PR #69 op dezelfde main-SHA: volledige Hoogvliet dry-run **38061167591** `PASS`, `snapshot_complete=true`; maintenance write-run **38063646183** `PASS`. De run controleerde 7.945 SKU's (7.616 bulkprijschecks, 329 detailfallbacks), wijzigde 562 bestaande prijzen, liet 7.383 gelijk, voegde 0 producten toe en behield 414 Production-only SKU's. Snapshotduplicaten: 0. Postcheck: 8.362 producten/prijsrecords met unieke SKU's, 0 ongeldige/nulprijzen, 520 offers en 0 actieve jobs/locks/attempts/imports. Dit checkpoint start geen nieuwe importer- of Production-run.
+
+## Root cause en invariant
+
+- `/api/internal/planner-readiness/mix-refresh` eist `meal_mix_profiles.status = verified`. Deze check beschermt de plannercontracten: alleen een inhoudelijk geverifieerd profiel met bruikbare profieldata mag als maaltijdmix aan de planner worden aangeboden. De normale recipe repository filtert recipes met niet-verified mixprofielen uit de plannercatalogus.
+- De route riep ook `refreshPlannerReadiness` aan, dat via `persistGate` zowel `recipe_readiness_cache` als `ingredient_product_matches` upsert. De route rechtstreeks verruimen zou dus status-/profielbescherming omzeilen én cachewrites buiten de gewenste scope kunnen doen.
+- Een exact bewezen SKU→bestaand-receptlink bewijst alleen de link. Het bewijst geen volledig profiel. De nieuwe flow laat daarom `needs_review` en `profile = null` staan en kan alleen de gewone ingredient-/product-/prijsregels van de bestaande readiness-evaluator toepassen.
+
+## Implementatie en grenzen
+
+- Nieuwe interne expliciete readiness-flow accepteert alleen de zeven gereviewde Knorr SKU→recipe-ID-paren uit de audit. SKU, Knorr-merk, profielstatus/leeg profiel, eventuele bestaande `recipe_id`, recipe-bestaan en minimaal één gekoppelde recipe-ingredient worden gevalideerd; `704881000` is uitgesloten.
+- Alleen het aangevraagde recipe-ID wordt via een expliciete repository-optie tijdelijk in de interne evaluatiecatalogus toegelaten. De evaluator blijft `evaluateRecipeReadiness`; er is geen tweede readiness-engine of kunstmatige match.
+- De geautoriseerde refresh mag uitsluitend `recipe_readiness_cache` voor dat recipe-ID bijwerken (1–10 personen). Semantisch identieke, nog actuele rijen worden overgeslagen. Er zijn geen writes aan `meal_mix_profiles`, `recipes`, `recipe_ingredients`, `products`, `product_prices` of `ingredient_product_matches`; andere recipes/profielen worden niet bijgewerkt.
+- Preview heeft uitsluitend een read-only GET-evaluatie. De bestaande normale mix-refresh blijft `verified` eisen. Geen migratie, Production recipe-link, readiness-refresh, Production-write, deployment of merge uitgevoerd.
+
+## Verificatie en volgende gate
+
+- Op branch `codex/needs-review-explicit-recipe-readiness-20261010`: gerichte readiness-/route-/repository-regressies **92/92 groen**; root `npm test` **444/444 groen**; root `npm run check` groen; volledige web `npm run check` groen (**lint, TypeScript, 73 testbestanden/875 tests en productiebuild**); `npm run test:postgres` **28/28 groen** op een tijdelijke lokale PostgreSQL-container; `git diff --check` groen.
+- Draft code-PR volgt op deze branch. Resterende gate: Preview/read-only evaluatie controleren en PR-review. Een latere Production `recipe_id`-write en readiness-refresh blijven buiten deze opdracht en vragen afzonderlijke expliciete toestemming. De bestaande `needs_review` status kan met deze flow niet worden gepromoveerd.
+
 # Checkpoint — Hoogvliet explicit-empty / non-hydration fix — 10 oktober 2026
 
 ## Basis en bewijs
