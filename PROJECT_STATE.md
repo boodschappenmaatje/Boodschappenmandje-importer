@@ -22,6 +22,26 @@
 
 ---
 
+# Checkpoint — veilige Zyte-fallback voor lege verwachte next-window — 10 oktober 2026
+
+## Onderzoek en oorzaak
+
+- Actuele remote `main` is `e77c4c69ed515b7a2c438d3987c84f9b0d0d54ea`, na merge van PR #67 (`3bac1675c46fba5903a6e9736903ffee210fd1e2`). Open PR's #54/#42/#41/#21 raken de Hoogvliet-listingfallback niet. Run [38052370086](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38052370086) bevestigt alleen de samenvatting: 10/20 routes, 150 listingwindows, 2.828 unieke SKU's, `category_listing_stagnated`, nul fallbackattempts en incomplete snapshot. Het GitHub-logendpoint gaf bij read-only inspectie HTTP 403 en de run heeft geen diagnostisch artifact; daarom is de exacte route/window van die historische run niet meer reconstrueerbaar.
+- De controlflow behield `transition=next` en de concrete `expectedWindowURL` tot in de snapshot. De concrete eligibilityfout zat in shellherkenning: `hasCatalogStructure` herkende alleen product-/categorieankers of `/producten`, niet de listingcontainer zelf. Een valide, geladen lege listing-shell zonder subcategorielink werd daardoor `catalog_shell_not_proven`; de fallback werd vóór de generieke `category_listing_stagnated`-classificatie overgeslagen. De oude fixture maskeerde dit doordat ze een kunstmatige subcategorielink bevatte. Load-more-stagnatie heeft terecht geen next-URL en blijft niet eligible.
+
+## Fix, observability en grenzen
+
+- Herkenning van expliciete listingcontainers (`main#catalog-listing` en beperkte catalog-/product-list selectors) is nu onderdeel van de bron-shell/readiness-evidence. Daarmee kan uitsluitend een concrete, geldige en via `next` verwachte pagina met HTTP 2xx/3xx, nul productlinks, een listing-shell en zonder expliciete lege status door de bestaande Zyte-eligibility lopen. De provideruitkomst blijft via dezelfde parser/hydratie-/dedupeflow gaan; mislukking blijft fail-closed.
+- Iedere `category_listing_stagnated` krijgt veilige diagnostiek: route, windowindex, canonical URL, transition (`initial`/`next`/`load_more`/`nested`), `expectedByNext`, HTTP-status, raw/unique SKU-count, shell-/empty-classificatie, eligibilityreden, fallback-attemptreden/teller en stopreden. Er worden geen HTML of secrets gelogd.
+- Geen Zyte voor initial/nested lege pagina's zonder next-context, expliciete leegstatus, load-more-stagnatie, 404, ongeldige identiteit/URL, loops, repeated SKU, page-alias, parser/schemafout of window-cap. `MAINTENANCE_MAX_LISTING_WINDOWS` en providerlimieten blijven ongewijzigd.
+
+## Branch, verificatie en releasegate
+
+- Branch `codex/fix-zyte-next-window-stagnation-20261010`, gebaseerd op actuele remote `main`; Draft PR wordt aangemaakt na verificatie. ROADMAP 1A.1 blijft open.
+- Gerichte regressies: listing-shell zonder link, next-success, fallback-empty/fail-closed, explicit-empty, load-more, initial-empty, 404, repeated SKU, pagination-loop, page-alias, window-cap, navigation-only nested en bestaande adapterrails.
+- Verificatie: gerichte listingtests **24/24 groen**; volledige `npm test` **441/441 groen**; `npm run check` groen; `git diff --check` groen. PostgreSQL-tests en workflow-YAML-validatie zijn niet relevant: databasecode en Actions-workflows zijn niet gewijzigd.
+- Geen Zyte-livecall, maintenance dry-run/write, productimport, databasewrite, migratie, deployment of merge uitgevoerd. Na groene PR-CI en aparte mergegoedkeuring is de exacte Work-gate één volledige maintenance dry-run: bevestig complete snapshot en controleer dat fallback alleen voor een bewezen next-window optreedt. Stop zonder write; finale write blijft een aparte goedkeuringsgate.
+
 # Checkpoint — Production-ready Zyte-listingfallback in Draft — 10 oktober 2026
 
 ## Bewezen provider en actuele basis

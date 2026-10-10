@@ -417,12 +417,22 @@ async function readCatalogPageEvidence(page) {
     const productLinks = document.querySelectorAll("a[href*='/product/']").length;
     const categoryLinks = [...document.querySelectorAll("a[href]")]
       .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
+    const hasListingShell = Boolean(document.querySelector([
+      "main[id*='catalog-listing' i]",
+      "main[class*='catalog-listing' i]",
+      "[data-testid*='catalog-listing' i]",
+      "[data-testid*='product-list' i]",
+      "[id*='product-list' i]",
+      "[class*='product-listing' i]",
+      "[class*='product-grid' i]",
+    ].join(",")));
     return {
       responseStatus,
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
       hasExpectedContent: productLinks > 0,
-      hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten",
+      hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten" || hasListingShell,
+      hasListingShell,
       hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text),
       hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
       productLinks,
@@ -457,9 +467,19 @@ async function waitForCatalogSource(page, options = {}) {
           && !nonCatalogPaths.includes(firstSegment);
       } catch { return false; }
     });
+    const hasListingShell = Boolean(document.querySelector([
+      "main[id*='catalog-listing' i]",
+      "main[class*='catalog-listing' i]",
+      "[data-testid*='catalog-listing' i]",
+      "[data-testid*='product-list' i]",
+      "[id*='product-list' i]",
+      "[class*='product-listing' i]",
+      "[class*='product-grid' i]",
+    ].join(",")));
     return document.querySelectorAll("a[href*='/product/']").length > 0
       || (!expect && document.location.pathname === "/producten")
       || ((expect || allowCategoryOnly) && hasCategoryLink)
+      || (allowCategoryOnly && hasListingShell)
       || /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten|captcha|verify you are human|controleer of je een mens bent|access denied|toegang geweigerd|forbidden/.test(text);
   }, { expectCategoryLinks, allowCategoryOnly: options.allowCategoryOnly === true,
     nonCatalogPaths: [...NON_CATALOG_PATHS] }, {
@@ -1067,6 +1087,7 @@ export async function collectCatalogListing(page, routeURL, {
   captureDiagnostics = false,
   normalTimeoutMs,
   listingFallback = null,
+  initialTransition = "initial",
 } = {}) {
   let pendingFallbackCandidates = null;
   let expectedWindowURL = routeURL;
@@ -1115,6 +1136,7 @@ export async function collectCatalogListing(page, routeURL, {
   let naturalExhaustion = false;
   let currentSignature = "";
   let stallReason = null;
+  let stallDiagnostic = null;
   const visitedListingURLs = new Set([page.url()]);
   const visitedListingIdentities = new Set([catalogListingPageIdentity(page.url())]);
   const seenFreshSKUFingerprints = new Set();
@@ -1123,31 +1145,66 @@ export async function collectCatalogListing(page, routeURL, {
   const canonicalListingURLs = new Map();
   let repeatedSKUWindows = 0;
   let pageAliasCount = 0;
-  let transition = "initial";
+  let transition = initialTransition === "nested" ? "nested" : "initial";
 
   const snapshot = async () => {
     if (primaryWindowPreRecorded) primaryWindowPreRecorded = false;
     else listingFallback?.recordPrimaryWindow?.();
     let rawDOM = pendingFallbackCandidates ?? await extractCatalogListingCandidates(page);
+    const primaryRawCandidateCount = rawDOM.length;
+    const primaryUniqueSKUCount = new Set(rawDOM
+      .map(candidate => extractSKUFromProductURL(candidate.sourceURL)).filter(Boolean)).size;
     pendingFallbackCandidates = null;
-    if (rawDOM.length === 0 && transition === "next" && listingFallback?.attempt
-      && normalizeCatalogListingURL(expectedWindowURL)
-      && catalogListingPageIdentity(page.url()) === catalogListingPageIdentity(expectedWindowURL)) {
-      const evidence = await readCatalogPageEvidence(page);
-      const categoryLinkCount = (await extractCatalogCategoryLinks(page)).length;
+    let eligibilityReason = transition !== "next"
+      ? `transition_${transition}_not_expected_next`
+      : rawDOM.length > 0 ? "primary_listing_has_candidates" : "expected_window_evidence_not_checked";
+    let fallbackEligible = false;
+    let shellClassification = "not_checked";
+    let explicitEmptyClassification = "not_checked";
+    let fallbackAttemptReason = null;
+    const expectedByNext = transition === "next";
+    const canonicalURL = normalizeCatalogListingURL(expectedWindowURL);
+    const expectedIdentityMatches = Boolean(canonicalURL)
+      && catalogListingPageIdentity(page.url()) === catalogListingPageIdentity(canonicalURL);
+    if (rawDOM.length === 0) {
+      if (!expectedByNext) eligibilityReason = `transition_${transition}_not_expected_next`;
+      else if (!canonicalURL) eligibilityReason = "expected_window_url_invalid";
+      else if (!expectedIdentityMatches) eligibilityReason = "final_url_listing_identity_mismatch";
+      else if (!listingFallback?.attempt) eligibilityReason = "fallback_provider_unavailable";
+      else eligibilityReason = "checking_expected_next_evidence";
+    }
+    let evidence = null;
+    let categoryLinkCount = null;
+    if (rawDOM.length === 0 && expectedByNext && canonicalURL && expectedIdentityMatches) {
+      evidence = await readCatalogPageEvidence(page);
+      categoryLinkCount = (await extractCatalogCategoryLinks(page)).length;
+      shellClassification = evidence.hasListingShell || evidence.hasCatalogStructure || categoryLinkCount > 0
+        ? "valid_catalog_shell" : "no_catalog_shell";
+      explicitEmptyClassification = evidence.hasExplicitEmptyState || evidence.hasZeroProductCount
+        ? "explicit_empty" : "not_explicitly_empty";
       const loadedExpectedShell = Number(evidence.responseStatus) >= 200
         && Number(evidence.responseStatus) < 400
         && (evidence.hasCatalogStructure || categoryLinkCount > 0)
         && !evidence.hasExplicitEmptyState
         && !evidence.hasZeroProductCount
         && evidence.productLinks === 0;
-      if (loadedExpectedShell) {
+      fallbackEligible = loadedExpectedShell && Boolean(listingFallback?.attempt);
+      if (loadedExpectedShell && !listingFallback?.attempt) eligibilityReason = "fallback_provider_unavailable";
+      else if (loadedExpectedShell) eligibilityReason = "eligible_expected_next_non_hydrated";
+      else if (Number(evidence.responseStatus) < 200 || Number(evidence.responseStatus) >= 400) {
+        eligibilityReason = "primary_response_status_not_successful";
+      } else if (evidence.productLinks > 0) eligibilityReason = "primary_has_product_links_parser_returned_none";
+      else if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) eligibilityReason = "explicit_empty_status";
+      else if (!(evidence.hasCatalogStructure || categoryLinkCount > 0)) eligibilityReason = "catalog_shell_not_proven";
+      else eligibilityReason = "expected_next_not_fallback_eligible";
+      if (fallbackEligible) {
         const result = await listingFallback.attempt({
           targetURL: expectedWindowURL,
           routeURL,
           windowIndex: windows.length,
           triggerReason: "expected_next_non_hydrated",
         });
+        fallbackAttemptReason = result.ok ? "success" : (result.reason ?? "provider_failure");
         if (result.ok) rawDOM = result.candidates;
       }
     }
@@ -1158,11 +1215,27 @@ export async function collectCatalogListing(page, routeURL, {
     if (freshDOM.length > 0) catalogAPICalls += 1;
     for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
     const signature = [...routeCandidates.keys()].sort().join("|");
-    return { fresh, rawDOM, signature };
+    return {
+      fresh,
+      rawDOM,
+      signature,
+      primaryRawCandidateCount,
+      primaryUniqueSKUCount,
+      expectedByNext,
+      canonicalURL,
+      shellClassification,
+      explicitEmptyClassification,
+      fallbackEligible,
+      eligibilityReason,
+      fallbackAttemptReason,
+      responseStatus: evidence?.responseStatus ?? page.__hoogvlietLastResponseStatus ?? null,
+      pageEvidence: evidence,
+    };
   };
 
   while (!shouldStop() && windows.length < maxWindows) {
-    const { fresh, rawDOM, signature } = await snapshot();
+    const windowSnapshot = await snapshot();
+    const { fresh, rawDOM, signature } = windowSnapshot;
     if (windows.length === 0 && fresh.length === 0
       && (await extractCatalogCategoryLinks(page)).length > 0) {
       naturalExhaustion = true;
@@ -1171,6 +1244,33 @@ export async function collectCatalogListing(page, routeURL, {
     if (signature === currentSignature && currentSignature) {
       stagnated = true;
       stallReason = "category_listing_stagnated";
+      const diagnosticEvidence = windowSnapshot.pageEvidence ?? await readCatalogPageEvidence(page);
+      const diagnosticShell = windowSnapshot.shellClassification !== "not_checked"
+        ? windowSnapshot.shellClassification
+        : (diagnosticEvidence?.hasListingShell || diagnosticEvidence?.hasCatalogStructure
+          ? "valid_catalog_shell" : "no_catalog_shell");
+      const diagnosticExplicitEmpty = windowSnapshot.explicitEmptyClassification !== "not_checked"
+        ? windowSnapshot.explicitEmptyClassification
+        : (diagnosticEvidence?.hasExplicitEmptyState || diagnosticEvidence?.hasZeroProductCount
+          ? "explicit_empty" : "not_explicitly_empty");
+      const reason = windowSnapshot.eligibilityReason;
+      stallDiagnostic = {
+        route: normalizeCatalogCategoryURL(routeURL) ?? "[invalid-route]",
+        window_index: windows.length,
+        canonical_url: normalizeCatalogListingURL(page.url()) ?? windowSnapshot.canonicalURL,
+        transition,
+        expectedByNext: windowSnapshot.expectedByNext,
+        response_status: windowSnapshot.responseStatus ?? diagnosticEvidence?.responseStatus ?? null,
+        raw_candidate_count: windowSnapshot.primaryRawCandidateCount,
+        unique_sku_count: windowSnapshot.primaryUniqueSKUCount,
+        shell_classification: diagnosticShell,
+        explicit_empty_classification: diagnosticExplicitEmpty,
+        fallback_eligible: windowSnapshot.fallbackEligible,
+        fallback_eligibility_reason: reason,
+        fallback_attempt_reason: windowSnapshot.fallbackAttemptReason,
+        fallback_attempts: listingFallback?.accounting?.().fallbackAttempts ?? 0,
+        stop_reason: stallReason,
+      };
       break;
     }
     const freshSKUFingerprint = [...new Set(fresh
@@ -1258,6 +1358,7 @@ export async function collectCatalogListing(page, routeURL, {
     listingURLsVisited: visitedListingURLs.size,
     sourceExhausted,
     stallReason: stagnated ? stallReason ?? "category_listing_stagnated" : null,
+    stallDiagnostic,
     nextPage: sourceExhausted ? 0 : startWindow + Math.min(maxWindows, windows.length),
     categoryURL: routeURL,
   };
@@ -1267,6 +1368,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   const rootURL = CATALOG_ROOT_URL;
   const queue = [rootURL];
   const queued = new Set(queue);
+  const routeTransitions = new Map([[rootURL, "initial"]]);
   const visitedCategories = new Set();
   const allCandidates = [];
   const seenURLs = new Set();
@@ -1277,6 +1379,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   let catalogAPICalls = 0;
   let sourceExhausted = true;
   let stallReason = null;
+  let stallDiagnostic = null;
   let rootCategoryCount = 0;
   let rootListingRouteCount = 0;
   let nestedRoutesSkipped = 0;
@@ -1318,7 +1421,11 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       rootListingRouteCount = listingRoutes.length;
       nestedRoutesSkipped = rootCategoryCount - rootListingRouteCount;
       for (const child of listingRoutes) {
-        if (!queued.has(child.url)) { queued.add(child.url); queue.push(child.url); }
+        if (!queued.has(child.url)) {
+          queued.add(child.url);
+          queue.push(child.url);
+          routeTransitions.set(child.url, "initial");
+        }
         else duplicateRouteDiscoveries += 1;
       }
       continue;
@@ -1335,6 +1442,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       captureDiagnostics: options.captureDiagnostics === true,
       normalTimeoutMs: options.normalTimeoutMs,
       listingFallback: options.listingFallback,
+      initialTransition: routeTransitions.get(routeURL) ?? "initial",
     });
     // A fresh page starts at window zero. Replay enough load-more clicks to
     // reach the persisted global cursor, then emit only the new window range.
@@ -1384,13 +1492,21 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
       });
     }
     sourceExhausted = listing.sourceExhausted;
-    if (listing.stallReason) { stallReason = listing.stallReason; break; }
+    if (listing.stallReason) {
+      stallReason = listing.stallReason;
+      stallDiagnostic = listing.stallDiagnostic;
+      break;
+    }
     if (listing.initialCandidateCount === 0) {
       const childRoutes = await extractCatalogCategoryLinks(page);
       const fallbackRoutes = selectCatalogListingRoutes(childRoutes, routeURL);
       nestedFallbackRoutes += fallbackRoutes.length;
       for (const child of fallbackRoutes) {
-        if (!queued.has(child.url)) { queued.add(child.url); queue.push(child.url); }
+        if (!queued.has(child.url)) {
+          queued.add(child.url);
+          queue.push(child.url);
+          routeTransitions.set(child.url, "nested");
+        }
         else duplicateRouteDiscoveries += 1;
       }
     }
@@ -1434,6 +1550,7 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     repeatedWindows,
     windowsWithoutNewSKUs,
     pageAliases,
+    stallDiagnostic,
     categoryDiagnostics,
     diagnosticUniqueSKUs: globallySeenSKUs.size,
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
@@ -2225,6 +2342,9 @@ export async function withDailyCatalogSource(config, handler, options = {}) {
       { navigationRetries: config.navigationRetries, listingFallback },
     );
     if (!snapshot.sourceExhausted || snapshot.stallReason) {
+      if (snapshot.stallReason === "category_listing_stagnated" && snapshot.stallDiagnostic) {
+        logger.warn(`category_listing_stagnated=${JSON.stringify(snapshot.stallDiagnostic)}`);
+      }
       throw new SourceUnavailableError(
         `Dagelijkse catalogussnapshot is onvolledig; stopreden=${snapshot.stallReason ?? "listing_window_limit"}`
         + ` | root_categorieen=${snapshot.rootCategoriesDiscovered}`
