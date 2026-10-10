@@ -50,11 +50,20 @@ Vaste regels:
 | 5 | Eigen recepten — vervolg | Gepland | Middel | Meer flexibiliteit zonder budget-/lijstregressies | Codex → Work | Opslag stabiel | Eigen recepten robuust bewerken/bewaren en correct laten meedoen in prijs/lijst |
 | 6 | Slimmere suggesties | Gepland | Hoog | Relevante aanvullingen zonder lijst te vervuilen | Codex → Work | Voorraad + historie | Suggesties zijn relevant, uitlegbaar, budgetbewust en nooit automatisch dominant |
 | 7 | Personalisatie | Gepland | Hoog | Minder handwerk en betere keuzes per huishouden | Codex → Work | Geschiedenis + suggesties | App leert voorkeuren/patronen zonder expliciete keuzes te overschrijven |
-| 8 | Home-mascotte / gerechtfoto's | Later | Laag | Meer herkenning en aantrekkelijkere app | Work | Kernfunctionaliteit stabiel | Visueel goedgekeurd op iPhone zonder functionele regressies |
+| 8 | Home-mascotte / gerechtfoto's + Maatje Intro 1.0 | Later — introconcept goedgekeurd, nog niet gebouwd | Laag | Herkenbare, speelse en premium merkbeleving bij openen | Codex → Work | Kernfunctionaliteit stabiel; origineel mascotte-asset en animatiehaalbaarheid gecontroleerd | Originele mascotte blijft exact herkenbaar; maximaal 5 seconden speelse animatie met sprong, knipperen, duimpjes, metallic-blauwe gloed en slogan; overslaan mogelijk; geen verplichte vertraging bij terugkeer; reduced-motion en fysieke iPhone-test geslaagd |
 | 9 | Haptische feedback | Onderzoeken | Laag | Snellere/duidelijkere bediening waar iOS dit betrouwbaar ondersteunt | Work eerst | Fysieke iPhone-proef | Alleen behouden als echte PWA-ondersteuning bewezen is |
 | 10 | Launch-polish | Voor publieke lancering | Middel | Snelle, betrouwbare en verzorgde eindervaring | Work | Functionele kern gereed | Volledige iPhone-flow, performance, toegankelijkheid, juridische pagina's en Production-smoke groen |
 | 11 | Accounts & synchronisatie | Na kern + launch-polish | Laag | Data tussen apparaten bewaren | Codex → Work | Opslag + launch-polish | Login en synchronisatie betrouwbaar zonder lokale data stil te verliezen |
 | 12 | BoodschappenMaatje Plus | Na accounts | Laag | Verdienmodel met extra gemak | Codex → Work | Accounts stabiel | Plus voegt waarde toe zonder gratis kern kunstmatig te beperken |
+
+## Gepland ontwerp — Maatje Intro 1.0
+
+- **Status:** storyboard en visuele richting goedgekeurd; nog geen implementatie.
+- **Duur en verloop:** circa 5 seconden: blauwe entree → originele bon-mascotte springt met zachte bounce in beeld → knipperen, glimlach en duimpjes → 'Slim kopen. Lekker eten.' → vloeiende overgang naar bestaande Home.
+- **Vormgeving:** bestaande officiële mascotte en metallic-blauwe design tokens behouden; subtiele diepte, gloed en fonkeltjes; geen nieuw logo of vervangend personage.
+- **Techniekkeuze bij uitvoering:** eerst originele assets en haalbaarheid van Rive onderzoeken; CSS/transparante assets als lichtgewicht alternatief. Geen nieuwe techniek vastleggen vóór de proef.
+- **Gedrag:** alleen bij een echte nieuwe openingssessie, nooit bij gewone navigatie; overslaan en verminderde beweging ondersteunen; Home mag niet op animatie wachten; iOS PWA-heropenen fysiek testen.
+- **Uitvoering:** eerst beperkte asset-/performanceproef en Preview, daarna fysieke iPhone-acceptatie. Geen merge of Production zonder afzonderlijke goedkeuring.
 
 ---
 
