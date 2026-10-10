@@ -21,6 +21,15 @@ Vaste regels:
 
 ## Uitvoeringsregels
 
+## Snelle kwaliteitscheck — standaard bij iedere ontwikkelstap
+
+- **Kort en risicogericht:** controleer vooraf de relevante bestaande code, afhankelijkheden en één of twee waarschijnlijke foutscenario's; geen brede audit zonder aanleiding.
+- **Passende tests:** draai gerichte tests en bestaande relevante checks. Valideer bij gewijzigde GitHub Actions YAML met actionlint; bij CLI's de echte exitcode en veilige resultaatuitvoer; bij API's auth, foutpad en timeout. Alleen wat voor de wijziging relevant is.
+- **Echte keten alleen waar nodig:** bij wijzigingen met externe systemen of writes eerst Preview en een begrensde read-only/dry-run, uitsluitend met passende toestemming. Voor eenvoudige documentatie- of UI-wijzigingen geen onnodige live-probes.
+- **Stopregel:** na maximaal twee mislukte fixpogingen geen derde gokpatch; rapporteer de aantoonbare oorzaak of blokkade en kies gericht vervolgonderzoek. Geen eindeloze retries of nieuwe PR's per symptoom.
+- **Klaar betekent bewijs:** noteer compact welke checks groen zijn, wat niet is getest en of een iPhone-test of aparte Production-goedkeuring nog nodig is.
+- **Tijdbudget:** streef naar een snelle check van circa 5–10 minuten bij normale kleine taken; verleng alleen bij aantoonbaar risico of een concrete fout, en meld waarom.
+
 - **Codex** doet standaard codeonderzoek, implementatie, refactors, algoritmes, tests en performancewerk.
 - **Work** doet GitHub/PR, Supabase-live-data, Vercel Preview, browsercontrole, live maintenance, release en Production-smoke.
 - **Een Work-run behandelt maximaal één technisch checkpoint.**
