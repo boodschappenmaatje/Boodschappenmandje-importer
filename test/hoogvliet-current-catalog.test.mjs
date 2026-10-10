@@ -348,24 +348,26 @@ test("zichtbare generieke leegfrase blijft zwak en blokkeert next-window fallbac
   assert.equal(result.stallDiagnostic.fallback_eligibility_reason, "eligible_expected_next_non_hydrated");
 });
 
-test("een verborgen leegplaceholder staat niet in rendered body-tekst en wordt als none vastgelegd", async t => {
+test("een onzichtbare lege placeholder blijft zwak bewijs en blokkeert fallback niet", async t => {
   const hiddenNotice = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><div style="opacity:0"><div data-testid="empty-state">Geen producten</div></div></main>';
   const h = await browserFor({
     body: paginationFixture,
     bodyForURL: url => url.searchParams.get("page") === "2" ? hiddenNotice : paginationFixture,
   });
   t.after(() => h.browser.close());
-  const fallback = fallbackStub();
+  const fallback = fallbackStub(async () => ({ ok: false, reason: "provider_failure" }));
   const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
     maxWindows: 10,
     listingFallback: fallback,
   });
   assert.equal(fallback.calls.length, 1);
   assert.equal(fallback.calls[0].triggerReason, "expected_next_non_hydrated");
-  assert.equal(result.stallDiagnostic.explicit_empty_classification, "not_explicitly_empty");
-  assert.equal(result.stallDiagnostic.empty_signal_type, "none");
-  assert.equal(result.stallDiagnostic.empty_match, "none");
-  assert.equal(result.stallDiagnostic.empty_visible, "unknown");
+  assert.equal(result.stallDiagnostic.explicit_empty_classification, "weak_signal");
+  assert.equal(result.stallDiagnostic.empty_signal_type, "body_text_phrase");
+  assert.equal(result.stallDiagnostic.empty_match, "geen_producten");
+  assert.equal(result.stallDiagnostic.empty_source_selector, "[data-testid*='empty' i]");
+  assert.equal(result.stallDiagnostic.empty_visible, "false");
+  assert.equal(result.stallDiagnostic.empty_strength, "weak");
 });
 
 test("empty diagnostic reports the earliest matched phrase as a stable enum", async t => {
