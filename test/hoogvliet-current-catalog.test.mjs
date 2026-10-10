@@ -323,8 +323,53 @@ test("expliciete lege next-window status sluit Zyte uit en wordt diagnostisch va
   assert.equal(result.stallDiagnostic.expectedByNext, true);
   assert.equal(result.stallDiagnostic.shell_classification, "valid_catalog_shell");
   assert.equal(result.stallDiagnostic.explicit_empty_classification, "explicit_empty");
+  assert.equal(result.stallDiagnostic.empty_signal_type, "body_text_phrase");
+  assert.equal(result.stallDiagnostic.empty_match, "geen_producten");
+  assert.equal(result.stallDiagnostic.empty_source_selector, "main");
+  assert.equal(result.stallDiagnostic.empty_visible, "true");
+  assert.equal(result.stallDiagnostic.empty_strength, "weak");
   assert.equal(result.stallDiagnostic.fallback_eligible, false);
   assert.equal(result.stallDiagnostic.fallback_eligibility_reason, "explicit_empty_status");
+});
+
+test("een zichtbare generieke leegfrase wordt veilig als zwak signaal vastgelegd", async t => {
+  const genericNotice = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><aside>Geen producten beschikbaar in deze melding</aside></main>';
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? genericNotice : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 0);
+  assert.equal(result.stallDiagnostic.explicit_empty_classification, "explicit_empty");
+  assert.equal(result.stallDiagnostic.empty_match, "geen_producten");
+  assert.equal(result.stallDiagnostic.empty_source_selector, "body");
+  assert.equal(result.stallDiagnostic.empty_visible, "true");
+  assert.equal(result.stallDiagnostic.empty_strength, "weak");
+});
+
+test("een verborgen leegplaceholder staat niet in rendered body-tekst en wordt als none vastgelegd", async t => {
+  const hiddenNotice = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><div data-testid="empty-state" style="display:none">Geen producten</div></main>';
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? hiddenNotice : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 1);
+  assert.equal(fallback.calls[0].triggerReason, "expected_next_non_hydrated");
+  assert.equal(result.stallDiagnostic.explicit_empty_classification, "not_explicitly_empty");
+  assert.equal(result.stallDiagnostic.empty_signal_type, "none");
+  assert.equal(result.stallDiagnostic.empty_match, "none");
+  assert.equal(result.stallDiagnostic.empty_visible, "unknown");
 });
 
 test("lege initial category zonder bewezen next-context gebruikt geen Zyte", async t => {
