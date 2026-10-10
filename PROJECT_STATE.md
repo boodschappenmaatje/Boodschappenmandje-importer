@@ -1,3 +1,16 @@
+# Checkpoint — GitHub Actions HTTP 422 Knorr-workflow — 10 oktober 2026
+
+- Basis: remote main `f3498711e6a06c3f8aba42e945f74bd73b6645cc` (PR #77 gemerged). PR #70 blijft open/Draft/ongemerged en is niet gewijzigd.
+- Exacte oorzaak: `.github/workflows/knorr-recipe-links.yml` regel 15 bevatte een ongequote beschrijving met `write: `; die dubbele punt plus spatie maakt de YAML ongeldig. PyYAML en actionlint reproduceren de parsefout op die regel. GitHub push-run `38085508641` faalde op de workflowfile, vóór jobs; de eerdere dispatch werd afgewezen met HTTP 422, zonder dispatch-run.
+- Registratie-ID `380798917` is actief en wijst naar het juiste pad; default branch is main. API-content en remote git hebben dezelfde blob `49030b78299add14c500549cb7afae08f35b6ae9`. Geen aangetoond registratie-/padverschil. `on` is een geldige GitHub Actions-key; PyYAML SafeLoader behandelt hem volgens YAML 1.1 als boolean, terwijl BaseLoader de stringkey behoudt. Dat parserverschil veroorzaakt deze 422 niet.
+- Kleinste fix: quote uitsluitend de confirmation-inputbeschrijving. Runner, zeven mappings, dry-run-default, read-only auth-preflight, write-confirmation, main-/attemptguard en partial-write stop zijn behouden.
+- Branch `codex/fix-knorr-workflow-yaml-20261010`; codecommit `f91a385`; aparte Draft PR [#78](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/78). ROADMAP blijft ongewijzigd.
+- Verificatie: actionlint **1.7.12** verwerpt de originele YAML en accepteert de gecorrigeerde workflow; YAML-parse plus exacte workflow_dispatch-inputs/defaults geslaagd; bestaande Knorr runner-tests **9/9** groen; `git diff --check` geslaagd.
+- De gecorrigeerde workflow is lokaal aantoonbaar geldig. GitHub-registratie als dispatchable op main kan pas na merge worden bevestigd; er is geen dispatch gebruikt om dit te testen.
+- Production-writes **0**; geen workflowdispatch, Production dry-run, readiness-refresh, databasewijziging, merge of handmatige deployment uitgevoerd. Volgende stap: review en afzonderlijke mergegoedkeuring voor de Draft PR, daarna read-only registratiecontrole op main en pas met expliciete toestemming één dry-run.
+
+---
+
 # Checkpoint — PR #71 release en actieve 1B-writegate — 10 oktober 2026
 
 ## Release op actuele main

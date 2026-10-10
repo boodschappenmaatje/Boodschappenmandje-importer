@@ -12,7 +12,7 @@ on:
           - dry-run
           - write
       confirmation:
-        description: Required only for write: WRITE_EXACT_7_KNORR_RECIPE_LINKS
+        description: 'Required only for write: WRITE_EXACT_7_KNORR_RECIPE_LINKS'
         type: string
         required: false
         default: ''
