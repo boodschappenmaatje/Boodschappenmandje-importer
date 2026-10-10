@@ -1,0 +1,57 @@
+name: Handmatige Zyte listingproof
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zyte-listing-proof:
+    if: github.repository == 'boodschappenmaatje/Boodschappenmandje-importer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Vereiste secret fail-closed controleren
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ZYTE_API_KEY:-}" ]]; then
+            echo 'ZYTE_API_KEY ontbreekt; read-only proof niet gestart.' >&2
+            exit 1
+          fi
+
+      - name: Checkout exact dispatch commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Bestaande runner-Chrome selecteren
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_path="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || true)"
+          if [[ -z "$chrome_path" ]]; then
+            echo 'Geen bestaande Chrome/Chromium op de GitHub-runner gevonden.' >&2
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome_path" >> "$GITHUB_ENV"
+          "$chrome_path" --version
+
+      - name: Exact zes read-only Zyte browserHtml-requests uitvoeren
+        env:
+          ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
+        run: npm run proof:zyte-listing

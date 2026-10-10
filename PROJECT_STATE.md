@@ -1,3 +1,21 @@
+# Checkpoint — handmatige Zyte read-only proofworkflow — 10 oktober 2026
+
+## Technische proofstap
+
+- Op branch `codex/hoogvliet-listing-fallback-1a1-20261010` / Draft PR [#66](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/66) staat nu een afzonderlijke `workflow_dispatch`-workflow: `.github/workflows/manual-zyte-listing-proof.yml`. Er is geen schedule, push- of pull-requesttrigger.
+- `scripts/probe-zyte-listing-windows.mjs` doet hard gecodeerd exact zes sequentiële Zyte `browserHtml`-requests: eerst 3× `https://hoogvliet.nl/chips-zoutjes-noten/q/page/4`, daarna 3× `https://hoogvliet.nl/chips-zoutjes-noten/q/page/1`. Iedere call heeft één timeout van maximaal 60 seconden; er is geen retry, extra URL of providerfailover.
+- De provider-HTML wordt offline door de bestaande `extractCatalogListingCandidates`-parser verwerkt. Subresources worden geblokkeerd. Per call worden alleen requestnummer, doel-URL, API-/bronstatus, veilige uiteindelijke Hoogvliet-URL, latency, HTML-bytecount, raw candidates, unieke SKU-count, hydratatiestatus en listingidentiteit gelogd. HTML, API-key en Authorization-header worden niet gelogd.
+- `ZYTE_API_KEY` komt uitsluitend uit GitHub Actions secrets en is alleen beschikbaar in de secretcheck en proofstap. Checkout, dependencyinstallatie en Chrome-selectie krijgen de secret niet. Ontbrekende configuratie stopt vóór browser- of netwerk-I/O.
+
+## Schrijfgrens, verificatie en overdracht
+
+- Het proofscript importeert alleen Playwright en bestaande read-only Hoogvliet-parserhelpers. De workflow bevat geen Supabase-config, databaseverbinding, importer, maintenance-orchestrator, runregistratie, product-/prijswriter, deployment of migratie. Er is nog steeds geen fallbackproductiecode toegevoegd.
+- Verificatie: gerichte proofregressies **5/5 groen**; `npm test` **417/417 groen**; `npm run check` groen; workflow-YAML parse geldig; `git diff --check` groen. PostgreSQL-tests zijn niet geraakt: deze wijziging heeft geen databasepad.
+- De workflow is niet gestart en PR #66 is niet gemerged. `workflow_dispatch` wordt in de GitHub Actions-UI pas bruikbaar nadat deze workflow via een afzonderlijk goedgekeurde merge op default branch `main` staat. Exact volgend Work-checkpoint: review PR #66, geef apart mergebesluit, merge via de normale procedure en start daarna eenmaal **Actions → Handmatige Zyte listingproof → Run workflow → main**. Stop na de zes read-only requests; geen maintenance-run of write-run.
+- `ROADMAP.md` blijft ongewijzigd en 1A.1 blijft open totdat de echte Zyte-proof groen is en de latere fallback afzonderlijk veilig is geïmplementeerd en bewezen.
+
+---
+
 # Checkpoint — roadmap 1A.1 providerbesluit; integratie wacht op live-proof — 10 oktober 2026
 
 ## Actuele bronstoring en remote basis

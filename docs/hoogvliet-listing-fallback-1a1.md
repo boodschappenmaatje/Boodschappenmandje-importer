@@ -72,16 +72,16 @@ Deze proof is read-only en doet geen workflow/importerwrite.
 
 1. Maak een Zyte API-account met pay-as-you-go en een harde lage spend alert/limiet. Vraag vóór uitvoering in domain pricing de actuele prijs voor `hoogvliet.nl` met `browserHtml` op en leg valuta, prijs per request en eventuele minimumcommitment vast.
 2. Voeg uitsluitend `ZYTE_API_KEY` als GitHub Actions-secret toe. Toon of log de waarde niet.
-3. Gebruik een tijdelijke, handmatig gestarte read-only proof vanaf de Draft-PR-head. Allowlist exact:
+3. Review de geïsoleerde workflow `.github/workflows/manual-zyte-listing-proof.yml` in Draft PR #66. Na een afzonderlijk mergebesluit en merge naar `main` start Work hem uitsluitend handmatig via **Actions → Handmatige Zyte listingproof → Run workflow → main**. Allowlist exact:
    - probleemwindow `https://hoogvliet.nl/chips-zoutjes-noten/q/page/4`;
    - gezond controlewindow `https://hoogvliet.nl/chips-zoutjes-noten/q/page/1`.
-4. Doe sequentieel maximaal drie Zyte-requests per URL met `{ "url": URL, "browserHtml": true }`, nul retries en 45 seconden timeout. Maximum: 6 betaalde requests.
+4. De workflow doet sequentieel exact drie Zyte-requests per URL met `{ "url": URL, "browserHtml": true }`, nul retries en maximaal 60 seconden timeout per request. Maximum: 6 betaalde requests.
 5. Controleer per response zonder bodylogging: HTTP/providerstatus, response-URL exact dezelfde canonical listingidentiteit, latency, HTML-bytecount, bestaande parser raw-SKU-count en unieke geldige 9-cijferige SKU's. Sla alleen de veilige tellingen/fingerprints op.
-6. Pass-gate: beide URL's leveren 3/3 keer binnen 45 seconden minimaal één geldige productlink; het probleemwindow levert bij voorkeur de eerder bewezen 20 SKU's, en alle resultaten zijn met de bestaande parser leesbaar. Geen redirect, challengebody, lege response of parserafwijking.
+6. Pass-gate: beide URL's leveren 3/3 keer binnen 60 seconden minimaal één geldige productlink; het probleemwindow levert bij voorkeur de eerder bewezen 20 SKU's, en alle resultaten zijn met de bestaande parser leesbaar. Geen redirect, challengebody, lege response of parserafwijking.
 7. Noteer de werkelijk door Zyte gerapporteerde kosten van deze zes calls. Stop na de proof; voer geen maintenance dry-run of write-run uit.
 
 Bij een mislukte Zyte-proof wordt niet automatisch Bright Data geactiveerd. Voer dan dezelfde maximaal-zes-requestproof met Web Unlocker uit, met API-token plus vaste zone, `format=raw` en een productlink-wachtvoorwaarde. Pas daarna mag de providerbeslissing worden herzien.
 
 ## Technische status
 
-Roadmap 1A.1 is nog niet technisch afgerond. De eerstvolgende Codex-stap na een groene Zyte-proof is de minimale adapter plus de tien gevraagde regressies. `ROADMAP.md` blijft daarom ongewijzigd.
+Roadmap 1A.1 is nog niet technisch afgerond. De handmatige read-only proofworkflow bevat geen productieadapter en is niet gestart. De eerstvolgende Codex-stap na een groene Zyte-proof is de minimale adapter plus de tien gevraagde regressies. `ROADMAP.md` blijft daarom ongewijzigd.
