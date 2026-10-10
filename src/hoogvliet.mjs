@@ -400,8 +400,9 @@ export function classifySourcePageEvidence(evidence = {}) {
     return "source_unavailable";
   }
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
-  if (evidence.hasExpectedContent || evidence.hasCatalogStructure) return "ready";
+  if (evidence.hasExpectedContent) return "ready";
   if (evidence.hasStrongExplicitEmptyState) return "valid_empty_search";
+  if (evidence.hasCatalogStructure) return "ready";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
   // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
