@@ -21,7 +21,9 @@
 ## Verificatie en volgende gate
 
 - Op branch `codex/needs-review-explicit-recipe-readiness-20261010`: gerichte readiness-/route-/repository-regressies **92/92 groen**; root `npm test` **444/444 groen**; root `npm run check` groen; volledige web `npm run check` groen (**lint, TypeScript, 73 testbestanden/875 tests en productiebuild**); `npm run test:postgres` **28/28 groen** op een tijdelijke lokale PostgreSQL-container; `git diff --check` groen.
-- Draft code-PR volgt op deze branch. Resterende gate: Preview/read-only evaluatie controleren en PR-review. Een latere Production `recipe_id`-write en readiness-refresh blijven buiten deze opdracht en vragen afzonderlijke expliciete toestemming. De bestaande `needs_review` status kan met deze flow niet worden gepromoveerd.
+- Branch `codex/needs-review-explicit-recipe-readiness-20261010`, codecommit **`631276778f49c3ba12140fc7422849dcf85e404e`**, Draft PR [#71](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/71) naar `main`. De PR-CI en Vercel Preview-check zijn groen.
+- Preview/read-only acceptatie op de deployment van deze codecommit: alle zeven allowlisted links gaven HTTP 200; alle zeven responses behielden `needs_review`, meldden `profilePromoted=false`, `readinessWrites=0` en `matchCacheWrites=0`. Zes recipes waren READY voor 1–10 personen; SKU `704892000` bleef NOT_READY voor alle aantallen met 2 readinessproblemen. Daarmee wordt onvoldoende readiness niet geforceerd. De Preview-routes `/week-voorbereiden`, `/budget` en `/lijst` gaven elk HTTP 200; planner-/menu-regressies vallen ook onder de volledige websuite.
+- In deze opdracht is uitsluitend de Preview GET gebruikt. Geen Production POST, recipe-link-write, readiness-cache-write, matchcache-write, migratie, Production-deployment of merge uitgevoerd. Resterende gate: review en expliciete mergegoedkeuring voor PR #71. Elke latere Production `recipe_id`-write en readiness-refresh blijft buiten deze opdracht en vraagt afzonderlijke expliciete toestemming. De bestaande `needs_review` status kan met deze flow niet worden gepromoveerd.
 
 # Checkpoint — Hoogvliet explicit-empty / non-hydration fix — 10 oktober 2026
 
