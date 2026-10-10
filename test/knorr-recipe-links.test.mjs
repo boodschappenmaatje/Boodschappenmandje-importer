@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { CONFIRMATION, LINKS, READINESS_PATH, runKnorrRecipeLinks } from "../scripts/run-knorr-recipe-links.mjs";
+import {
+  CONFIRMATION, LINKS, READINESS_PATH, runKnorrRecipeLinks, runKnorrRecipeLinksCli,
+} from "../scripts/run-knorr-recipe-links.mjs";
 
 const workflow = readFileSync(new URL("../.github/workflows/knorr-recipe-links.yml", import.meta.url), "utf8");
 const envBase = {
@@ -134,6 +136,77 @@ test("dry-run requires a successful authenticated Production preflight, validate
   assert.equal(posts(testFixture.calls).length, 0);
 });
 
+test("successful dry-run prints one structured terminal result with zero database writes", async () => {
+  const testFixture = fixture();
+  const stdout = [];
+  const stderr = [];
+  const result = await runKnorrRecipeLinksCli(envBase, {
+    fetchImpl: testFixture.fetchImpl,
+    stdout: value => stdout.push(value),
+    stderr: value => stderr.push(value),
+  });
+  assert.equal(stdout.length, 1);
+  assert.equal(stderr.length, 0);
+  assert.deepEqual(JSON.parse(stdout[0]), result);
+  assert.deepEqual(result, {
+    status: "dry-run",
+    evaluationMode: "preflight",
+    candidatesChecked: 7,
+    validLinks: 7,
+    writes: { recipeIds: 0, readinessCache: 0, ingredientMatchCache: 0, total: 0 },
+    stopReason: null,
+  });
+  assert.doesNotMatch(stdout[0], /admin-fixture-not-real|bypass-fixture-not-real|sb_secret_fixture_not_real/);
+  assert.equal(writes(testFixture.calls).length, 0);
+  assert.equal(posts(testFixture.calls).length, 0);
+});
+
+test("missing runner result is reported as stopped and cannot exit successfully", async () => {
+  const stdout = [];
+  const stderr = [];
+  await assert.rejects(runKnorrRecipeLinksCli(envBase, {
+    runImpl: async () => undefined,
+    stdout: value => stdout.push(value),
+    stderr: value => stderr.push(value),
+  }), error => error.code === "runner_result_missing_or_invalid");
+  assert.equal(stdout.length, 0);
+  assert.equal(stderr.length, 1);
+  const output = JSON.parse(stderr[0]);
+  assert.equal(output.status, "stopped");
+  assert.equal(output.stopReason, "runner_result_missing_or_invalid");
+});
+
+test("invalid preflight result is printed as stopped and never reported as success", async () => {
+  const testFixture = fixture({ preflightWrongResponse: true });
+  const stdout = [];
+  const stderr = [];
+  await assert.rejects(runKnorrRecipeLinksCli(envBase, {
+    fetchImpl: testFixture.fetchImpl,
+    stdout: value => stdout.push(value),
+    stderr: value => stderr.push(value),
+  }), error => error.code === "production_preflight_response_mismatch");
+  assert.equal(stdout.length, 0);
+  assert.equal(JSON.parse(stderr[0]).stopReason, "production_preflight_response_mismatch");
+  assert.equal(writes(testFixture.calls).length, 0);
+});
+
+test("preflight timeout is printed as stopped with zero completed writes", async () => {
+  const testFixture = fixture({ preflightException: new DOMException("fixture", "TimeoutError") });
+  const stdout = [];
+  const stderr = [];
+  await assert.rejects(runKnorrRecipeLinksCli(envBase, {
+    fetchImpl: testFixture.fetchImpl,
+    stdout: value => stdout.push(value),
+    stderr: value => stderr.push(value),
+  }), error => error.code === "production_preflight_timeout");
+  assert.equal(stdout.length, 0);
+  const output = JSON.parse(stderr[0]);
+  assert.equal(output.stopReason, "production_preflight_timeout");
+  assert.equal(output.writes.recipeIds, 0);
+  assert.equal(output.writes.readinessRefreshesCompleted, 0);
+  assert.equal(writes(testFixture.calls).length, 0);
+});
+
 test("authentication, route, timeout, and malformed preflight failures stop before candidate reads", async () => {
   for (const options of [{ preflightStatus: 401 }, { preflightStatus: 403 }, { preflightStatus: 404 },
     { preflightStatus: 503 }, { preflightError: true }, { preflightWrongResponse: true }]) {
@@ -181,10 +254,9 @@ test("an expired preflight deadline is classified as a timeout even when fetch r
 
 test("write links only seven profiles and calls the explicit readiness route once per pair", async () => {
   const testFixture = fixture();
-  const logs = [];
   const result = await runKnorrRecipeLinks({
     ...envBase, KNORR_LINK_MODE: "write", KNORR_LINK_CONFIRMATION: CONFIRMATION,
-  }, { fetchImpl: testFixture.fetchImpl, log: value => logs.push(value) });
+  }, { fetchImpl: testFixture.fetchImpl });
   assert.equal(result.recipeWrites, 7);
   assert.equal(result.readinessCalls, 7);
   assert.deepEqual(result.changedSkus, LINKS.map(item => item.sku));
@@ -198,7 +270,6 @@ test("write links only seven profiles and calls the explicit readiness route onc
   assert.equal(preflights(testFixture.calls)[0].headers.authorization, "Bearer " + envBase.PLANNER_CACHE_ADMIN_TOKEN);
   assert.equal(preflights(testFixture.calls)[0].headers["x-vercel-protection-bypass"], envBase.VERCEL_AUTOMATION_BYPASS_SECRET);
   assert.equal(result.readiness.find(item => item.sku === "704892000").readiness[0].status, "NOT_READY");
-  assert.doesNotMatch(logs.join("\n"), /admin-fixture-not-real|bypass-fixture-not-real|sb_secret_fixture_not_real/);
 });
 
 test("a failed precheck on one record stops before every write", async () => {

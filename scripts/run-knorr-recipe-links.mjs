@@ -214,7 +214,6 @@ async function productionReadinessPreflight(fetchImpl, config) {
 export async function runKnorrRecipeLinks(env = process.env, dependencies = {}) {
   const config = validate(env);
   const fetchImpl = dependencies.fetchImpl ?? fetch;
-  const log = dependencies.log ?? (() => {});
   const preflight = await productionReadinessPreflight(fetchImpl, config);
   const inspected = [];
   for (const link of LINKS) inspected.push(await inspectLink(fetchImpl, config, link));
@@ -226,9 +225,7 @@ export async function runKnorrRecipeLinks(env = process.env, dependencies = {}) 
     skuList: LINKS.map(item => item.sku), matchCacheHashBefore: matchHashBefore };
   if (config.mode === "dry-run") {
     if (config.confirmation !== "") stop("dry_run_confirmation_must_be_empty");
-    const result = { status: "dry-run", ...base, recipeWrites: 0, readinessCalls: 0 };
-    log(JSON.stringify(result));
-    return result;
+    return { status: "dry-run", ...base, recipeWrites: 0, readinessCalls: 0 };
   }
   if (config.confirmation !== CONFIRMATION) stop("write_confirmation_rejected");
 
@@ -297,21 +294,95 @@ export async function runKnorrRecipeLinks(env = process.env, dependencies = {}) 
     profileDataPreserved: true,
     matchCacheUnchanged: true,
   };
-  log(JSON.stringify(result));
   return result;
 }
 
+function successfulOutput(result) {
+  if (!result || !["dry-run", "complete"].includes(result.status) ||
+      result.productionPreflight?.authAccepted !== true ||
+      result.productionPreflight?.evaluationMode !== "preflight" ||
+      result.productionPreflight?.readinessRows !== 1 ||
+      result.productionPreflight?.readinessWrites !== 0 ||
+      result.productionPreflight?.matchCacheWrites !== 0 ||
+      result.precheckValid !== LINKS.length ||
+      stable(result.skuList) !== stable(LINKS.map(item => item.sku)) ||
+      !Number.isInteger(result.recipeWrites) || result.recipeWrites < 0 ||
+      !Number.isInteger(result.readinessCalls) || result.readinessCalls < 0 ||
+      (result.status === "complete" && !Array.isArray(result.readiness))) {
+    stop("runner_result_missing_or_invalid");
+  }
+  if (result.status === "dry-run" && (result.recipeWrites !== 0 || result.readinessCalls !== 0)) {
+    stop("dry_run_result_reported_writes");
+  }
+  const readinessCacheWrites = result.status === "complete"
+    ? result.readiness?.reduce((total, item) => total + item.readinessWrites, 0)
+    : result.productionPreflight.readinessWrites;
+  const ingredientMatchCacheWrites = result.status === "complete"
+    ? result.readiness?.reduce((total, item) => total + item.matchCacheWrites, 0)
+    : result.productionPreflight.matchCacheWrites;
+  if (!Number.isInteger(readinessCacheWrites) || readinessCacheWrites < 0 ||
+      !Number.isInteger(ingredientMatchCacheWrites) || ingredientMatchCacheWrites < 0) {
+    stop("runner_result_missing_or_invalid");
+  }
+  return {
+    status: result.status,
+    evaluationMode: result.productionPreflight.evaluationMode,
+    candidatesChecked: result.precheckValid,
+    validLinks: result.precheckValid,
+    writes: {
+      recipeIds: result.recipeWrites,
+      readinessCache: readinessCacheWrites,
+      ingredientMatchCache: ingredientMatchCacheWrites,
+      total: result.recipeWrites + readinessCacheWrites + ingredientMatchCacheWrites,
+    },
+    stopReason: null,
+  };
+}
+
+function stoppedOutput(error) {
+  const code = error?.code ?? "runner_failed";
+  return {
+    status: "stopped",
+    evaluationMode: null,
+    candidatesChecked: null,
+    validLinks: null,
+    writes: {
+      recipeIds: error?.changedSkus?.length ?? 0,
+      readinessRefreshesCompleted: error?.refreshedSkus?.length ?? 0,
+    },
+    stopReason: code,
+    code,
+    changedSkus: error?.changedSkus ?? [],
+    readinessRefreshedSkus: error?.refreshedSkus ?? [],
+    details: error?.details,
+    secretsRedacted: true,
+  };
+}
+
+export async function runKnorrRecipeLinksCli(env = process.env, dependencies = {}) {
+  const {
+    runImpl = runKnorrRecipeLinks,
+    stdout = value => console.log(value),
+    stderr = value => console.error(value),
+    ...runDependencies
+  } = dependencies;
+  try {
+    const result = await runImpl(env, runDependencies);
+    const output = successfulOutput(result);
+    try {
+      stdout(JSON.stringify(output));
+    } catch {
+      stop("runner_result_output_failed");
+    }
+    return output;
+  } catch (error) {
+    stderr(JSON.stringify(stoppedOutput(error)));
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runKnorrRecipeLinks().catch(error => {
-    const output = {
-      status: "stopped",
-      code: error?.code ?? "runner_failed",
-      changedSkus: error?.changedSkus ?? [],
-      readinessRefreshedSkus: error?.refreshedSkus ?? [],
-      details: error?.details,
-      secretsRedacted: true,
-    };
-    console.error(JSON.stringify(output));
+  runKnorrRecipeLinksCli().catch(() => {
     process.exitCode = 1;
   });
 }
