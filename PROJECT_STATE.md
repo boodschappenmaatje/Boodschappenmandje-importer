@@ -1,3 +1,25 @@
+# Checkpoint — 1A.1 afgerond; 1B NO_RECIPE-audit — 10 oktober 2026
+
+## Remote basis en runs
+
+- Remote `main`: `9922b4b666c89fed42104b0700e5cd690e6b6459` (PR #69).
+- De bestaande lokale 1B-worktree/branch was niet beschikbaar; remote branch search vond geen `codex/roadmap-1b-honig-knorr-no-recipe-20261010`. Dit checkpoint is daarom read-only op actuele Production-data hersteld en wordt nu op dezelfde branchnaam teruggezet naar GitHub.
+- Volledige maintenance dry-run [38061167591](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38061167591) is succesvol op main `9922b4b`: 20 rootcategorieën, 20 listingroutes, 420 primary listingwindows, 1 Zyte fallback-request/succes op verwachte next-window `/frisdrank-sappen/q/page/13`, 30 raw/30 unieke SKU’s, 7.745 ms, `snapshot_complete=true`.
+- Production maintenance write-run [38063646183](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38063646183) is succesvol met `DRY_RUN=0` en bevestiging `RUN_DAILY_MAINTENANCE_WRITE`: 7.945 actuele SKU’s; 7.616 bulk checks + 329 detailfallbacks; 0 nieuwe producten; 562 bestaande prijzen gewijzigd; 7.383 ongewijzigd; 414 Production-only/verdwenen behouden; 0 duplicaten; snapshot compleet.
+- Read-only Production-postcheck: 8.359 productrecords en 8.359 prijsrijen, 0 niet-positieve prijzen, 0 dubbele SKU-groepen, 562 prijsrijen bijgewerkt sinds de run. Er zijn geen actieve/verlopen cataloguslocks; twee oude `retry_scheduled`-rijen hebben een verlopen `next_retry_at` (29 september en 6 oktober) en geen lock.
+- Daarmee is **1A.1 afgerond**: de fallback/classificatie is in een volledige run bewezen met één begrensde, succesvolle Zyte-fallback en een complete snapshot. Geen extra run door dit documentatiecheckpoint.
+
+## 1B actuele audit
+
+- Live Production-inventaris: Honig 20 profielen (5 current READY; 6 cached READY/pending; 7 cached NOT_READY/pending; 2 NO_RECIPE); Knorr 37 profielen (5 current READY; 12 cached READY/pending; 5 cached NOT_READY/pending; 15 NO_RECIPE).
+- Read-only audit: [docs/honig-knorr-no-recipe-audit-20261010.md](docs/honig-knorr-no-recipe-audit-20261010.md).
+- Zeven exacte bestaande Knorr-receptkandidaten: `686060000`, `686150000`, `704884000`, `704888000`, `704892000`, `704897000`, `704898000`. Elk recept bestaat al en heeft een geldige ingredient-productmatch naar precies die SKU. De positieve opgeslagen prijzen zijn bevestigd; de per-SKU prijsrecords zijn laatst opgehaald op 24 september, dus versheid wordt vóór een latere write opnieuw read-only gecontroleerd.
+- Teriyaki (`704892000`) blijft in de laatst opgeslagen p4-readiness NOT_READY/pending door `runderreepjes: matcher_failed` en `peultjes: no_catalog_product`; geen automatische reparatie.
+- **Geen 1B recipe/profile-write of readiness refresh uitgevoerd.** De audit branch/PR bevat uitsluitend documentatie. Exacte writegate voor een later afzonderlijk geautoriseerd checkpoint: uitsluitend de zeven hierboven genoemde, op dat moment opnieuw gevalideerde profile.recipe_id-koppelingen en daarna alleen hun gerichte readiness; geen prijzen, producten, nieuwe recepten/ingrediënten, andere profielen, migratie of globale rebuild.
+- SKU `704881000` blijft uitgesloten zolang het actuele catalogusmerk ontbreekt. De overige tien NO_RECIPE-profielen krijgen geen gokfix.
+
+---
+
 # Checkpoint — Hoogvliet explicit-empty / non-hydration fix — 10 oktober 2026
 
 ## Basis en bewijs
