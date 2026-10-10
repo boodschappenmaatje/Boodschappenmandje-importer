@@ -414,6 +414,15 @@ export function classifySourcePageEvidence(evidence = {}) {
 async function readCatalogPageEvidence(page) {
   return page.evaluate(({ responseStatus }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
+    const listingShellSelector = [
+      "main[id*='catalog-listing' i]",
+      "main[class*='catalog-listing' i]",
+      "[data-testid*='catalog-listing' i]",
+      "[data-testid*='product-list' i]",
+      "[id*='product-list' i]",
+      "[class*='product-listing' i]",
+      "[class*='product-grid' i]",
+    ].join(",");
     const emptyPhrases = [
       { match: "geen_resultaten_gevonden", phrase: "geen resultaten gevonden" },
       { match: "geen_zoekresultaten", phrase: "geen zoekresultaten" },
@@ -431,6 +440,7 @@ async function readCatalogPageEvidence(page) {
     let emptySourceSelector = hasExplicitEmptyState ? "body" : "none";
     let emptyVisible = "unknown";
     let emptyStrength = hasExplicitEmptyState ? "weak" : "none";
+    let emptySourceElement = null;
     if (emptyMatch) {
       const sourceCandidates = [
         { selector: "[data-testid*='empty' i]", strength: "strong" },
@@ -451,6 +461,7 @@ async function readCatalogPageEvidence(page) {
           .find(element => (element.innerText ?? "").toLowerCase().includes(emptyMatch.phrase));
         if (!matchingElement) continue;
         emptySourceSelector = candidate.selector;
+        emptySourceElement = matchingElement;
         const rectsVisible = matchingElement.getClientRects().length > 0;
         let stylesVisible = true;
         for (let ancestor = matchingElement; ancestor; ancestor = ancestor.parentElement) {
@@ -470,19 +481,12 @@ async function readCatalogPageEvidence(page) {
       ? "zero_product_count"
       : emptyMatch ? "body_text_phrase" : "none";
     const hasStrongExplicitEmptyState = hasExplicitEmptyState
-      && emptyStrength === "strong" && emptyVisible === "true";
+      && emptyStrength === "strong" && emptyVisible === "true"
+      && Boolean(emptySourceElement?.closest(listingShellSelector));
     const productLinks = document.querySelectorAll("a[href*='/product/']").length;
     const categoryLinks = [...document.querySelectorAll("a[href]")]
       .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
-    const hasListingShell = Boolean(document.querySelector([
-      "main[id*='catalog-listing' i]",
-      "main[class*='catalog-listing' i]",
-      "[data-testid*='catalog-listing' i]",
-      "[data-testid*='product-list' i]",
-      "[id*='product-list' i]",
-      "[class*='product-listing' i]",
-      "[class*='product-grid' i]",
-    ].join(",")));
+    const hasListingShell = Boolean(document.querySelector(listingShellSelector));
     return {
       responseStatus,
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
