@@ -45,10 +45,8 @@ function fixture(options = {}) {
         const link = LINKS[0];
         const body = {
           sku: link.sku, recipeId: link.recipeId, profileStatus: "needs_review",
-          profilePromoted: false, matchCacheWrites: 0, readinessWrites: 0,
-          readiness: Array.from({ length: 10 }, (_, i) => ({
-            peopleCount: i + 1, status: "READY", problemCount: 0,
-          })),
+          profilePromoted: false, matchCacheWrites: 0, readinessWrites: 0, evaluationMode: "preflight",
+          readiness: [{ peopleCount: 4, status: "READY", problemCount: 0 }],
         };
         if (options.preflightWrongResponse) body.readinessWrites = 1;
         const result = response(body);
@@ -61,7 +59,7 @@ function fixture(options = {}) {
       const notReady = link.sku === "704892000";
       return response({
         sku: link.sku, recipeId: link.recipeId, profileStatus: "needs_review",
-        profilePromoted: false, matchCacheWrites: 0, readinessWrites: 10,
+        profilePromoted: false, matchCacheWrites: 0, readinessWrites: 10, evaluationMode: "full",
         readiness: Array.from({ length: 10 }, (_, i) => ({
           peopleCount: i + 1, status: notReady ? "NOT_READY" : "READY", problemCount: notReady ? 2 : 0,
         })),
@@ -124,8 +122,8 @@ test("dry-run requires a successful authenticated Production preflight, validate
   const result = await runKnorrRecipeLinks(envBase, { fetchImpl: testFixture.fetchImpl });
   assert.equal(result.status, "dry-run");
   assert.deepEqual(result.productionPreflight, {
-    route: READINESS_PATH, authAccepted: true, explicitRecipeReadiness: true,
-    readinessRows: 10, readinessWrites: 0, matchCacheWrites: 0,
+    route: READINESS_PATH, authAccepted: true, explicitRecipeReadiness: true, evaluationMode: "preflight",
+    readinessRows: 1, readinessWrites: 0, matchCacheWrites: 0,
   });
   assert.equal(result.precheckValid, 7);
   assert.equal(result.recipeWrites, 0);

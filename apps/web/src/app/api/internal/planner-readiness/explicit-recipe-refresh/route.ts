@@ -46,7 +46,10 @@ export async function POST(request: Request): Promise<Response> {
   const client = getSupabaseServerClient();
   if (!client) return Response.json({ error: "cache-unavailable" }, { status: 503 });
   try {
-    return Response.json(await refreshExplicitRecipeReadiness(client, input, { persist: !preflight }));
+    return Response.json(await refreshExplicitRecipeReadiness(client, input, {
+      persist: !preflight,
+      evaluationMode: preflight ? "preflight" : "full",
+    }));
   } catch {
     return Response.json({ error: "explicit-refresh-blocked" }, { status: 409 });
   }

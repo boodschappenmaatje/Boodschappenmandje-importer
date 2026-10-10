@@ -16,6 +16,7 @@ beforeEach(() => {
   vi.mocked(refreshExplicitRecipeReadiness).mockResolvedValue({
     sku: "686060000", recipeId: "6593543a-5c8d-409d-8c9e-145632c43f0b", readiness: [],
     readinessWrites: 0, profileStatus: "needs_review", profilePromoted: false, matchCacheWrites: 0,
+    evaluationMode: "full",
   });
 });
 
@@ -66,6 +67,9 @@ describe("explicit recipe readiness route", () => {
       body: JSON.stringify(preflightBody),
     }));
     expect(response.status).toBe(200);
-    expect(refreshExplicitRecipeReadiness).toHaveBeenCalledExactlyOnceWith(expect.anything(), body, { persist: false });
+    expect(refreshExplicitRecipeReadiness).toHaveBeenCalledExactlyOnceWith(expect.anything(), body, {
+      persist: false,
+      evaluationMode: "preflight",
+    });
   });
 });

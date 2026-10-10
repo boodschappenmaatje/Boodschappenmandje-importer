@@ -140,6 +140,7 @@ function checkProfile(row, candidate, changed, refreshed) {
 function validateReadiness(body, link, changed, refreshed) {
   if (!body || body.sku !== link.sku || body.recipeId !== link.recipeId ||
       body.profileStatus !== "needs_review" || body.profilePromoted !== false || body.matchCacheWrites !== 0 ||
+      body.evaluationMode !== "full" ||
       !Number.isInteger(body.readinessWrites) || body.readinessWrites < 0 ||
       !Array.isArray(body.readiness) || body.readiness.length !== 10) {
     stop("readiness_response_contract_mismatch", changed, refreshed);
@@ -192,8 +193,8 @@ async function productionReadinessPreflight(fetchImpl, config) {
   }
   if (!body || body.sku !== link.sku || body.recipeId !== link.recipeId ||
       body.profileStatus !== "needs_review" || body.profilePromoted !== false ||
-      body.matchCacheWrites !== 0 || body.readinessWrites !== 0 ||
-      !Array.isArray(body.readiness) || body.readiness.length !== PEOPLE.length) {
+      body.matchCacheWrites !== 0 || body.readinessWrites !== 0 || body.evaluationMode !== "preflight" ||
+      !Array.isArray(body.readiness) || body.readiness.length !== 1) {
     stop("production_preflight_response_mismatch");
   }
   const seen = new Set();
@@ -205,8 +206,8 @@ async function productionReadinessPreflight(fetchImpl, config) {
     }
     seen.add(row.peopleCount);
   }
-  if (PEOPLE.some(count => !seen.has(count))) stop("production_preflight_readiness_incomplete");
-  return { route: READINESS_PATH, authAccepted: true, explicitRecipeReadiness: true,
+  if (seen.size !== 1 || !seen.has(4)) stop("production_preflight_readiness_incomplete");
+  return { route: READINESS_PATH, authAccepted: true, explicitRecipeReadiness: true, evaluationMode: body.evaluationMode,
     readinessRows: body.readiness.length, readinessWrites: body.readinessWrites, matchCacheWrites: body.matchCacheWrites };
 }
 
