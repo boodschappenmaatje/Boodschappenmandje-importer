@@ -58,7 +58,7 @@
 - Targeted runner-tests: **9/9**; expliciete route-tests: **4/4**. Dekking omvat geldige read-only preflight, dezelfde authheaders, ontbrekende/wrong auth via 401/403, 404, 5xx, timeout, verkeerde response, geen kandidaatreads na preflightfalen, nul writes, exacte allowlist, confirmation gate en partial-write stop.
 - `npm test`: **453/453**; `npm run check`: geslaagd. Web `npm run check`: lint, typecheck, **876 tests**, production build geslaagd. `git diff --check`: volgt na documentatie-update. PostgreSQL-tests zijn niet relevant: geen schema-, query- of databaseimplementatie gewijzigd; de preflight gebruikt de reeds bestaande read-only evaluator.
 - Preflightbewijs is lokaal/fixture-gebaseerd: runner valideert de vaste Production-origin en volledige authenticated response; route-test bewijst `persist: false`. Er is geen live Production-call gedaan. Geen Production-workflow/dry-run gestart; recipe-link-writes **0**, readiness-refreshes **0**, readinesscachewrites **0**, ingredient-matchcachewrites **0**.
-- Branch: `codex/knorr-prod-auth-preflight-20261010`, vanaf exact remote main. Draft PR wordt als aparte hotfix-PR aangemaakt. PR #70 blijft ongewijzigd.
+- Branch: `codex/knorr-prod-auth-preflight-20261010`, vanaf exact remote main; codecommit `2910cdc`. Aparte Draft PR [#77](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/77). PR #70 blijft ongewijzigd.
 - Volgende mergegate: review en expliciete goedkeuring van deze Draft PR, plus groene PR-CI. Daarna beslist de gebruiker apart over een workflowdispatch; merge alleen geeft geen toestemming voor Production dry-run of writes. Geen merge uitgevoerd.
 
 ---
