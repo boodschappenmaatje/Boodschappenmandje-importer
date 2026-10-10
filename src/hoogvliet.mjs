@@ -422,11 +422,14 @@ async function readCatalogPageEvidence(page) {
       { match: "geen_producten", phrase: "geen producten" },
       { match: "nul_producten", phrase: "0 producten" },
     ];
-    const emptyMatch = emptyPhrases.find(signal => text.includes(signal.phrase)) ?? null;
+    const emptyMatch = emptyPhrases
+      .map(signal => ({ ...signal, index: text.indexOf(signal.phrase) }))
+      .filter(signal => signal.index >= 0)
+      .sort((a, b) => a.index - b.index)[0] ?? null;
     const hasExplicitEmptyState = /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
-    const hasZeroProductCount = /(?:^|\s)0\s+producten(?:\s|$)/.test(text);
+    const hasZeroProductCount = /(?:^|\\s)0\\s+producten(?:\\s|$)/.test(text);
     let emptySourceSelector = hasExplicitEmptyState ? "body" : "none";
-    let emptyVisible = hasExplicitEmptyState ? "true" : "unknown";
+    let emptyVisible = "unknown";
     let emptyStrength = hasExplicitEmptyState ? "weak" : "none";
     if (emptyMatch) {
       const sourceCandidates = [
@@ -451,9 +454,9 @@ async function readCatalogPageEvidence(page) {
         break;
       }
     }
-    const emptySignalType = hasZeroProductCount
+    const emptySignalType = emptyMatch?.match === "nul_producten"
       ? "zero_product_count"
-      : hasExplicitEmptyState ? "body_text_phrase" : "none";
+      : emptyMatch ? "body_text_phrase" : "none";
     const productLinks = document.querySelectorAll("a[href*='/product/']").length;
     const categoryLinks = [...document.querySelectorAll("a[href]")]
       .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
