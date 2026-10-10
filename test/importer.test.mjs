@@ -215,7 +215,7 @@ test("bronclassificatie onderscheidt challenge, lege zoekroute, parserwijziging 
     hasExpectedContent: false,
     hasStrongExplicitEmptyState: true,
     hasIncapsula: true,
-  }), "valid_empty_search");
+  }), "security_check");
   assert.equal(classifySourcePageEvidence({
     hasSearchStructure: true,
     hasIncapsula: true,
