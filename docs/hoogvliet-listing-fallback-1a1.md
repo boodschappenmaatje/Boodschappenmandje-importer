@@ -84,4 +84,6 @@ Bij een mislukte Zyte-proof wordt niet automatisch Bright Data geactiveerd. Voer
 
 ## Technische status
 
-Roadmap 1A.1 is nog niet technisch afgerond. De handmatige read-only proofworkflow bevat geen productieadapter en is niet gestart. De eerstvolgende Codex-stap na een groene Zyte-proof is de minimale adapter plus de tien gevraagde regressies. `ROADMAP.md` blijft daarom ongewijzigd.
+De read-only proofrun `38046108912` is 6/6 groen: beide URL's leverden driemaal 30 SKU's met dezelfde bestaande parser, correcte listingidentiteit en API-/bronstatus 200. De minimale Production-adapter staat daarom nu op branch `codex/zyte-listing-fallback-1a1-20261010`: primary blijft direct, fallback is per concreet window één poging, standaard maximaal 3 calls/run en 45 seconden/call, met harde clamps 10 en 60 seconden.
+
+Roadmap 1A.1 is nog niet afgerond. De implementatie moet eerst via Draft PR en aparte mergegoedkeuring naar `main`; daarna moet Work één volledige maintenance dry-run bewijzen en pas na een afzonderlijke goedkeuring één finale write-acceptatie uitvoeren. `ROADMAP.md` blijft daarom ongewijzigd.
