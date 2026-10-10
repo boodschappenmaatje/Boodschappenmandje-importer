@@ -43,6 +43,26 @@
 - Preview/read-only acceptatie op de deployment van deze codecommit: alle zeven allowlisted links gaven HTTP 200; alle zeven responses behielden `needs_review`, meldden `profilePromoted=false`, `readinessWrites=0` en `matchCacheWrites=0`. Zes recipes waren READY voor 1–10 personen; SKU `704892000` bleef NOT_READY voor alle aantallen met 2 readinessproblemen. Daarmee wordt onvoldoende readiness niet geforceerd. De Preview-routes `/week-voorbereiden`, `/budget` en `/lijst` gaven elk HTTP 200; planner-/menu-regressies vallen ook onder de volledige websuite.
 - In deze opdracht is uitsluitend de Preview GET gebruikt. Geen Production POST, recipe-link-write, readiness-cache-write, matchcache-write, migratie, Production-deployment of merge uitgevoerd. Resterende gate: review en expliciete mergegoedkeuring voor PR #71. Elke latere Production `recipe_id`-write en readiness-refresh blijft buiten deze opdracht en vraagt afzonderlijke expliciete toestemming. De bestaande `needs_review` status kan met deze flow niet worden gepromoveerd.
 
+# Checkpoint — read-only Production-auth preflight PR #76 hotfix — 10 oktober 2026
+
+## Oorzaak en oplossing
+
+- Actuele remote `main` is `19ce0d561c27aa6f988a1490a97a4d3b943e29a7` (PR #76). PR #70 blijft open, Draft en ongemerged. PR #71 is gemerged; de explicit-recipe readiness-route controleerde in de runner vóórheen alleen later, na de zeven recipe-link-writes. De dry-run controleerde de Production-route helemaal niet.
+- De runner voert nu als eerste een authenticated POST uit naar de vaste Production-route `/api/internal/planner-readiness/explicit-recipe-refresh`, met dezelfde `PLANNER_CACHE_ADMIN_TOKEN` Bearer-auth en `VERCEL_AUTOMATION_BYPASS_SECRET` header als de latere refresh.
+- De route hergebruikt uitsluitend de bestaande expliciete zeven-item allowlist en readiness-evaluator. Een exacte `preflight: true` payload selecteert `persist: false`; de evaluator bewijst dat de Production-route en readiness-functionaliteit werken en retourneert 10 personenresultaten met exact nul readinesscachewrites en nul ingredient-matchcachewrites. Er is geen nieuwe authketen of alternatieve endpoint toegevoegd.
+- Runner faalt gesloten op ontbrekende/verkeerde Production-config, 401/403, 404, redirects, 5xx, timeout/netwerkfout, content-type/JSON/responsecontract-afwijking of non-zero preflight-writetelling. Kandidaatcontroles beginnen pas na succesvolle preflight.
+- Write-flow blijft: authenticated read-only preflight → zeven allowlist-kandidaatcontroles → exacte `WRITE_EXACT_7_KNORR_RECIPE_LINKS`-bevestiging → exact zeven conditionele `recipe_id`-writes → pas daarna gerichte readiness-refresh. Er is geen retry na gedeeltelijke writes. De allowlist is exact `686060000`, `686150000`, `704884000`, `704888000`, `704892000`, `704897000`, `704898000`; `704881000` blijft uitgesloten.
+
+## Verificatie en stopgate
+
+- Targeted runner-tests: **9/9**; expliciete route-tests: **4/4**. Dekking omvat geldige read-only preflight, dezelfde authheaders, ontbrekende/wrong auth via 401/403, 404, 5xx, timeout, verkeerde response, geen kandidaatreads na preflightfalen, nul writes, exacte allowlist, confirmation gate en partial-write stop.
+- `npm test`: **453/453**; `npm run check`: geslaagd. Web `npm run check`: lint, typecheck, **876 tests**, production build geslaagd. `git diff --check`: volgt na documentatie-update. PostgreSQL-tests zijn niet relevant: geen schema-, query- of databaseimplementatie gewijzigd; de preflight gebruikt de reeds bestaande read-only evaluator.
+- Preflightbewijs is lokaal/fixture-gebaseerd: runner valideert de vaste Production-origin en volledige authenticated response; route-test bewijst `persist: false`. Er is geen live Production-call gedaan. Geen Production-workflow/dry-run gestart; recipe-link-writes **0**, readiness-refreshes **0**, readinesscachewrites **0**, ingredient-matchcachewrites **0**.
+- Branch: `codex/knorr-prod-auth-preflight-20261010`, vanaf exact remote main; codecommit `2910cdc`. Aparte Draft PR [#77](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/77). PR #70 blijft ongewijzigd.
+- Volgende mergegate: review en expliciete goedkeuring van deze Draft PR, plus groene PR-CI. Daarna beslist de gebruiker apart over een workflowdispatch; merge alleen geeft geen toestemming voor Production dry-run of writes. Geen merge uitgevoerd.
+
+---
+
 # Checkpoint — Hoogvliet explicit-empty / non-hydration fix — 10 oktober 2026
 
 ## Basis en bewijs

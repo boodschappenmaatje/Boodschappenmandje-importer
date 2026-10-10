@@ -39,7 +39,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Run fixed seven-record precheck, link write and readiness refresh
+      - name: Run authenticated read-only preflight, seven-record check and guarded flow
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_REPOSITORY: ${{ github.repository }}

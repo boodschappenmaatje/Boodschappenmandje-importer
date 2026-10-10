@@ -33,13 +33,20 @@ export async function POST(request: Request): Promise<Response> {
   if (!isPlannerCacheAdminRequest(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
   if (process.env.VERCEL_ENV !== "production") return Response.json({ error: "write-environment-unavailable" }, { status: 503 });
   let input;
-  try { input = parseExplicitRecipeLinkInput(await request.json()); }
+  let preflight = false;
+  try {
+    const body: unknown = await request.json();
+    if (body && typeof body === "object" && !Array.isArray(body) &&
+        Object.keys(body).length === 3 && Object.hasOwn(body, "preflight") &&
+        (body as Record<string, unknown>).preflight === true) preflight = true;
+    input = parseExplicitRecipeLinkInput(body);
+  }
   catch { input = null; }
   if (!input) return Response.json({ error: "invalid-request" }, { status: 400 });
   const client = getSupabaseServerClient();
   if (!client) return Response.json({ error: "cache-unavailable" }, { status: 503 });
   try {
-    return Response.json(await refreshExplicitRecipeReadiness(client, input));
+    return Response.json(await refreshExplicitRecipeReadiness(client, input, { persist: !preflight }));
   } catch {
     return Response.json({ error: "explicit-refresh-blocked" }, { status: 409 });
   }

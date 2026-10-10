@@ -13,7 +13,7 @@ export const LINKS = Object.freeze([
   { sku: "704897000", recipeId: "4718fbbd-5cd9-4a58-841c-e62bee4574db", recipeName: "Knorr Hokkien Mie met kip en groente" },
   { sku: "704898000", recipeId: "95cfbfc8-45a0-4de9-b015-a731cb015107", recipeName: "Knorr Griekse kofta met rundergehakt" },
 ]);
-const PATH = "/api/internal/planner-readiness/explicit-recipe-refresh";
+export const READINESS_PATH = "/api/internal/planner-readiness/explicit-recipe-refresh";
 const PEOPLE = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 
 function stop(code, changedSkus = [], refreshedSkus = [], details = undefined) {
@@ -38,8 +38,6 @@ function validate(env) {
   const mode = env.KNORR_LINK_MODE;
   const confirmation = String(env.KNORR_LINK_CONFIRMATION ?? "").trim();
   if (mode !== "dry-run" && mode !== "write") stop("mode_rejected");
-  if (mode === "write" && confirmation !== CONFIRMATION) stop("write_confirmation_rejected");
-  if (mode === "dry-run" && confirmation !== "") stop("dry_run_confirmation_must_be_empty");
   const supabaseSecret = String(env.SUPABASE_SECRET_KEY ?? "").trim();
   const adminToken = String(env.PLANNER_CACHE_ADMIN_TOKEN ?? "").trim();
   const bypass = String(env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "").trim();
@@ -47,11 +45,11 @@ function validate(env) {
   let planner;
   try { database = new URL(env.SUPABASE_URL); planner = new URL(env.PLANNER_CACHE_BASE_URL); }
   catch { stop("production_configuration_invalid"); }
-  if (database.origin !== SUPABASE_ORIGIN || database.pathname !== "/" || database.search || database.hash ||
-      planner.origin !== PRODUCTION_ORIGIN || planner.pathname !== "/" || planner.search || planner.hash ||
+  if (database.origin !== SUPABASE_ORIGIN || database.pathname !== "/" || database.username || database.password || database.search || database.hash ||
+      planner.origin !== PRODUCTION_ORIGIN || planner.pathname !== "/" || planner.username || planner.password || planner.search || planner.hash ||
       !supabaseSecret || !adminToken || !bypass ||
       /\s/.test(supabaseSecret) || /\s/.test(adminToken) || /\s/.test(bypass)) stop("production_configuration_invalid");
-  return { mode, database, planner, supabaseSecret, adminToken, bypass };
+  return { mode, confirmation, database, planner, supabaseSecret, adminToken, bypass };
 }
 function dbHeaders(secret) {
   const headers = { apikey: secret, accept: "application/json" };
@@ -157,22 +155,70 @@ function validateReadiness(body, link, changed, refreshed) {
   if (PEOPLE.some(count => !seen.has(count))) stop("readiness_people_counts_incomplete", changed, refreshed);
 }
 
+async function productionReadinessPreflight(fetchImpl, config) {
+  const link = LINKS[0];
+  let response;
+  try {
+    response = await fetchImpl(new URL(READINESS_PATH, config.planner), {
+      method: "POST",
+      redirect: "manual",
+      signal: AbortSignal.timeout(20_000),
+      headers: {
+        authorization: "Bearer " + config.adminToken,
+        "x-vercel-protection-bypass": config.bypass,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ sku: link.sku, recipeId: link.recipeId, preflight: true }),
+    });
+  } catch {
+    stop("production_preflight_network_or_timeout");
+  }
+  if (response.status >= 300 && response.status < 400) stop("production_preflight_redirect_rejected");
+  if (!response.ok) stop("production_preflight_http_" + response.status);
+  if (!response.headers.get("content-type")?.includes("application/json")) stop("production_preflight_wrong_content_type");
+  let body;
+  try { body = await response.json(); } catch { stop("production_preflight_invalid_json"); }
+  if (!body || body.sku !== link.sku || body.recipeId !== link.recipeId ||
+      body.profileStatus !== "needs_review" || body.profilePromoted !== false ||
+      body.matchCacheWrites !== 0 || body.readinessWrites !== 0 ||
+      !Array.isArray(body.readiness) || body.readiness.length !== PEOPLE.length) {
+    stop("production_preflight_response_mismatch");
+  }
+  const seen = new Set();
+  for (const row of body.readiness) {
+    if (!row || !PEOPLE.includes(row.peopleCount) || seen.has(row.peopleCount) ||
+        !["READY", "NOT_READY"].includes(row.status) ||
+        !Number.isInteger(row.problemCount) || row.problemCount < 0) {
+      stop("production_preflight_readiness_invalid");
+    }
+    seen.add(row.peopleCount);
+  }
+  if (PEOPLE.some(count => !seen.has(count))) stop("production_preflight_readiness_incomplete");
+  return { route: READINESS_PATH, authAccepted: true, explicitRecipeReadiness: true,
+    readinessRows: body.readiness.length, readinessWrites: body.readinessWrites, matchCacheWrites: body.matchCacheWrites };
+}
+
 export async function runKnorrRecipeLinks(env = process.env, dependencies = {}) {
   const config = validate(env);
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const log = dependencies.log ?? (() => {});
+  const preflight = await productionReadinessPreflight(fetchImpl, config);
   const inspected = [];
   for (const link of LINKS) inspected.push(await inspectLink(fetchImpl, config, link));
   const rejected = inspected.filter(item => item.reasons.length);
   if (rejected.length) stop("precheck_rejected", [], [], rejected.map(item => ({ sku: item.link.sku, reasons: item.reasons })));
   const productIds = inspected.map(item => item.product.id);
   const matchHashBefore = await matchSnapshot(fetchImpl, config, productIds);
-  const base = { precheckValid: inspected.length, skuList: LINKS.map(item => item.sku), matchCacheHashBefore: matchHashBefore };
+  const base = { productionPreflight: preflight, precheckValid: inspected.length,
+    skuList: LINKS.map(item => item.sku), matchCacheHashBefore: matchHashBefore };
   if (config.mode === "dry-run") {
+    if (config.confirmation !== "") stop("dry_run_confirmation_must_be_empty");
     const result = { status: "dry-run", ...base, recipeWrites: 0, readinessCalls: 0 };
     log(JSON.stringify(result));
     return result;
   }
+  if (config.confirmation !== CONFIRMATION) stop("write_confirmation_rejected");
 
   const changed = [];
   const refreshed = [];
@@ -205,7 +251,7 @@ export async function runKnorrRecipeLinks(env = process.env, dependencies = {}) 
   const readinessResults = [];
   for (const item of inspected) {
     const link = item.link;
-    const responseBody = await request(fetchImpl, new URL(PATH, config.planner), {
+    const responseBody = await request(fetchImpl, new URL(READINESS_PATH, config.planner), {
       method: "POST",
       headers: {
         authorization: "Bearer " + config.adminToken,
