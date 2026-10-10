@@ -37,7 +37,7 @@
 
 ## Branch, verificatie en releasegate
 
-- Branch `codex/fix-zyte-next-window-stagnation-20261010`, gebaseerd op actuele remote `main`; Draft PR wordt aangemaakt na verificatie. ROADMAP 1A.1 blijft open.
+- Branch `codex/fix-zyte-next-window-stagnation-20261010`, gebaseerd op remote `main` `e77c4c6`; codecommit `99e5673`. Open Draft PR [#68](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/68). ROADMAP 1A.1 blijft open.
 - Gerichte regressies: listing-shell zonder link, next-success, fallback-empty/fail-closed, explicit-empty, load-more, initial-empty, 404, repeated SKU, pagination-loop, page-alias, window-cap, navigation-only nested en bestaande adapterrails.
 - Verificatie: gerichte listingtests **24/24 groen**; volledige `npm test` **441/441 groen**; `npm run check` groen; `git diff --check` groen. PostgreSQL-tests en workflow-YAML-validatie zijn niet relevant: databasecode en Actions-workflows zijn niet gewijzigd.
 - Geen Zyte-livecall, maintenance dry-run/write, productimport, databasewrite, migratie, deployment of merge uitgevoerd. Na groene PR-CI en aparte mergegoedkeuring is de exacte Work-gate één volledige maintenance dry-run: bevestig complete snapshot en controleer dat fallback alleen voor een bewezen next-window optreedt. Stop zonder write; finale write blijft een aparte goedkeuringsgate.
