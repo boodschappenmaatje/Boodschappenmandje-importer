@@ -1,3 +1,13 @@
+# Checkpoint — Knorr zeven Production-links bevestigd — 11 oktober 2026
+
+- PR #80 en #81 zijn gemerged op main; PR #81 mergecommit `242fabcd55089e7bcdfea988aa5c2e0ca84a54f0`. PR #70 blijft een afzonderlijk auditcheckpoint; niet gewijzigd.
+- Geautoriseerde GitHub Actions dry-run op 10 oktober 22:30 UTC: `status=dry-run`, `evaluationMode=preflight`, `candidatesChecked=7`, `validLinks=7`, totale writes **0**.
+- Vervolgens expliciet geautoriseerde write-run op 10 oktober 22:34–22:37 UTC: `status=complete`, `evaluationMode=preflight`, `candidatesChecked=7`, `validLinks=7`, `writes.recipeIds=7`, `writes.readinessCache=70`, `writes.ingredientMatchCache=0`, `writes.total=77`, `stopReason=null`. De eerdere write-poging zonder bevestiging stopte veilig met `write_confirmation_rejected` en 0 writes.
+- Onafhankelijke read-only Production-Supabase-controle na de write-run: alle zeven exacte SKU→recipe-ID-links zijn correct; elk heeft tien cache-rijen voor persoonsaantallen 1–10 (70 totaal). Zes recepten hebben 10/10 READY; Japanse teriyaki SKU `704892000` heeft 0/10 READY en blijft terecht NOT_READY. Alle zeven profielen blijven `needs_review`, `profile=null`. Geen profielpromotie of geforceerde matches.
+- Deze documentatie-update voert uitsluitend read-only databasecontrole en GitHub-documentatiewijzigingen uit; geen extra Production-write, refresh, import, migratie of deployment. De zeven-links-writegate is afgerond; roadmap 1B blijft gedeeltelijk actief voor de overige NO_RECIPE-profielen en brongebaseerde beoordeling.
+
+---
+
 # Checkpoint — zichtbare Knorr dry-run-uitkomst — 10 oktober 2026
 
 - Basis: remote `main` **`1e8330bd95ed1cbda940a5e7f63211bcaaaab1f9`** bevat gemergede PR #80. PR #70 blijft open/Draft/ongemergd en is niet gewijzigd. GitHub Actions-run `38090505561` / job `114325781790` eindigde succesvol vanaf deze main-SHA, maar na de runnerstap volgde direct cleanup zonder JSON-resultaatregel.
