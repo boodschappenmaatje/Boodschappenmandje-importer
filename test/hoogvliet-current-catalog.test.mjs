@@ -349,7 +349,7 @@ test("zichtbare generieke leegfrase blijft zwak en blokkeert next-window fallbac
 });
 
 test("een verborgen leegplaceholder staat niet in rendered body-tekst en wordt als none vastgelegd", async t => {
-  const hiddenNotice = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><div data-testid="empty-state" style="display:none">Geen producten</div></main>';
+  const hiddenNotice = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><div style="opacity:0"><div data-testid="empty-state">Geen producten</div></div></main>';
   const h = await browserFor({
     body: paginationFixture,
     bodyForURL: url => url.searchParams.get("page") === "2" ? hiddenNotice : paginationFixture,
