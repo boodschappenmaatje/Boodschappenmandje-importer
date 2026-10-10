@@ -427,7 +427,7 @@ async function readCatalogPageEvidence(page) {
       .filter(signal => signal.index >= 0)
       .sort((a, b) => a.index - b.index)[0] ?? null;
     const hasExplicitEmptyState = /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
-    const hasZeroProductCount = /(?:^|\\s)0\\s+producten(?:\\s|$)/.test(text);
+    const hasZeroProductCount = /(?:^|\s)0\s+producten(?:\s|$)/.test(text);
     let emptySourceSelector = hasExplicitEmptyState ? "body" : "none";
     let emptyVisible = "unknown";
     let emptyStrength = hasExplicitEmptyState ? "weak" : "none";
