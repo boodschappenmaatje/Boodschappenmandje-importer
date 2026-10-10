@@ -438,6 +438,12 @@ async function readCatalogPageEvidence(page) {
         { selector: "[id*='empty' i]", strength: "strong" },
         { selector: "[role='status']", strength: "weak" },
         { selector: "[role='alert']", strength: "weak" },
+        { selector: "p", strength: "weak" },
+        { selector: "span", strength: "weak" },
+        { selector: "aside", strength: "weak" },
+        { selector: "li", strength: "weak" },
+        { selector: "div", strength: "weak" },
+        { selector: "section", strength: "weak" },
         { selector: "main", strength: "weak" },
       ];
       for (const candidate of sourceCandidates) {
