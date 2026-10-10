@@ -1,3 +1,27 @@
+# Checkpoint — finale volledige maintenance dry-run na PR #67 — 10 oktober 2026
+
+## Releasebasis en run
+
+- PR #66 is gemerged als `71c183261a99350dab74d91257ad0d702b615f34`; Zyte proofrun `38046108912` bewees 6/6 succesvolle `browserHtml`-requests, 30 SKU's per request en gebruik van de bestaande parser.
+- PR #67 is gemerged naar remote `main` als **`3bac1675c46fba5903a6e9736903ffee210fd1e2`**. Deze merge bevat de begrensde Zyte-listingfallback.
+- De enige handmatige volledige maintenance dry-run na PR #67 is workflowrun **`38052370086`**, poging 1, vanaf exact deze main SHA. De dispatch had `mode=dry-run`, lege writebevestiging en de fail-closed dispatchvalidatie slaagde.
+- De uitvoerende stap had `DRY_RUN=1`, `ZYTE_LISTING_FALLBACK_ENABLED=1`, limiet **3 requests**, timeout **45.000 ms** en de Actions-secret `ZYTE_API_KEY` (in logs door GitHub gemaskeerd). `MAINTENANCE_MAX_LISTING_WINDOWS=800` bleef staan. Verplichte regressies waren groen. Er waren bij de precheck geen actieve maintenance/import Actions; de workflow deelde de bestaande concurrencygroep.
+
+## Dry-run-uitkomst — FAIL, snapshot onvolledig
+
+- De workflow eindigde met **failure** na circa 5m22s in de volledige maintenance-stap. Stopreden: **`category_listing_stagnated`**. De snapshot bereikte de prijs-/productbeoordeling niet.
+- Catalogusaccounting: **20** rootcategorieën; **20** listingroutes geselecteerd; **10** routes bezocht; **150** verwerkte listingvensters; **151** primary window requests volgens de fallbackaccounting; **2.828** unieke actuele listing-SKU's; **47** duplicate candidates; `snapshot_complete=false`.
+- Zyte-accounting: **0** fallback attempts, **0** providerrequests, **0** successes, **0** failures. Er is geen Zyte-trigger of fallback-URL gerapporteerd; de stagnatie stopte fail-closed vóór een toegestane fallback. Geen fallback raw candidates of SKU-count.
+- Bulkprijschecks, detailfallbacks, nieuwe SKU-validaties, prijswijzigingen en ongewijzigde prijzen: **niet bereikt / niet van toepassing**. Production-only/verdwenen SKU's zijn niet opnieuw beoordeeld. De log geeft geen exacte listing-URL van de stagnatie.
+
+## Geen-writebevestiging en gate
+
+- Dispatch: `DRY_RUN=1`, `MANUAL_MAINTENANCE_MODE=dry-run`, `MANUAL_MAINTENANCE_CONFIRM` leeg. De bestaande maintenance-code slaat bij dry-run runregistratie, `upsertProducts` en finish/writepaden over; bovendien stopte de onvolledige snapshot vóór de prijs-/productwriter. Productwrites **0**, prijswrites **0**, catalog import-runregistraties **0**. Geen migration, delete, deployment, retry of tweede maintenance-run gestart.
+- **Geen write-acceptatie vrijgegeven.** Omdat de snapshot incompleet bleef en Zyte niet werd ingezet, is een write-run niet verantwoord. `ROADMAP.md` blijft ongewijzigd; stap 1A.1 is niet afgerond.
+- Volgende stap: Codex onderzoekt waarom `category_listing_stagnated` in deze run niet tot een toegestane fallbacktrigger leidde en identificeert de ontbrekende route/window-identiteit/accounting. Pas na die diagnose en een aparte expliciete gate kan een nieuwe run worden overwogen. Geen automatische retry.
+
+---
+
 # Checkpoint — Production-ready Zyte-listingfallback in Draft — 10 oktober 2026
 
 ## Bewezen provider en actuele basis
