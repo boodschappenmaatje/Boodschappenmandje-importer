@@ -143,7 +143,7 @@ test("current category Next pagination traverses a second public listing page", 
 });
 
 test("verwachte next-window met geldige lege shell gebruikt exact eenmaal dezelfde URL via fallback", async t => {
-  const emptyShell = '<!doctype html><main><a href="/aardappelen-groente-fruit/nested">Subcategorie</a></main>';
+  const emptyShell = '<!doctype html><main id="catalog-listing"><h1>Aardappelen, groente en fruit</h1></main>';
   const h = await browserFor({
     body: paginationFixture,
     bodyForURL: url => url.searchParams.get("page") === "2" ? emptyShell : paginationFixture,
@@ -185,7 +185,7 @@ for (const status of [408, 425, 429, 503]) {
 }
 
 test("primary leeg en fallback leeg blijft onvolledig", async t => {
-  const emptyShell = '<!doctype html><main><a href="/aardappelen-groente-fruit/nested">Subcategorie</a></main>';
+  const emptyShell = '<!doctype html><main id="catalog-listing"><h1>Aardappelen, groente en fruit</h1></main>';
   const h = await browserFor({
     body: paginationFixture,
     bodyForURL: url => url.searchParams.get("page") === "2" ? emptyShell : paginationFixture,
@@ -199,6 +199,23 @@ test("primary leeg en fallback leeg blijft onvolledig", async t => {
   assert.equal(fallback.calls.length, 1);
   assert.equal(result.sourceExhausted, false);
   assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.deepEqual(result.stallDiagnostic, {
+    route: "https://hoogvliet.nl/aardappelen-groente-fruit",
+    window_index: 1,
+    canonical_url: "https://hoogvliet.nl/aardappelen-groente-fruit?page=2",
+    transition: "next",
+    expectedByNext: true,
+    response_status: 200,
+    raw_candidate_count: 0,
+    unique_sku_count: 0,
+    shell_classification: "valid_catalog_shell",
+    explicit_empty_classification: "not_explicitly_empty",
+    fallback_eligible: true,
+    fallback_eligibility_reason: "eligible_expected_next_non_hydrated",
+    fallback_attempt_reason: "listing_unusable",
+    fallback_attempts: 1,
+    stop_reason: "category_listing_stagnated",
+  });
 });
 
 test("permanente HTTP 404 gebruikt geen fallback", async t => {
@@ -280,6 +297,48 @@ test("load-more stagnation is fail-closed and does not claim exhaustion", async 
   assert.equal(result.sourceExhausted, false);
   assert.equal(result.stallReason, "category_listing_stagnated");
   assert.equal(fallback.calls.length, 0);
+  assert.equal(result.stallDiagnostic.transition, "load_more");
+  assert.equal(result.stallDiagnostic.expectedByNext, false);
+  assert.equal(result.stallDiagnostic.fallback_eligible, false);
+  assert.equal(result.stallDiagnostic.fallback_eligibility_reason, "transition_load_more_not_expected_next");
+});
+
+test("expliciete lege next-window status sluit Zyte uit en wordt diagnostisch vastgelegd", async t => {
+  const explicitEmpty = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1><p>Geen producten</p></main>';
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? explicitEmpty : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 0);
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(result.stallDiagnostic.canonical_url, "https://hoogvliet.nl/aardappelen-groente-fruit?page=2");
+  assert.equal(result.stallDiagnostic.transition, "next");
+  assert.equal(result.stallDiagnostic.expectedByNext, true);
+  assert.equal(result.stallDiagnostic.shell_classification, "valid_catalog_shell");
+  assert.equal(result.stallDiagnostic.explicit_empty_classification, "explicit_empty");
+  assert.equal(result.stallDiagnostic.fallback_eligible, false);
+  assert.equal(result.stallDiagnostic.fallback_eligibility_reason, "explicit_empty_status");
+});
+
+test("lege initial category zonder bewezen next-context gebruikt geen Zyte", async t => {
+  const emptyInitial = '<!doctype html><main id="catalog-listing"><h1>Aardappelen</h1></main>';
+  const h = await browserFor({ body: emptyInitial });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub();
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 0);
+  assert.equal(result.initialCandidateCount, 0);
+  assert.equal(result.stallReason, null);
 });
 
 test("repeated SKU window stops without recounting or looping", async t => {
