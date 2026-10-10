@@ -26,7 +26,16 @@ export type ExplicitRecipeReadinessResult = {
   profileStatus: "needs_review";
   profilePromoted: false;
   matchCacheWrites: 0;
+  evaluationMode: "full" | "preflight";
 };
+
+type ExplicitRecipeReadinessOptions = {
+  persist?: boolean;
+  now?: Date;
+  evaluationMode?: "full" | "preflight";
+};
+
+const PREFLIGHT_PEOPLE_COUNT = 4;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -70,7 +79,7 @@ function currentEquivalent(row: Record<string, unknown>, next: Record<string, un
 export async function refreshExplicitRecipeReadiness(
   client: SupabaseClient,
   input: ExplicitRecipeLinkInput,
-  { persist = true, now = new Date() }: { persist?: boolean; now?: Date } = {},
+  { persist = true, now = new Date(), evaluationMode = "full" }: ExplicitRecipeReadinessOptions = {},
 ): Promise<ExplicitRecipeReadinessResult> {
   const parsed = parseExplicitRecipeLinkInput(input);
   if (!parsed) failClosed("explicit_link_not_allowlisted");
@@ -105,15 +114,21 @@ export async function refreshExplicitRecipeReadiness(
   const catalog = await loadCatalog(client, [parsed.recipeId]);
   const recipe = catalog.recipes.find((item) => item.id === parsed.recipeId);
   if (!recipe) failClosed("explicit_recipe_not_in_catalog");
-  const oldResult = await client.from("recipe_readiness_cache")
-    .select("recipe_id,people_count,evaluator_version,dependency_match_keys,refresh_status,invalidated_at,expires_at,readiness_status,required_ingredient_count,ready_required_ingredient_count,problem_count,readiness_payload")
-    .eq("recipe_id", parsed.recipeId).in("people_count", [...PLANNER_MAINTENANCE_PEOPLE_COUNTS]);
-  if (oldResult.error || !Array.isArray(oldResult.data)) failClosed("readiness_state_unavailable");
-  const previous = new Map((oldResult.data as Record<string, unknown>[]).map((row) => [row.people_count, row]));
+  if (evaluationMode === "preflight" && persist) failClosed("preflight_must_be_read_only");
+  const peopleCounts = evaluationMode === "preflight"
+    ? [PREFLIGHT_PEOPLE_COUNT] : [...PLANNER_MAINTENANCE_PEOPLE_COUNTS];
+  const previous = new Map<unknown, Record<string, unknown>>();
+  if (persist) {
+    const oldResult = await client.from("recipe_readiness_cache")
+      .select("recipe_id,people_count,evaluator_version,dependency_match_keys,refresh_status,invalidated_at,expires_at,readiness_status,required_ingredient_count,ready_required_ingredient_count,problem_count,readiness_payload")
+      .eq("recipe_id", parsed.recipeId).in("people_count", peopleCounts);
+    if (oldResult.error || !Array.isArray(oldResult.data)) failClosed("readiness_state_unavailable");
+    for (const row of oldResult.data as Record<string, unknown>[]) previous.set(row.people_count, row);
+  }
   const pendingWrites: Record<string, unknown>[] = [];
   const readiness: ExplicitRecipeReadinessResult["readiness"] = [];
   const repository = new SupabaseCatalogRepository(client);
-  for (const peopleCount of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
+  for (const peopleCount of peopleCounts) {
     const gate = await evaluateRecipeReadiness([recipe as Recipe], peopleCount, catalog, repository);
     if (gate.recipes.length !== 1 || gate.recipes[0]?.recipeId !== parsed.recipeId) failClosed("evaluator_scope_mismatch");
     const rows = rowsForGate(gate, peopleCount, now);
@@ -136,5 +151,6 @@ export async function refreshExplicitRecipeReadiness(
     profileStatus: "needs_review",
     profilePromoted: false,
     matchCacheWrites: 0,
+    evaluationMode,
   };
 }

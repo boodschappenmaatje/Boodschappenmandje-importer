@@ -186,4 +186,29 @@ describe("explicit needs_review recipe readiness", () => {
     expect(result.matchCacheWrites).toBe(0);
     expect(db.writes).toHaveLength(0);
   });
+
+  it("Production preflight evaluates one fixed people count and skips cache reads and all writes", async () => {
+    const db = database();
+    const result = await refreshExplicitRecipeReadiness(db.client, { sku, recipeId }, {
+      persist: false,
+      evaluationMode: "preflight",
+    });
+    expect(result).toMatchObject({ evaluationMode: "preflight", readinessWrites: 0, matchCacheWrites: 0 });
+    expect(result.readiness).toEqual([{ peopleCount: 4, status: "NOT_READY", problemCount: 1 }]);
+    expect(evaluateRecipeReadiness).toHaveBeenCalledTimes(1);
+    expect(evaluateRecipeReadiness).toHaveBeenCalledWith([recipe], 4, expect.anything(), expect.anything());
+    expect(db.reads).not.toContain("recipe_readiness_cache");
+    expect(db.reads).not.toContain("ingredient_product_matches");
+    expect(db.writes).toHaveLength(0);
+  });
+
+  it("cannot combine bounded preflight evaluation with persistence", async () => {
+    const db = database();
+    await expect(refreshExplicitRecipeReadiness(db.client, { sku, recipeId }, {
+      persist: true,
+      evaluationMode: "preflight",
+    })).rejects.toThrow("preflight_must_be_read_only");
+    expect(evaluateRecipeReadiness).not.toHaveBeenCalled();
+    expect(db.writes).toHaveLength(0);
+  });
 });
