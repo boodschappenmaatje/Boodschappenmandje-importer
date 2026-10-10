@@ -400,24 +400,22 @@ export function classifySourcePageEvidence(evidence = {}) {
     return "source_unavailable";
   }
   if (evidence.captcha || evidence.denied || [401, 403].includes(responseStatus)) return "challenge";
-  if (evidence.hasExpectedContent || evidence.hasCatalogStructure) return "ready";
-  if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) return "valid_empty_search";
+  if (evidence.hasExpectedContent) return "ready";
   // De bron kan na de initiële loader een volledige websiteschil renderen,
   // terwijl de productdata nog steeds door de normale broncontrole wordt
   // tegengehouden. Een grote HTML-response is daarom geen bewijs van een
   // geldige productresponse; alleen de verwachte inhoud is dat.
   if (evidence.hasIncapsula) return "security_check";
+  if (evidence.hasStrongExplicitEmptyState) return "valid_empty_search";
+  if (evidence.hasCatalogStructure) return "ready";
   if (evidence.hasSearchStructure || evidence.hasCatalogStructure) return "parser_structure_changed";
   return "parser_structure_changed";
 }
 
-async function readCatalogPageEvidence(page) {
-  return page.evaluate(({ responseStatus }) => {
+async function readCatalogPageEvidence(page, expectedSelector = null) {
+  return page.evaluate(({ responseStatus, selector }) => {
     const text = (document.body?.innerText ?? "").toLowerCase();
-    const productLinks = document.querySelectorAll("a[href*='/product/']").length;
-    const categoryLinks = [...document.querySelectorAll("a[href]")]
-      .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
-    const hasListingShell = Boolean(document.querySelector([
+    const listingShellSelector = [
       "main[id*='catalog-listing' i]",
       "main[class*='catalog-listing' i]",
       "[data-testid*='catalog-listing' i]",
@@ -425,23 +423,94 @@ async function readCatalogPageEvidence(page) {
       "[id*='product-list' i]",
       "[class*='product-listing' i]",
       "[class*='product-grid' i]",
-    ].join(",")));
+    ].join(",");
+    const emptyPhrases = [
+      { match: "geen_resultaten_gevonden", phrase: "geen resultaten gevonden" },
+      { match: "geen_zoekresultaten", phrase: "geen zoekresultaten" },
+      { match: "niks_kunnen_vinden", phrase: "niks kunnen vinden" },
+      { match: "niets_gevonden", phrase: "niets gevonden" },
+      { match: "geen_producten", phrase: "geen producten" },
+      { match: "nul_producten", phrase: "0 producten" },
+    ];
+    const emptyMatch = emptyPhrases
+      .map(signal => ({ ...signal, index: text.indexOf(signal.phrase) }))
+      .filter(signal => signal.index >= 0)
+      .sort((a, b) => a.index - b.index)[0] ?? null;
+    const hasExplicitEmptyState = /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text);
+    const hasZeroProductCount = /(?:^|\s)0\s+producten(?:\s|$)/.test(text);
+    let emptySourceSelector = hasExplicitEmptyState ? "body" : "none";
+    let emptyVisible = "unknown";
+    let emptyStrength = hasExplicitEmptyState ? "weak" : "none";
+    let emptySourceElement = null;
+    if (emptyMatch) {
+      const sourceCandidates = [
+        { selector: "[data-testid*='empty' i]", strength: "strong" },
+        { selector: "[class*='empty' i]", strength: "strong" },
+        { selector: "[id*='empty' i]", strength: "strong" },
+        { selector: "[role='status']", strength: "weak" },
+        { selector: "[role='alert']", strength: "weak" },
+        { selector: "p", strength: "weak" },
+        { selector: "span", strength: "weak" },
+        { selector: "aside", strength: "weak" },
+        { selector: "li", strength: "weak" },
+        { selector: "div", strength: "weak" },
+        { selector: "section", strength: "weak" },
+        { selector: "main", strength: "weak" },
+      ];
+      for (const candidate of sourceCandidates) {
+        const matchingElement = [...document.querySelectorAll(candidate.selector)]
+          .find(element => (element.innerText ?? "").toLowerCase().includes(emptyMatch.phrase));
+        if (!matchingElement) continue;
+        emptySourceSelector = candidate.selector;
+        emptySourceElement = matchingElement;
+        const rectsVisible = matchingElement.getClientRects().length > 0;
+        let stylesVisible = true;
+        for (let ancestor = matchingElement; ancestor; ancestor = ancestor.parentElement) {
+          const style = getComputedStyle(ancestor);
+          if (style.display === "none" || style.visibility === "hidden"
+            || Number(style.opacity || 1) <= 0) {
+            stylesVisible = false;
+            break;
+          }
+        }
+        emptyVisible = rectsVisible && stylesVisible ? "true" : "false";
+        emptyStrength = emptyVisible === "true" ? candidate.strength : "weak";
+        break;
+      }
+    }
+    const emptySignalType = emptyMatch?.match === "nul_producten"
+      ? "zero_product_count"
+      : emptyMatch ? "body_text_phrase" : "none";
+    const hasStrongExplicitEmptyState = hasExplicitEmptyState
+      && emptyStrength === "strong" && emptyVisible === "true"
+      && Boolean(emptySourceElement?.closest(listingShellSelector));
+    const productLinks = document.querySelectorAll("a[href*='/product/']").length;
+    const categoryLinks = [...document.querySelectorAll("a[href]")]
+      .filter(link => /\/producten(?:\/|$)|\/product\//i.test(link.getAttribute("href") || "")).length;
+    const hasListingShell = Boolean(document.querySelector(listingShellSelector));
     return {
       responseStatus,
       captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
       denied: /access denied|toegang geweigerd|forbidden/.test(text),
-      hasExpectedContent: productLinks > 0,
+      hasExpectedContent: productLinks > 0 || Boolean(selector && document.querySelector(selector)),
+      hasSearchStructure: productLinks > 0,
+      hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
       hasCatalogStructure: categoryLinks > 0 || document.location.pathname === "/producten" || hasListingShell,
       hasListingShell,
-      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 producten/.test(text),
-      hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
+      hasExplicitEmptyState,
+      hasStrongExplicitEmptyState,
+      hasZeroProductCount,
+      emptySignalType,
+      emptyMatch: emptyMatch?.match ?? "none",
+      emptySourceSelector,
+      emptyVisible,
+      emptyStrength,
       productLinks,
       bodyTextLength: text.trim().length,
       htmlLength: document.documentElement?.outerHTML?.length ?? 0,
     };
-  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null });
+  }, { responseStatus: page.__hoogvlietLastResponseStatus ?? null, selector: expectedSelector });
 }
-
 async function waitForCatalogSource(page, options = {}) {
   const expectCategoryLinks = options.expectCategoryLinks === true;
   const immediateStatus = Number(page.__hoogvlietLastResponseStatus);
@@ -505,24 +574,7 @@ async function waitForCatalogSource(page, options = {}) {
 }
 
 async function readSourcePageEvidence(page, expectedSelector = null) {
-  return page.evaluate(({ selector, responseStatus }) => {
-    const text = (document.body?.innerText ?? "").toLowerCase();
-    return {
-      responseStatus,
-      captcha: /captcha|verify you are human|controleer of je een mens bent/.test(text),
-      denied: /access denied|toegang geweigerd|forbidden/.test(text),
-      hasExpectedContent: Boolean(selector && document.querySelector(selector)),
-      hasExplicitEmptyState: /geen (?:producten|zoekresultaten)|geen resultaten gevonden|niks kunnen vinden|niets gevonden|0 resultaten/.test(text),
-      hasSearchStructure: Boolean(document.querySelector("a[href*='/product/']")),
-      hasZeroProductCount: /(?:^|\s)0\s+producten(?:\s|$)/.test(text),
-      hasIncapsula: Boolean(document.querySelector("script[src*='_Incapsula_Resource']")),
-      bodyTextLength: text.trim().length,
-      htmlLength: document.documentElement?.outerHTML?.length ?? 0,
-    };
-  }, {
-    selector: expectedSelector,
-    responseStatus: page.__hoogvlietLastResponseStatus ?? null,
-  });
+  return readCatalogPageEvidence(page, expectedSelector);
 }
 
 async function detectBlocking(page, expectedSelector = null) {
@@ -1180,13 +1232,13 @@ export async function collectCatalogListing(page, routeURL, {
       categoryLinkCount = (await extractCatalogCategoryLinks(page)).length;
       shellClassification = evidence.hasListingShell || evidence.hasCatalogStructure || categoryLinkCount > 0
         ? "valid_catalog_shell" : "no_catalog_shell";
-      explicitEmptyClassification = evidence.hasExplicitEmptyState || evidence.hasZeroProductCount
-        ? "explicit_empty" : "not_explicitly_empty";
+      explicitEmptyClassification = evidence.hasStrongExplicitEmptyState
+        ? "explicit_empty"
+        : evidence.emptyStrength === "weak" ? "weak_signal" : "not_explicitly_empty";
       const loadedExpectedShell = Number(evidence.responseStatus) >= 200
         && Number(evidence.responseStatus) < 400
         && (evidence.hasCatalogStructure || categoryLinkCount > 0)
-        && !evidence.hasExplicitEmptyState
-        && !evidence.hasZeroProductCount
+        && !evidence.hasStrongExplicitEmptyState
         && evidence.productLinks === 0;
       fallbackEligible = loadedExpectedShell && Boolean(listingFallback?.attempt);
       if (loadedExpectedShell && !listingFallback?.attempt) eligibilityReason = "fallback_provider_unavailable";
@@ -1194,7 +1246,7 @@ export async function collectCatalogListing(page, routeURL, {
       else if (Number(evidence.responseStatus) < 200 || Number(evidence.responseStatus) >= 400) {
         eligibilityReason = "primary_response_status_not_successful";
       } else if (evidence.productLinks > 0) eligibilityReason = "primary_has_product_links_parser_returned_none";
-      else if (evidence.hasExplicitEmptyState || evidence.hasZeroProductCount) eligibilityReason = "explicit_empty_status";
+      else if (evidence.hasStrongExplicitEmptyState) eligibilityReason = "explicit_empty_status";
       else if (!(evidence.hasCatalogStructure || categoryLinkCount > 0)) eligibilityReason = "catalog_shell_not_proven";
       else eligibilityReason = "expected_next_not_fallback_eligible";
       if (fallbackEligible) {
@@ -1230,14 +1282,23 @@ export async function collectCatalogListing(page, routeURL, {
       fallbackAttemptReason,
       responseStatus: evidence?.responseStatus ?? page.__hoogvlietLastResponseStatus ?? null,
       pageEvidence: evidence,
+      explicitEmptyTerminal: expectedByNext && evidence?.hasStrongExplicitEmptyState === true
+        && rawDOM.length === 0,
     };
   };
 
   while (!shouldStop() && windows.length < maxWindows) {
     const windowSnapshot = await snapshot();
     const { fresh, rawDOM, signature } = windowSnapshot;
-    if (windows.length === 0 && fresh.length === 0
-      && (await extractCatalogCategoryLinks(page)).length > 0) {
+    if (windows.length === 0 && fresh.length === 0) {
+      const initialEvidence = windowSnapshot.pageEvidence ?? await readCatalogPageEvidence(page);
+      if (initialEvidence.hasStrongExplicitEmptyState
+        || (await extractCatalogCategoryLinks(page)).length > 0) {
+        naturalExhaustion = true;
+        break;
+      }
+    }
+    if (windowSnapshot.explicitEmptyTerminal) {
       naturalExhaustion = true;
       break;
     }
@@ -1251,8 +1312,9 @@ export async function collectCatalogListing(page, routeURL, {
           ? "valid_catalog_shell" : "no_catalog_shell");
       const diagnosticExplicitEmpty = windowSnapshot.explicitEmptyClassification !== "not_checked"
         ? windowSnapshot.explicitEmptyClassification
-        : (diagnosticEvidence?.hasExplicitEmptyState || diagnosticEvidence?.hasZeroProductCount
-          ? "explicit_empty" : "not_explicitly_empty");
+        : (diagnosticEvidence?.hasStrongExplicitEmptyState
+          ? "explicit_empty"
+          : diagnosticEvidence?.emptyStrength === "weak" ? "weak_signal" : "not_explicitly_empty");
       const reason = windowSnapshot.eligibilityReason;
       stallDiagnostic = {
         route: normalizeCatalogCategoryURL(routeURL) ?? "[invalid-route]",
@@ -1265,6 +1327,11 @@ export async function collectCatalogListing(page, routeURL, {
         unique_sku_count: windowSnapshot.primaryUniqueSKUCount,
         shell_classification: diagnosticShell,
         explicit_empty_classification: diagnosticExplicitEmpty,
+        empty_signal_type: diagnosticEvidence?.emptySignalType ?? "unknown",
+        empty_match: diagnosticEvidence?.emptyMatch ?? "unknown",
+        empty_source_selector: diagnosticEvidence?.emptySourceSelector ?? "unknown",
+        empty_visible: diagnosticEvidence?.emptyVisible ?? "unknown",
+        empty_strength: diagnosticEvidence?.emptyStrength ?? "unknown",
         fallback_eligible: windowSnapshot.fallbackEligible,
         fallback_eligibility_reason: reason,
         fallback_attempt_reason: windowSnapshot.fallbackAttemptReason,

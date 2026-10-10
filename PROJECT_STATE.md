@@ -1,3 +1,32 @@
+# Checkpoint — Hoogvliet explicit-empty / non-hydration fix — 10 oktober 2026
+
+## Basis en bewijs
+
+- Remote `main` bleef `1bf913b032cbdfcb6b44ad9dd16da7467aa8f35d` (merge PR #68); PR #69 is Draft en ongemerged.
+- De laatste volledige maintenance dry-run blijft run [38055512512](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38055512512): `category_listing_stagnated` op `https://hoogvliet.nl/frisdrank-sappen/q/page/6`, `transition=next`, `expectedByNext=true`, HTTP 200, nul candidates, `valid_catalog_shell`, `explicit_empty`, fallback uitgesloten en 0 Zyte attempts. Snapshot onvolledig; 0 writes.
+- De historische logs bewaarden niet welke bodyphrase of DOM-bron de brede `document.body.innerText`-regex activeerde. De historische DOM en visibility zijn dus niet reconstrueerbaar.
+- Gerichte read-only waarneming op exact hetzelfde publieke URL liet een geldige page/6-listing zien met productkaarten en de site-indicatie **447 producten**. Dat bevestigt dat het probleemwindow een echte, gevulde cataloguslisting kan zijn; het reconstrueert de oude response niet. Er is geen tweede controle-URL opgehaald en geen Zyte-request gedaan.
+- De code-root-cause in de stoproute was wel concreet: een zwakke bodytekstmatch werd als expliciete lege status gebruikt en blokkeerde daardoor de bestaande fallback voor een concrete, geldige, via `next` verwachte listing. De oplossing hangt niet af van raden welke historische frase is geraakt.
+
+## Fix op de featurebranch
+
+- Branch: `codex/explicit-empty-evidence-1a1-20261010`. Draft PR [#69](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/69), base `main`.
+- Veilige observability logt alleen vaste enums voor signaaltype en matchphrase, een statische selector/source, visibility (`true/false/unknown`), strength (`strong/weak/none`), en bestaande route/window/canonical URL/transition/expectedByNext/shellvelden. Geen HTML of vrije bodytekst.
+- Alleen een zichtbare empty-marker binnen de bekende listing-shell geldt als sterke expliciete leegstatus. Die marker laat initial en verwachte next-listings natuurlijk completeren.
+- Generieke bodyphrase, verborgen marker of onbekende visibility blijft zwak bewijs. Zo'n signaal blokkeert de bestaande Zyte-eligibility voor een concrete geldige `next`-window niet. De bestaande canonical identity-, status-, trigger-, requestbudget-, single-attempt-, parser-, dedupe- en fail-closed providerrails blijven leidend.
+- Geen wijzigingen aan 404-, parser/schema-, repeated-window-, loop-, alias-, load-more- of window-capgedrag; geen providerlimieten gewijzigd.
+
+## Tests, veiligheid en releasegate
+
+- Regressies dekken gevulde listings, echte sterke lege initial/next listing, generieke en opacity-hidden lege signalen, non-hydrated verwachte next, load-more, 404, repeated window, pagination-loop, alias, window cap, Zyte budget, maximaal één attempt per canonical window en fail-closed providerfailure.
+- Op code-head `6691d2dd7ac0f9237c7e2f2365803c86ec6af2e3` is de volledige `Stability & core flows`-run groen: `npm test` en `npm run check`, PostgreSQL atomic rollback/concurrency en web regressions/lint/TypeScript/build.
+- `git diff --check` is groen via de PR-runnerpatchvalidatie. Databasecode is niet gewijzigd.
+- In deze goal zijn geen full maintenance-run, Zyte-request, Production-write, migratie, deployment of merge gestart. Product-, prijs- en catalogusrunregistratiewrites zijn 0.
+- `ROADMAP.md` blijft ongewijzigd: 1A.1 blijft open totdat de fix na merge live is bewezen. `DESIGN.md` is niet gewijzigd.
+- Volgende gate: review en expliciete mergegoedkeuring voor Draft PR #69. Na afzonderlijke mergegoedkeuring: exact één volledige maintenance DRY-RUN vanaf de nieuwe main, volledige accounting, geen write. De finale write blijft een aparte toestemming.
+
+---
+
 # Checkpoint — finale volledige maintenance dry-run na PR #67 — 10 oktober 2026
 
 ## Releasebasis en run
