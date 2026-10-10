@@ -14,7 +14,7 @@
 
 ## Scope, branch en vervolg
 
-- Branch: `codex/hoogvliet-listing-fallback-1a1-20261010`. Draft PR: wordt na verificatie geopend. Geen importer-, workflow-, database-, migration-, delete-, budget-, gebruikersdata- of providerconfigwijziging; geen workflowdispatch, maintenance-run, Production-write, deployment of merge.
+- Branch: `codex/hoogvliet-listing-fallback-1a1-20261010`; documentatiecommit `a5487fe`; Draft PR [#66](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/66). Geen importer-, workflow-, database-, migration-, delete-, budget-, gebruikersdata- of providerconfigwijziging; geen workflowdispatch, maintenance-run, Production-write, deployment of merge.
 - Verificatie op de actuele main-basis: `npm test` **412/412 groen**, `npm run check` groen en `git diff --check` groen. PostgreSQL-tests zijn niet geraakt of nodig voor deze documentatie-only providergate.
 - `ROADMAP.md` blijft ongewijzigd: 1A.1 is nog niet technisch afgerond. Exacte Work-stap: voer alleen de gedocumenteerde Zyte domain-pricing-check en read-only 3× probleemwindow + 3× controlewindow proof uit. Stop daarna zonder maintenance dry-run/write. Bij groen gaat de uitkomst terug naar Codex voor de minimale adapter en de tien regressies.
 
