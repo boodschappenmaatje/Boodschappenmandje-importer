@@ -451,10 +451,16 @@ async function readCatalogPageEvidence(page) {
           .find(element => (element.innerText ?? "").toLowerCase().includes(emptyMatch.phrase));
         if (!matchingElement) continue;
         emptySourceSelector = candidate.selector;
-        const style = getComputedStyle(matchingElement);
         const rectsVisible = matchingElement.getClientRects().length > 0;
-        const stylesVisible = style.display !== "none" && style.visibility !== "hidden"
-          && Number(style.opacity || 1) > 0;
+        let stylesVisible = true;
+        for (let ancestor = matchingElement; ancestor; ancestor = ancestor.parentElement) {
+          const style = getComputedStyle(ancestor);
+          if (style.display === "none" || style.visibility === "hidden"
+            || Number(style.opacity || 1) <= 0) {
+            stylesVisible = false;
+            break;
+          }
+        }
         emptyVisible = rectsVisible && stylesVisible ? "true" : "false";
         emptyStrength = emptyVisible === "true" ? candidate.strength : "weak";
         break;
