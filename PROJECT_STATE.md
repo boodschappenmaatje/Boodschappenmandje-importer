@@ -1,3 +1,29 @@
+# Checkpoint — onderzoek dagelijkse Hoogvliet-stagnatie — 11 oktober 2026
+
+## Actuele basis en Actions-bewijs
+
+- Onderzocht vanaf remote `main` **`82b66be`**. PR #68 (`1bf913b`) en PR #69 (`9922b4b`) zijn al gemerged. De relevante codefixes staan dus al op `main`; tijdens dit checkpoint is geen tweede codepatch nodig of gemaakt.
+- De laatste volledige maintenance-dry-run vóór PR #69 was run [38055512512](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38055512512): `category_listing_stagnated` op `/frisdrank-sappen/q/page/6`, `transition=next`, `expectedByNext=true`, HTTP 200, nul candidates, listing-shell geldig, leegclassificatie `explicit_empty`, Zyte-attempts **0** en `snapshot_complete=false`. Zyte werd dus niet aangeroepen; providerfouten en fallback-successes zijn voor die run niet van toepassing.
+- De daaropvolgende retry [38059669297](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38059669297) draaide nog vanaf commit `1bf913b` (vóór PR #69) en faalde. Na merge van PR #69 op `9922b4b` zijn de volledige maintenance-runs [38061167591](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38061167591) en [38063646183](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38063646183) als `success` geregistreerd; de bestaande checkpointregistratie meldt voor 380611 `snapshot_complete=true`. Hun actuele Zyte-attempt-/success-/failuretellers konden hier niet opnieuw worden geverifieerd: GitHub weigert de logdownload met HTTP 403 en er zijn geen run-artifacts.
+- De meest recente retry-workflowrun [38088599583](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38088599583) eindigde met `success`, maar de stappen voor Chrome en `Verschuldigde daily attempt uitvoeren` zijn overgeslagen. Dit is geen importsucces en geen bewijs van fallbackgebruik. Er is geen nieuwere daily-/retry-run zichtbaar.
+
+## Bewezen oorzaak en herstelstatus
+
+- In run 380555 was de problematische pagina een normale HTTP-200-vervolgpagina die via `next` werd verwacht. De brede leegstatusdetectie behandelde zwakke/algemene of verborgen “geen producten”-tekst alsof de listing expliciet leeg was. Daardoor sloeg de eligibilitycheck de bestaande Zyte-fallback over, waarna de collector fail-closed stopte met `category_listing_stagnated`. De gemelde 10/20 bezochte routes en 2.828 unieke SKU's waren een onvolledige snapshot, geen betrouwbare catalogusuitputting.
+- Een eerdere, aanvullende controlflowfout zat in de shellherkenning: een geldige listingcontainer zonder subcategorielink werd niet als catalogusshell herkend. PR #68 herstelde die evidence. PR #69 herstelde de foutieve `explicit_empty`-classificatie: alleen een zichtbare empty-marker binnen de bekende listing-shell geldt nu als sterke expliciete leegstatus; zwakke signalen blokkeren een concrete verwachte `next`-window niet.
+- De bewijslast wijst voor de genoemde fout op stagnatiedetectie/fallback-triggerlogica, niet op bewezen bronblokkade of verkeerde pagination. Een onafhankelijke read-only observatie van hetzelfde page/6-URL zag een geldige listing met 447 producten. Dat kan de historische response niet reconstrueren. Andere routes of upstream blokkades zijn niet uitgesloten.
+- De fallback is alleen aan de uitvoerende maintenance-stap gekoppeld met het bestaande maximum van 3 Zyte-requests en timeout van 45 seconden. Een succesvolle Zyte-proofrun [38046108912](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/actions/runs/38046108912) bewees eerder 6/6 geldige `browserHtml`-responses met 30 SKU's per request via de bestaande parser. Dit bewijst de provider/parsercombinatie; het bewijst niet dat Zyte in een dagelijkse run na PR #69 is getriggerd.
+- Echte catalogusstagnatie blijft fail-closed: expliciet lege listings mogen natuurlijk eindigen; onvolledige snapshots of provider-/parserfouten blijven fouten en mogen geen succesvolle catalogusrun of writer bereiken. Bestaande dedupe, positieve prijsvalidatie, last-known-good en writegates blijven intact.
+
+## Verificatie en open acceptatie
+
+- Op actuele `main`: gerichte listing-, Zyte-adapter- en maintenance-tests **56/56 groen**. Ze dekken normale listingpagination, sterke echte leegstatus, zwakke/verborgen empty-signalen, fallback-trigger en -uitsluiting, één attempt per canonical window, requestbudget, providerfailure, dedupe, geen fictieve/nulprijs en fail-closed writer-/exitpad.
+- De ROADMAP-snelle kwaliteitscheck `npm run check` is geslaagd. Geen workflow-YAML is gewijzigd; actionlint was daarom niet nodig. De tests zijn een veilige lokale simulatie, geen Production- of live Zyte-call.
+- In dit checkpoint zijn geen productimport, Actions-dispatch, Zyte-request, databasewrite, migratie, deployment of merge gestart. Geen bestanden in workflows of importerlogica gewijzigd. Alleen dit statusdocument is bijgewerkt; ROADMAP-status blijft ongewijzigd.
+- Definitieve end-to-end acceptatie vraagt om een volgende geautoriseerde natuurlijke daily-run vanaf actuele `main` met uitleesbare volledige accounting: complete snapshot, route-/windowaantallen, fallback-triggerreden en attempt/success/failure, provider-/parserresultaat, nul duplicates/ongeldige prijzen en correcte finale status. Alleen als er aantoonbaar een geschikte tijdelijke blokkade of niet-hydrated verwachte next-window optreedt, kan die run Zytegebruik bewijzen. Deze run is hier niet gestart.
+
+---
+
 # Checkpoint — Knorr zeven Production-links bevestigd — 11 oktober 2026
 
 - PR #80 en #81 zijn gemerged op main; PR #81 mergecommit `242fabcd55089e7bcdfea988aa5c2e0ca84a54f0`. PR #70 blijft een afzonderlijk auditcheckpoint; niet gewijzigd.
