@@ -3,6 +3,7 @@
 ## Bron en bestaand contract
 
 - Startpunt: remote `main` **`b8c9ed03b8a762e26aa399d78e979b3323ef8341`**; PR #85 en PR #86 zijn gemerged. De historische authenticated dry-run **`38230369554`** is alleen bewijs uit het verleden; zijn plan-token is niet hergebruikt. In deze voorbereiding is geen Production-request gestart.
+- Code staat op de hergebruikte branch `codex/checkpoint-14a-bounded-runner`; featurecommit **`781db5f9760faa05afea99709f0e0fc9313f4173`**. Draft PR [#87](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/87) staat open op head `451217903a57156e243c2f751793852ae8b02016`, base `main`; PR-checks en Preview lopen. Er is niet gemerged.
 - De bestaande route blijft `POST /api/internal/planner-readiness/bounded-refresh`: bearer-auth via `PLANNER_CACHE_ADMIN_TOKEN`, Vercel bypass via `VERCEL_AUTOMATION_BYPASS_SECRET`, JSON-modi `dry-run` en `write`. De bestaande `.github/workflows/bounded-production-recompute.yml` en zijn runner blijven ongewijzigd en dry-run-only.
 - De bestaande `writeBoundedReadiness` gebruikt één `commit_bounded_readiness`-RPC. De bestaande RPC verifieert het verse plan-token onder resource-locks/revisions in één READ COMMITTED-transactie; scope-/CAS-conflict of onverwacht trigger-effect rolt de volledige transactie terug. Alleen `service_role` kan de RPC uitvoeren. Er is geen directe SQL-commit, nieuwe RPC of migratie toegevoegd.
 
