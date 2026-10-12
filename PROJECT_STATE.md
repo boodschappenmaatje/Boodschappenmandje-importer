@@ -18,6 +18,30 @@
 
 ---
 
+# Checkpoint — bounded planner-cache GitHub runner dry-run-only voorbereiding — 12 oktober 2026
+
+## Actuele basis en bestaande route
+
+- Remote `main` is geverifieerd op `fafbc62ca118892c10b14531bc848ab3faedbfa6`; PR #85 is gemerged. De bestaande Production-route is `POST /api/internal/planner-readiness/bounded-refresh`.
+- De route verwacht JSON met `recipeIds`, `matchKeys` en `mode: "dry-run"`; authenticatie gebruikt `Authorization: Bearer <PLANNER_CACHE_ADMIN_TOKEN>` en de bestaande Vercel-protection-header `x-vercel-protection-bypass` met `VERCEL_AUTOMATION_BYPASS_SECRET`. De route controleert admin-auth vóór requestverwerking en retourneert een transactionele dry-run-snapshot met requested/resolved scope, subscribers, source revision, CAS-revisions, geplande write-aantallen en plan-token. Er is geen directe Supabase-SQL/RPC-route toegevoegd.
+- Bestaande `.github/workflows/bounded-production-recompute.yml` was handmatig, maar vroeg onbeperkte vrije recipe-ID-JSON en de runner bevatte een `RECOMPUTE_ARMED=true` commitpad. Daarom was die nog niet passend voor permanent dry-run-only gebruik.
+
+## Voorbereiding op bestaande featurebranch
+
+- Hergebruikt `codex/checkpoint-14a-bounded-runner`, de al gemergede PR #43-runnerbranch; geen nieuwe branch gemaakt. De branch is fast-forward bijgewerkt naar de actuele main en de bestaande Draft PR #43 blijft ongemoeid/gesloten.
+- Workflow heeft uitsluitend `workflow_dispatch`, zonder inputs, is begrensd tot repository `boodschappenmaatje/Boodschappenmandje-importer`, branch `main` en eerste runpoging, met bestaande GitHub Actions-secrets `PLANNER_CACHE_ADMIN_TOKEN` en `VERCEL_AUTOMATION_BYPASS_SECRET`. De Production-origin staat vast in workflowcode; er zijn geen Supabase-credentials nodig.
+- Runner bevat nu alleen één POST met `mode: "dry-run"`; het commitpad, armingflag en vrije recipe-ID-input zijn verwijderd. De zeven goedgekeurde recipe-ID's en drie matchkeys staan vast in de runner. Hij stopt fail-closed op auth-/HTTP-/JSON-fouten, blocked plan, afwijkende recipe-/matchkey-/subscriber-scope, onverwachte dependencies, readinesscount boven 70, ontbrekende bronrevision/CAS of ongeldig plan-token. Er zijn geen retry, import, refresh, migration of extra requestparameters.
+- Resultaatlogging bevat scope/aantallen en revisionsnapshot; plan-token en credentials worden niet gelogd. Historische 38 dependencykeys zijn geen harde actuele eis; de live response moet wel de exacte goedgekeurde matchkeys bevatten en `unexpectedDependencies=[]` teruggeven.
+- De secretnamen zijn door bestaande workflows gebruikt; deze sessie kon de actuele secretmetadata niet uitlezen via de beschikbare GitHub-interface. Secretwaarden zijn niet benaderd. Als een benodigde secret ontbreekt, stopt de runner vóór het HTTP-request.
+
+## Verificatie en stopgrens
+
+- Gerichte runner-tests: **12/12** geslaagd. `node --check` en `git diff --check` geslaagd. YAML-structuur wordt nog vóór PR bijgewerkt opnieuw gecontroleerd; `actionlint` is in de omgeving niet beschikbaar.
+- Geen Production-request of workflowdispatch uitgevoerd. Geen bounded commit, planner-refresh, import, database/migrationwijziging, deployment of merge uitgevoerd. `ROADMAP.md` ongewijzigd.
+- Volgende uitvoerstap ná PR-review/merge en bijbehorende Production-deployment: controleer workflow op `main` en de secret-aanwezigheid via GitHub Actions-instellingen; start daarna uitsluitend handmatig vanaf `main` de `READ ONLY — NO REPAIR | bounded Production recomputation` dry-run. Vereist afzonderlijke expliciete gebruikersgoedkeuring vóór dispatch. Een groen resultaat bewijst de actuele scope; geen vervolgcommit vanuit deze workflow.
+
+---
+
 # Checkpoint — Knorr zeven Production-links bevestigd — 11 oktober 2026
 
 - PR #80 en #81 zijn gemerged op main; PR #81 mergecommit `242fabcd55089e7bcdfea988aa5c2e0ca84a54f0`. PR #70 blijft een afzonderlijk auditcheckpoint; niet gewijzigd.

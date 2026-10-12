@@ -2,12 +2,6 @@ name: "READ ONLY — NO REPAIR | bounded Production recomputation"
 
 on:
   workflow_dispatch:
-    inputs:
-      recipe_ids_json:
-        description: 'Exacte 7 recipe UUIDs uit de nieuw goedgekeurde actuele Production-scopebaseline.'
-        required: true
-        default: "[]"
-        type: string
 
 permissions:
   contents: read
@@ -18,12 +12,11 @@ concurrency:
 
 jobs:
   bounded-recompute:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     name: "READ ONLY — NO REPAIR"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      RECOMPUTE_ARMED: "false"
-      RECIPE_IDS_JSON: ${{ inputs.recipe_ids_json }}
       PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
       PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
@@ -36,8 +29,6 @@ jobs:
         with:
           node-version: 22
 
-      # The runner itself hard-fails unless RECOMPUTE_ARMED is the literal
-      # string "false". Do not add SQL, RPC, repair, or retry steps here.
       - name: Verse Production dry-run en veilige scopevalidatie
         shell: bash
         run: node src/bounded-production-recompute.mjs
