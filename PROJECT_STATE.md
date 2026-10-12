@@ -1,3 +1,23 @@
+# Checkpoint — Shanghai source-readfix, eerste dry-run stopt vóór source-read — 12 oktober 2026
+
+## Bewezen live DOM en patch
+
+- Remote `main` bleef **`46cd27f21e130c2dede46805eec65db08e10f42e`**. Bestaande branch `codex/shanghai-source-diagnostic-20261012`, Draft PR [#90](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/90). Source-readfixcommit **`f2fc0f7c02a9e3d33fa1dc1a75a8b24e012ef587`**.
+- Live DOM-inspectie bevestigde dat de oude selector `[data-testing-id="product-detail-page"]` 0 matches heeft en de semantische contentroot `main:has(h1)` exact 1 match. Deze root bevat exact de Shanghai-`h1`, `239 gram`, `Voor 2-3 personen` en, na het semantisch openen van de knop `Gebruiksaanwijzing`, het via `aria-controls` gekoppelde paneel met 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei en olie.
+- De begrensde Shanghai-reader wacht op `main:has(h1)`, vereist de exacte `h1` en exact één knop `Gebruiksaanwijzing`, opent die indien nodig, wacht op het gekoppelde ARIA-paneel en geeft daarna de roottekst aan de bestaande parser. De rootvalidatie vereist vóór parsing alleen exacte productnaam, 239 gram, 2–3 personen en `Boodschappenlijstje:`; de bestaande parser/supplement- en projectionvalidatie blijven intact.
+- Regressies dekken de actuele root, onafhankelijkheid van de oude selector, parserbereik, ontbrekende root, malformed content, fail-closed/zero-write en veilige diagnostiek. Core-CI **#38298781970** is groen: importer **489/489**, PostgreSQL **28/28**, web **887/887**, seedchecks, ESLint, TypeScript en Production-build.
+
+## Exact één nieuwe dry-run en stopgrens
+
+- Handmatige dry-run **#38299370698**, attempt 1, draaide op exact `f2fc0f7c02a9e3d33fa1dc1a75a8b24e012ef587`, branch `codex/shanghai-source-diagnostic-20261012`, `SHANGHAI_WRITE_MODE=dry-run`, lege write-confirmation.
+- De runner stopte onmiddellijk met veilige publieke uitkomst `{"status":"failed","sku":"231215000","sourceKey":"catalog-mix-231215000","code":"unexpected_writepad_failure"}`.
+- Code-inspectie bewijst de oorzaak: `parseCurrentSource` gebruikt `SHANGHAI_PRODUCT_NAME`, maar de source-readfixcommit importeert die constante niet uit `shanghai-writepad-core.mjs`. Dit veroorzaakt een `ReferenceError` bij het opbouwen van de locator, vóór `page.goto`.
+- Daardoor zijn in deze run identity, HTTP-status/finale URL, contentrootdetectie, parser, source verification en recipe projection **niet bereikt/niet geëvalueerd**. Er is geen bewijs uit deze run dat de nieuwe contentroot faalt; de runner bereikte hem niet.
+- Stopregel gerespecteerd: geen automatische reparatie en geen tweede dry-run. Kleinste vervolgstap is afzonderlijk de ontbrekende bestaande constante-import toevoegen, een regressie/loadtest opnemen die de runner tot het source-readpad uitvoert, alle checks opnieuw groen krijgen en pas na nieuwe expliciete toestemming één volgende dry-run starten.
+- **Production-writes 0**, dry-runs in dit checkpoint exact 1, merge nee, import/migratie nee. `ROADMAP.md` blijft ongewijzigd omdat roadmap 1B nog actief is.
+
+---
+
 # Checkpoint — Shanghai source-diagnostiek bewezen — 12 oktober 2026
 
 ## Branch, PR en tests
