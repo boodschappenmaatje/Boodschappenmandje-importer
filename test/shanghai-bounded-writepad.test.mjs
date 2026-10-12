@@ -42,7 +42,11 @@ const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-wri
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
 
 test("runner imports the Shanghai product name used by the normal source-read flow", () => {
-  assert.equal(runner.includes("SHANGHAI_PRODUCT_NAME,\\n  SHANGHAI_SKU,"), true);
+  const coreImportEnd = runner.indexOf('} from "./shanghai-writepad-core.mjs";');
+  const coreImportStart = runner.lastIndexOf("import {", coreImportEnd);
+  assert.notEqual(coreImportStart, -1);
+  assert.notEqual(coreImportEnd, -1);
+  assert.match(runner.slice(coreImportStart, coreImportEnd), /\bSHANGHAI_PRODUCT_NAME\b/);
   assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
 });
 
