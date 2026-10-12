@@ -2,32 +2,29 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ALLOWED_MATCH_KEYS,
+  ALLOWED_RECIPE_IDS,
   PRODUCTION_ORIGIN,
   runBoundedRecompute,
 } from "../src/bounded-production-recompute.mjs";
 
-const recipeIds = Array.from({ length: 7 }, (_, index) =>
-  `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`);
 const envBase = {
-  RECIPE_IDS_JSON: JSON.stringify(recipeIds),
-  RECOMPUTE_ARMED: "false",
   PLANNER_CACHE_BASE_URL: PRODUCTION_ORIGIN,
   PLANNER_CACHE_ADMIN_TOKEN: "test-admin-token",
-  VERCEL_AUTOMATION_BYPASS_SECRET: "test-bypass",
+  VERCEL_AUTOMATION_BYPASS_SECRET: "test-bypass-secret",
 };
 const planToken = "a".repeat(64);
 
 function dryRun(overrides = {}) {
   return {
-    requestedRecipeIds: [...recipeIds],
-    resolvedRecipeIds: [...recipeIds],
+    requestedRecipeIds: [...ALLOWED_RECIPE_IDS],
+    resolvedRecipeIds: [...ALLOWED_RECIPE_IDS],
     requestedMatchKeys: [...ALLOWED_MATCH_KEYS],
     dependencyKeys: [
       ...ALLOWED_MATCH_KEYS,
       ...Array.from({ length: 35 }, (_, index) =>
         `meal-mix-ingredient:dependency-${index}:g:ingredient:generic`),
     ],
-    subscriberScope: recipeIds.flatMap((recipeId) =>
+    subscriberScope: ALLOWED_RECIPE_IDS.flatMap((recipeId) =>
       Array.from({ length: 10 }, (_, index) => ({ recipeId, peopleCount: index + 1 }))),
     sourceRevision: "368",
     casRevisions: [["r:recipe", "4"], ["k:match", "2"]],
@@ -38,18 +35,6 @@ function dryRun(overrides = {}) {
     reason: null,
     planToken,
     transactional: true,
-    ...overrides,
-  };
-}
-
-function commitResult(overrides = {}) {
-  return {
-    blocked: false,
-    matchWrites: 3,
-    readinessWrites: 70,
-    outsideScopeEffects: 0,
-    finalPlanToken: "b".repeat(64),
-    validatedScope: { recipeIds: [...recipeIds], matchKeys: [...ALLOWED_MATCH_KEYS] },
     ...overrides,
   };
 }
@@ -67,12 +52,21 @@ function fetchSequence(responses, calls = []) {
   };
 }
 
-test("DISARMED doet precies één verse dry-run en kan geen commit sturen", async () => {
+test("stuurt exact één geauthenticeerde dry-run met uitsluitend de vaste scope", async () => {
   const calls = [];
   const result = await runBoundedRecompute({ env: envBase, fetchImpl: fetchSequence([response(dryRun())], calls) });
   assert.equal(result.mode, "dry-run");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].body.mode, "dry-run");
+  assert.equal(calls[0].url, `${PRODUCTION_ORIGIN}/api/internal/planner-readiness/bounded-refresh`);
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.redirect, "error");
+  assert.equal(calls[0].options.headers.authorization, "Bearer test-admin-token");
+  assert.equal(calls[0].options.headers["x-vercel-protection-bypass"], "test-bypass-secret");
+  assert.deepEqual(calls[0].body, {
+    recipeIds: [...ALLOWED_RECIPE_IDS],
+    matchKeys: [...ALLOWED_MATCH_KEYS],
+    mode: "dry-run",
+  });
   assert.equal(calls[0].body.expectedPlanToken, undefined);
 });
 
@@ -86,14 +80,16 @@ test("ontbrekende auth faalt vóór netwerkverkeer", async () => {
 });
 
 for (const [name, mutate] of [
-  ["blocked=true", (plan) => ({ ...plan, blocked: true })],
-  ["onverwachte recipe ID", (plan) => ({ ...plan, resolvedRecipeIds: [...recipeIds.slice(0, 6), "11111111-1111-4111-8111-111111111111"] })],
+  ["blocked response", (plan) => ({ ...plan, blocked: true })],
+  ["onverwacht recept", (plan) => ({ ...plan, resolvedRecipeIds: [...ALLOWED_RECIPE_IDS.slice(0, 6), "11111111-1111-4111-8111-111111111111"] })],
   ["onverwachte matchkey", (plan) => ({ ...plan, requestedMatchKeys: [...ALLOWED_MATCH_KEYS.slice(0, 2), "meal-mix-ingredient:other:g:ingredient:generic"] })],
   ["onverwachte dependency", (plan) => ({ ...plan, unexpectedDependencies: ["outside-recipe:4"] })],
   ["onverwachte subscriber", (plan) => ({ ...plan, subscriberScope: [...plan.subscriberScope, { recipeId: "11111111-1111-4111-8111-111111111111", peopleCount: 4 }] })],
   ["ontbrekend plan-token", (plan) => ({ ...plan, planToken: null })],
+  ["te veel readinessrijen", (plan) => ({ ...plan, plannedReadinessWrites: 71 })],
+  ["ontbrekende CAS-revisies", (plan) => ({ ...plan, casRevisions: [] })],
 ]) {
-  test(`${name} stopt vóór commit`, async () => {
+  test(`${name} stopt fail-closed na alleen de dry-run`, async () => {
     const calls = [];
     await assert.rejects(() => runBoundedRecompute({
       env: envBase,
@@ -104,45 +100,27 @@ for (const [name, mutate] of [
   });
 }
 
-test("ARMED gebruikt exact het verse plan en maakt één commitrequest bereikbaar", async () => {
-  const calls = [];
-  const result = await runBoundedRecompute({
-    env: { ...envBase, RECOMPUTE_ARMED: "true" },
-    fetchImpl: fetchSequence([response(dryRun()), response(commitResult())], calls),
-  });
-  assert.equal(result.mode, "write");
-  assert.equal(calls.length, 2);
-  assert.equal(calls[0].body.mode, "dry-run");
-  assert.equal(calls[1].body.mode, "write");
-  assert.equal(calls[1].body.expectedPlanToken, planToken);
-  assert.deepEqual(calls[1].body.recipeIds, calls[0].body.recipeIds);
-  assert.deepEqual(calls[1].body.matchKeys, calls[0].body.matchKeys);
-});
-
-test("409 wordt gestopt zonder automatische retry", async () => {
+test("HTTP-authfout stopt zonder retry of tweede request", async () => {
   const calls = [];
   await assert.rejects(() => runBoundedRecompute({
-    env: { ...envBase, RECOMPUTE_ARMED: "true" },
-    fetchImpl: fetchSequence([response(dryRun()), response({ blocked: true }, 409)], calls),
-  }), /http-409/);
-  assert.equal(calls.filter((call) => call.body.mode === "write").length, 1);
+    env: envBase,
+    fetchImpl: fetchSequence([response({ error: "unauthorized" }, 401)], calls),
+  }), /production-request-failed-http-401/);
+  assert.equal(calls.length, 1);
 });
 
-test("5xx na commitrequest veroorzaakt geen tweede write", async () => {
-  const calls = [];
-  await assert.rejects(() => runBoundedRecompute({
-    env: { ...envBase, RECOMPUTE_ARMED: "true" },
-    fetchImpl: fetchSequence([response(dryRun()), response({ error: "bounded-refresh-failed" }, 503)], calls),
-  }), /http-503/);
-  assert.equal(calls.filter((call) => call.body.mode === "write").length, 1);
-});
-
-test("een wijziging tussen fresh dry-run en commit wordt door één CAS-request afgewezen", async () => {
-  const calls = [];
-  await assert.rejects(() => runBoundedRecompute({
-    env: { ...envBase, RECOMPUTE_ARMED: "true" },
-    fetchImpl: fetchSequence([response(dryRun()), response({ blocked: true }, 409)], calls),
-  }));
-  assert.equal(calls[1].body.expectedPlanToken, planToken);
-  assert.equal(calls.filter((call) => call.body.mode === "write").length, 1);
+test("runneroutput bevat geen credentials of plan-token", async () => {
+  const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const dir = await mkdtemp(join(tmpdir(), "bounded-dry-run-"));
+  const summaryPath = join(dir, "summary.md");
+  try {
+    await runBoundedRecompute({ env: envBase, fetchImpl: fetchSequence([response(dryRun())]), summaryPath });
+    const summary = await readFile(summaryPath, "utf8");
+    assert.doesNotMatch(summary, /test-admin-token|test-bypass-secret|a{64}/);
+    assert.match(summary, /no commit request exists in this runner/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
