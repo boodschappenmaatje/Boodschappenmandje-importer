@@ -19,6 +19,7 @@ import {
 } from "./shanghai-source-diagnostics.mjs";
 import {
   SHANGHAI_PARSER_VERSION,
+  SHANGHAI_PRODUCT_NAME,
   SHANGHAI_SKU,
   SHANGHAI_SOURCE_KEY,
   assertShanghaiWriteArmed,
