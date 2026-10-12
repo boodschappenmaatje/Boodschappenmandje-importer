@@ -1,3 +1,23 @@
+# Checkpoint — Shanghai source-diagnostiek bewezen — 12 oktober 2026
+
+## Branch, PR en tests
+
+- Remote `main` bleef ongewijzigd op **`46cd27f21e130c2dede46805eec65db08e10f42e`**. Diagnosebranch **`codex/shanghai-source-diagnostic-20261012`**, Draft PR [#90](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/90), code-head **`899a1e7b3b236024d90a269977aa12bb2a082df1`**.
+- De identity-gate accepteert uitsluitend voor SKU `231215000` de twee bewezen Shanghai-URL's; SKU, exacte naam, merk en verpakking blijven ongewijzigd streng. Er is geen algemene URL-normalisatie of fuzzy matching toegevoegd.
+- Veilige, redacted source-diagnostiek rapporteert uitsluitend navigatiestatus, publieke finale Hoogvliet-URL, foutstadium/type, selector-/parserstatus en timeoutcategorie. De foutuitkomst blijft `source_unavailable`; foutmeldingen, bodies, headers, cookies, tokens en stacktraces worden niet gelogd.
+- Core-CI run **#38297086728** is groen: importer `487/487`, PostgreSQL `28/28`, web `887/887`, plus seedchecks, ESLint, TypeScript en Production-build.
+
+## Exact één Production dry-run
+
+- Handmatige dry-run **#38297723917**, attempt 1, draaide op exact code-head `899a1e7b3b236024d90a269977aa12bb2a082df1`, branch `codex/shanghai-source-diagnostic-20261012`, met `SHANGHAI_WRITE_MODE=dry-run` en lege write-confirmation.
+- Identity-resultaat: de actuele Production-URL-variant is geaccepteerd; `product_identity_mismatch` ontbreekt.
+- Source-resultaat: navigatiestatus **200**; finale URL **`https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000`**; `error_stage=selector`; `error_type=TimeoutError`; `selector_status=failed`; `parser_status=not_reached`; `timeout=true`.
+- De echte oorzaak van `source_unavailable` is daarmee bewezen: de live pagina laadt succesvol, maar de writepad wacht op de verouderde selector `[data-testing-id="product-detail-page"]`, die niet verschijnt. De parser is niet aangeroepen.
+- Finale beslissing: **blocked** met `source_unavailable`, `source_not_verified` en `recipe_projection_mismatch`; geplande records en write-operations zijn allebei 0. De job eindigde daarom verwacht met exitcode 1.
+- Stopgrens gerespecteerd: exact één dry-run in dit checkpoint; geen tweede run, geen fetch/parserfix, geen merge, geen importer, geen migratie en **Production-writes 0**. De kleinste vervolgstap is een apart gereviewde, fail-closed Shanghai source-readfix die een bestaande bewezen contentroot/bronextractie hergebruikt, gevolgd door tests en pas na aparte toestemming één nieuwe dry-run.
+
+---
+
 # Checkpoint — Chinese Beef Shanghai bounded writepad Draft PR #89 — 12 oktober 2026
 
 ## Basis en PR
