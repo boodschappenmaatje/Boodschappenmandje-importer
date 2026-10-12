@@ -110,9 +110,22 @@ Vaste regels:
 - vergelijkbare alternatieven en besparingsfeedback alleen wanneer de bestaande prijs-/matchdata dit betrouwbaar bewijst;
 - toegankelijkheid, reduced motion en performancecontrole.
 
+### Vast besluit — toekomstige multi-supermarktwerking
+
+- **Eerste keuze:** bij eerste gebruik van Zoeken kiest de gebruiker verplicht één supermarkt; BoodschappenMaatje onthoudt die keuze.
+- **Actieve supermarkt zichtbaar:** boven `Ontdek & bespaar` staat compact `Boodschappen bij [ supermarkt ▾ ]`; wisselen gebeurt vanuit die selector.
+- **Geen gemengde zoekresultaten:** zoeken, categorieën, aanbiedingen, prijzen en alternatieven zijn altijd begrensd tot de actieve supermarkt. Zoekresultaten van verschillende ketens worden nooit standaard door elkaar getoond.
+- **Lijst per supermarkt:** wisselt de gebruiker terwijl een actieve lijst al producten bevat, dan volgt een waarschuwing en wordt voor de nieuwe supermarkt een aparte lijst gestart. Er vindt geen stille vermenging of automatische productomzetting plaats.
+- **Vormgeving:** supermarktkeuze blijft in BoodschappenMaatje-stijl met officiële supermarktlogo's; de huisstijl van de keten neemt het scherm niet over.
+- **Keuzeniveau:** in de eerste multi-supermarktversie kiest de gebruiker een keten, niet verplicht een specifieke vestiging.
+- **Toekomstige ketens:** architectuur voorbereiden op **Albert Heijn, Jumbo, Lidl en Dirk** naast Hoogvliet. Deze ketens worden nu nog niet als product-/prijsbron aangesloten; eerst wordt Hoogvliet functioneel bewezen.
+- **Providerarchitectuur:** 1C mag Hoogvliet niet diep hardcoden in zoek-/filter-/lijstlogica. Producten, prijzen, categorieën, aanbiedingen en lijstcontext krijgen een expliciete supermarkt/provider-context zodat een nieuwe keten later zonder tweede zoek- of winkelwagenimplementatie kan aansluiten.
+- **Vergelijken tussen winkels:** later komt een aparte functie `Vergelijk supermarkten`; normaal zoeken blijft altijd binnen één actieve supermarkt.
+- Een nieuwe supermarkt wordt pas actief nadat bron, productidentiteit, actuele prijsbetrouwbaarheid, aanbiedingen, juridische randvoorwaarden en veilige lijst-/budgetintegratie afzonderlijk zijn bewezen.
+
 ### Data- en veiligheidsregels
 
-- Hoogvliet blijft de enige prijs-/productbron in deze scope.
+- Hoogvliet blijft de enige prijs-/productbron in de huidige 1C-A testscope, maar de zoekarchitectuur wordt provider-aware voorbereid op meerdere supermarkten.
 - Geen fictieve €0-prijzen, nepaanbiedingen, nepresultaataantallen, geforceerde matches of misleidende afbeeldingen.
 - Maaltijdbudget en totaal weekbudget blijven afzonderlijk.
 - Zoeken en ontdekken mogen de boodschappenlijst niet vervangen: de lijst blijft het centrale eindpunt.
@@ -127,7 +140,7 @@ Vaste regels:
 | Meldingen | Laag | Codex → Work | Alleen nuttige herinneringen |
 | Offline/PWA-robuustheid | Middel | Codex → Work | Geen schijnbaar actuele onbetrouwbare prijsdata |
 | Kassabon / werkelijke uitgaven | Hoog | Codex → Work | Betrouwbare invoer/herkenning beschikbaar |
-| Meerdere supermarkten | **Zeer hoog** | Codex → Work | Hoogvliet-kern en providerarchitectuur betrouwbaar |
+| Meerdere supermarkten — AH / Jumbo / Lidl / Dirk naast Hoogvliet | **Zeer hoog** | Codex → Work | Slim Zoeken provider-aware; Hoogvliet-flow bewezen; elke nieuwe bron afzonderlijk gevalideerd |
 
 ---
 
