@@ -18,7 +18,7 @@
 
 - Shanghai-writepad + meal-mix parserregressies: **2 testbestanden groen**. Relevante readiness/cachetests: **109/109 groen**. `npm run check`, ESLint op runnermodules, workflow-YAML-parse en `git diff --check` groen.
 - `actionlint` was niet geïnstalleerd. Runner-import eindigde zonder secrets vóór databaseclientgebruik op `database_credentials_missing`; dit was alleen een lokale loadcheck.
-- Geen Production-write, workflowdispatch, import, migratie, merge of deployment uitgevoerd. `ROADMAP.md` ongewijzigd. Na Chinese Beef Shanghai blijven de overige Honig/Knorr `NO_RECIPE`-profielen geparkeerd en gaat ontwikkeling verder naar Slim Zoeken.
+- Geen Production-write, workflowdispatch, import, migratie, merge of Production-deployment uitgevoerd. Het openen/updaten van de Draft PR laat de gekoppelde Vercel Preview automatisch bouwen; geen Preview is handmatig gedispatched. `ROADMAP.md` ongewijzigd. Na Chinese Beef Shanghai blijven de overige Honig/Knorr `NO_RECIPE`-profielen geparkeerd en gaat ontwikkeling verder naar Slim Zoeken.
 
 # Checkpoint — PR #87 release, bounded cacheherstel en roadmap 1A.1 — 12 oktober 2026
 
