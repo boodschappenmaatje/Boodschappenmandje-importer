@@ -1,3 +1,23 @@
+# Checkpoint — 1A.1 planner-cacheherstel na prijsupdates — 12 oktober 2026
+
+## Deelcheckpoint — gedeeltelijke cachewrite hersteld
+
+- PR [#85](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/85), branch `codex/planner-price-cache-recovery-20261012`; code-/testcommit **`695eec450ed725e44866f7de7fbd27b75756007b`**, gebaseerd op remote `main` `82b66be59cb565b23052fdf0ce6ad495206db17f`. Geen nieuwe PR, migratie of databasefunctie.
+- Bewezen foutpad gerepareerd: na een geverifieerde match-upsert vangt de route uitsluitend readiness-upsert-/readbackfouten op als bounded-recoverykandidaat. De al vastgelegde scope gaat via één bestaande bounded dry-run en `commit_bounded_readiness`; overige fouten blijven direct fail-closed.
+- De preflight bewaart kandidaat-matchkeys uit zowel pending matches als pending readiness-dependencies, begrensd tot actuele recipe requirements. Hij bewaart ook de subscriber-/dependency-snapshot vóór writes. Vóór commit controleert de route opnieuw subscribers en vergelijkt dependencykeys met de dry-run; afwijking, geweigerde scope, stale token/CAS-conflict of overschrijding stopt zonder CURRENT-resultaat. Bij een latere poging kan een current matchkey opnieuw worden gevonden via de nog pending readiness-dependency.
+- Na bounded commit worden match- en readinessstatussen opnieuw uit de database gelezen; alle readinessvarianten 1–10 moeten current en niet geïnvalideerd zijn. De bestaande `bounded_only` guard, service-role RPC-grant, scopegrenzen, verse plan-token en CAS zijn ongewijzigd.
+- Regressietests A–F toegevoegd voor gedeeltelijke write, herafleiding na current match, geweigerde dry-run, geweigerde/stale commit, opgeslagen 1–10-verificatie en herhaalde refresh zonder extra writes. Gerichte cache-/bounded-/transactietests **34/34**, planner-/week-/budgetregressies **133/133**, ESLint, TypeScript en `git diff --check` groen. Geen Production-tests of writes.
+- CI en Vercel Preview voor de nieuwe PR-head worden na push gecontroleerd. Geen merge, Production-import/write, migratie, deployment of wijziging aan PR #84 uitgevoerd.
+
+- Basis: actuele `origin/main` **`82b66be`**; PR #84 bleef ongemoeid. Werkbranch: `codex/planner-price-cache-recovery-20261012`.
+- Bewezen oorzaak: `planner_cache_write_guard` zet readiness-upserts van oude schrijvers voor `bounded_only`-resources terug naar `pending` (`transactional_refresh_required`). De bestaande lazy planner-refresh schreef via PostgREST, controleerde de teruggeschreven status niet en telde evaluaties als verversingen. Daardoor leek onderhoud geslaagd terwijl opslag `pending` bleef. Dezelfde route wordt vanuit de planner op gebruik gestart; er is geen geplande achtergrondtaak aangetoond.
+- Gerichte reparatie: normale match- en readiness-upserts lezen de werkelijk opgeslagen cachestatus terug. Als readiness door de guard niet `current` is, stopt die route met gewone schrijvers en gebruikt zij één nieuwe bounded dry-run plus `commit_bounded_readiness` met het verse plan-token. De recovery neemt alleen vooraf pending matchkeys en hun bestaande readiness-subscribers mee; scope groter dan 10 recepten of 10 matchkeys, een geweigerde scope, conflict, of opslagverificatie die faalt eindigt gesloten met een fout. De transactie verifieert na commit opnieuw alle matchrijen en readinessvarianten 1–10.
+- De databaseguard, import, prijsupdates, triggers en bestaande bounded autorisatie zijn niet gewijzigd. Er was geen databasewijziging nodig. Er is geen retry-loop; het bestaande plannerverzoek blijft de automatische, luie trigger. Een pending cache wordt dus hersteld wanneer de planner die cache opvraagt; er is geen zelfstandige geplande rebuild toegevoegd.
+- Tests op deze branch: gerichte planner-/bounded-/weekplanner-/budgetsuite **157/157** groen; lokale disposable PostgreSQL-guard-/rollback-/concurrency-suite **25/25** groen; web TypeScript-check, gerichte ESLint en `git diff --check` groen. De ketentest simuleert guard-downgrade → één bounded commit → verificatie van tien personenvarianten; een geblokkeerde preflight doet geen commit.
+- Nog niet bewezen: echte Production-readinesscache is door deze code niet aangeraakt. Na normale review, merge en deployment vereist acceptatie een afzonderlijk toegestane planner-refresh van de getroffen scope, gevolgd door read-only controle van de precieze matchkeys en alle readinessrijen voor personen 1–10. Geen merge, Production-write, import, migratie of deployment uitgevoerd.
+
+---
+
 # Checkpoint — Knorr zeven Production-links bevestigd — 11 oktober 2026
 
 - PR #80 en #81 zijn gemerged op main; PR #81 mergecommit `242fabcd55089e7bcdfea988aa5c2e0ca84a54f0`. PR #70 blijft een afzonderlijk auditcheckpoint; niet gewijzigd.
