@@ -354,7 +354,8 @@ async function pendingMatchKeysForRecipes(
   client: SupabaseClient,
   recipes: Recipe[],
   catalog: RecipeCatalog,
-): Promise<Map<string, string[]>> {
+  existingReadiness: PlannerReadinessStateRow[],
+): Promise<PlannerRecoverySnapshot> {
   const keysByRecipe = new Map<string, Set<string>>();
   for (const people of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
     for (const [recipeId, keys] of requirementKeysForRecipes(recipes, people, catalog)) {
@@ -364,12 +365,14 @@ async function pendingMatchKeysForRecipes(
     }
   }
   const keys = [...new Set([...keysByRecipe.values()].flatMap((recipeKeys) => [...recipeKeys]))];
-  if (keys.length === 0) return new Map();
+  if (keys.length === 0) return emptyPlannerRecoverySnapshot();
   // Keep the recovery preflight bounded independently of the refresh input.
   // Oversized requests may still refresh through the existing route; if the
   // guard rejects them, recovery fails closed because no exact pending scope
   // was collected.
-  if (keys.length > 1000) return new Map([...keysByRecipe.keys()].map((id) => [id, []]));
+  if (keys.length > 1000) {
+    return emptyPlannerRecoverySnapshot("planner-bounded-recovery-scope-exceeded");
+  }
   const pending = new Set<string>();
   for (let offset = 0; offset < keys.length; offset += 100) {
     const result = await client.from("ingredient_product_matches")
@@ -380,34 +383,115 @@ async function pendingMatchKeysForRecipes(
       if (row.refresh_status === "pending") pending.add(row.match_key);
     }
   }
-  return new Map([...keysByRecipe].map(([recipeId, recipeKeys]) => [
+  // A previous request may have committed the matches and then failed before
+  // storing readiness. Retain keys named by pending readiness rows as well as
+  // keys that are still pending in the match cache. Intersect with the current
+  // recipe requirements so stale payloads cannot expand the bounded scope.
+  for (const row of existingReadiness) {
+    if (row.refresh_status !== "pending") continue;
+    const currentKeys = keysByRecipe.get(row.recipe_id);
+    if (!currentKeys) continue;
+    for (const key of row.dependency_match_keys ?? []) {
+      if (currentKeys.has(key)) pending.add(key);
+    }
+  }
+
+  const matchKeysByRecipe = new Map([...keysByRecipe].map(([recipeId, recipeKeys]) => [
     recipeId,
     [...recipeKeys].filter((key) => pending.has(key)).sort(),
   ]));
+  const recoveryMatchKeys = [...new Set([...matchKeysByRecipe.values()].flat())].sort();
+  if (recoveryMatchKeys.length === 0) return emptyPlannerRecoverySnapshot();
+  if (recoveryMatchKeys.length > 10) {
+    return { matchKeysByRecipe, dependenciesByRecipe: new Map(), subscribers: [], blockedReason: "planner-bounded-recovery-scope-exceeded" };
+  }
+
+  const subscriberResult = await client.from("recipe_readiness_cache")
+    .select("recipe_id,people_count,dependency_match_keys")
+    .overlaps("dependency_match_keys", recoveryMatchKeys)
+    .limit(1000);
+  if (subscriberResult.error || !Array.isArray(subscriberResult.data)) {
+    throw new Error("planner-bounded-recovery-subscribers-unavailable");
+  }
+  const subscribers = subscriberResult.data as PlannerRecoverySubscriber[];
+  const scopedRecipeIds = [...new Set([
+    ...matchKeysByRecipe.keys(),
+    ...subscribers.map((row) => row.recipe_id),
+  ])].sort();
+  if (subscribers.length >= 1000 || scopedRecipeIds.length > 10) {
+    return { matchKeysByRecipe, dependenciesByRecipe: new Map(), subscribers, blockedReason: "planner-bounded-recovery-scope-exceeded" };
+  }
+
+  const scopedRecipes = catalog.recipes.filter((recipe) => scopedRecipeIds.includes(recipe.id));
+  const dependenciesByRecipe = new Map<string, Set<string>>();
+  for (const people of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
+    for (const [recipeId, recipeKeys] of requirementKeysForRecipes(scopedRecipes, people, catalog)) {
+      const current = dependenciesByRecipe.get(recipeId) ?? new Set<string>();
+      for (const key of recipeKeys) current.add(key);
+      dependenciesByRecipe.set(recipeId, current);
+    }
+  }
+  return {
+    matchKeysByRecipe,
+    dependenciesByRecipe: new Map([...dependenciesByRecipe].map(([id, recipeKeys]) => [id, [...recipeKeys].sort()])),
+    subscribers: subscribers.map((row) => ({
+      ...row,
+      dependency_match_keys: [...(row.dependency_match_keys ?? [])].sort(),
+    })),
+    blockedReason: null,
+  };
+}
+
+interface PlannerRecoverySubscriber {
+  recipe_id: string;
+  people_count: number;
+  dependency_match_keys: string[];
+}
+
+interface PlannerRecoverySnapshot {
+  matchKeysByRecipe: Map<string, string[]>;
+  dependenciesByRecipe: Map<string, string[]>;
+  subscribers: PlannerRecoverySubscriber[];
+  blockedReason: string | null;
+}
+
+function emptyPlannerRecoverySnapshot(blockedReason: string | null = null): PlannerRecoverySnapshot {
+  return { matchKeysByRecipe: new Map(), dependenciesByRecipe: new Map(), subscribers: [], blockedReason };
 }
 
 async function restoreRejectedBoundedReadiness(
   client: SupabaseClient,
   recipeIds: string[],
   matchKeys: string[],
+  recoverySnapshot: PlannerRecoverySnapshot,
   now: Date,
 ): Promise<number> {
+  if (recoverySnapshot.blockedReason) throw new Error(recoverySnapshot.blockedReason);
   if (recipeIds.length === 0 || matchKeys.length === 0) {
     throw new Error("planner-bounded-recovery-scope-unavailable");
   }
   if (recipeIds.length > 10 || matchKeys.length > 10) {
     throw new Error("planner-bounded-recovery-scope-exceeded");
   }
+  const expectedSubscribers = recoverySnapshot.subscribers
+    .filter((row) => row.dependency_match_keys.some((key) => matchKeys.includes(key)));
   const subscribers = await client.from("recipe_readiness_cache")
-    .select("recipe_id,people_count")
+    .select("recipe_id,people_count,dependency_match_keys")
     .overlaps("dependency_match_keys", matchKeys)
     .limit(1000);
   if (subscribers.error || !Array.isArray(subscribers.data)) {
     throw new Error("planner-bounded-recovery-subscribers-unavailable");
   }
+  const actualSubscribers = subscribers.data as Array<PlannerRecoverySubscriber>;
+  const subscriberShape = (rows: PlannerRecoverySubscriber[]) => rows.map((row) =>
+    `${row.recipe_id}:${row.people_count}:${[...(row.dependency_match_keys ?? [])].sort().join(",")}`,
+  ).sort();
+  if (JSON.stringify(subscriberShape(actualSubscribers)) !== JSON.stringify(subscriberShape(expectedSubscribers))) {
+    throw new Error("planner-bounded-recovery-subscribers-changed");
+  }
   const scopedRecipeIds = [...new Set([
     ...recipeIds,
-    ...(subscribers.data as Array<{ recipe_id: string }>).map((row) => row.recipe_id),
+    ...actualSubscribers.map((row) => row.recipe_id),
   ])].sort();
   if (scopedRecipeIds.length > 10 || matchKeys.length > 10) {
     throw new Error("planner-bounded-recovery-scope-exceeded");
@@ -419,9 +503,15 @@ async function restoreRejectedBoundedReadiness(
   const { dryRunBoundedReadiness, writeBoundedReadiness } =
     await import("@/server/bounded-readiness-maintenance");
   const scope = { recipeIds: scopedRecipeIds, matchKeys };
+  const expectedDependencies = [...new Set(scopedRecipeIds.flatMap((id) =>
+    recoverySnapshot.dependenciesByRecipe.get(id) ?? [],
+  ))].sort();
   const plan = await dryRunBoundedReadiness(client, scope);
   if (plan.blocked || !plan.planToken) {
     throw new Error(`planner-bounded-recovery-blocked:${plan.reason ?? "plan_unavailable"}`);
+  }
+  if (JSON.stringify([...(plan.dependencyKeys ?? [])].sort()) !== JSON.stringify(expectedDependencies)) {
+    throw new Error("planner-bounded-recovery-dependencies-changed");
   }
   const committed = await writeBoundedReadiness(client, {
     ...scope,
@@ -525,13 +615,14 @@ export async function maintainPlannerReadiness(
     now,
   );
   const targetRecipeIds = new Set(targets.flatMap((target) => target.recipeIds));
-  const pendingKeysByRecipe = targetRecipeIds.size > 0
+  const recoverySnapshot = targetRecipeIds.size > 0
     ? await pendingMatchKeysForRecipes(
         client,
         recipes.filter((recipe) => targetRecipeIds.has(recipe.id)),
         catalog,
+        existing,
       )
-    : new Map<string, string[]>();
+    : emptyPlannerRecoverySnapshot();
   let refreshed = 0;
   let persistentHits = 0;
   let fallbackCount = 0;
@@ -540,15 +631,28 @@ export async function maintainPlannerReadiness(
   for (const target of targets) {
     const targetIds = new Set(target.recipeIds.filter((id) => !rejectedRecipeIds.has(id)));
     if (targetIds.size === 0) continue;
-    const result = await refreshWithCatalog(
-      client,
-      catalog,
-      recipes.filter((recipe) => targetIds.has(recipe.id)),
-      target.numberOfPeople,
-      now,
-      catalogRepository,
-      true,
-    );
+    let result: PlannerCacheRefreshAttempt;
+    try {
+      result = await refreshWithCatalog(
+        client,
+        catalog,
+        recipes.filter((recipe) => targetIds.has(recipe.id)),
+        target.numberOfPeople,
+        now,
+        catalogRepository,
+        true,
+      );
+    } catch (error) {
+      // Match rows have already been persisted and verified before readiness
+      // persistence can fail. Treat only that second-stage failure as a
+      // bounded-recovery candidate; all other errors remain fail-closed.
+      if (!(error instanceof Error) || ![
+        "planner-readiness-cache-write-failed",
+        "planner-readiness-cache-verification-failed",
+      ].includes(error.message)) throw error;
+      for (const id of targetIds) rejectedRecipeIds.add(id);
+      continue;
+    }
     const rejected = new Set(result.rejectedReadinessRecipeIds);
     for (const id of rejected) rejectedRecipeIds.add(id);
     refreshed += result.refreshed - rejected.size;
@@ -559,7 +663,8 @@ export async function maintainPlannerReadiness(
     const recovered = await restoreRejectedBoundedReadiness(
       client,
       [...rejectedRecipeIds].sort(),
-      [...new Set([...rejectedRecipeIds].flatMap((id) => pendingKeysByRecipe.get(id) ?? []))].sort(),
+      [...new Set([...rejectedRecipeIds].flatMap((id) => recoverySnapshot.matchKeysByRecipe.get(id) ?? []))].sort(),
+      recoverySnapshot,
       now,
     );
     refreshed += recovered;
