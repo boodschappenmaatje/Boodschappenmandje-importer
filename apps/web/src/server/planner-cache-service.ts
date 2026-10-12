@@ -61,6 +61,10 @@ export interface PlannerCacheMaintenanceResult extends PlannerCacheRefreshResult
   skippedCurrentReadiness: number;
 }
 
+interface PlannerCacheRefreshAttempt extends PlannerCacheRefreshResult {
+  rejectedReadinessRecipeIds: string[];
+}
+
 function currentReadinessState(
   row: PlannerReadinessStateRow,
   now: Date,
@@ -238,6 +242,26 @@ export function rowsForGate(
   return { matchRows, readinessRows };
 }
 
+export function rejectedReadinessRecipeIds(
+  expectedRows: Array<{ recipe_id: string; people_count: number }>,
+  savedRows: Array<{
+    recipe_id: string;
+    people_count: number;
+    refresh_status: string;
+    invalidated_at: string | null;
+  }>,
+): string[] {
+  const expectedKeys = new Set(expectedRows.map((row) => `${row.recipe_id}:${row.people_count}`));
+  const savedKeys = new Set(savedRows.map((row) => `${row.recipe_id}:${row.people_count}`));
+  if (savedKeys.size !== savedRows.length || savedKeys.size !== expectedKeys.size ||
+      [...expectedKeys].some((key) => !savedKeys.has(key))) {
+    throw new Error("planner-readiness-cache-verification-failed");
+  }
+  return [...new Set(savedRows.filter((row) =>
+    row.refresh_status !== "current" || row.invalidated_at !== null,
+  ).map((row) => row.recipe_id))];
+}
+
 export async function loadCatalog(
   client: SupabaseClient,
   includeBlockedRecipeIds: readonly string[] = [],
@@ -256,20 +280,43 @@ async function persistGate(
   gate: RecipeReadinessGateResult,
   numberOfPeople: number,
   now: Date,
-): Promise<void> {
+): Promise<string[]> {
   const { matchRows, readinessRows } = rowsForGate(gate, numberOfPeople, now);
   if (matchRows.length > 0) {
     const matchResult = await client
       .from("ingredient_product_matches")
-      .upsert(matchRows, { onConflict: "match_key" });
+      .upsert(matchRows, { onConflict: "match_key" })
+      .select("match_key,refresh_status,invalidated_at");
     if (matchResult.error) throw new Error("planner-match-cache-write-failed");
+    const savedMatches = matchResult.data as Array<{
+      match_key: string;
+      refresh_status: string;
+      invalidated_at: string | null;
+    }> | null;
+    if (!Array.isArray(savedMatches) || savedMatches.length !== matchRows.length ||
+        savedMatches.some((row) => row.refresh_status !== "current" || row.invalidated_at !== null) ||
+        matchRows.some((row) => !savedMatches.some((saved) => saved.match_key === row.match_key))) {
+      throw new Error("planner-match-cache-verification-failed");
+    }
   }
   if (readinessRows.length > 0) {
     const readinessResult = await client
       .from("recipe_readiness_cache")
-      .upsert(readinessRows, { onConflict: "recipe_id,people_count" });
+      .upsert(readinessRows, { onConflict: "recipe_id,people_count" })
+      .select("recipe_id,people_count,refresh_status,invalidated_at");
     if (readinessResult.error) throw new Error("planner-readiness-cache-write-failed");
+    if (!Array.isArray(readinessResult.data) || readinessResult.data.length !== readinessRows.length) {
+      throw new Error("planner-readiness-cache-verification-failed");
+    }
+    const saved = readinessResult.data as Array<{
+      recipe_id: string;
+      people_count: number;
+      refresh_status: string;
+      invalidated_at: string | null;
+    }>;
+    return rejectedReadinessRecipeIds(readinessRows, saved);
   }
+  return [];
 }
 
 async function refreshWithCatalog(
@@ -279,7 +326,8 @@ async function refreshWithCatalog(
   numberOfPeople: number,
   now: Date,
   catalogRepository: CatalogRepository = new SupabaseCatalogRepository(client),
-): Promise<PlannerCacheRefreshResult> {
+  allowRejectedReadiness = false,
+): Promise<PlannerCacheRefreshAttempt> {
   const persistentRepository = new SupabasePersistentRecipeReadinessRepository(client);
   const resolution = await resolveRecipeReadiness(
     recipes,
@@ -289,13 +337,124 @@ async function refreshWithCatalog(
     persistentRepository,
     now,
   );
-  await persistGate(client, resolution.gate, numberOfPeople, now);
+  const rejectedReadinessRecipeIds = await persistGate(client, resolution.gate, numberOfPeople, now);
+  if (rejectedReadinessRecipeIds.length > 0 && !allowRejectedReadiness) {
+    throw new Error("planner-readiness-cache-not-current-after-write");
+  }
   return {
     requested: recipes.length,
     refreshed: resolution.gate.recipes.length,
     persistentHits: resolution.persistentHitCount,
     fallbackCount: resolution.fallbackCount,
+    rejectedReadinessRecipeIds,
   };
+}
+
+async function pendingMatchKeysForRecipes(
+  client: SupabaseClient,
+  recipes: Recipe[],
+  catalog: RecipeCatalog,
+): Promise<Map<string, string[]>> {
+  const keysByRecipe = new Map<string, Set<string>>();
+  for (const people of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
+    for (const [recipeId, keys] of requirementKeysForRecipes(recipes, people, catalog)) {
+      const current = keysByRecipe.get(recipeId) ?? new Set<string>();
+      for (const key of keys) current.add(key);
+      keysByRecipe.set(recipeId, current);
+    }
+  }
+  const keys = [...new Set([...keysByRecipe.values()].flatMap((recipeKeys) => [...recipeKeys]))];
+  if (keys.length === 0) return new Map();
+  // Keep the recovery preflight bounded independently of the refresh input.
+  // Oversized requests may still refresh through the existing route; if the
+  // guard rejects them, recovery fails closed because no exact pending scope
+  // was collected.
+  if (keys.length > 1000) return new Map([...keysByRecipe.keys()].map((id) => [id, []]));
+  const pending = new Set<string>();
+  for (let offset = 0; offset < keys.length; offset += 100) {
+    const result = await client.from("ingredient_product_matches")
+      .select("match_key,refresh_status")
+      .in("match_key", keys.slice(offset, offset + 100));
+    if (result.error || !Array.isArray(result.data)) throw new Error("planner-match-cache-state-read-failed");
+    for (const row of result.data as Array<{ match_key: string; refresh_status: string }>) {
+      if (row.refresh_status === "pending") pending.add(row.match_key);
+    }
+  }
+  return new Map([...keysByRecipe].map(([recipeId, recipeKeys]) => [
+    recipeId,
+    [...recipeKeys].filter((key) => pending.has(key)).sort(),
+  ]));
+}
+
+async function restoreRejectedBoundedReadiness(
+  client: SupabaseClient,
+  recipeIds: string[],
+  matchKeys: string[],
+  now: Date,
+): Promise<number> {
+  if (recipeIds.length === 0 || matchKeys.length === 0) {
+    throw new Error("planner-bounded-recovery-scope-unavailable");
+  }
+  if (recipeIds.length > 10 || matchKeys.length > 10) {
+    throw new Error("planner-bounded-recovery-scope-exceeded");
+  }
+  const subscribers = await client.from("recipe_readiness_cache")
+    .select("recipe_id,people_count")
+    .overlaps("dependency_match_keys", matchKeys)
+    .limit(1000);
+  if (subscribers.error || !Array.isArray(subscribers.data)) {
+    throw new Error("planner-bounded-recovery-subscribers-unavailable");
+  }
+  const scopedRecipeIds = [...new Set([
+    ...recipeIds,
+    ...(subscribers.data as Array<{ recipe_id: string }>).map((row) => row.recipe_id),
+  ])].sort();
+  if (scopedRecipeIds.length > 10 || matchKeys.length > 10) {
+    throw new Error("planner-bounded-recovery-scope-exceeded");
+  }
+
+  // Import lazily to avoid a static cycle: the bounded service uses this
+  // module's catalog loader and row builder. Its RPC remains the only route
+  // that can publish CURRENT for bounded_only resources.
+  const { dryRunBoundedReadiness, writeBoundedReadiness } =
+    await import("@/server/bounded-readiness-maintenance");
+  const scope = { recipeIds: scopedRecipeIds, matchKeys };
+  const plan = await dryRunBoundedReadiness(client, scope);
+  if (plan.blocked || !plan.planToken) {
+    throw new Error(`planner-bounded-recovery-blocked:${plan.reason ?? "plan_unavailable"}`);
+  }
+  const committed = await writeBoundedReadiness(client, {
+    ...scope,
+    expectedPlanToken: plan.planToken,
+  });
+  if (committed.blocked) throw new Error(`planner-bounded-recovery-blocked:${committed.reason}`);
+
+  const readiness = await loadReadinessState(
+    client,
+    scopedRecipeIds,
+    PLANNER_MAINTENANCE_PEOPLE_COUNTS,
+  );
+  const readinessByKey = new Map(readiness.map((row) => [`${row.recipe_id}:${row.people_count}`, row]));
+  const allReadinessCurrent = scopedRecipeIds.every((id) =>
+    PLANNER_MAINTENANCE_PEOPLE_COUNTS.every((people) => {
+      const row = readinessByKey.get(`${id}:${people}`);
+      return row !== undefined && currentReadinessState(row, now);
+    }),
+  );
+  const matches = await client.from("ingredient_product_matches")
+    .select("match_key,refresh_status,invalidated_at")
+    .in("match_key", matchKeys);
+  const matchRows = matches.data as Array<{
+    match_key: string;
+    refresh_status: string;
+    invalidated_at: string | null;
+  }> | null;
+  if (matches.error || !Array.isArray(matchRows) || matchRows.length !== matchKeys.length ||
+      matchRows.some((row) => row.refresh_status !== "current" || row.invalidated_at !== null) ||
+      !allReadinessCurrent) {
+    throw new Error("planner-bounded-recovery-verification-failed");
+  }
+  return scopedRecipeIds.length * PLANNER_MAINTENANCE_PEOPLE_COUNTS.length;
 }
 
 export async function refreshPlannerReadiness(
@@ -365,12 +524,22 @@ export async function maintainPlannerReadiness(
     peopleCounts,
     now,
   );
+  const targetRecipeIds = new Set(targets.flatMap((target) => target.recipeIds));
+  const pendingKeysByRecipe = targetRecipeIds.size > 0
+    ? await pendingMatchKeysForRecipes(
+        client,
+        recipes.filter((recipe) => targetRecipeIds.has(recipe.id)),
+        catalog,
+      )
+    : new Map<string, string[]>();
   let refreshed = 0;
   let persistentHits = 0;
   let fallbackCount = 0;
+  const rejectedRecipeIds = new Set<string>();
   const catalogRepository = createCachedCatalogRepository(new SupabaseCatalogRepository(client));
   for (const target of targets) {
-    const targetIds = new Set(target.recipeIds);
+    const targetIds = new Set(target.recipeIds.filter((id) => !rejectedRecipeIds.has(id)));
+    if (targetIds.size === 0) continue;
     const result = await refreshWithCatalog(
       client,
       catalog,
@@ -378,18 +547,34 @@ export async function maintainPlannerReadiness(
       target.numberOfPeople,
       now,
       catalogRepository,
+      true,
     );
-    refreshed += result.refreshed;
+    const rejected = new Set(result.rejectedReadinessRecipeIds);
+    for (const id of rejected) rejectedRecipeIds.add(id);
+    refreshed += result.refreshed - rejected.size;
     persistentHits += result.persistentHits;
     fallbackCount += result.fallbackCount;
   }
+  if (rejectedRecipeIds.size > 0) {
+    const recovered = await restoreRejectedBoundedReadiness(
+      client,
+      [...rejectedRecipeIds].sort(),
+      [...new Set([...rejectedRecipeIds].flatMap((id) => pendingKeysByRecipe.get(id) ?? []))].sort(),
+      now,
+    );
+    refreshed += recovered;
+  }
+  const maintainedPeopleCounts = [...new Set([
+    ...targets.map((target) => target.numberOfPeople),
+    ...(rejectedRecipeIds.size > 0 ? PLANNER_MAINTENANCE_PEOPLE_COUNTS : []),
+  ])].sort((a, b) => a - b);
   return {
     requested: recipes.length,
     refreshed,
     persistentHits,
     fallbackCount,
-    maintainedPeopleCounts: targets.map((target) => target.numberOfPeople),
-    skippedCurrentReadiness: recipeIds.length * peopleCounts.length - refreshed,
+    maintainedPeopleCounts,
+    skippedCurrentReadiness: Math.max(0, recipeIds.length * peopleCounts.length - refreshed),
   };
 }
 

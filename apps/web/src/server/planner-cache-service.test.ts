@@ -8,6 +8,7 @@ import {
   PLANNER_MAINTENANCE_PEOPLE_COUNTS,
   loadCatalog,
   planPlannerReadinessMaintenance,
+  rejectedReadinessRecipeIds,
   type PlannerReadinessStateRow,
 } from "@/server/planner-cache-service";
 
@@ -133,5 +134,19 @@ describe("planner-cache automatisch onderhoud", () => {
       numberOfPeople: 5,
       recipeIds: ["expired", "old-evaluator"],
     }]);
+  });
+
+  it("controleert de werkelijk opgeslagen readiness en detecteert bounded_only-downgrade", () => {
+    const requested = [
+      { recipe_id: "bounded", people_count: 4 },
+      { recipe_id: "regular", people_count: 4 },
+    ];
+    expect(rejectedReadinessRecipeIds(requested, [
+      { ...requested[0], refresh_status: "pending", invalidated_at: NOW.toISOString() },
+      { ...requested[1], refresh_status: "current", invalidated_at: null },
+    ])).toEqual(["bounded"]);
+    expect(() => rejectedReadinessRecipeIds(requested, [
+      { ...requested[0], refresh_status: "current", invalidated_at: null },
+    ])).toThrow("planner-readiness-cache-verification-failed");
   });
 });
