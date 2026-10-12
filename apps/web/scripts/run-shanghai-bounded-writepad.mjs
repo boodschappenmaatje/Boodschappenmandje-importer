@@ -12,7 +12,11 @@ import { matcherVersionForSourceKey } from "../src/services/week-preparation/per
 import { mealMixCorroborationFor } from "../../../src/meal-mix-reviewed-evidence.mjs";
 import { MEAL_MIX_PROFILES } from "../src/services/week-preparation/meal-mix-profiles.ts";
 import { MEAL_MIX_PARSER_VERSION, profileRecipeRow } from "../../../src/meal-mix-profile-maintenance.mjs";
-import { inspectShanghaiSource } from "./shanghai-source-diagnostics.mjs";
+import {
+  SHANGHAI_CONTENT_ROOT,
+  inspectShanghaiSource,
+  validateShanghaiContentRoot,
+} from "./shanghai-source-diagnostics.mjs";
 import {
   SHANGHAI_PARSER_VERSION,
   SHANGHAI_SKU,
@@ -54,18 +58,28 @@ async function parseCurrentSource(browser, product) {
   }
   const page = await browser.newPage();
   try {
-    const detail = page.locator('[data-testing-id="product-detail-page"]');
+    const contentRoot = page.locator("main").filter({ has: page.locator("h1") });
+    const title = contentRoot.getByRole("heading", { level: 1, name: SHANGHAI_PRODUCT_NAME, exact: true });
+    const instructions = contentRoot.getByRole("button", { name: "Gebruiksaanwijzing", exact: true });
     return await inspectShanghaiSource({
+      selector: SHANGHAI_CONTENT_ROOT,
       navigate: async () => {
         const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 25000 });
         return { status: response?.status() ?? null };
       },
       finalUrl: async () => page.url(),
-      waitForSelector: async () => detail.waitFor({ timeout: 15000 }),
-      readSource: async () => ({
+      waitForSelector: async () => {
+        await contentRoot.waitFor({ timeout: 15000 });
+        if (await title.count() !== 1 || await instructions.count() !== 1) throw new Error("source-structure-mismatch");
+        if (await instructions.getAttribute("aria-expanded") !== "true") await instructions.click();
+        const panelId = await instructions.getAttribute("aria-controls");
+        if (!panelId) throw new Error("source-instructions-panel-missing");
+        await contentRoot.locator(`[id=${JSON.stringify(panelId)}]`).waitFor({ timeout: 15000 });
+      },
+      readSource: async () => validateShanghaiContentRoot({
         product,
-        title: await page.locator("h1").innerText(),
-        text: await detail.textContent(),
+        title: await title.innerText(),
+        text: await contentRoot.textContent(),
         sourceUrl: page.url(),
         fetchedAt: new Date().toISOString(),
       }),

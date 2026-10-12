@@ -13,7 +13,11 @@ import {
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
-import { inspectShanghaiSource } from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
+import {
+  SHANGHAI_CONTENT_ROOT,
+  inspectShanghaiSource,
+  validateShanghaiContentRoot,
+} from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
 
 const product = {
   id: "837af4a6-b7b6-4fd4-8eea-3437d4f138a7", sku: SHANGHAI_SKU, name: SHANGHAI_PRODUCT_NAME,
@@ -60,6 +64,51 @@ const sourceProbe = (overrides = {}) => inspectShanghaiSource({
   ...overrides,
 });
 
+const liveShanghaiSource = {
+  title: SHANGHAI_PRODUCT_NAME,
+  text: `Knorr Wereldgerecht maaltijdpakket chinese beef shanghai
+239 gram - Prijs per kilo
+Chinese Beef Shanghai, gehaktballetjes met mie. Voor 2-3 personen.
+Bereidingswijze: Recept met lekker veel groente: Boodschappenlijstje:
+225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, Olie.`,
+};
+
+test("uses the current semantic Shanghai root, opens source content and reaches the parser", async () => {
+  let waitedFor = null;
+  let parserReached = false;
+  const result = await sourceProbe({
+    waitForSelector: async (selector) => { waitedFor = selector; },
+    readSource: async () => validateShanghaiContentRoot(liveShanghaiSource),
+    parseSource: async () => { parserReached = true; return { status: "verified" }; },
+  });
+  assert.equal(waitedFor, "main:has(h1)");
+  assert.equal(waitedFor, SHANGHAI_CONTENT_ROOT);
+  assert.notEqual(waitedFor, '[data-testing-id="product-detail-page"]');
+  assert.equal(parserReached, true);
+  assert.equal(result.diagnostic.content_root_found, true);
+  assert.equal(result.diagnostic.parser_status, "parsed");
+});
+
+test("missing current root and malformed root content fail closed before parsing", async () => {
+  const timeout = new Error("sensitive selector details");
+  timeout.name = "TimeoutError";
+  const missing = await sourceProbe({ waitForSelector: async () => { throw timeout; } });
+  assert.equal(missing.error, "source_unavailable");
+  assert.equal(missing.diagnostic.error_stage, "selector");
+  assert.equal(missing.diagnostic.content_root_found, false);
+
+  let parserReached = false;
+  const malformed = await sourceProbe({
+    readSource: async () => validateShanghaiContentRoot({ ...liveShanghaiSource, text: "239 gram" }),
+    parseSource: async () => { parserReached = true; return { status: "verified" }; },
+  });
+  assert.equal(malformed.error, "source_unavailable");
+  assert.equal(malformed.diagnostic.error_stage, "validation");
+  assert.equal(malformed.diagnostic.content_root_found, true);
+  assert.equal(malformed.diagnostic.parser_status, "not_reached");
+  assert.equal(parserReached, false);
+});
+
 test("source diagnostics classify navigation, selector and parser failures without writes or secret leakage", async () => {
   let writes = 0;
   const failures = [
@@ -72,6 +121,7 @@ test("source diagnostics classify navigation, selector and parser failures witho
     assert.equal(result.error, "source_unavailable");
     assert.equal(result.diagnostic.error_stage, stage);
     assert.equal(result.diagnostic.timeout, stage === "selector");
+    assert.equal(result.diagnostic.content_root, SHANGHAI_CONTENT_ROOT);
     assert.equal(result.diagnostic.final_url,
       "https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000");
     assert.doesNotMatch(JSON.stringify(result), /token=|cookie=|authorization=|secret/i);
