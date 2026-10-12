@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { BoundedReadinessConflict, writeBoundedReadiness } from "@/server/bounded-readiness-maintenance";
+import { BoundedReadinessConflict, verifyBoundedReadiness, writeBoundedReadiness } from "@/server/bounded-readiness-maintenance";
 
 vi.mock("@/lib/supabase/server", () => ({ getSupabaseServerClient: vi.fn() }));
 vi.mock("@/server/bounded-readiness-maintenance", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/server/bounded-readiness-maintenance")>(), writeBoundedReadiness: vi.fn(),
+  verifyBoundedReadiness: vi.fn(),
 }));
 
 afterEach(() => vi.unstubAllEnvs());
@@ -55,5 +56,40 @@ describe("bounded readiness route", () => {
     expect(await conflict.json()).toMatchObject({ blocked: true, matchWrites: 0, readinessWrites: 0 });
     vi.mocked(writeBoundedReadiness).mockRejectedValueOnce(new Error("bounded_database_unavailable"));
     expect((await POST(request("Bearer secret"))).status).toBe(503);
+  });
+
+  it("routes an authenticated Production verify mode to the read-only verifier", async () => {
+    vi.stubEnv("PLANNER_CACHE_ADMIN_TOKEN", "secret");
+    vi.stubEnv("VERCEL_ENV", "production");
+    const exactInput = {
+      recipeIds: [
+        "4e60b9b6-abd3-46e7-b6a1-b10f73ccbec3", "baf31144-bb45-4c2b-aa2f-2f9be588b01c",
+        "3bbe1561-d757-422e-aded-3d802310805c", "5726609e-82a3-4fa7-b5b0-dab78b2b59f1",
+        "4f871e07-a684-4014-843a-f72a11b4c01d", "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+        "6a85d19f-5654-440b-b296-325c8f9fbd30",
+      ],
+      matchKeys: [
+        "meal-mix-ingredient:mix-supplement-hacheevlees:g:ingredient:generic",
+        "meal-mix-ingredient:mix-supplement-pitabroodjes:g:ingredient:generic",
+        "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+      ],
+    };
+    vi.mocked(getSupabaseServerClient).mockReturnValue({} as NonNullable<ReturnType<typeof getSupabaseServerClient>>);
+    vi.mocked(verifyBoundedReadiness).mockResolvedValue({ blocked: false, currentReadinessRows: 70 } as never);
+    const verifyRequest = new Request("https://example.test/api/internal/planner-readiness/bounded-refresh", {
+      method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify({ ...exactInput, mode: "verify" }),
+    });
+    const response = await POST(verifyRequest);
+    expect(response.status).toBe(200);
+    expect(verifyBoundedReadiness).toHaveBeenCalledWith(expect.anything(), {
+      recipeIds: [...exactInput.recipeIds].sort(), matchKeys: [...exactInput.matchKeys].sort(), expectedPlanToken: undefined,
+    });
+    const preview = new Request("https://example.test/api/internal/planner-readiness/bounded-refresh", {
+      method: "POST", headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify({ ...exactInput, mode: "verify" }),
+    });
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect((await POST(preview)).status).toBe(503);
   });
 });
