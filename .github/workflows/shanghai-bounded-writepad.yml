@@ -29,7 +29,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' ||
+       (inputs.mode == 'dry-run' && github.ref == 'refs/heads/codex/shanghai-source-diagnostic-20261012')) &&
       github.run_attempt == 1
     environment: Production
     runs-on: ubuntu-latest

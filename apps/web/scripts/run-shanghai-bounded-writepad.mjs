@@ -11,7 +11,8 @@ import { enrichIngredientsForMealMixes } from "../src/services/week-preparation/
 import { matcherVersionForSourceKey } from "../src/services/week-preparation/persistent-readiness-cache.ts";
 import { mealMixCorroborationFor } from "../../../src/meal-mix-reviewed-evidence.mjs";
 import { MEAL_MIX_PROFILES } from "../src/services/week-preparation/meal-mix-profiles.ts";
-import { MEAL_MIX_PARSER_VERSION, profileRecipeRow, readMealMixSource } from "../../../src/meal-mix-profile-maintenance.mjs";
+import { MEAL_MIX_PARSER_VERSION, profileRecipeRow } from "../../../src/meal-mix-profile-maintenance.mjs";
+import { inspectShanghaiSource } from "./shanghai-source-diagnostics.mjs";
 import {
   SHANGHAI_PARSER_VERSION,
   SHANGHAI_SKU,
@@ -44,11 +45,32 @@ async function readProfile(client, productId) {
 }
 
 async function parseCurrentSource(browser, product) {
+  const url = new URL(product.source_url);
+  if (url.origin !== "https://www.hoogvliet.com" || !url.pathname.startsWith("/product/") || url.username || url.password) {
+    return { error: "source_unavailable", diagnostic: {
+      navigation_status: null, final_url: null, error_stage: "validation", error_type: "Error",
+      selector_status: "not_reached", parser_status: "not_reached", timeout: false,
+    } };
+  }
   const page = await browser.newPage();
   try {
-    const source = await readMealMixSource(page, product);
-    const parsed = parseMealMixSource(source, MEAL_MIX_PROFILES, mealMixCorroborationFor(product));
-    return { source, parsed };
+    const detail = page.locator('[data-testing-id="product-detail-page"]');
+    return await inspectShanghaiSource({
+      navigate: async () => {
+        const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 25000 });
+        return { status: response?.status() ?? null };
+      },
+      finalUrl: async () => page.url(),
+      waitForSelector: async () => detail.waitFor({ timeout: 15000 }),
+      readSource: async () => ({
+        product,
+        title: await page.locator("h1").innerText(),
+        text: await detail.textContent(),
+        sourceUrl: page.url(),
+        fetchedAt: new Date().toISOString(),
+      }),
+      parseSource: async (source) => parseMealMixSource(source, MEAL_MIX_PROFILES, mealMixCorroborationFor(product)),
+    });
   } finally {
     await page.close();
   }
@@ -110,13 +132,15 @@ async function preflight(client, browser) {
   let parsed = null;
   let recipeRow = null;
   let recipeId = randomUUID();
+  let sourceDiagnostic = null;
   const blockers = [];
   if (product) {
-    try {
-      ({ source, parsed } = await parseCurrentSource(browser, product));
+    const sourceResult = await parseCurrentSource(browser, product);
+    sourceDiagnostic = sourceResult.diagnostic;
+    if (sourceResult.error) blockers.push("source_unavailable");
+    else {
+      ({ source, parsed } = sourceResult);
       if (parsed.status === "verified") recipeRow = profileRecipeRow(parsed.profile, source);
-    } catch {
-      blockers.push("source_unavailable");
     }
   }
   const conflictsResult = await client.from("recipes").select("id,source_key,name").eq("source_key", SHANGHAI_SOURCE_KEY);
@@ -177,6 +201,7 @@ async function preflight(client, browser) {
     parsedProfile: parsed?.profile ?? null,
     sourceEvidence: parsed?.evidence ?? null,
     parsedStatus: parsed?.status ?? "unavailable",
+    sourceDiagnostic,
     sourceFingerprint: parsed?.fingerprint ?? null,
     matchKeys: evaluated?.matchRows.map((row) => row.match_key).sort() ?? [],
     writeMatchKeys: planned?.matchKeys ?? [],
@@ -203,7 +228,11 @@ async function freshIdentitySnapshot(client, browser) {
   const product = await readProduct(client);
   const profile = product ? await readProfile(client, product.id) : null;
   let parsed = null;
-  if (product) ({ parsed } = await parseCurrentSource(browser, product));
+  if (product) {
+    const sourceResult = await parseCurrentSource(browser, product);
+    if (sourceResult.error) throw new Error("source_unavailable");
+    ({ parsed } = sourceResult);
+  }
   const conflictResult = await client.from("recipes").select("id,source_key,name").eq("source_key", SHANGHAI_SOURCE_KEY);
   const conflicts = requireData(conflictResult, "recipe_conflict_recheck_failed") ?? [];
   return {

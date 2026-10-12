@@ -13,6 +13,7 @@ import {
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
+import { inspectShanghaiSource } from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
 
 const product = {
   id: "837af4a6-b7b6-4fd4-8eea-3437d4f138a7", sku: SHANGHAI_SKU, name: SHANGHAI_PRODUCT_NAME,
@@ -38,6 +39,57 @@ const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-wri
 test("accepts only the exact Shanghai preflight identity and proven profile", () => {
   assert.deepEqual(valid(), { blocked: false, blockers: [] });
   assert.equal(buildShanghaiWriteSummary(["catalog-mix-product-231215000:piece:mealMix:knorr"]).uniqueRecords.total, 13);
+});
+
+test("accepts only the two allowlisted Shanghai URL variants for the exact SKU", () => {
+  const productionUrl = "https://www.hoogvliet.com/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai";
+  assert.equal(validateShanghaiPreflight({ product: { ...product, source_url: productionUrl }, profile,
+    recipeConflicts: [], parsed, recipe }).blocked, false);
+  assert.ok(validateShanghaiPreflight({ product: { ...product, sku: "231215001", source_url: productionUrl }, profile,
+    recipeConflicts: [], parsed, recipe }).blockers.includes("product_identity_mismatch"));
+  assert.ok(validateShanghaiPreflight({ product: { ...product, source_url: "https://www.hoogvliet.com/product/other" }, profile,
+    recipeConflicts: [], parsed, recipe }).blockers.includes("product_identity_mismatch"));
+});
+
+const sourceProbe = (overrides = {}) => inspectShanghaiSource({
+  navigate: async () => ({ status: 200 }),
+  finalUrl: async () => "https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000?secret=hidden",
+  waitForSelector: async () => {},
+  readSource: async () => ({ text: "safe" }),
+  parseSource: async () => ({ status: "verified" }),
+  ...overrides,
+});
+
+test("source diagnostics classify navigation, selector and parser failures without writes or secret leakage", async () => {
+  let writes = 0;
+  const failures = [
+    ["navigation", { navigate: async () => { const error = new Error("token=secret"); error.name = "TypeError"; throw error; } }],
+    ["selector", { waitForSelector: async () => { const error = new Error("cookie=secret"); error.name = "TimeoutError"; throw error; } }],
+    ["parser", { parseSource: async () => { throw new Error("authorization=secret"); } }],
+  ];
+  for (const [stage, override] of failures) {
+    const result = await sourceProbe(override);
+    assert.equal(result.error, "source_unavailable");
+    assert.equal(result.diagnostic.error_stage, stage);
+    assert.equal(result.diagnostic.timeout, stage === "selector");
+    assert.equal(result.diagnostic.final_url,
+      "https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000");
+    assert.doesNotMatch(JSON.stringify(result), /token=|cookie=|authorization=|secret/i);
+    await assert.rejects(runShanghaiCommit({ mode: "write", confirmation: SHANGHAI_CONFIRMATION, context,
+      plan: { blocked: true, recipeId: "new-id", _snapshot: {} }, readCurrentSnapshot: async () => ({}),
+      writeRecipe: async () => writes++, writeProfile: async () => writes++, writeCaches: async () => writes++,
+      verifyWrites: async () => {}, markProfileCurrent: async () => {} }), /preflight_blocked/);
+  }
+  assert.equal(writes, 0);
+});
+
+test("successful source diagnostics report public status without query leakage", async () => {
+  const result = await sourceProbe();
+  assert.equal(result.error, undefined);
+  assert.equal(result.diagnostic.navigation_status, 200);
+  assert.equal(result.diagnostic.selector_status, "matched");
+  assert.equal(result.diagnostic.parser_status, "parsed");
+  assert.doesNotMatch(JSON.stringify(result.diagnostic), /secret|hidden/i);
 });
 
 test("rejects another SKU and a missing product", () => {
@@ -129,6 +181,8 @@ test("workflow is manual-only, fixed-scope, default dry-run and branch/attempt g
   assert.match(workflow, /default: dry-run/);
   assert.match(workflow, /WRITE_ONLY_SHANGHAI_231215000/);
   assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /inputs\.mode == 'dry-run'/);
+  assert.match(workflow, /refs\/heads\/codex\/shanghai-source-diagnostic-20261012/);
   assert.match(workflow, /github\.run_attempt == 1/);
   assert.doesNotMatch(workflow.slice(workflow.indexOf("    inputs:"), workflow.indexOf("\n\npermissions:")), /sku:/i);
   assert.doesNotMatch(workflow, /SUPABASE_DB_PASSWORD|PLANNER_CACHE_ADMIN_TOKEN/);

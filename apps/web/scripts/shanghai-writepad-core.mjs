@@ -5,6 +5,11 @@ export const SHANGHAI_PARSER_VERSION = 5;
 export const SHANGHAI_CONFIRMATION = "WRITE_ONLY_SHANGHAI_231215000";
 export const SHANGHAI_PACKAGE_TEXT = "239 gram";
 
+const SHANGHAI_SOURCE_URLS = new Set([
+  "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakket-chinese-beef-shanghai",
+  "https://www.hoogvliet.com/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai",
+]);
+
 const EXPECTED_SUPPLEMENTS = [
   ["mix-supplement-mager-rundergehakt", "mager rundergehakt", 225, "g"],
   ["mix-supplement-champignons", "champignons", 250, "g"],
@@ -23,7 +28,7 @@ export function validateShanghaiPreflight({ product, profile, recipeConflicts, p
   else if (product.sku !== SHANGHAI_SKU || product.name !== SHANGHAI_PRODUCT_NAME ||
       product.brand?.trim().toLocaleLowerCase("en-US") !== "knorr" ||
       product.package_text !== SHANGHAI_PACKAGE_TEXT ||
-      product.source_url !== "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakket-chinese-beef-shanghai") {
+      !SHANGHAI_SOURCE_URLS.has(product.source_url)) {
     blockers.push("product_identity_mismatch");
   }
   if (!profile) blockers.push("profile_missing");
