@@ -105,7 +105,12 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
   const end = /(?:Variatie\s*tip|Dagje zonder|Algemene bereidingswijze|Bereidingstijd|Voorbereiding|Zo maak|Netto-inhoud|\n1[. )]\s*(?:Kook|Verwarm|Verhit|Snij|Breng|Strooi)\b)/i.exec(after);
   if (!end) return fail("supplement_list_boundary_missing");
   const list = after.slice(0, end.index).trim();
-  const rows = list.replace(/([a-z])\s*Olie\b/g, "$1\nOlie")
+  const isChineseBeefShanghai = source.product.sku === "231215000";
+  const rowList = isChineseBeefShanghai
+    ? list.replace(/,\s*(?=(?:\d+(?:[.,]\d+)?\s+(?:g\b|gram\b|kg\b|ml\b|el\b|eetl\.?|eetlepels?\b|bosui(?:en)?\b|ui(?:en)?\b|prei\b)|olie\b))/gi, "\n")
+      .replace(/\bbosuien\b/gi, "bosui")
+    : list;
+  const rows = rowList.replace(/([a-z])\s*Olie\b/g, "$1\nOlie")
     .split(/\n|\s+[-?•]\s*|,(?=\d+\s)|\.\s+(?=\d)|\.(?=[A-Z])|(?<=[\p{L})])\s+(?![^()]*\))(?=\d+(?:[.,]\d+)?\s+(?:g\b|kg\b|ml\b|el\b|bosui\b|uien\b|courgette\b|prei\b))/iu)
     .map((row) => row.replace(/^\s*[-?•]\s*/, "").trim()).filter(Boolean);
   // Required frying oil is sometimes declared only in the preparation steps.
@@ -116,12 +121,17 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
   }
   const supplements: MealMixSupplement[] = [];
   for (const original of rows) {
-    let row = original.replace(/\s*\((?:blokjes|reepjes)\)/gi, "").replace(/\((diepvries|blik)\)/gi, "$1").replace(/\((basmati|kastanje)\)\s*/gi, "$1").replace(/\b(?:Honig|Heinz)\s+/gi, "");
+    let row = (isChineseBeefShanghai ? original.replace(/\.$/, "") : original)
+      .replace(/\s*\((?:blokjes|reepjes)\)/gi, "").replace(/\((diepvries|blik)\)/gi, "$1").replace(/\((basmati|kastanje)\)\s*/gi, "$1").replace(/\b(?:Honig|Heinz)\s+/gi, "");
     if (/water\s*$/i.test(row)) continue;
     if (/^olie$/i.test(row)) {
-      const declaredOil = /(\d+(?:[.,]\d+)?)\s*(?:el|eetl\.?|eetlepels?)\s+(?:olijf)?olie/i.exec(after.slice(end.index));
-      if (!declaredOil) return fail(`supplement_quantity_missing:${normalize(original)}`);
-      row = `${number(declaredOil[1]) * 15} ml olie`;
+      const cookingText = after.slice(end.index).split(/Netto-inhoud/i)[0];
+      const declaredOils = [...cookingText.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:el|eetl\.?|eetlepels?)\s+(?:olijf)?olie/gi)];
+      if (!declaredOils.length) return fail(`supplement_quantity_missing:${normalize(original)}`);
+      const oilTablespoons = isChineseBeefShanghai
+        ? declaredOils.reduce((total, match) => total + number(match[1]), 0)
+        : number(declaredOils[0][1]);
+      row = `${oilTablespoons * 15} ml olie`;
     }
     const namedWeight = /^(.+?)\s*\((\d+(?:[.,]\d+)?)\s*(g|gram|ml)\)\.?$/i.exec(row);
     const container = /^(\d+)\s+(?:(?:grote|kleine)\s+)?(?:blik|blikje|pot)\s+(.+?)\s*\((à\s*)?(\d+)\s*(?:g|gram)\)/i.exec(row);
