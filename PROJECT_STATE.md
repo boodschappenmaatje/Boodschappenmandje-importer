@@ -1,3 +1,25 @@
+# Checkpoint — Chinese Beef Shanghai bounded writepad Draft PR #89 — 12 oktober 2026
+
+## Basis en PR
+
+- Remote `main` is geverifieerd op **`29964fabfe3849ba7494b45cdcd7fc188333e326`**, de gemergede PR #88-parserfix. De Shanghai-parser blijft SKU-specifiek; dit checkpoint bouwt alleen het latere, afzonderlijk te autoriseren schrijfpad.
+- Draft PR [#89](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/89), branch `codex/shanghai-bounded-writepad-20261012`; code-/testcommit **`e40cbbafa5469cd4049634dc992ae21fc69f8702`**. PR #70 is niet gewijzigd.
+- Alleen een handmatige `workflow_dispatch`; SKU en `catalog-mix-231215000` zijn vast gecodeerd. Standaard is dry-run. Write vereist exacte bevestiging `WRITE_ONLY_SHANGHAI_231215000`, repository `main` en run attempt 1. Geen vrije SKU-input, schedule, algemene maintenance-modus of automatische write-retry.
+
+## Preflight en begrensde writes
+
+- De dry-run controleert exacte product-/bron-/profile-identiteit, status `needs_review`, lege recipe-link en profile, parser-versie 5, geverifieerde live bron, de zeven bewezen supplementen, drie porties, 40 minuten, ontbrekende recipe `source_key`, zeven current geldige supplementmatches en afwezigheid van de nieuwe pakketmatchcache.
+- De bestaande profile-onderhoudsparser en `profileRecipeRow`, readiness evaluator/`rowsForGate` en transactionele `commit_bounded_readiness` worden hergebruikt. Na CAS-linking van recipe/profile commit de cachetransactie alleen de ene nieuwe Shanghai-pakketmatch plus readiness voor personen 1–10. De zeven bestaande supplementmatches zijn read-only; andere profielen of subscribers op die keys worden niet geüpsert of geïnvalideerd.
+- Succesvolle doelrecords: **13 uniek** — 1 recipe, 1 `meal_mix_profiles`, 1 `ingredient_product_matches`, 10 `recipe_readiness_cache`. Verwachte applicatie-rijwrites: **14** — profilelink (1), recipe (1), nieuwe match (1), readiness (10), profile-cachestatus naar `current` (1). Interne CAS-/revision-counterwrites vallen buiten die applicatietelling.
+- De bestaande `bounded_readiness_state`-RPC is niet aan `service_role` toegekend. Dry-run toont daarom de beschikbare catalogus-`sourceRevision` en `casRevisions=null`; na de profilelink haalt de runner via de bestaande bounded planner een verse CAS-snapshot/token op en valideert die opnieuw in de commit-RPC.
+- Recipe-insert, profile-CAS en readinesstransactie zijn drie gefaseerde stappen omdat er geen bestaande transactie is die recipe plus profile omvat. Een fout na recipe-insert kan een ongekoppelde recipe achterlaten. Een fout na de profile-CAS kan een gekoppelde profile met `cache_status=pending` achterlaten. De readiness-RPC is atomair; er ontstaat geen gedeeltelijke readinessset. De profile wordt pas `cache_status=current` na post-write readback.
+
+## Verificatie en stopgrens
+
+- Shanghai-writepad + meal-mix parserregressies: **2 testbestanden groen**. Relevante readiness/cachetests: **109/109 groen**. `npm run check`, ESLint op runnermodules, workflow-YAML-parse en `git diff --check` groen.
+- `actionlint` was niet geïnstalleerd. Runner-import eindigde zonder secrets vóór databaseclientgebruik op `database_credentials_missing`; dit was alleen een lokale loadcheck.
+- Geen Production-write, workflowdispatch, import, migratie, merge of Production-deployment uitgevoerd. Het openen/updaten van de Draft PR laat de gekoppelde Vercel Preview automatisch bouwen; geen Preview is handmatig gedispatched. `ROADMAP.md` ongewijzigd. Na Chinese Beef Shanghai blijven de overige Honig/Knorr `NO_RECIPE`-profielen geparkeerd en gaat ontwikkeling verder naar Slim Zoeken.
+
 # Checkpoint — PR #87 release, bounded cacheherstel en roadmap 1A.1 — 12 oktober 2026
 
 ## Release en cacheherstel

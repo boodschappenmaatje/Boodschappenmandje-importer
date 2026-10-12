@@ -1,0 +1,67 @@
+name: Shanghai one-SKU writepad
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read-only preflight by default; write requires the exact confirmation below
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - write
+      confirmation:
+        description: 'Required only for write: WRITE_ONLY_SHANGHAI_231215000'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-supabase-update
+  cancel-in-progress: false
+
+jobs:
+  shanghai-one-sku:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' &&
+      github.ref == 'refs/heads/main' &&
+      github.run_attempt == 1
+    environment: Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+      - name: Install locked dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/web
+      - name: Install Chromium for the verified Hoogvliet source read
+        run: npx playwright install --with-deps chromium
+      - name: Run fixed Shanghai preflight / explicitly armed commit
+        working-directory: apps/web
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          SHANGHAI_WRITE_MODE: ${{ inputs.mode }}
+          SHANGHAI_WRITE_CONFIRMATION: ${{ inputs.confirmation }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+        run: node --import tsx scripts/run-shanghai-bounded-writepad.mjs

@@ -1,0 +1,327 @@
+import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
+import { chromium } from "playwright";
+import { createClient } from "@supabase/supabase-js";
+import { parseMealMixSource } from "../src/server/meal-mix-source.ts";
+import { loadCatalog, rowsForGate, PLANNER_MAINTENANCE_PEOPLE_COUNTS } from "../src/server/planner-cache-service.ts";
+import { dryRunBoundedReadiness, writeBoundedReadiness } from "../src/server/bounded-readiness-maintenance.ts";
+import { evaluateRecipeReadiness } from "../src/services/week-preparation/recipe-readiness.ts";
+import { SupabaseCatalogRepository } from "../src/services/catalog/catalog-repository.ts";
+import { enrichIngredientsForMealMixes } from "../src/services/week-preparation/meal-mix-profiles.ts";
+import { matcherVersionForSourceKey } from "../src/services/week-preparation/persistent-readiness-cache.ts";
+import { mealMixCorroborationFor } from "../../../src/meal-mix-reviewed-evidence.mjs";
+import { MEAL_MIX_PROFILES } from "../src/services/week-preparation/meal-mix-profiles.ts";
+import { MEAL_MIX_PARSER_VERSION, profileRecipeRow, readMealMixSource } from "../../../src/meal-mix-profile-maintenance.mjs";
+import {
+  SHANGHAI_PARSER_VERSION,
+  SHANGHAI_SKU,
+  SHANGHAI_SOURCE_KEY,
+  assertShanghaiWriteArmed,
+  buildShanghaiWriteSummary,
+  runShanghaiCommit,
+  validateShanghaiMatchScope,
+  validateShanghaiPreflight,
+} from "./shanghai-writepad-core.mjs";
+
+const SELECT_PRODUCT = "id,sku,name,brand,package_text,source_url,category,updated_at";
+
+function requireData(result, stage) {
+  if (result.error) throw new Error(stage);
+  return result.data;
+}
+
+async function readProduct(client) {
+  const result = await client.from("products").select(SELECT_PRODUCT).eq("sku", SHANGHAI_SKU).maybeSingle();
+  if (result.error) throw new Error("product_read_failed");
+  return result.data;
+}
+
+async function readProfile(client, productId) {
+  if (!productId) return null;
+  const result = await client.from("meal_mix_profiles").select("*").eq("product_id", productId).maybeSingle();
+  if (result.error) throw new Error("profile_read_failed");
+  return result.data;
+}
+
+async function parseCurrentSource(browser, product) {
+  const page = await browser.newPage();
+  try {
+    const source = await readMealMixSource(page, product);
+    const parsed = parseMealMixSource(source, MEAL_MIX_PROFILES, mealMixCorroborationFor(product));
+    return { source, parsed };
+  } finally {
+    await page.close();
+  }
+}
+
+function projectedRecipe(id, recipeRow) {
+  return {
+    id,
+    sourceKey: recipeRow.source_key,
+    name: recipeRow.name,
+    normalizedName: recipeRow.normalized_name,
+    symbol: recipeRow.symbol,
+    preparationMinutes: recipeRow.preparation_minutes,
+    vegetarian: recipeRow.vegetarian,
+    containsPork: recipeRow.contains_pork,
+    kidFriendly: recipeRow.kid_friendly,
+    healthy: recipeRow.healthy,
+    budgetTier: recipeRow.budget_tier,
+  };
+}
+
+async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile) {
+  const catalog = await loadCatalog(client);
+  if (catalog.recipes.some((item) => item.sourceKey === SHANGHAI_SOURCE_KEY)) throw new Error("recipe_source_key_conflict");
+  const prospectiveProfile = { ...parsedProfile, recipeId, productId: parsedProfile.productId };
+  catalog.mealMixProfiles = [...(catalog.mealMixProfiles ?? []), prospectiveProfile];
+  catalog.ingredients = enrichIngredientsForMealMixes(catalog.ingredients, catalog.mealMixProfiles);
+  const recipe = projectedRecipe(recipeId, recipeRow);
+  catalog.recipes = [...catalog.recipes, recipe];
+  const repository = new SupabaseCatalogRepository(client);
+  const byMatchKey = new Map();
+  const readinessRows = [];
+  for (const peopleCount of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
+    const gate = await evaluateRecipeReadiness([recipe], peopleCount, catalog, repository);
+    if (gate.recipes.length !== 1 || gate.recipes[0]?.recipeId !== recipeId) throw new Error("evaluator_recipe_scope_mismatch");
+    const rows = rowsForGate(gate, peopleCount, new Date());
+    if (rows.readinessRows.length !== 1 || rows.readinessRows[0]?.recipe_id !== recipeId) throw new Error("readiness_scope_mismatch");
+    readinessRows.push(rows.readinessRows[0]);
+    for (const row of rows.matchRows) {
+      const existing = byMatchKey.get(row.match_key);
+      if (existing && (existing.product_id !== row.product_id || existing.match_status !== row.match_status ||
+          existing.failure_reason !== row.failure_reason || existing.product_updated_at !== row.product_updated_at ||
+          existing.price_updated_at !== row.price_updated_at)) throw new Error("match_changes_across_people");
+      byMatchKey.set(row.match_key, row);
+    }
+  }
+  const matchRows = [...byMatchKey.values()];
+  const expectedSourceKeys = new Set([parsedProfile.productIngredientSourceKey, ...parsedProfile.supplements.map((row) => row.sourceKey)]);
+  if (matchRows.length !== 8 || matchRows.some((row) => !expectedSourceKeys.has(row.ingredient_source_key)) || readinessRows.length !== 10) {
+    throw new Error("computed_scope_mismatch");
+  }
+  return { catalog, recipe, matchRows, readinessRows, expectedSourceKeys };
+}
+
+async function preflight(client, browser) {
+  const product = await readProduct(client);
+  const profile = product ? await readProfile(client, product.id) : null;
+  let source = null;
+  let parsed = null;
+  let recipeRow = null;
+  let recipeId = randomUUID();
+  const blockers = [];
+  if (product) {
+    try {
+      ({ source, parsed } = await parseCurrentSource(browser, product));
+      if (parsed.status === "verified") recipeRow = profileRecipeRow(parsed.profile, source);
+    } catch {
+      blockers.push("source_unavailable");
+    }
+  }
+  const conflictsResult = await client.from("recipes").select("id,source_key,name").eq("source_key", SHANGHAI_SOURCE_KEY);
+  const recipeConflicts = requireData(conflictsResult, "recipe_conflict_read_failed") ?? [];
+  const state = validateShanghaiPreflight({ product, profile, recipeConflicts, parsed, recipe: recipeRow });
+  blockers.push(...state.blockers);
+  if (MEAL_MIX_PARSER_VERSION !== SHANGHAI_PARSER_VERSION) blockers.push("parser_version_code_mismatch");
+  let evaluated = null;
+  let matchValidation = { blocked: true, blockers: ["readiness_plan_unavailable"], matchRows: [] };
+  let planned = null;
+  const cas = null;
+  let sourceRevision = null;
+  if (product && parsed?.status === "verified" && recipeRow) {
+    try {
+      evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile);
+      const missingKey = evaluated.matchRows.filter((row) => row.ingredient_source_key === "catalog-mix-product-231215000");
+      const supplementKeys = evaluated.matchRows.filter((row) => row.ingredient_source_key.startsWith("mix-supplement-")).map((row) => row.match_key);
+      const oldResult = await client.from("ingredient_product_matches").select("*").in("match_key", supplementKeys);
+      const existingRows = requireData(oldResult, "supplement_match_read_failed") ?? [];
+      matchValidation = validateShanghaiMatchScope({ matchRows: evaluated.matchRows, expectedSourceKeys: evaluated.expectedSourceKeys,
+        existingRows, matcherVersionForSourceKey });
+      blockers.push(...matchValidation.blockers);
+      if (missingKey.length !== 1) blockers.push("package_match_scope_mismatch");
+      else {
+        const packageMatchResult = await client.from("ingredient_product_matches").select("match_key")
+          .eq("match_key", missingKey[0].match_key).maybeSingle();
+        const packageMatchRow = requireData(packageMatchResult, "package_match_read_failed");
+        if (packageMatchRow) blockers.push("package_match_cache_already_exists");
+        const sourceResult = await client.rpc("bounded_readiness_source_revision");
+        if (sourceResult.error || typeof sourceResult.data !== "string") throw new Error("source_revision_unavailable");
+        sourceRevision = sourceResult.data;
+        // bounded_readiness_state is intentionally not granted to service_role.
+        // The executable CAS snapshot/token is obtained later through the
+        // existing bounded planner, after the exact recipe/profile are linked.
+        planned = buildShanghaiWriteSummary([missingKey[0].match_key]);
+      }
+    } catch {
+      blockers.push("readiness_preflight_unavailable");
+    }
+  }
+  const sourceSnapshot = {
+    product: product && { id: product.id, sku: product.sku, name: product.name, brand: product.brand,
+      package_text: product.package_text, source_url: product.source_url, updated_at: product.updated_at },
+    profile: profile && { product_id: profile.product_id, status: profile.status, recipe_id: profile.recipe_id,
+      profile: profile.profile, parser_version: profile.parser_version, updated_at: profile.updated_at },
+    sourceFingerprint: parsed?.fingerprint ?? null,
+    recipeConflicts,
+    sourceRevision,
+  };
+  const blocked = blockers.length > 0;
+  const emptyCounts = { recipes: 0, mealMixProfiles: 0, ingredientProductMatches: 0, readiness: 0, total: 0 };
+  return {
+    blocked,
+    sku: SHANGHAI_SKU,
+    sourceKey: SHANGHAI_SOURCE_KEY,
+    recipeId,
+    recipe: recipeRow,
+    parsedProfile: parsed?.profile ?? null,
+    sourceEvidence: parsed?.evidence ?? null,
+    parsedStatus: parsed?.status ?? "unavailable",
+    sourceFingerprint: parsed?.fingerprint ?? null,
+    matchKeys: evaluated?.matchRows.map((row) => row.match_key).sort() ?? [],
+    writeMatchKeys: planned?.matchKeys ?? [],
+    plannedRecords: !blocked && planned ? planned.uniqueRecords : emptyCounts,
+    writeOperations: !blocked && planned
+      ? { recipes: 1, mealMixProfiles: 2, ingredientProductMatches: 1, readiness: 10, total: 14 }
+      : emptyCounts,
+    existingSupplementMatches: matchValidation.blocked ? [] : 7,
+    readinessPeopleCounts: planned?.readinessPeopleCounts ?? [1,2,3,4,5,6,7,8,9,10],
+    sourceRevision,
+    casRevisions: cas,
+    casRevisionStatus: cas ? "captured" : "will_be_captured_by_bounded_dry_run_after_link",
+    dependencyKeys: evaluated ? [...new Set(evaluated.readinessRows.flatMap((row) => row.dependency_match_keys))].sort() : [],
+    blockers: [...new Set(blockers)],
+    _snapshot: sourceSnapshot,
+  };
+}
+
+function publicPlan(plan) {
+  return Object.fromEntries(Object.entries(plan).filter(([key]) => key !== "_snapshot"));
+}
+
+async function freshIdentitySnapshot(client, browser) {
+  const product = await readProduct(client);
+  const profile = product ? await readProfile(client, product.id) : null;
+  let parsed = null;
+  if (product) ({ parsed } = await parseCurrentSource(browser, product));
+  const conflictResult = await client.from("recipes").select("id,source_key,name").eq("source_key", SHANGHAI_SOURCE_KEY);
+  const conflicts = requireData(conflictResult, "recipe_conflict_recheck_failed") ?? [];
+  return {
+    product: product && { id: product.id, sku: product.sku, name: product.name, brand: product.brand,
+      package_text: product.package_text, source_url: product.source_url, updated_at: product.updated_at },
+    profile: profile && { product_id: profile.product_id, status: profile.status, recipe_id: profile.recipe_id,
+      profile: profile.profile, parser_version: profile.parser_version, updated_at: profile.updated_at },
+    sourceFingerprint: parsed?.fingerprint ?? null,
+    recipeConflicts: conflicts,
+    sourceRevision: requireData(await client.rpc("bounded_readiness_source_revision"), "source_revision_recheck_failed"),
+  };
+}
+
+async function commit(client, browser, plan) {
+  return runShanghaiCommit({
+    mode: "write", confirmation: process.env.SHANGHAI_WRITE_CONFIRMATION,
+    context: { eventName: process.env.GITHUB_EVENT_NAME, repository: process.env.GITHUB_REPOSITORY,
+      ref: process.env.GITHUB_REF, runAttempt: process.env.GITHUB_RUN_ATTEMPT },
+    plan,
+    readCurrentSnapshot: () => freshIdentitySnapshot(client, browser),
+    writeRecipe: async (currentPlan) => {
+      const insert = await client.from("recipes").insert({ id: currentPlan.recipeId, ...currentPlan.recipe })
+        .select("id,source_key").single();
+      if (insert.error || insert.data?.id !== currentPlan.recipeId || insert.data?.source_key !== SHANGHAI_SOURCE_KEY) {
+        throw new Error("recipe_insert_failed");
+      }
+    },
+    writeProfile: async (currentPlan) => {
+      const updatedAt = new Date().toISOString();
+      const profilePatch = {
+        status: "verified", cache_status: "pending", reason: null, recipe_id: currentPlan.recipeId,
+        profile: currentPlan.parsedProfile, source_url: currentPlan.parsedProfile.sourceUrl,
+        source_fingerprint: currentPlan.sourceFingerprint, source_evidence: currentPlan.sourceEvidence,
+        source_product_updated_at: currentPlan._snapshot.product.updated_at,
+        parser_version: SHANGHAI_PARSER_VERSION, checked_at: updatedAt, updated_at: updatedAt,
+      };
+      const profileWrite = await client.from("meal_mix_profiles").update(profilePatch)
+        .eq("product_id", currentPlan._snapshot.product.id).eq("updated_at", currentPlan._snapshot.profile.updated_at)
+        .eq("status", "needs_review").is("recipe_id", null).is("profile", null)
+        .select("product_id,recipe_id,status,cache_status,updated_at");
+      if (profileWrite.error || profileWrite.data?.length !== 1 || profileWrite.data[0].recipe_id !== currentPlan.recipeId ||
+          profileWrite.data[0].status !== "verified") throw new Error("profile_compare_and_set_failed");
+    },
+    writeCaches: async (currentPlan) => {
+      const beforePlan = await client.from("ingredient_product_matches").select("match_key")
+        .eq("match_key", currentPlan.writeMatchKeys[0]).maybeSingle();
+      if (beforePlan.error || beforePlan.data) throw new Error("package_match_state_changed");
+      const cachePlan = await dryRunBoundedReadiness(client, { recipeIds: [currentPlan.recipeId], matchKeys: currentPlan.writeMatchKeys });
+      if (cachePlan.blocked || cachePlan.transactional !== true || cachePlan.plannedMatchWrites !== 1 ||
+          cachePlan.plannedReadinessWrites !== 10 || !cachePlan.planToken || !cachePlan.sourceRevision ||
+          cachePlan.dependencyKeys?.length !== 8) throw new Error("bounded_readiness_preflight_failed");
+      const beforeCommit = await client.from("ingredient_product_matches").select("match_key")
+        .eq("match_key", currentPlan.writeMatchKeys[0]).maybeSingle();
+      if (beforeCommit.error || beforeCommit.data) throw new Error("package_match_state_changed");
+      const written = await writeBoundedReadiness(client, {
+        recipeIds: [currentPlan.recipeId], matchKeys: currentPlan.writeMatchKeys, expectedPlanToken: cachePlan.planToken,
+      });
+      if (written.blocked || written.matchWrites !== 1 || written.readinessWrites !== 10) throw new Error("bounded_readiness_commit_failed");
+    },
+    verifyWrites: async (currentPlan) => {
+      const [matchResult, readinessResult] = await Promise.all([
+        client.from("ingredient_product_matches").select("match_key,match_status,refresh_status,invalidated_at,invalidation_reason")
+          .in("match_key", currentPlan.writeMatchKeys),
+        client.from("recipe_readiness_cache").select("recipe_id,people_count,refresh_status,invalidated_at,invalidation_reason,expires_at")
+          .eq("recipe_id", currentPlan.recipeId).in("people_count", [...PLANNER_MAINTENANCE_PEOPLE_COUNTS]),
+      ]);
+      const matches = requireData(matchResult, "postwrite_match_read_failed") ?? [];
+      const readiness = requireData(readinessResult, "postwrite_readiness_read_failed") ?? [];
+      if (matches.length !== 1 || matches[0].match_status !== "valid" || matches[0].refresh_status !== "current" ||
+          matches[0].invalidated_at !== null || matches[0].invalidation_reason !== null || readiness.length !== 10 ||
+          readiness.some((row) => row.recipe_id !== currentPlan.recipeId || row.refresh_status !== "current" ||
+            row.invalidated_at !== null || row.invalidation_reason !== null || Date.parse(row.expires_at) <= Date.now())) {
+        throw new Error("postwrite_verification_failed");
+      }
+    },
+    markProfileCurrent: async (currentPlan) => {
+      const profileCurrent = await client.from("meal_mix_profiles").update({ cache_status: "current", updated_at: new Date().toISOString() })
+        .eq("product_id", currentPlan._snapshot.product.id).eq("recipe_id", currentPlan.recipeId).eq("status", "verified")
+        .eq("cache_status", "pending").select("product_id");
+      if (profileCurrent.error || profileCurrent.data?.length !== 1) throw new Error("profile_cache_status_verification_failed");
+    },
+  });
+}
+
+async function main() {
+  const mode = process.env.SHANGHAI_WRITE_MODE ?? "dry-run";
+  const confirmation = process.env.SHANGHAI_WRITE_CONFIRMATION ?? "";
+  if (mode === "write") assertShanghaiWriteArmed({ mode, confirmation, eventName: process.env.GITHUB_EVENT_NAME,
+    repository: process.env.GITHUB_REPOSITORY, ref: process.env.GITHUB_REF, runAttempt: process.env.GITHUB_RUN_ATTEMPT });
+  else if (mode !== "dry-run") throw new Error("invalid_mode");
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
+  const secret = process.env.SUPABASE_SECRET_KEY?.trim();
+  if (!supabaseUrl || !secret) throw new Error("database_credentials_missing");
+  const client = createClient(supabaseUrl, secret, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined, headless: true });
+  try {
+    const plan = await preflight(client, browser);
+    if (mode === "dry-run") {
+      console.log(JSON.stringify({ status: "dry-run", ...publicPlan(plan) }, null, 2));
+      if (plan.blocked) process.exitCode = 1;
+      return;
+    }
+    if (plan.blocked) {
+      console.log(JSON.stringify({ status: "blocked", ...publicPlan(plan) }, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+    const result = await commit(client, browser, plan);
+    console.log(JSON.stringify({ ...publicPlan(plan), ...result }, null, 2));
+  } finally {
+    await browser.close();
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    const code = /^[a-z][a-z0-9_]{0,80}$/.test(error?.message ?? "") ? error.message : "unexpected_writepad_failure";
+    console.error(JSON.stringify({ status: "failed", sku: SHANGHAI_SKU, sourceKey: SHANGHAI_SOURCE_KEY, code }));
+    process.exitCode = 1;
+  });
+}
