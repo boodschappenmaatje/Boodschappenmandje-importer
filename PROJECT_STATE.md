@@ -28,7 +28,7 @@
 
 ## Voorbereiding op bestaande featurebranch
 
-- Hergebruikt `codex/checkpoint-14a-bounded-runner`, de al gemergede PR #43-runnerbranch; geen nieuwe branch gemaakt. De branch is fast-forward bijgewerkt naar de actuele main en de bestaande Draft PR #43 blijft ongemoeid/gesloten.
+- Hergebruikt `codex/checkpoint-14a-bounded-runner`, de al gemergede PR #43-runnerbranch; geen nieuwe branch gemaakt. De branch is fast-forward bijgewerkt naar de actuele main. Nieuwe Draft PR **#86** staat open op head `0da6ee0b2918437c4eb4c27ad635692c4050ba9e`; PR #43 blijft ongemoeid/gesloten.
 - Workflow heeft uitsluitend `workflow_dispatch`, zonder inputs, is begrensd tot repository `boodschappenmaatje/Boodschappenmandje-importer`, branch `main` en eerste runpoging, met bestaande GitHub Actions-secrets `PLANNER_CACHE_ADMIN_TOKEN` en `VERCEL_AUTOMATION_BYPASS_SECRET`. De Production-origin staat vast in workflowcode; er zijn geen Supabase-credentials nodig.
 - Runner bevat nu alleen één POST met `mode: "dry-run"`; het commitpad, armingflag en vrije recipe-ID-input zijn verwijderd. De zeven goedgekeurde recipe-ID's en drie matchkeys staan vast in de runner. Hij stopt fail-closed op auth-/HTTP-/JSON-fouten, blocked plan, afwijkende recipe-/matchkey-/subscriber-scope, onverwachte dependencies, readinesscount boven 70, ontbrekende bronrevision/CAS of ongeldig plan-token. Er zijn geen retry, import, refresh, migration of extra requestparameters.
 - Resultaatlogging bevat scope/aantallen en revisionsnapshot; plan-token en credentials worden niet gelogd. Historische 38 dependencykeys zijn geen harde actuele eis; de live response moet wel de exacte goedgekeurde matchkeys bevatten en `unexpectedDependencies=[]` teruggeven.
