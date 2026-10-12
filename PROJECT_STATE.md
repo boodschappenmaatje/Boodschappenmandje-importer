@@ -1,3 +1,23 @@
+# Checkpoint — Shanghai runtime-importfix en één nieuwe dry-run — 12 oktober 2026
+
+## Minimale runtimefix en verificatie
+
+- Remote `main` bleef **`46cd27f21e130c2dede46805eec65db08e10f42e`**. Bestaande branch `codex/shanghai-source-diagnostic-20261012`, Draft PR [#90](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/90).
+- De bewezen `ReferenceError` is minimaal gerepareerd door de reeds geëxporteerde `SHANGHAI_PRODUCT_NAME` uit `shanghai-writepad-core.mjs` ook in `run-shanghai-bounded-writepad.mjs` te importeren. Geen selector-, parser-, source-verification- of projectionlogica is gewijzigd.
+- Een regressietest controleert dat het gebruikte `SHANGHAI_PRODUCT_NAME` in het core-importblok van de runner aanwezig is. De bestaande source-probe blijft normale parserbereikbaarheid en fail-closed gedrag dekken.
+- Core-CI **#38301333735** is groen op code-head **`5bf44d0401b277d80dcfebeccf36a4292155ea1f`**: importer **490/490**, PostgreSQL **28/28**, web **887/887**, seedchecks, ESLint, TypeScript en Production-build.
+
+## Exact één nieuwe dry-run en stopgrens
+
+- Handmatige Production dry-run **#38302190864**, attempt 1, draaide op exact `5bf44d0401b277d80dcfebeccf36a4292155ea1f`, branch `codex/shanghai-source-diagnostic-20261012`, met `SHANGHAI_WRITE_MODE=dry-run` en lege write-confirmation.
+- De `ReferenceError` is verdwenen. De run bereikte de bron: HTTP **200**, finale URL `https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000`.
+- De run stopte vervolgens fail-closed bij de selector: contentroot `main:has(h1)` niet gevonden binnen de timeout; `error_stage=selector`, `error_type=TimeoutError`, `content_root_found=false`, `parser_status=not_reached`. Daardoor zijn `Gebruiksaanwijzing` en het ARIA-paneel niet bereikt, is geen broninhoud geparsed en bleef source verification uit.
+- Identity is groen afgeleid uit het ontbreken van `product_identity_mismatch`; blockers zijn exact `source_unavailable`, `source_not_verified` en `recipe_projection_mismatch`. Geplande records en write-operations zijn allebei 0; `safe_to_write=false`.
+- Stopregel gerespecteerd: geen selector-/parservervolgfix en geen tweede dry-run in deze opdracht. De eerstvolgende bewezen blokkade is dat de onafhankelijk in een interactieve live DOM waargenomen root niet verschijnt in de GitHub Actions-headless bronread.
+- **Production-writes 0**, dry-runs in dit checkpoint exact 1, merge nee, import/migratie nee. `ROADMAP.md` blijft ongewijzigd omdat roadmap 1B nog actief is.
+
+---
+
 # Checkpoint — Shanghai source-readfix, eerste dry-run stopt vóór source-read — 12 oktober 2026
 
 ## Bewezen live DOM en patch
