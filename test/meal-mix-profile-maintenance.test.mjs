@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { mealMixCorroborationFor } from "../src/meal-mix-reviewed-evidence.mjs";
 import { parseMealMixSource, matchingExistingMixProfile, mealMixPreparationFingerprint } from "../apps/web/src/server/meal-mix-source.ts";
-import { maintainMealMixProfiles, refreshStaleMealMixCaches, MEAL_MIX_PARSER_VERSION } from "../src/meal-mix-profile-maintenance.mjs";
+import { maintainMealMixProfiles, profileRecipeRow, refreshStaleMealMixCaches, MEAL_MIX_PARSER_VERSION } from "../src/meal-mix-profile-maintenance.mjs";
 
 const product = { id: "product", sku: "123456789", name: "Honig Basis voor testpasta", brand: "Honig",
   package_text: "41 gram", source_url: "https://www.hoogvliet.com/product/honig-testpasta", category: "Maaltijdmixen" };
@@ -79,6 +79,29 @@ test("parses parenthesized can contents and does not split that quantity into a 
   const result = parseMealMixSource(source("Voor 3 tot 4 personen. Zelf toevoegen: ? 1 blik tomatenblokjes (à 400 g) ? 300 g kipfilet ? OlieVoorbereiding: Verhit 2 el olie. 20 min"));
   assert.equal(result.status, "verified");
   assert.deepEqual(result.profile.supplements.map((row) => [row.name, row.quantity, row.unit]), [["tomatenblokjes", 400, "g"], ["kipfilet", 300, "g"], ["olie", 30, "ml"]]);
+});
+
+test("parses the exact comma-separated Knorr Chinese Beef Shanghai source and totals its declared oil", () => {
+  const snapshot = JSON.parse(readFileSync(new URL('./fixtures/knorr-chinese-beef-shanghai-source.json', import.meta.url)));
+  const parsed = parseMealMixSource({ ...snapshot, sourceUrl: snapshot.sourceUrl, fetchedAt: snapshot.capturedAt });
+  assert.equal(parsed.status, "verified", parsed.reason);
+  assert.equal(parsed.fingerprint.length, 64);
+  assert.equal(parsed.profile.servingsPerPackage, 3);
+  const recipe = profileRecipeRow(parsed.profile, snapshot);
+  assert.equal(recipe.source_key, "catalog-mix-231215000");
+  assert.equal(recipe.preparation_minutes, 40);
+  assert.equal(recipe.vegetarian, false);
+  assert.deepEqual(parsed.profile.supplements.map(({ name, quantity, unit }) => [name, quantity, unit]), [
+    ["mager rundergehakt", 225, "g"],
+    ["champignons", 250, "g"],
+    ["taugé", 125, "g"],
+    ["bosui", 3, "piece"],
+    ["ui", 1, "piece"],
+    ["prei", 1, "piece"],
+    ["olie", 30, "ml"],
+  ]);
+  const otherSku = { ...snapshot, product: { ...snapshot.product, sku: "231215001" } };
+  assert.equal(parseMealMixSource(otherSku).reason, "supplement_ambiguous:225 g mager rundergehakt 250 g champignons 125 g tauge 3 bosuien 1 ui 1 prei olie");
 });
 
 test("never borrows serving counts or ingredients from a similar branded variant", () => {
