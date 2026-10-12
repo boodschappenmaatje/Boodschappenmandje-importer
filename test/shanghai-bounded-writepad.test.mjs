@@ -39,6 +39,13 @@ const valid = () => validateShanghaiPreflight({ product, profile, recipeConflict
 const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatje/Boodschappenmandje-importer",
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
+const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
+
+test("runner imports the Shanghai product name used by the normal source-read flow", () => {
+  const coreImport = runner.match(/import \\{([\\s\\S]*?)\\} from "\\.\\/shanghai-writepad-core\\.mjs";/)?.[1] ?? "";
+  assert.match(coreImport, /\\bSHANGHAI_PRODUCT_NAME\\b/);
+  assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
+});
 
 test("accepts only the exact Shanghai preflight identity and proven profile", () => {
   assert.deepEqual(valid(), { blocked: false, blockers: [] });
