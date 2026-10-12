@@ -6,6 +6,7 @@ import {
   BoundedReadinessConflict,
   dryRunBoundedReadiness,
   parseBoundedRefreshInput,
+  verifyBoundedReadiness,
   writeBoundedReadiness,
 } from "@/server/bounded-readiness-maintenance";
 
@@ -44,10 +45,10 @@ export async function POST(request: Request): Promise<Response> {
   catch { return Response.json({ error: "invalid-request" }, { status: 400 }); }
   const input = parseBoundedRefreshInput(body);
   const mode = typeof body === "object" && body !== null ? (body as { mode?: unknown }).mode : null;
-  if (!input || (mode !== "dry-run" && mode !== "write")) {
+  if (!input || (mode !== "dry-run" && mode !== "write" && mode !== "verify")) {
     return Response.json({ error: "invalid-request" }, { status: 400 });
   }
-  if (mode === "write" && process.env.VERCEL_ENV !== "production") {
+  if ((mode === "write" || mode === "verify") && process.env.VERCEL_ENV !== "production") {
     return Response.json({ error: "preview-read-only" }, { status: 503 });
   }
   const client = getSupabaseServerClient();
@@ -55,7 +56,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const result = mode === "dry-run"
       ? await dryRunBoundedReadiness(client, input)
-      : await writeBoundedReadiness(client, input);
+      : mode === "verify"
+        ? await verifyBoundedReadiness(client, input)
+        : await writeBoundedReadiness(client, input);
     return Response.json(result, { status: result.blocked ? 409 : 200 });
   } catch (error) {
     if (error instanceof BoundedReadinessConflict) {

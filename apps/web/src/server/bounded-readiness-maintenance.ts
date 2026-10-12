@@ -4,7 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository";
 import { createCachedCatalogRepository } from "@/services/week-preparation/planning-cache";
 import { evaluateRecipeReadiness } from "@/services/week-preparation/recipe-readiness";
-import { requirementKeysForRecipes } from "@/services/week-preparation/persistent-readiness-cache";
+import {
+  matcherVersionForSourceKey,
+  readinessVersionForMatchKeys,
+  requirementKeysForRecipes,
+} from "@/services/week-preparation/persistent-readiness-cache";
 import { loadCatalog, PLANNER_MAINTENANCE_PEOPLE_COUNTS, rowsForGate } from "@/server/planner-cache-service";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -26,6 +30,21 @@ interface Subscriber {
 }
 
 export class BoundedReadinessConflict extends Error {}
+
+const APPROVED_RECIPE_IDS = [
+  "4e60b9b6-abd3-46e7-b6a1-b10f73ccbec3",
+  "baf31144-bb45-4c2b-aa2f-2f9be588b01c",
+  "3bbe1561-d757-422e-aded-3d802310805c",
+  "5726609e-82a3-4fa7-b5b0-dab78b2b59f1",
+  "4f871e07-a684-4014-843a-f72a11b4c01d",
+  "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+  "6a85d19f-5654-440b-b296-325c8f9fbd30",
+].sort();
+const APPROVED_MATCH_KEYS = [
+  "meal-mix-ingredient:mix-supplement-hacheevlees:g:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-pitabroodjes:g:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
+].sort();
 
 export function isBoundedDatabaseConflict(error: { code?: string; message?: string }): boolean {
   return ["40001", "40P01", "55P03"].includes(error.code ?? "") ||
@@ -250,4 +269,109 @@ export async function writeBoundedReadiness(client: SupabaseClient, input: Bound
     throw new Error("bounded_commit_result_invalid");
   }
   return result;
+}
+
+/** Read-only post-commit verification for the fixed, approved one-time scope. */
+export async function verifyBoundedReadiness(client: SupabaseClient, input: BoundedRefreshInput, now = new Date()) {
+  if (JSON.stringify([...input.recipeIds].sort()) !== JSON.stringify(APPROVED_RECIPE_IDS) ||
+      JSON.stringify([...input.matchKeys].sort()) !== JSON.stringify(APPROVED_MATCH_KEYS)) {
+    throw new Error("bounded_verification_scope_invalid");
+  }
+  const plan = await dryRunBoundedReadiness(client, input);
+  const expectedSubscribers = APPROVED_RECIPE_IDS.flatMap((recipeId) =>
+    PLANNER_MAINTENANCE_PEOPLE_COUNTS.map((peopleCount) => `${recipeId}:${peopleCount}`)).sort();
+  const subscribers = (plan.subscriberScope ?? []).map((entry) => `${entry.recipeId}:${entry.peopleCount}`).sort();
+  if (plan.blocked || plan.transactional !== true || plan.plannedMatchWrites !== 3 ||
+      plan.plannedReadinessWrites !== 70 || subscribers.length !== 70 ||
+      JSON.stringify(subscribers) !== JSON.stringify(expectedSubscribers) ||
+      !Array.isArray(plan.casRevisions) || !plan.sourceRevision) {
+    throw new Error("bounded_verification_plan_mismatch");
+  }
+  const expectedResources = new Set([
+    ...APPROVED_RECIPE_IDS.map((recipeId) => `r:${recipeId}`),
+    ...(plan.dependencyKeys ?? []).map((key) => `k:${key}`),
+  ]);
+  const casResources = plan.casRevisions.map(([resource]) => resource);
+  if (new Set(casResources).size !== casResources.length ||
+      plan.casRevisions.some(([resource, revision]) => !/^\d+$/.test(revision) || typeof resource !== "string") ||
+      [...expectedResources].some((resource) => !casResources.includes(resource)) ||
+      casResources.some((resource) => !expectedResources.has(resource) &&
+        !(resource.startsWith("k:") && /^[A-Za-z0-9:_-]+:(g|kg|ml|l|piece|loaf):(ingredient|mealMix):[A-Za-z0-9_-]+$/.test(resource.slice(2))))) {
+    throw new Error("bounded_verification_revision_scope_invalid");
+  }
+
+  const [matches, readiness] = await Promise.all([
+    client.from("ingredient_product_matches")
+      .select("match_key,ingredient_source_key,product_id,match_status,failure_reason,refresh_status,invalidated_at,invalidation_reason,matcher_version,product_updated_at,price_updated_at,matched_at,checked_at,updated_at")
+      .in("match_key", APPROVED_MATCH_KEYS),
+    client.from("recipe_readiness_cache")
+      .select("recipe_id,people_count,readiness_status,required_ingredient_count,ready_required_ingredient_count,problem_count,readiness_payload,dependency_match_keys,evaluator_version,refresh_status,invalidated_at,invalidation_reason,evaluated_at,expires_at,updated_at")
+      .in("recipe_id", APPROVED_RECIPE_IDS)
+      .in("people_count", [...PLANNER_MAINTENANCE_PEOPLE_COUNTS]),
+  ]);
+  if (matches.error || !Array.isArray(matches.data) || matches.data.length !== 3 ||
+      readiness.error || !Array.isArray(readiness.data) || readiness.data.length !== 70) {
+    throw new Error("bounded_verification_rows_missing");
+  }
+  const matchKeys = matches.data.map((row) => row.match_key).sort();
+  if (JSON.stringify(matchKeys) !== JSON.stringify(APPROVED_MATCH_KEYS) || matches.data.some((row) =>
+    row.refresh_status !== "current" || row.invalidated_at !== null || row.invalidation_reason !== null ||
+    !["valid", "invalid"].includes(row.match_status) || !Number.isInteger(row.matcher_version) ||
+    row.matcher_version !== matcherVersionForSourceKey(row.ingredient_source_key) ||
+    (row.match_status === "valid" && (!row.product_id || row.failure_reason !== null)) ||
+    (row.match_status === "invalid" && (row.product_id !== null || !row.failure_reason)) ||
+    !row.matched_at || !row.checked_at || !row.updated_at ||
+    [row.product_updated_at, row.price_updated_at].some((value) => value !== null && !Number.isFinite(Date.parse(value))))) {
+    throw new Error("bounded_verification_match_state_invalid");
+  }
+  const readinessKeys = readiness.data.map((row) => `${row.recipe_id}:${row.people_count}`).sort();
+  if (JSON.stringify(readinessKeys) !== JSON.stringify(expectedSubscribers)) {
+    throw new Error("bounded_verification_readiness_scope_invalid");
+  }
+  const expiries: number[] = [];
+  const evaluatorVersions = new Set<number>();
+  for (const row of readiness.data) {
+    const dependencyKeys = row.dependency_match_keys;
+    const payload = row.readiness_payload;
+    const expiry = typeof row.expires_at === "string" ? Date.parse(row.expires_at) : NaN;
+    if (row.refresh_status !== "current" || row.invalidated_at !== null || row.invalidation_reason !== null ||
+        !["READY", "NOT_READY"].includes(row.readiness_status) ||
+        !Number.isInteger(row.evaluator_version) || !Array.isArray(dependencyKeys) ||
+        dependencyKeys.some((key) => typeof key !== "string" || !plan.dependencyKeys?.includes(key)) ||
+        !dependencyKeys.some((key) => APPROVED_MATCH_KEYS.includes(key)) ||
+        row.evaluator_version !== readinessVersionForMatchKeys(dependencyKeys) ||
+        !Number.isInteger(row.required_ingredient_count) || !Number.isInteger(row.ready_required_ingredient_count) ||
+        !Number.isInteger(row.problem_count) || row.ready_required_ingredient_count > row.required_ingredient_count ||
+        !payload || typeof payload !== "object" || Array.isArray(payload) ||
+        (payload as { recipeId?: unknown }).recipeId !== row.recipe_id ||
+        (payload as { ready?: unknown }).ready !== (row.readiness_status === "READY") ||
+        (payload as { requiredIngredientCount?: unknown }).requiredIngredientCount !== row.required_ingredient_count ||
+        (payload as { readyRequiredIngredientCount?: unknown }).readyRequiredIngredientCount !== row.ready_required_ingredient_count ||
+        (payload as { problemCount?: unknown }).problemCount !== row.problem_count ||
+        !Array.isArray((payload as { ingredients?: unknown }).ingredients) ||
+        JSON.stringify([...new Set([...(payload as { ingredients: Array<{ requirementKey?: unknown }> }).ingredients]
+          .map((ingredient) => ingredient?.requirementKey).filter((key): key is string => typeof key === "string"))].sort()) !==
+          JSON.stringify([...dependencyKeys].sort()) ||
+        !row.evaluated_at || !row.updated_at || !Number.isFinite(expiry) || expiry <= now.getTime()) {
+      throw new Error("bounded_verification_readiness_state_invalid");
+    }
+    evaluatorVersions.add(row.evaluator_version);
+    expiries.push(expiry);
+  }
+  return {
+    blocked: false,
+    recipeCount: APPROVED_RECIPE_IDS.length,
+    matchKeyCount: matches.data.length,
+    subscriberCount: readiness.data.length,
+    currentMatchRows: matches.data.length,
+    currentReadinessRows: readiness.data.length,
+    invalidatedRows: 0,
+    dependencyKeys: plan.dependencyKeys,
+    sourceRevision: plan.sourceRevision,
+    casRevisionCount: plan.casRevisions.length,
+    revisionMetadataValidated: true,
+    evaluatorVersions: [...evaluatorVersions].sort((a, b) => a - b),
+    expiryRange: { earliest: new Date(Math.min(...expiries)).toISOString(), latest: new Date(Math.max(...expiries)).toISOString() },
+    payloadsValidated: readiness.data.length,
+  };
 }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BoundedReadinessConflict, dryRunBoundedReadiness, writeBoundedReadiness } from "./bounded-readiness-maintenance";
+import { BoundedReadinessConflict, dryRunBoundedReadiness, verifyBoundedReadiness, writeBoundedReadiness } from "./bounded-readiness-maintenance";
 import { loadCatalog, rowsForGate } from "./planner-cache-service";
 import { requirementKeysForRecipes } from "@/services/week-preparation/persistent-readiness-cache";
 import { evaluateRecipeReadiness } from "@/services/week-preparation/recipe-readiness";
@@ -89,6 +89,9 @@ describe("bounded transaction integration", () => {
     const db = client();
     expect(await dryRunBoundedReadiness(db.value, input, false)).toMatchObject({ blocked: false, planToken: null, transactional: false });
     expect(db.rpc).not.toHaveBeenCalled();
+  });
+  it("limits the prepared read-only verifier to the seven-by-three approved scope", async () => {
+    await expect(verifyBoundedReadiness({} as SupabaseClient, input)).rejects.toThrow("bounded_verification_scope_invalid");
   });
   it("rejects changed plan before evaluator or writes", async () => {
     const db = client();

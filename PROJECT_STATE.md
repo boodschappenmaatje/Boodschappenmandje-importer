@@ -1,3 +1,27 @@
+# Checkpoint — eenmalige bounded planner-cache commitroute voorbereid — 12 oktober 2026
+
+## Bron en bestaand contract
+
+- Startpunt: remote `main` **`b8c9ed03b8a762e26aa399d78e979b3323ef8341`**; PR #85 en PR #86 zijn gemerged. De historische authenticated dry-run **`38230369554`** is alleen bewijs uit het verleden; zijn plan-token is niet hergebruikt. In deze voorbereiding is geen Production-request gestart.
+- De bestaande route blijft `POST /api/internal/planner-readiness/bounded-refresh`: bearer-auth via `PLANNER_CACHE_ADMIN_TOKEN`, Vercel bypass via `VERCEL_AUTOMATION_BYPASS_SECRET`, JSON-modi `dry-run` en `write`. De bestaande `.github/workflows/bounded-production-recompute.yml` en zijn runner blijven ongewijzigd en dry-run-only.
+- De bestaande `writeBoundedReadiness` gebruikt één `commit_bounded_readiness`-RPC. De bestaande RPC verifieert het verse plan-token onder resource-locks/revisions in één READ COMMITTED-transactie; scope-/CAS-conflict of onverwacht trigger-effect rolt de volledige transactie terug. Alleen `service_role` kan de RPC uitvoeren. Er is geen directe SQL-commit, nieuwe RPC of migratie toegevoegd.
+
+## Afzonderlijke eenmalige route
+
+- Op de bestaande branch `codex/checkpoint-14a-bounded-runner` is `.github/workflows/bounded-production-recompute-once.yml` voorbereid. Deze heeft alleen `workflow_dispatch`, default `NO_COMMIT`, een aparte exacte `COMMIT_BOUNDED_READINESS_ONCE`-keuze, vaste repository/main/attemptguards, `actions:read` voor de run-historycontrole en een concurrencygroep. Er is geen push-, PR-, schedule- of deployment-trigger.
+- `src/bounded-production-recompute-once.mjs` bevat geen vrije scopeparameters. Hij eist de zeven goedgekeurde recipe-ID's, de drie goedgekeurde matchkeys, exact 70 subscribers, 3/70 geplande writes, nul onverwachte dependencies, verse source-/CAS-revisions en een geldig plan-token. Daarna doet hij hoogstens één write-request met dat verse token en controleert 3 matchwrites, 70 readinesswrites, `outsideScopeEffects=0` en de exacte scope. Een commit-timeout is een onbekende uitkomst; de runner stopt en herhaalt de request niet.
+- De route controleert de Actions-runhistorie fail-closed voordat hij Production benadert. Een reeds uitgevoerde, dubbele, rerun- of ambiguë dispatch kan geen commit starten. Handmatige runs zonder exacte commitkeuze worden overgeslagen. Er volgt nooit automatisch een tweede commit of dry-run-naar-commitactie vanuit de bestaande dry-run-workflow.
+- De geauthenticeerde `mode: "verify"` is read-only en alleen Production-beschikbaar. Hij accepteert server-side uitsluitend deze exacte vaste scope, herhaalt de read-only plan-/subscriber/CAS-controle en leest alleen de 3 matchrijen en 70 readinessrijen. Hij controleert CURRENT-/invalidatievelden, matcher- en evaluatorversies, expiry, payloadvelden/dependencies en revisionmetadata; geen plannerendpoint dat lazy refresh kan starten wordt aangeroepen.
+- Actions gebruikt alleen de bestaande secretnamen `PLANNER_CACHE_ADMIN_TOKEN` en `VERCEL_AUTOMATION_BYPASS_SECRET`; `PLANNER_CACHE_BASE_URL` staat vast op de bekende Production-origin. Waarden zijn niet gelezen of gelogd. Secretbeschikbaarheid moet vóór release read-only in GitHub Actions-instellingen worden bevestigd.
+
+## Tests en stopgrens
+
+- Runner-/regressietests: **26/26** geslaagd voor verse dry-run vóór commit, exacte scope, ontbrekende auth, geblokkeerde scope, subscriber-/dependency-/CAS-afwijkingen, commitfout, timeout zonder retry, dubbele dispatch, responsevalidatie en geheimredactie. Bestaande dry-run-only runner: regressies geslaagd. Bounded route/verifier en bestaande transaction-tests: **21/21** geslaagd. Web TypeScript-check en `git diff --check` geslaagd.
+- Beide workflowbestanden parseerden als YAML. `actionlint` is niet beschikbaar in de omgeving. Geen live request of Production-write uitgevoerd; geen planner-/budgetlogica aangepast. `ROADMAP.md` ongewijzigd.
+- Eenmalige commitroute is voorbereid maar niet vrijgegeven of gestart. Vereist: Draft PR-review/CI, expliciete goedkeuring vóór merge, release naar Production, daarna expliciete goedkeuring vóór een Production-run. De eerstvolgende Production-run moet een verse authenticated dry-run bevatten; het historische run-token is ongeldig als uitvoerbasis.
+
+---
+
 # Checkpoint — 1A.1 planner-cacheherstel na prijsupdates — 12 oktober 2026
 
 ## Deelcheckpoint — gedeeltelijke cachewrite hersteld
