@@ -141,6 +141,7 @@ Vaste regels:
 | Offline/PWA-robuustheid | Middel | Codex → Work | Geen schijnbaar actuele onbetrouwbare prijsdata |
 | Kassabon / werkelijke uitgaven | Hoog | Codex → Work | Betrouwbare invoer/herkenning beschikbaar |
 | Meerdere supermarkten — AH / Jumbo / Lidl / Dirk naast Hoogvliet | **Zeer hoog** | Codex → Work | Slim Zoeken provider-aware; Hoogvliet-flow bewezen; elke nieuwe bron afzonderlijk gevalideerd |
+| Vergelijk supermarkten | **Zeer hoog** | Codex → Work | Meerdere betrouwbare supermarktbronnen actief; vergelijking is een aparte flow en vermengt nooit gewone zoekresultaten |
 
 ---
 
