@@ -36,7 +36,7 @@
 
 ## Verificatie en stopgrens
 
-- Gerichte runner-tests: **12/12** geslaagd. `node --check`, YAML-parse/structuurchecks en `git diff --check` geslaagd. `actionlint` is in de omgeving niet beschikbaar. Het openen van PR #86 startte automatisch Vercel Preview-builds: deployment `dpl_EdG8V6vEowYHXockQfdZ4gw91b5y` op de eerste PR-head bereikte `READY`; latere builds `dpl_HUkpRUSDVf564PoY5kT6jQegGgik`, `dpl_7w7vp1JqwzeCddo2HDDcvSmxAEfB` en `dpl_Gu1uVPCDeyE55JKVLcLb1NDaEatC` zijn geannuleerd. Geen Production deployment is gestart.
+- Gerichte runner-tests: **12/12** geslaagd. `node --check`, YAML-parse/structuurchecks en `git diff --check` geslaagd. `actionlint` is in de omgeving niet beschikbaar. Het openen van PR #86 startte automatisch Vercel Preview-builds: deployment `dpl_EdG8V6vEowYHXockQfdZ4gw91b5y` op de eerste PR-head bereikte `READY`; latere builds `dpl_HUkpRUSDVf564PoY5kT6jQegGgik`, `dpl_7w7vp1JqwzeCddo2HDDcvSmxAEfB`, `dpl_Gu1uVPCDeyE55JKVLcLb1NDaEatC` en `dpl_FYzYAXHiNYSZURPqZpeoaTR86bc3` zijn geannuleerd. Geen Production deployment is gestart.
 - Geen Production-request of workflowdispatch uitgevoerd. Geen bounded commit, planner-refresh, import, database/migrationwijziging, deployment of merge uitgevoerd. `ROADMAP.md` ongewijzigd.
 - Volgende uitvoerstap ná PR-review/merge en bijbehorende Production-deployment: controleer workflow op `main` en de secret-aanwezigheid via GitHub Actions-instellingen; start daarna uitsluitend handmatig vanaf `main` de `READ ONLY — NO REPAIR | bounded Production recomputation` dry-run. Vereist afzonderlijke expliciete gebruikersgoedkeuring vóór dispatch. Een groen resultaat bewijst de actuele scope; geen vervolgcommit vanuit deze workflow.
 
