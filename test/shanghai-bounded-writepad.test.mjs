@@ -143,6 +143,25 @@ test("source diagnostics classify navigation, selector and parser failures witho
   assert.equal(writes, 0);
 });
 
+test("selector diagnostics expose only bounded DOM facts, not page text", async () => {
+  const timeout = new Error("timeout");
+  timeout.name = "TimeoutError";
+  const result = await sourceProbe({
+    waitForSelector: async () => { throw timeout; },
+    diagnose: async () => ({
+      at_domcontentloaded: { ready_state: "interactive", main_count: 0, body_contains_product_name: false,
+        challenge_signals: { human_check: true } },
+      after_wait: { ready_state: "complete", main_count: 0, h1_count: 0, body_text: "secret cookie=hidden",
+        challenge_signals: { captcha: true } },
+      leaked_text: "must not be returned",
+    }),
+  });
+  assert.equal(result.diagnostic.document_diagnostic.at_domcontentloaded.ready_state, "interactive");
+  assert.equal(result.diagnostic.document_diagnostic.at_domcontentloaded.challenge_signals.human_check, true);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.challenge_signals.captcha, true);
+  assert.doesNotMatch(JSON.stringify(result), /secret|cookie=|hidden|must not be returned/i);
+});
+
 test("successful source diagnostics report public status without query leakage", async () => {
   const result = await sourceProbe();
   assert.equal(result.error, undefined);
