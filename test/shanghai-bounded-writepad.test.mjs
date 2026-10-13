@@ -135,6 +135,11 @@ test("reject-only consent action is unique, visible, enabled and never accepts o
 
 test("readiness preflight reports only a bounded stage when evaluation stops", () => {
   assert.match(runner, /readinessPreflightStage/);
+  assert.match(runner, /safeReadinessGateShape/);
+  assert.match(runner, /safeReadinessErrorType/);
+  assert.match(runner, /requirement_key_types/);
+  assert.match(runner, /candidate_product_lists/);
+  assert.doesNotMatch(runner, /error\.message|error\.stack|JSON\.stringify\(error/);
   for (const stage of ["catalog_load", "recipe_source_key_check", "catalog_enrichment", "recipe_projection",
     "readiness_evaluation", "readiness_row_projection", "readiness_scope_validation", "supplement_match_read",
     "supplement_match_validation", "package_match_read", "source_revision_read"]) {
