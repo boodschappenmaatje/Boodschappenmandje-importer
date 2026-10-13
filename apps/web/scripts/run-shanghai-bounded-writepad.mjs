@@ -14,6 +14,7 @@ import { MEAL_MIX_PROFILES } from "../src/services/week-preparation/meal-mix-pro
 import { MEAL_MIX_PARSER_VERSION, profileRecipeRow } from "../../../src/meal-mix-profile-maintenance.mjs";
 import {
   SHANGHAI_CONTENT_ROOT,
+  clickShanghaiInstructionsWithConsentFallback,
   dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
   validateShanghaiContentRoot,
@@ -179,7 +180,13 @@ async function parseCurrentSource(browser, product) {
         });
         await dismissShanghaiRejectOptionalConsent(rejectOptionalCookies);
         selectorSubstage = "instructions_click";
-        if (await instructions.getAttribute("aria-expanded") !== "true") await instructions.click();
+        if (await instructions.getAttribute("aria-expanded") !== "true") {
+          await clickShanghaiInstructionsWithConsentFallback({
+            instructions,
+            inspectDocument,
+            rejectOptionalCookies,
+          });
+        }
         selectorSubstage = "aria_controls";
         const panelId = await instructions.getAttribute("aria-controls");
         if (!panelId) throw new Error("source-instructions-panel-missing");

@@ -15,6 +15,7 @@ import {
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
 import {
   SHANGHAI_CONTENT_ROOT,
+  clickShanghaiInstructionsWithConsentFallback,
   dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
   validateShanghaiContentRoot,
@@ -55,6 +56,29 @@ test("runner imports the Shanghai product name used by the normal source-read fl
   assert.ok(consentSelectorStart >= 0 && consentSelectorEnd > consentSelectorStart,
     "runner must select consent semantically");
   assert.doesNotMatch(runner.slice(consentSelectorStart, consentSelectorEnd), /accept|accepteren/i);
+});
+
+test("Shanghai retries the instruction click only after one visible reject-only choice is confirmed", async () => {
+  let rejectClicks = 0;
+  let instructionClicks = 0;
+  const result = await clickShanghaiInstructionsWithConsentFallback({
+    instructions: { click: async () => {
+      instructionClicks++;
+      if (instructionClicks === 1) throw new Error("intercepted");
+    } },
+    inspectDocument: async () => ({ instructions_center_hit_target: false, consent_reject_only_count: 1 }),
+    rejectOptionalCookies: { count: async () => 1, isVisible: async () => true, isEnabled: async () => true,
+      click: async () => rejectClicks++ },
+  });
+  assert.equal(result, undefined);
+  assert.equal(rejectClicks, 1);
+  assert.equal(instructionClicks, 2);
+
+  await assert.rejects(clickShanghaiInstructionsWithConsentFallback({
+    instructions: { click: async () => { throw new Error("intercepted"); } },
+    inspectDocument: async () => ({ instructions_center_hit_target: false, consent_reject_only_count: 2 }),
+    rejectOptionalCookies: { count: async () => 2 },
+  }), /intercepted/);
 });
 
 test("reject-only consent action is unique, visible, enabled and never accepts optional cookies", async () => {

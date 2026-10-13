@@ -110,6 +110,19 @@ export async function dismissShanghaiRejectOptionalConsent(buttons) {
   return true;
 }
 
+export async function clickShanghaiInstructionsWithConsentFallback({ instructions, inspectDocument, rejectOptionalCookies }) {
+  try {
+    await instructions.click({ timeout: 5000 });
+    return;
+  } catch (clickError) {
+    const state = await inspectDocument();
+    if (state.instructions_center_hit_target !== false || state.consent_reject_only_count !== 1) throw clickError;
+    const dismissed = await dismissShanghaiRejectOptionalConsent(rejectOptionalCookies);
+    if (!dismissed) throw clickError;
+    await instructions.click({ timeout: 10000 });
+  }
+}
+
 export function validateShanghaiContentRoot(source) {
   if (source?.title !== SHANGHAI_PRODUCT_NAME || typeof source?.text !== "string" ||
       SHANGHAI_SOURCE_MARKERS.some((marker) => !source.text.includes(marker))) {
