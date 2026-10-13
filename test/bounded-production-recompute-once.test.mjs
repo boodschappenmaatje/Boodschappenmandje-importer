@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { PRODUCTION_ORIGIN } from "../src/bounded-production-recompute.mjs";
 import {
   ALLOWED_MATCH_KEYS,
   ALLOWED_RECIPE_IDS,
-  PRODUCTION_ORIGIN,
-} from "../src/bounded-production-recompute.mjs";
+} from "../src/bounded-production-recompute-once-scope.mjs";
 import {
   assertFirstAndOnlyDispatch,
   runBoundedRecomputeOnce,

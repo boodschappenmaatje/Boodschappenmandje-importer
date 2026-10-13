@@ -1,5 +1,6 @@
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
+- PR #93 CI-run #555 vond een regressie omdat de one-shot write/verify-runner de Shanghai-runner-validator deelde. Hersteld door de bestaande 7-recepten/3-matchkeys/70-rijen scope en validator naar `bounded-production-recompute-once-scope.mjs` te isoleren; de Shanghai-runner blijft exact 20/2/200 en dry-run-only. Gerichte suites 28/28, volledige `npm test` 503/503, `npm run check` en `git diff --check` groen. Geen Production-call, workflow-dispatch of write uitgevoerd.
 - PR **#92** is gemerged. De gecontroleerde actuele remote `main` is **`7e54907ad386ef2840e045828ecd14155fc438e6`**. Production-migratie `secure_shared_match_readiness` is toegepast als versie **`20261013162855`**.
 - De Production-read-only nulmeting bevestigt nog steeds exact twee stale maar valid matchkeys: olie (`meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic`) met 16 recepten/160 readinessrijen en ui (`meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic`) met 9/90. Samen zijn dat exact 20 unieke recepten/200 readinessrijen. Er is geen derde stale Shanghai-key.
 - Work kon geen directe dry-run starten omdat Vercel de Production-admin-token maskeert. De poging stopte vóór POST; geen credential is getoond en geen POST is uitgevoerd. Production-writes sinds de vorige stap: **0**.
