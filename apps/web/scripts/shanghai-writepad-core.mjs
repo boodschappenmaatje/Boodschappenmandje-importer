@@ -5,6 +5,52 @@ export const SHANGHAI_PARSER_VERSION = 5;
 export const SHANGHAI_CONFIRMATION = "WRITE_ONLY_SHANGHAI_231215000";
 export const SHANGHAI_PACKAGE_TEXT = "239 gram";
 
+const READINESS_VARIATION_LABELS = new Map([
+  ["catalog-mix-product-231215000", "package"],
+  ["mix-supplement-mager-rundergehakt", "mager-rundergehakt"],
+  ["mix-supplement-champignons", "champignons"],
+  ["mix-supplement-tauge", "tauge"],
+  ["mix-supplement-bosui", "bosui"],
+  ["mix-supplement-ui", "ui"],
+  ["mix-supplement-prei", "prei"],
+  ["mix-supplement-olie", "olie"],
+]);
+const READINESS_VARIATION_FIELDS = new Set([
+  "product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at",
+]);
+
+export function safeToWriteShanghaiPlan(blockers, planned) {
+  return Array.isArray(blockers) && blockers.length === 0 && planned?.matchKeys?.length === 1 &&
+    planned.uniqueRecords?.total === 13 && planned.readinessPeopleCounts?.length === 10;
+}
+
+export function validateShanghaiReadinessResolution(resolved, recipeId) {
+  return Boolean(resolved?.cacheAvailable && resolved.persistentHitCount === 0 &&
+    resolved.fallbackCount === 1 && resolved.gate?.recipes?.length === 1 &&
+    resolved.gate.recipes[0]?.recipeId === recipeId);
+}
+
+export function safeReadinessMatchChange(sourceKey, firstPeopleCount, currentPeopleCount, changedFields) {
+  const label = READINESS_VARIATION_LABELS.get(sourceKey);
+  if (!label || !Number.isInteger(firstPeopleCount) || firstPeopleCount < 1 || firstPeopleCount > 10 ||
+      !Number.isInteger(currentPeopleCount) || currentPeopleCount < 1 || currentPeopleCount > 10 ||
+      !Array.isArray(changedFields)) return null;
+  const safeChangedFields = [...new Set(changedFields.filter((field) => READINESS_VARIATION_FIELDS.has(field)))].sort();
+  if (safeChangedFields.length === 0) return null;
+  return {
+    match_kind: label === "package" ? "package" : "supplement",
+    ingredient: label === "package" ? null : label,
+    previous_people_count: firstPeopleCount,
+    current_people_count: currentPeopleCount,
+    changed_fields: safeChangedFields,
+  };
+}
+
+const SHANGHAI_SOURCE_URLS = new Set([
+  "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakket-chinese-beef-shanghai",
+  "https://www.hoogvliet.com/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai",
+]);
+
 const EXPECTED_SUPPLEMENTS = [
   ["mix-supplement-mager-rundergehakt", "mager rundergehakt", 225, "g"],
   ["mix-supplement-champignons", "champignons", 250, "g"],
@@ -23,7 +69,7 @@ export function validateShanghaiPreflight({ product, profile, recipeConflicts, p
   else if (product.sku !== SHANGHAI_SKU || product.name !== SHANGHAI_PRODUCT_NAME ||
       product.brand?.trim().toLocaleLowerCase("en-US") !== "knorr" ||
       product.package_text !== SHANGHAI_PACKAGE_TEXT ||
-      product.source_url !== "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakket-chinese-beef-shanghai") {
+      !SHANGHAI_SOURCE_URLS.has(product.source_url)) {
     blockers.push("product_identity_mismatch");
   }
   if (!profile) blockers.push("profile_missing");

@@ -1,3 +1,104 @@
+# Checkpoint — Shanghai safe_to_write PASS, write-volgorde geblokkeerd, 13 oktober 2026
+
+- Branch `codex/shanghai-source-diagnostic-20261012`, Draft PR #90 open en mergeable. Remote main `46cd27f21e130c2dede46805eec65db08e10f42e`; geteste PR-head vóór deze documentatiecommit `8d74a3b27ed1c3394a457e83523fb012ea93b8e8`.
+- Finale CI **#539** / run `38373105264` op `8d74a3b`: groen. Importer **501/501**, PostgreSQL **28/28**, web **887/887** in 74 bestanden, seedchecks, ESLint, TypeScript en Production-build groen; Vercel Preview-check groen. De expliciete `safe_to_write`-rapportage is met gerichte fail-closed regressietests gedekt en versoepelt geen bestaande gate.
+- Dry-run **#27** / `38372720686` en **#28** / `38372724153` op `758044a`: beide PASS met `blocked=false`, source/parser verified, zeven supplementen, acht matchkeys, tien readiness-projecties, 13 unieke geplande records, blockers []; geen writes. #28 bevestigde onafhankelijk dezelfde head/input.
+- Acceptance dry-runs **#29** / `38373889167` (job `115217305710`) en **#30** / `38373919887` (job `115217779455`), beide op `8d74a3b`: **PASS; letterlijk `safe_to_write=true`**, `blocked=false`, blockers []. Run #29 was al gestart door de repository-eigenaar voordat onze dispatch #30 werd ingediend; #30 wachtte op #29 en bevestigde dezelfde uitkomst. Exacte SKU `231215000`, HTTP 200, finale Shanghai-URL, contentroot `main:has(h1)`, instructiepaneel, parser en source verified. Zeven supplementen: 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, 30 ml olie. Zeven bestaande supplementmatches plus één geplande pakketmatch; readiness-projecties voor personen 1–10, source revision `22372`, blockers [], 13 unieke records en 14 geplande write-operaties. Beide runs bleven `dry-run`: **nul** Production-writes.
+- **Harde volgordeblokkade:** bestaande workflow `.github/workflows/shanghai-bounded-writepad.yml` laat de PR-branch uitsluitend in `dry-run` toe; `assertShanghaiWriteArmed` in `apps/web/scripts/shanghai-writepad-core.mjs` eist voor `write` de exacte bevestiging, workflow_dispatch, poging 1 én `refs/heads/main`. Main bevat de PR-code nog niet. De gevraagde mergevoorwaarden eisen eerst Production-write plus verificatie. Een write vóór merge via het bestaande pad kan dus niet; de ref-gate versoepelen is uitdrukkelijk verboden. **Production-write 0, post-write nee, merge nee, release/smoke nee.**
+- Exacte volgende stap na expliciete keuze over de volgorde: veiligst is na groene CI en `safe_to_write=true` PR #90 naar main mergen, daarna de op main bestaande bounded write-workflow met exacte bevestiging eenmaal uitvoeren, read-only verifiëren en pas dan release/smoke afronden. Dit wijzigt de door de gebruiker gestelde write-vóór-mergevoorwaarde; voer dit niet zonder aangepaste toestemming uit. Alternatief vereist bewuste nieuwe toestemming voor ref-gatewijziging. ROADMAP blijft open.
+
+---
+
+# Checkpoint — Shanghai dry-run PASS, expliciete write-gate wacht op CI, 13 oktober 2026
+
+- Bestaande branch `codex/shanghai-source-diagnostic-20261012`, PR #90 open/Draft; remote `main` laatst `46cd27f21e130c2dede46805eec65db08e10f42e`. Code-head vóór dit checkpoint: `143877e69d647f88b3ec4ed704c7fe9f339c37dd`.
+- Volledige CI **#534** / run `38372009141` op `758044a`: groen, inclusief importer, PostgreSQL, webtests, seedchecks, ESLint, TypeScript, Production-build; Vercel Preview groen.
+- Bounded Shanghai dry-run **#27** / run `38372720686`, op `758044a`: **PASS**. Identiteit SKU 231215000/product `837af4a6-b7b6-4fd4-8eea-3437d4f138a7`, HTTP 200, finale Shanghai-URL, contentroot `main:has(h1)`, instructiepaneel en Boodschappenlijstje goed. Parser/source `verified`; zeven supplementen: 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, 30 ml olie. Acht matchkeys (zeven bestaande supplementmatches, één geplande pakketmatch), tien persoonsprojecties, source revision `22372`, `blocked=false`, blockers [], 13 unieke geplande records/14 write-operaties. **Geen write uitgevoerd**. Gelijktijdig gestarte tweede dry-run **#28** / run `38372724153` op dezelfde head ook groen; lees volledige rapport bij hervatting.
+- Omdat de bestaande uitvoer geen letterlijk `safe_to_write` veld bevatte, voegen `2409366`, `ccead21`, `b293a9d` en test `143877e` een expliciete fail-closed data-gate toe: geen blockers, exact één pakketmatch, 13 unieke records, tien readiness-aantallen. Geen write-arming, ref-beperking of andere safety-gate versoepeld. Volledige CI **#538** / run `38373016820` op `143877e` was nog pending bij dit checkpoint.
+- **Production-writes: 0.** Geen merge, deployment of smoke test. Exacte volgende stap: wacht op volledige groene CI op actuele head, doe één bounded dry-run en controleer `safe_to_write=true`. De bestaande Production-write workflow eist `refs/heads/main`; PR #90 is nog Draft en de gevraagde volgorde vereist write vóór merge. Verzwak die gate niet: bepaal na PASS een veilige, expliciet geautoriseerde volgorde of rapporteer deze concrete volgordeblokkade.
+
+---
+
+# Checkpoint — Shanghai readiness-preflight via bestaande cache, 13 oktober 2026
+
+- Branch `codex/shanghai-source-diagnostic-20261012`, PR #90 open/Draft. Remote `main` laatst `46cd27f21e130c2dede46805eec65db08e10f42e`. Laatste code-head vóór dit checkpoint: `87a40e3a3065536d994dea4272e2df7790fb30c2`.
+- Volledige CI #528 op `ab715ac` groen (importer 498/498, PostgreSQL 28/28, web 887/887; seedchecks, ESLint, TypeScript en build groen). Bounded dry-run #25, Actions `38369650436` op `d6f5f88`, en #26, Actions `38371283837` op `ab715ac`, faalden veilig met nul geplande/write-operaties. Beiden: juiste SKU/bron HTTP 200, contentroot, instructiepaneel, parser en zeven hoeveelheden verified. Eerste blocker `match_changes_across_people` voor supplement **champignons** van één naar vier personen: `product_id`, `product_updated_at`, `price_updated_at`. `safe_to_write=false`; Production-writes blijven **0**.
+- De Shanghai-preflight gebruikte de ongebufferde evaluator en eiste identieke producten voor alle persoonsaantallen. De bestaande planner gebruikt bij een actuele supplementmatch juist `resolveRecipeReadiness` met opgeslagen matches en kandidaatproducten. Commit `43b4c68` laat alleen deze Shanghai-preflight dat bestaande pad gebruiken; `0dc8d47`/`00e9b5a` voegen een fail-closed scopecheck toe; `87a40e3` test de cache-/recipegrenzen. Geen algemene evaluator, parser, schema of safety-gate aangepast. Volledige CI op actuele head nog te controleren.
+- Exacte volgende stap: wacht op volledige groene CI op de actuele PR-head; start daarna één bounded Shanghai `dry-run` op dezelfde branch. Lees het volledige rapport en verifieer vooral supplementmatch, projectie, `source_verified` en `safe_to_write`. Bij een nieuwe bewezen blocker uitsluitend die oorzaak repareren; geen Production-write zolang `safe_to_write` niet waar is. Bestaande write-workflow is bewust main-only en vereist exacte bevestiging; bij PASS moet de veilige merge/write-volgorde worden beoordeeld zonder die bewaking te verzwakken.
+
+---
+
+# Checkpoint — PR #90 Shanghai readiness-drift diagnose, 13 oktober 2026
+
+- Remote `main`: `46cd27f21e130c2dede46805eec65db08e10f42e`. Bestaande branch `codex/shanghai-source-diagnostic-20261012`; PR #90 is open, Draft, mergeable. Laatste code-head vóór deze documentatiecommit: `d6f5f8813138e6d4a64bcb61348587ab93c3ff47`.
+- Na de eerdere Shanghai-specifieke parserfix `cc6af32` zijn source/headless-fixes en readinessdiagnostiek op dezelfde branch gevolgd. CI #521 op `2a4ffdc` was volledig groen. CI #519/#520 faalden uitsluitend op te strenge of syntax-specifieke diagnostiektestassertions; die zijn op dezelfde branch gecorrigeerd.
+- Bounded Production **dry-run #24**, Actions-run `38368528661`, attempt 1, op `2a4ffdc`: SKU `231215000`, juiste productidentiteit, HTTP 200, finale Shanghai-URL, contentroot `main:has(h1)` en instructiepaneel gevonden. De expliciete `Boodschappenlijstje`-sectie is geparsed; source/profile zijn `verified`. Zeven supplementen: 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, olie 30 ml. De bron vermeldde olie en twee bereidingsmetingen. De dry-run bleef `blocked` bij `readiness_row_projection` met exact `match_changes_across_people`; `sourceRevision=null`, `safe_to_write=false`, geplande/write-operaties 0.
+- Bewezen technische oorzaak tot nu toe: voor één match-key verschillen bij projectie over personen 1–10 één of meer van product, matchstatus, reden of brontimestamps. Welke sleutel en welk veld verschilt, was in #24 nog niet zichtbaar. Daarom is de fail-closed Shanghai-preflight in commit `92b8407` uitgebreid met uitsluitend veilig begrensde diagnosevelden (matchtype, persoonsaantallen, vooraf toegestane gewijzigde veldnamen); testcommit `d6f5f88` controleert die grens. Geen product-ID, raw error of secret wordt in de nieuwe diagnose gerapporteerd.
+- Volledige Core-CI **#523** / run `38368980882` op code-head `d6f5f88` is groen: importer **498/498**, PostgreSQL **28/28**, web **887/887** over 74 bestanden, plus seedchecks, ESLint, TypeScript en Production-build. Vercel Preview-check groen. De documentatiecommit kan een nieuwe CI-run starten; controleer die op de actuele PR-head.
+- **Production-writes: 0**. Geen merge, database-migratie, import of Production-release. Exacte volgende stap: na volledig groene CI op de actuele branch-head één bestaande bounded `dry-run` voor SKU 231215000 starten, volledig rapport lezen, de eerste gewijzigde matchveldnaam/het matchtype toetsen, alleen die bewezen Shanghai-oorzaak repareren, tests/CI herhalen en verder tot `safe_to_write=true`.
+
+---
+
+# Checkpoint — Shanghai runtime-importfix en één nieuwe dry-run — 12 oktober 2026
+
+## Minimale runtimefix en verificatie
+
+- Remote `main` bleef **`46cd27f21e130c2dede46805eec65db08e10f42e`**. Bestaande branch `codex/shanghai-source-diagnostic-20261012`, Draft PR [#90](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/90).
+- De bewezen `ReferenceError` is minimaal gerepareerd door de reeds geëxporteerde `SHANGHAI_PRODUCT_NAME` uit `shanghai-writepad-core.mjs` ook in `run-shanghai-bounded-writepad.mjs` te importeren. Geen selector-, parser-, source-verification- of projectionlogica is gewijzigd.
+- Een regressietest controleert dat het gebruikte `SHANGHAI_PRODUCT_NAME` in het core-importblok van de runner aanwezig is. De bestaande source-probe blijft normale parserbereikbaarheid en fail-closed gedrag dekken.
+- Core-CI **#38301333735** is groen op code-head **`5bf44d0401b277d80dcfebeccf36a4292155ea1f`**: importer **490/490**, PostgreSQL **28/28**, web **887/887**, seedchecks, ESLint, TypeScript en Production-build.
+
+## Exact één nieuwe dry-run en stopgrens
+
+- Handmatige Production dry-run **#38302190864**, attempt 1, draaide op exact `5bf44d0401b277d80dcfebeccf36a4292155ea1f`, branch `codex/shanghai-source-diagnostic-20261012`, met `SHANGHAI_WRITE_MODE=dry-run` en lege write-confirmation.
+- De `ReferenceError` is verdwenen. De run bereikte de bron: HTTP **200**, finale URL `https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000`.
+- De run stopte vervolgens fail-closed bij de selector: contentroot `main:has(h1)` niet gevonden binnen de timeout; `error_stage=selector`, `error_type=TimeoutError`, `content_root_found=false`, `parser_status=not_reached`. Daardoor zijn `Gebruiksaanwijzing` en het ARIA-paneel niet bereikt, is geen broninhoud geparsed en bleef source verification uit.
+- Identity is groen afgeleid uit het ontbreken van `product_identity_mismatch`; blockers zijn exact `source_unavailable`, `source_not_verified` en `recipe_projection_mismatch`. Geplande records en write-operations zijn allebei 0; `safe_to_write=false`.
+- Stopregel gerespecteerd: geen selector-/parservervolgfix en geen tweede dry-run in deze opdracht. De eerstvolgende bewezen blokkade is dat de onafhankelijk in een interactieve live DOM waargenomen root niet verschijnt in de GitHub Actions-headless bronread.
+- **Production-writes 0**, dry-runs in dit checkpoint exact 1, merge nee, import/migratie nee. `ROADMAP.md` blijft ongewijzigd omdat roadmap 1B nog actief is.
+
+---
+
+# Checkpoint — Shanghai source-readfix, eerste dry-run stopt vóór source-read — 12 oktober 2026
+
+## Bewezen live DOM en patch
+
+- Remote `main` bleef **`46cd27f21e130c2dede46805eec65db08e10f42e`**. Bestaande branch `codex/shanghai-source-diagnostic-20261012`, Draft PR [#90](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/90). Source-readfixcommit **`f2fc0f7c02a9e3d33fa1dc1a75a8b24e012ef587`**.
+- Live DOM-inspectie bevestigde dat de oude selector `[data-testing-id="product-detail-page"]` 0 matches heeft en de semantische contentroot `main:has(h1)` exact 1 match. Deze root bevat exact de Shanghai-`h1`, `239 gram`, `Voor 2-3 personen` en, na het semantisch openen van de knop `Gebruiksaanwijzing`, het via `aria-controls` gekoppelde paneel met 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei en olie.
+- De begrensde Shanghai-reader wacht op `main:has(h1)`, vereist de exacte `h1` en exact één knop `Gebruiksaanwijzing`, opent die indien nodig, wacht op het gekoppelde ARIA-paneel en geeft daarna de roottekst aan de bestaande parser. De rootvalidatie vereist vóór parsing alleen exacte productnaam, 239 gram, 2–3 personen en `Boodschappenlijstje:`; de bestaande parser/supplement- en projectionvalidatie blijven intact.
+- Regressies dekken de actuele root, onafhankelijkheid van de oude selector, parserbereik, ontbrekende root, malformed content, fail-closed/zero-write en veilige diagnostiek. Core-CI **#38298781970** is groen: importer **489/489**, PostgreSQL **28/28**, web **887/887**, seedchecks, ESLint, TypeScript en Production-build.
+
+## Exact één nieuwe dry-run en stopgrens
+
+- Handmatige dry-run **#38299370698**, attempt 1, draaide op exact `f2fc0f7c02a9e3d33fa1dc1a75a8b24e012ef587`, branch `codex/shanghai-source-diagnostic-20261012`, `SHANGHAI_WRITE_MODE=dry-run`, lege write-confirmation.
+- De runner stopte onmiddellijk met veilige publieke uitkomst `{"status":"failed","sku":"231215000","sourceKey":"catalog-mix-231215000","code":"unexpected_writepad_failure"}`.
+- Code-inspectie bewijst de oorzaak: `parseCurrentSource` gebruikt `SHANGHAI_PRODUCT_NAME`, maar de source-readfixcommit importeert die constante niet uit `shanghai-writepad-core.mjs`. Dit veroorzaakt een `ReferenceError` bij het opbouwen van de locator, vóór `page.goto`.
+- Daardoor zijn in deze run identity, HTTP-status/finale URL, contentrootdetectie, parser, source verification en recipe projection **niet bereikt/niet geëvalueerd**. Er is geen bewijs uit deze run dat de nieuwe contentroot faalt; de runner bereikte hem niet.
+- Stopregel gerespecteerd: geen automatische reparatie en geen tweede dry-run. Kleinste vervolgstap is afzonderlijk de ontbrekende bestaande constante-import toevoegen, een regressie/loadtest opnemen die de runner tot het source-readpad uitvoert, alle checks opnieuw groen krijgen en pas na nieuwe expliciete toestemming één volgende dry-run starten.
+- **Production-writes 0**, dry-runs in dit checkpoint exact 1, merge nee, import/migratie nee. `ROADMAP.md` blijft ongewijzigd omdat roadmap 1B nog actief is.
+
+---
+
+# Checkpoint — Shanghai source-diagnostiek bewezen — 12 oktober 2026
+
+## Branch, PR en tests
+
+- Remote `main` bleef ongewijzigd op **`46cd27f21e130c2dede46805eec65db08e10f42e`**. Diagnosebranch **`codex/shanghai-source-diagnostic-20261012`**, Draft PR [#90](https://github.com/boodschappenmaatje/Boodschappenmandje-importer/pull/90), code-head **`899a1e7b3b236024d90a269977aa12bb2a082df1`**.
+- De identity-gate accepteert uitsluitend voor SKU `231215000` de twee bewezen Shanghai-URL's; SKU, exacte naam, merk en verpakking blijven ongewijzigd streng. Er is geen algemene URL-normalisatie of fuzzy matching toegevoegd.
+- Veilige, redacted source-diagnostiek rapporteert uitsluitend navigatiestatus, publieke finale Hoogvliet-URL, foutstadium/type, selector-/parserstatus en timeoutcategorie. De foutuitkomst blijft `source_unavailable`; foutmeldingen, bodies, headers, cookies, tokens en stacktraces worden niet gelogd.
+- Core-CI run **#38297086728** is groen: importer `487/487`, PostgreSQL `28/28`, web `887/887`, plus seedchecks, ESLint, TypeScript en Production-build.
+
+## Exact één Production dry-run
+
+- Handmatige dry-run **#38297723917**, attempt 1, draaide op exact code-head `899a1e7b3b236024d90a269977aa12bb2a082df1`, branch `codex/shanghai-source-diagnostic-20261012`, met `SHANGHAI_WRITE_MODE=dry-run` en lege write-confirmation.
+- Identity-resultaat: de actuele Production-URL-variant is geaccepteerd; `product_identity_mismatch` ontbreekt.
+- Source-resultaat: navigatiestatus **200**; finale URL **`https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000`**; `error_stage=selector`; `error_type=TimeoutError`; `selector_status=failed`; `parser_status=not_reached`; `timeout=true`.
+- De echte oorzaak van `source_unavailable` is daarmee bewezen: de live pagina laadt succesvol, maar de writepad wacht op de verouderde selector `[data-testing-id="product-detail-page"]`, die niet verschijnt. De parser is niet aangeroepen.
+- Finale beslissing: **blocked** met `source_unavailable`, `source_not_verified` en `recipe_projection_mismatch`; geplande records en write-operations zijn allebei 0. De job eindigde daarom verwacht met exitcode 1.
+- Stopgrens gerespecteerd: exact één dry-run in dit checkpoint; geen tweede run, geen fetch/parserfix, geen merge, geen importer, geen migratie en **Production-writes 0**. De kleinste vervolgstap is een apart gereviewde, fail-closed Shanghai source-readfix die een bestaande bewezen contentroot/bronextractie hergebruikt, gevolgd door tests en pas na aparte toestemming één nieuwe dry-run.
+
+---
+
 # Checkpoint — Chinese Beef Shanghai bounded writepad Draft PR #89 — 12 oktober 2026
 
 ## Basis en PR

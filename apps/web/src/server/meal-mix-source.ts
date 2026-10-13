@@ -46,6 +46,12 @@ export function isMealMixProduct(product: MealMixSourceProduct): boolean {
 }
 
 const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const SHANGHAI_SKU = "231215000";
+const SHANGHAI_CATALOG_PATHS = new Set([
+  "/product/knorr-wereldgerechten-maaltijdpakket-chinese-beef-shanghai",
+  "/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai",
+]);
+const SHANGHAI_REDIRECT_PATH = "/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000";
 const number = (text: string) => Number(text.replace(",", "."));
 
 function ingredientCategory(name: string): string {
@@ -78,7 +84,17 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
   const fail = (reason: string): MealMixSourceResult => ({ status: "needs_review", reason, fingerprint, evidence });
   let url: URL;
   try { url = new URL(source.sourceUrl); } catch { return fail("source_url_invalid"); }
-  if (url.origin !== "https://www.hoogvliet.com" || url.pathname !== new URL(source.product.source_url).pathname ||
+  let catalogUrl: URL;
+  try { catalogUrl = new URL(source.product.source_url); } catch { return fail("source_url_invalid"); }
+  const exactCatalogRoute = url.origin === "https://www.hoogvliet.com" &&
+    url.pathname === catalogUrl.pathname;
+  const exactShanghaiRedirect = source.product.sku === SHANGHAI_SKU &&
+    catalogUrl.origin === "https://www.hoogvliet.com" &&
+    SHANGHAI_CATALOG_PATHS.has(catalogUrl.pathname) &&
+    url.origin === "https://hoogvliet.nl" &&
+    url.pathname === SHANGHAI_REDIRECT_PATH &&
+    !url.search && !url.hash && !url.username && !url.password;
+  if ((!exactCatalogRoute && !exactShanghaiRedirect) ||
     normalize(source.title) !== normalize(source.product.name)) return fail("source_identity_mismatch");
   if (!isMealMixProduct(source.product)) return fail("not_a_supported_meal_mix");
   if (corroboration) {
@@ -99,13 +115,17 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
   servings.splice(0, servings.length, ...new Set(servings));
   if (!servings.length && existing?.verificationStatus === "verified") servings.push(existing.servingsPerPackage);
   if (servings.length !== 1 || servings[0] < 1 || servings[0] > 12) return fail(servings.length > 1 ? "servings_conflict" : "package_servings_missing");
-  const start = /(?:Zelf toevoegen|Boodschappenlijstje)\s*:?\s*/i.exec(text);
+  const isChineseBeefShanghai = source.product.sku === SHANGHAI_SKU;
+  // Shanghai pages also show a product-description "Nog zelf toevoegen" list.
+  // Parse only the explicit instruction-panel shopping-list label for this SKU.
+  const start = isChineseBeefShanghai
+    ? /Boodschappenlijstje\s*:?\s*/i.exec(text)
+    : /(?:Zelf toevoegen|Boodschappenlijstje)\s*:?\s*/i.exec(text);
   if (!start) return fail("supplement_list_missing");
   const after = text.slice(start.index + start[0].length);
   const end = /(?:Variatie\s*tip|Dagje zonder|Algemene bereidingswijze|Bereidingstijd|Voorbereiding|Zo maak|Netto-inhoud|\n1[. )]\s*(?:Kook|Verwarm|Verhit|Snij|Breng|Strooi)\b)/i.exec(after);
   if (!end) return fail("supplement_list_boundary_missing");
   const list = after.slice(0, end.index).trim();
-  const isChineseBeefShanghai = source.product.sku === "231215000";
   const rowList = isChineseBeefShanghai
     ? list.replace(/,\s*(?=(?:\d+(?:[.,]\d+)?\s+(?:g\b|gram\b|kg\b|ml\b|el\b|eetl\.?|eetlepels?\b|bosui(?:en)?\b|ui(?:en)?\b|prei\b)|olie\b))/gi, "\n")
       .replace(/\bbosuien\b/gi, "bosui")

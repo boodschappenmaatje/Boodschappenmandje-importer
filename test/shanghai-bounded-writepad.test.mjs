@@ -10,9 +10,22 @@ import {
   assertShanghaiWriteArmed,
   buildShanghaiWriteSummary,
   runShanghaiCommit,
+  safeReadinessMatchChange,
+  safeToWriteShanghaiPlan,
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
+  validateShanghaiReadinessResolution,
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
+import {
+  SHANGHAI_CONTENT_ROOT,
+  clickShanghaiInstructionsWithConsentFallback,
+  dismissShanghaiRejectOptionalConsent,
+  inspectShanghaiSource,
+  safeShanghaiParserReason,
+  safeShanghaiSourceFacts,
+  shanghaiOilMeasurementCount,
+  validateShanghaiContentRoot,
+} from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
 
 const product = {
   id: "837af4a6-b7b6-4fd4-8eea-3437d4f138a7", sku: SHANGHAI_SKU, name: SHANGHAI_PRODUCT_NAME,
@@ -34,10 +47,321 @@ const valid = () => validateShanghaiPreflight({ product, profile, recipeConflict
 const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatje/Boodschappenmandje-importer",
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
+const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
+
+test("Shanghai safe_to_write requires a complete bounded plan and zero blockers", () => {
+  const plan = buildShanghaiWriteSummary(["meal-mix-ingredient:catalog-mix-product-231215000:piece:mealMix:Knorr"]);
+  assert.equal(safeToWriteShanghaiPlan([], plan), true);
+  assert.equal(safeToWriteShanghaiPlan(["source_not_verified"], plan), false);
+  assert.equal(safeToWriteShanghaiPlan([], null), false);
+  assert.equal(safeToWriteShanghaiPlan([], { ...plan, matchKeys: [] }), false);
+  assert.equal(safeToWriteShanghaiPlan([], { ...plan, uniqueRecords: { ...plan.uniqueRecords, total: 14 } }), false);
+  assert.ok(runner.includes("safe_to_write: safeToWriteShanghaiPlan(blockers, planned)"));
+});
+
+test("Shanghai projects the prospective recipe through current persistent matches and fails closed on unavailable cache", () => {
+  const resolved = { cacheAvailable: true, persistentHitCount: 0, fallbackCount: 1,
+    gate: { recipes: [{ recipeId: "prospective-shanghai" }] } };
+  assert.equal(validateShanghaiReadinessResolution(resolved, "prospective-shanghai"), true);
+  for (const invalid of [
+    { ...resolved, cacheAvailable: false },
+    { ...resolved, persistentHitCount: 1 },
+    { ...resolved, fallbackCount: 0 },
+    { ...resolved, gate: { recipes: [{ recipeId: "unrelated" }] } },
+    { ...resolved, gate: { recipes: [] } },
+  ]) assert.equal(validateShanghaiReadinessResolution(invalid, "prospective-shanghai"), false);
+  assert.match(runner, /resolveRecipeReadiness\(/);
+  assert.match(runner, /new SupabasePersistentRecipeReadinessRepository\(client\)/);
+  assert.match(runner, /validateShanghaiReadinessResolution\(resolved, recipeId\)/);
+});
+
+test("Shanghai parser diagnostics expose bounded reason and allowlisted item only", () => {
+  assert.deepEqual(safeShanghaiParserReason("supplement_quantity_missing:225 g mager rundergehakt"), {
+    code: "supplement_quantity_missing", item: "rundergehakt",
+  });
+  assert.deepEqual(safeShanghaiParserReason("supplement_quantity_missing:secret token=hidden"), {
+    code: "supplement_quantity_missing", item: null,
+  });
+  assert.deepEqual(safeShanghaiParserReason("corroboration_source_changed"), {
+    code: "corroboration_source_changed", item: null,
+  });
+  assert.equal(safeShanghaiParserReason("secret token=hidden"), null);
+  assert.equal(safeShanghaiParserReason(undefined), null);
+});
+
+test("Shanghai source read waits for both explicit preparation oil quantities without logging text", () => {
+  const complete = "Boodschappenlijstje: Olie. Zo maak je 't: Verhit 1 el olie. Verhit nog 1 el olie.";
+  const incomplete = "Boodschappenlijstje: Olie. Zo maak je 't: Verhit tot gaar.";
+  assert.equal(shanghaiOilMeasurementCount(complete), 2);
+  assert.equal(shanghaiOilMeasurementCount(incomplete), 0);
+  assert.deepEqual(safeShanghaiSourceFacts(complete), { instruction_oil_measurement_count: 2 });
+  assert.doesNotMatch(JSON.stringify(safeShanghaiSourceFacts(complete)), /Verhit|olie/i);
+  assert.match(runner, /selectorSubstage = "instructions_content"/);
+  assert.match(runner, /await page\.waitForFunction\(/);
+  assert.doesNotMatch(runner, /shanghaiOilMeasurementCount\(controlledPanels/);
+  assert.match(runner, /instructionOilMeasurementCount/);
+  assert.match(runner, /oilMeasurementsBeforeWait/);
+  assert.match(runner, /oilMeasurementsAfterWait/);
+});
+
+test("runner imports the Shanghai product name used by the normal source-read flow", () => {
+  const coreImportEnd = runner.indexOf('} from "./shanghai-writepad-core.mjs";');
+  const coreImportStart = runner.lastIndexOf("import {", coreImportEnd);
+  assert.notEqual(coreImportStart, -1);
+  assert.notEqual(coreImportEnd, -1);
+  assert.match(runner.slice(coreImportStart, coreImportEnd), /\bSHANGHAI_PRODUCT_NAME\b/);
+  assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
+  assert.ok(runner.includes("dismissShanghaiRejectOptionalConsent(rejectOptionalCookies)"));
+  const consentSelectorStart = runner.indexOf('rejectOptionalCookies = page.getByRole("button", {');
+  const consentSelectorEnd = runner.indexOf("/i,", consentSelectorStart);
+  assert.ok(consentSelectorStart >= 0 && consentSelectorEnd > consentSelectorStart,
+    "runner must select consent semantically");
+  const consentSelector = runner.slice(consentSelectorStart, consentSelectorEnd);
+  assert.match(consentSelector, /alleen noodzakelijke|only necessary|reject optional|weigeren|afwijzen/);
+  assert.doesNotMatch(consentSelector, /accept|accepteren|\^|\$/i);
+});
+
+test("Shanghai retries the instruction click only after one visible reject-only choice is confirmed", async () => {
+  let rejectClicks = 0;
+  let instructionClicks = 0;
+  const result = await clickShanghaiInstructionsWithConsentFallback({
+    instructions: { click: async () => {
+      instructionClicks++;
+      if (instructionClicks === 1) throw new Error("intercepted");
+    } },
+    inspectDocument: async () => ({ instructions_center_hit_target: false, consent_reject_only_count: 1 }),
+    rejectOptionalCookies: { count: async () => 1, isVisible: async () => true, isEnabled: async () => true,
+      click: async () => rejectClicks++ },
+  });
+  assert.equal(result, undefined);
+  assert.equal(rejectClicks, 1);
+  assert.equal(instructionClicks, 2);
+
+  await assert.rejects(clickShanghaiInstructionsWithConsentFallback({
+    instructions: { click: async () => { throw new Error("intercepted"); } },
+    inspectDocument: async () => ({ instructions_center_hit_target: false, consent_reject_only_count: 2 }),
+    rejectOptionalCookies: { count: async () => 2 },
+  }), /intercepted/);
+});
+
+test("reject-only consent action is unique, visible, enabled and never accepts optional cookies", async () => {
+  const noChoice = { count: async () => 0 };
+  assert.equal(await dismissShanghaiRejectOptionalConsent(noChoice), false);
+
+  const ambiguous = { count: async () => 2 };
+  await assert.rejects(dismissShanghaiRejectOptionalConsent(ambiguous), /source-consent-choice-ambiguous/);
+
+  let clicks = 0;
+  const hidden = { count: async () => 1, isVisible: async () => false, isEnabled: async () => true,
+    click: async () => clicks++ };
+  assert.equal(await dismissShanghaiRejectOptionalConsent(hidden), false);
+
+  const rejectOnly = { count: async () => 1, isVisible: async () => true, isEnabled: async () => true,
+    click: async (options) => { assert.deepEqual(options, { timeout: 5000 }); clicks++; } };
+  assert.equal(await dismissShanghaiRejectOptionalConsent(rejectOnly), true);
+  assert.equal(clicks, 1);
+});
+
+test("readiness preflight reports only a bounded stage when evaluation stops", () => {
+  assert.match(runner, /readinessPreflightStage/);
+  assert.match(runner, /safeReadinessGateShape/);
+  assert.match(runner, /safeReadinessErrorType/);
+  assert.match(runner, /SAFE_READINESS_PREFLIGHT_CODES/);
+  for (const code of ["readiness_scope_mismatch", "match_changes_across_people", "computed_scope_mismatch",
+    "supplement_match_read_failed", "package_match_read_failed", "source_revision_unavailable"]) {
+    assert.ok(runner.includes(`"${code}"`), `missing allowlisted preflight code ${code}`);
+  }
+  assert.match(runner, /unclassified_readiness_preflight_error/);
+  assert.match(runner, /safeReadinessMatchChange,/);
+  assert.match(runner, /safeReadinessMatchChange\(row\.ingredient_source_key/);
+  assert.match(runner, /readinessPreflightMismatch/);
+  const core = readFileSync(new URL("../apps/web/scripts/shanghai-writepad-core.mjs", import.meta.url), "utf8");
+  assert.match(core, /function safeReadinessMatchChange/);
+  for (const safeField of ["mager-rundergehakt", "champignons", "tauge", "bosui", "ui", "prei", "olie",
+    "product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at"]) {
+    assert.ok(core.includes(safeField), `missing safe readiness diagnostic allowlist ${safeField}`);
+  }
+
+  assert.match(runner, /requirement_key_types/);
+  assert.match(runner, /candidate_product_lists/);
+  const safeDiagnostics = runner.slice(runner.indexOf("function safeReadinessGateShape"), runner.indexOf("function projectedRecipe"));
+  assert.doesNotMatch(safeDiagnostics, /error\.stack|JSON\.stringify\(error/);
+  assert.match(safeDiagnostics, /\["TypeError", "RangeError", "Error"\]/);
+  assert.match(safeDiagnostics, /SAFE_READINESS_PREFLIGHT_CODES\.has\(error\?\.message\)/);
+  assert.match(safeDiagnostics, /unclassified_readiness_preflight_error/);
+  for (const stage of ["catalog_load", "recipe_source_key_check", "catalog_enrichment", "recipe_projection",
+    "readiness_evaluation", "readiness_row_projection", "readiness_scope_validation", "supplement_match_read",
+    "supplement_match_validation", "package_match_read", "source_revision_read"]) {
+    assert.ok(runner.includes(`"${stage}"`), `missing safe readiness stage ${stage}`);
+  }
+  assert.doesNotMatch(runner, /readinessPreflightStage[^;]*error\.message/);
+  assert.doesNotMatch(runner, /readinessPreflightStage[^;]*stack/);
+});
+
+test("Shanghai match-variation diagnostics name only allowlisted ingredients and fields", () => {
+  assert.deepEqual(safeReadinessMatchChange("mix-supplement-mager-rundergehakt", 1, 4,
+    ["product_id", "price_updated_at", "secret_value", "product_id"]), {
+      match_kind: "supplement", ingredient: "mager-rundergehakt", previous_people_count: 1,
+      current_people_count: 4, changed_fields: ["price_updated_at", "product_id"],
+    });
+  assert.deepEqual(safeReadinessMatchChange("catalog-mix-product-231215000", 1, 4, ["match_status"]), {
+    match_kind: "package", ingredient: null, previous_people_count: 1, current_people_count: 4,
+    changed_fields: ["match_status"],
+  });
+  assert.equal(safeReadinessMatchChange("private-source-key", 1, 4, ["product_id"]), null);
+  assert.equal(safeReadinessMatchChange("mix-supplement-olie", 0, 4, ["product_id"]), null);
+  assert.equal(safeReadinessMatchChange("mix-supplement-olie", 1, 4, ["private_field"]), null);
+  assert.doesNotMatch(JSON.stringify(safeReadinessMatchChange("mix-supplement-olie", 1, 4, ["product_id"])),
+    /private|secret|uuid/i);
+});
 
 test("accepts only the exact Shanghai preflight identity and proven profile", () => {
   assert.deepEqual(valid(), { blocked: false, blockers: [] });
   assert.equal(buildShanghaiWriteSummary(["catalog-mix-product-231215000:piece:mealMix:knorr"]).uniqueRecords.total, 13);
+});
+
+test("accepts only the two allowlisted Shanghai URL variants for the exact SKU", () => {
+  const productionUrl = "https://www.hoogvliet.com/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai";
+  assert.equal(validateShanghaiPreflight({ product: { ...product, source_url: productionUrl }, profile,
+    recipeConflicts: [], parsed, recipe }).blocked, false);
+  assert.ok(validateShanghaiPreflight({ product: { ...product, sku: "231215001", source_url: productionUrl }, profile,
+    recipeConflicts: [], parsed, recipe }).blockers.includes("product_identity_mismatch"));
+  assert.ok(validateShanghaiPreflight({ product: { ...product, source_url: "https://www.hoogvliet.com/product/other" }, profile,
+    recipeConflicts: [], parsed, recipe }).blockers.includes("product_identity_mismatch"));
+});
+
+const sourceProbe = (overrides = {}) => inspectShanghaiSource({
+  navigate: async () => ({ status: 200 }),
+  finalUrl: async () => "https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000?secret=hidden",
+  waitForSelector: async () => {},
+  readSource: async () => ({ text: "safe" }),
+  parseSource: async () => ({ status: "verified" }),
+  ...overrides,
+});
+
+const liveShanghaiSource = {
+  title: SHANGHAI_PRODUCT_NAME,
+  text: `Knorr Wereldgerecht maaltijdpakket chinese beef shanghai
+239 gram - Prijs per kilo
+Chinese Beef Shanghai, gehaktballetjes met mie. Voor 2-3 personen.
+Bereidingswijze: Recept met lekker veel groente: Boodschappenlijstje:
+225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, Olie.`,
+};
+
+test("runner uses the exact measured Shanghai CSS content-root selector", () => {
+  assert.ok(runner.includes("page.locator(SHANGHAI_CONTENT_ROOT)"));
+  assert.ok(!runner.includes('page.locator("main").filter({ has: page.locator("h1") })'));
+});
+
+test("uses the current semantic Shanghai root, opens source content and reaches the parser", async () => {
+  let waitedFor = null;
+  let parserReached = false;
+  const result = await sourceProbe({
+    waitForSelector: async (selector) => { waitedFor = selector; },
+    readSource: async () => validateShanghaiContentRoot(liveShanghaiSource),
+    parseSource: async () => { parserReached = true; return { status: "verified" }; },
+  });
+  assert.equal(waitedFor, "main:has(h1)");
+  assert.equal(waitedFor, SHANGHAI_CONTENT_ROOT);
+  assert.notEqual(waitedFor, '[data-testing-id="product-detail-page"]');
+  assert.equal(parserReached, true);
+  assert.equal(result.diagnostic.content_root_found, true);
+  assert.equal(result.diagnostic.parser_status, "parsed");
+});
+
+test("missing current root and malformed root content fail closed before parsing", async () => {
+  const timeout = new Error("sensitive selector details");
+  timeout.name = "TimeoutError";
+  const missing = await sourceProbe({ waitForSelector: async () => { throw timeout; } });
+  assert.equal(missing.error, "source_unavailable");
+  assert.equal(missing.diagnostic.error_stage, "selector");
+  assert.equal(missing.diagnostic.content_root_found, false);
+
+  let parserReached = false;
+  const malformed = await sourceProbe({
+    readSource: async () => validateShanghaiContentRoot({ ...liveShanghaiSource, text: "239 gram" }),
+    parseSource: async () => { parserReached = true; return { status: "verified" }; },
+  });
+  assert.equal(malformed.error, "source_unavailable");
+  assert.equal(malformed.diagnostic.error_stage, "validation");
+  assert.equal(malformed.diagnostic.content_root_found, true);
+  assert.equal(malformed.diagnostic.parser_status, "not_reached");
+  assert.equal(parserReached, false);
+});
+
+test("source diagnostics classify navigation, selector and parser failures without writes or secret leakage", async () => {
+  let writes = 0;
+  const failures = [
+    ["navigation", { navigate: async () => { const error = new Error("token=secret"); error.name = "TypeError"; throw error; } }],
+    ["selector", { waitForSelector: async () => { const error = new Error("cookie=secret"); error.name = "TimeoutError"; throw error; } }],
+    ["parser", { parseSource: async () => { throw new Error("authorization=secret"); } }],
+  ];
+  for (const [stage, override] of failures) {
+    const result = await sourceProbe(override);
+    assert.equal(result.error, "source_unavailable");
+    assert.equal(result.diagnostic.error_stage, stage);
+    assert.equal(result.diagnostic.timeout, stage === "selector");
+    assert.equal(result.diagnostic.content_root, SHANGHAI_CONTENT_ROOT);
+    assert.equal(result.diagnostic.final_url,
+      "https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000");
+    assert.doesNotMatch(JSON.stringify(result), /token=|cookie=|authorization=|secret/i);
+    await assert.rejects(runShanghaiCommit({ mode: "write", confirmation: SHANGHAI_CONFIRMATION, context,
+      plan: { blocked: true, recipeId: "new-id", _snapshot: {} }, readCurrentSnapshot: async () => ({}),
+      writeRecipe: async () => writes++, writeProfile: async () => writes++, writeCaches: async () => writes++,
+      verifyWrites: async () => {}, markProfileCurrent: async () => {} }), /preflight_blocked/);
+  }
+  assert.equal(writes, 0);
+});
+
+test("selector diagnostics expose only bounded DOM facts, not page text", async () => {
+  const timeout = new Error("timeout");
+  timeout.name = "TimeoutError";
+  const result = await sourceProbe({
+    waitForSelector: async () => { throw timeout; },
+    diagnose: async () => ({
+      selector_substage: "instructions_panel", playwright_root_count: 1, playwright_root_visible: true,
+      heading_locator_count: 1, heading_locator_visible: true, instructions_locator_count: 1,
+      instructions_locator_visible: true,
+      at_domcontentloaded: { ready_state: "interactive", main_count: 0, body_contains_product_name: false,
+        challenge_signals: { human_check: true } },
+      after_wait: { ready_state: "complete", main_count: 1, main_visible_count: 0, main_zero_rect_count: 1,
+        main_display_contents_count: 1, main_with_h1_count: 1, visible_main_with_h1_count: 0,
+        content_root_query_count: 1, visible_content_root_count: 0, h1_count: 0, body_text: "secret cookie=hidden",
+        consent_control_visible_count: 5, consent_reject_only_count: 1, consent_accept_all_count: 1,
+        reject_only_locator_count: 0, reject_only_locator_visible: false, reject_only_locator_enabled: false,
+        instructions_intersects_viewport: true, instructions_center_hit_target: false, instructions_center_hit_by_consent: true,
+        instructions_center_hit_kind: "div", instructions_center_hit_has_click_surface: false,
+        instructions_center_hit_inside_content_root: false, challenge_signals: { captcha: true } },
+      leaked_text: "must not be returned",
+    }),
+  });
+  assert.equal(result.diagnostic.document_diagnostic.at_domcontentloaded.ready_state, "interactive");
+  assert.equal(result.diagnostic.document_diagnostic.at_domcontentloaded.challenge_signals.human_check, true);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.challenge_signals.captcha, true);
+  assert.equal(result.diagnostic.document_diagnostic.selector_substage, "instructions_panel");
+  assert.equal(result.diagnostic.document_diagnostic.playwright_root_count, 1);
+  assert.equal(result.diagnostic.document_diagnostic.playwright_root_visible, true);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.main_display_contents_count, 1);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.content_root_query_count, 1);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.visible_content_root_count, 0);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.instructions_center_hit_by_consent, true);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.instructions_center_hit_kind, "div");
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.instructions_center_hit_has_click_surface, false);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.instructions_center_hit_inside_content_root, false);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.consent_reject_only_count, 1);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.reject_only_locator_count, 0);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.reject_only_locator_visible, false);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.reject_only_locator_enabled, false);
+  assert.doesNotMatch(JSON.stringify(result), /secret|cookie=|hidden|must not be returned/i);
+});
+
+test("successful source diagnostics report public status without query leakage", async () => {
+  const result = await sourceProbe();
+  assert.equal(result.error, undefined);
+  assert.equal(result.diagnostic.navigation_status, 200);
+  assert.equal(result.diagnostic.selector_status, "matched");
+  assert.equal(result.diagnostic.parser_status, "parsed");
+  assert.doesNotMatch(JSON.stringify(result.diagnostic), /secret|hidden/i);
 });
 
 test("rejects another SKU and a missing product", () => {
@@ -129,6 +453,8 @@ test("workflow is manual-only, fixed-scope, default dry-run and branch/attempt g
   assert.match(workflow, /default: dry-run/);
   assert.match(workflow, /WRITE_ONLY_SHANGHAI_231215000/);
   assert.match(workflow, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /inputs\.mode == 'dry-run'/);
+  assert.match(workflow, /refs\/heads\/codex\/shanghai-source-diagnostic-20261012/);
   assert.match(workflow, /github\.run_attempt == 1/);
   assert.doesNotMatch(workflow.slice(workflow.indexOf("    inputs:"), workflow.indexOf("\n\npermissions:")), /sku:/i);
   assert.doesNotMatch(workflow, /SUPABASE_DB_PASSWORD|PLANNER_CACHE_ADMIN_TOKEN/);
