@@ -79,10 +79,17 @@ async function parseCurrentSource(browser, product) {
       const title = normalize(document.title);
       const challengeText = normalize((document.title ?? "") + " " + (document.body?.innerText ?? ""));
       const mains = [...document.querySelectorAll("main")];
+      const contentRoots = [...document.querySelectorAll("main:has(h1)")];
       return {
         ready_state: document.readyState,
         main_count: mains.length,
+        main_visible_count: mains.filter(visible).length,
+        main_zero_rect_count: mains.filter((main) => main.getClientRects().length === 0).length,
+        main_display_contents_count: mains.filter((main) => window.getComputedStyle(main).display === "contents").length,
         main_with_h1_count: mains.filter((main) => main.querySelector("h1")).length,
+        visible_main_with_h1_count: mains.filter((main) => main.querySelector("h1") && visible(main)).length,
+        content_root_query_count: contentRoots.length,
+        visible_content_root_count: contentRoots.filter(visible).length,
         h1_count: headings.length,
         visible_h1_count: headings.filter(visible).length,
         matching_product_h1_count: headings.filter((heading) => normalize(heading.innerText || heading.textContent) === product).length,
