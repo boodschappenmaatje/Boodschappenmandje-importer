@@ -78,8 +78,15 @@ function safeDocumentSnapshot(value) {
 function safeDocumentDiagnostic(value) {
   if (!value || typeof value !== "object") return null;
   const substages = ["content_root", "product_heading", "instructions_button", "instructions_click", "aria_controls", "instructions_panel"];
+  const count = (key) => Number.isInteger(value[key]) ? Math.max(0, Math.min(value[key], 99)) : 0;
   return {
     selector_substage: substages.includes(value.selector_substage) ? value.selector_substage : "unknown",
+    playwright_root_count: count("playwright_root_count"),
+    playwright_root_visible: value.playwright_root_visible === true,
+    heading_locator_count: count("heading_locator_count"),
+    heading_locator_visible: value.heading_locator_visible === true,
+    instructions_locator_count: count("instructions_locator_count"),
+    instructions_locator_visible: value.instructions_locator_visible === true,
     at_domcontentloaded: safeDocumentSnapshot(value.at_domcontentloaded),
     after_wait: safeDocumentSnapshot(value.after_wait),
   };
