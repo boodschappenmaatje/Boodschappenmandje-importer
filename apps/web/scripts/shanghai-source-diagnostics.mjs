@@ -87,7 +87,7 @@ function safeDocumentSnapshot(value) {
 
 function safeDocumentDiagnostic(value) {
   if (!value || typeof value !== "object") return null;
-  const substages = ["content_root", "product_heading", "instructions_button", "instructions_click", "aria_controls", "instructions_panel"];
+  const substages = ["content_root", "product_heading", "instructions_button", "optional_consent", "instructions_click", "aria_controls", "instructions_panel"];
   const count = (key) => Number.isInteger(value[key]) ? Math.max(0, Math.min(value[key], 99)) : 0;
   return {
     selector_substage: substages.includes(value.selector_substage) ? value.selector_substage : "unknown",
