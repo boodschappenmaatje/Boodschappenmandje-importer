@@ -2,10 +2,10 @@ export const SHANGHAI_CONTENT_ROOT = "main:has(h1)";
 
 export function shanghaiOilMeasurementCount(text) {
   if (typeof text !== "string") return 0;
-  const start = text.search(/\\bZo maak\\b/i);
+  const start = text.search(/\bZo maak\b/i);
   if (start < 0) return 0;
   const preparation = text.slice(start).split(/Netto-inhoud/i)[0];
-  return [...preparation.matchAll(/\\b\\d+(?:[.,]\\d+)?\\s*(?:el|eetl\\.?|eetlepels?)\\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\\b/gi)].length;
+  return [...preparation.matchAll(/\b\d+(?:[.,]\d+)?\s*(?:el|eetl\.?|eetlepels?)\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\b/gi)].length;
 }
 
 export function safeShanghaiSourceFacts(text) {
