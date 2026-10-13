@@ -1,3 +1,11 @@
+# Checkpoint — Shanghai shared-match-refresh uitgevoerd en geverifieerd — 13 oktober 2026
+
+- PR **#94** is gemerged in `main` met mergecommit **`3e6e3f05c7a8c163a7f3c4ca8868526640f2145e`**. De gedeelde Shanghai-refresh is vervolgens via de daarvoor gemaakte one-time GitHub Actions-workflow exact één keer uitgevoerd: run **38452228028**.
+- De workflow deed een verse dry-run en valideerde de volledige scope en CAS-revisions vóór de write. De transactionele commit rapporteerde exact **2 matchupdates**, **200 readinessupdates** en **0 effecten buiten scope**. De daaropvolgende verifier bevestigde exact **20 recepten**, **2 matchkeys**, **200 subscribers**, alle readinessrijen current, **0 invalidated** en **200 payloads gevalideerd**.
+- Scope was uitsluitend de olie- en ui-matchkeys van de bewezen Shanghai shared-scope en hun volledige gedeelde subscriber-set. Geen derde matchkey of 21e recept viel binnen de scope. De plan-token is niet gelogd of getoond. Er is geen tweede write-run gestart.
+- De refresh gebruikte de transactionele gedeelde-refresh-RPC die door PR #92/migratie `secure_shared_match_readiness` is voorbereid; PR #94 voegde de afzonderlijke Shanghai one-time runner/workflow toe en liet het bestaande legacy one-shot-pad ongewijzigd. De migratie is al in Production geregistreerd als **`20261013162855`**.
+- **Roadmap 1B Shanghai shared-match-blocker: afgerond.** Production-write: uitgevoerd en geverifieerd binnen de begrensde scope (2 matchrecords + 200 readinessrecords). De enige volgende stap is regulier vervolgwerk uit Roadmap 1B; geen verdere Shanghai-refresh is nodig op basis van deze run.
+
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
 - Na expliciete toestemming is PR #93 gemerged op `main` (`1308ba5364921597939d5f20e31d372c84feed51`). Shanghai dry-run run **38449274591** slaagde; de runner accepteerde exact 20 recepten, 2 matchkeys en 200 subscribers. De voorafgaande dispatch **38443749835** startte geen job door GitHub billing en deed geen Production-request.
