@@ -12,7 +12,7 @@ import {
 import { loadCatalog, PLANNER_MAINTENANCE_PEOPLE_COUNTS, rowsForGate } from "@/server/planner-cache-service";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MAX_RECIPES = 10;
+const MAX_RECIPES = 20;
 const MAX_KEYS = 10;
 const MAX_SUBSCRIBERS = 1000;
 
@@ -122,6 +122,10 @@ export function buildBoundedRefreshPlan(
   }
   if (observedKeys.size !== allowedKeys.size) reason ??= "unknown_match_key";
   if (subscribers.length >= MAX_SUBSCRIBERS) reason ??= "subscriber_scope_too_large";
+  const targetSubscribers = subscribers.filter((subscriber) =>
+    subscriber.dependency_match_keys.some((key) => allowedKeys.has(key)),
+  );
+  const subscriberRecipeIds = [...new Set(targetSubscribers.map((row) => row.recipe_id))].sort();
   for (const subscriber of subscribers) {
     if (subscriber.dependency_match_keys.some((key) => allowedKeys.has(key)) &&
         (!allowedRecipes.has(subscriber.recipe_id) ||
@@ -130,6 +134,16 @@ export function buildBoundedRefreshPlan(
     }
   }
   if (unexpected.size) reason ??= "dependency_outside_allowlist";
+  if (subscriberRecipeIds.join("|") !== requestedRecipeIds.join("|")) reason ??= "subscriber_scope_mismatch";
+  for (const recipeId of requestedRecipeIds) {
+    const peopleCounts = targetSubscribers.filter((row) => row.recipe_id === recipeId)
+      .map((row) => row.people_count);
+    if (peopleCounts.length !== PLANNER_MAINTENANCE_PEOPLE_COUNTS.length ||
+        new Set(peopleCounts).size !== PLANNER_MAINTENANCE_PEOPLE_COUNTS.length ||
+        peopleCounts.some((people) => !PLANNER_MAINTENANCE_PEOPLE_COUNTS.includes(people as 1))) {
+      reason ??= "incomplete_subscriber_scope";
+    }
+  }
   const blocked = reason !== null;
   const scope = subscribers.map(({ recipe_id, people_count, updated_at, dependency_match_keys }) =>
     [recipe_id, people_count, updated_at, dependency_match_keys.toSorted()],

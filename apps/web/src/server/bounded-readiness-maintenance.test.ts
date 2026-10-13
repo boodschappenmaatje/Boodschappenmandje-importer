@@ -14,6 +14,29 @@ const matchKeys = [
 ];
 const unrelated = "meal-mix-ingredient:mix-supplement-broccoli:g:ingredient:generic";
 const input = { recipeIds, matchKeys };
+const sharedRecipeIds = Array.from({ length: 20 }, (_, index) =>
+  `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`);
+const sharedMatchKeys = [
+  "meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic",
+];
+const sharedAssignments = sharedRecipeIds.map((_, index) =>
+  index < 11 ? [sharedMatchKeys[0]] : index < 16 ? sharedMatchKeys : [sharedMatchKeys[1]],
+);
+const sharedUnrelated = "meal-mix-ingredient:mix-supplement-zout:g:ingredient:generic";
+const sharedKeysByPeople = (indices: number[]) => new Map(Array.from({ length: 10 }, (_, index) =>
+  [index + 1, new Map(indices.map((recipeIndex) => [
+    sharedRecipeIds[recipeIndex], [...sharedAssignments[recipeIndex], sharedUnrelated],
+  ]))],
+));
+const sharedSubscribers = (indices: number[]) => Array.from({ length: 10 }, (_, index) =>
+  indices.map((recipeIndex) => ({
+    recipe_id: sharedRecipeIds[recipeIndex],
+    people_count: index + 1,
+    updated_at: "2026-10-02T10:00:00.000Z",
+    dependency_match_keys: [...sharedAssignments[recipeIndex], sharedUnrelated],
+  })),
+).flat();
 const keysByPeople = () => new Map(Array.from({ length: 10 }, (_, index) =>
   [index + 1, new Map(recipeIds.map((id, recipeIndex) =>
     [id, [matchKeys[recipeIndex % 3], unrelated]],
@@ -76,7 +99,8 @@ describe("begrensde readiness maintenance", () => {
     expect(parseBoundedRefreshInput({ recipeIds: [], matchKeys })).toBeNull();
     expect(parseBoundedRefreshInput({ recipeIds, matchKeys: [] })).toBeNull();
     expect(parseBoundedRefreshInput({ recipeIds: [...recipeIds, recipeIds[0]], matchKeys })).toBeNull();
-    expect(parseBoundedRefreshInput({ recipeIds: Array.from({ length: 11 }, (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`), matchKeys })).toBeNull();
+    expect(parseBoundedRefreshInput({ recipeIds: Array.from({ length: 21 }, (_, i) => `00000000-0000-4000-8000-${String(i + 1).padStart(12, "0")}`), matchKeys })).toBeNull();
+    expect(parseBoundedRefreshInput({ recipeIds: sharedRecipeIds, matchKeys: sharedMatchKeys })?.recipeIds).toEqual([...sharedRecipeIds].sort());
     expect(parseBoundedRefreshInput({ recipeIds, matchKeys, expectedPlanToken: "bad" })).toBeNull();
     expect(parseBoundedRefreshInput(input)).toEqual({ recipeIds: [...recipeIds].sort(), matchKeys: [...matchKeys].sort(), expectedPlanToken: undefined });
   });
@@ -85,5 +109,65 @@ describe("begrensde readiness maintenance", () => {
     const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     expect(parseBoundedRefreshInput({ recipeIds: [id.toUpperCase()], matchKeys })?.recipeIds).toEqual([id]);
     expect(parseBoundedRefreshInput({ recipeIds: [id, id.toUpperCase()], matchKeys })).toBeNull();
+  });
+
+  it("houdt één matchkey met acht subscribers binnen de volledige 1–10 scope", () => {
+    const indices = Array.from({ length: 8 }, (_, index) => index);
+    const plan = buildBoundedRefreshPlan({
+      recipeIds: indices.map((index) => sharedRecipeIds[index]), matchKeys: [sharedMatchKeys[0]],
+    }, sharedKeysByPeople(indices), sharedSubscribers(indices), indices.map((index) => sharedRecipeIds[index]));
+    expect(plan).toMatchObject({ blocked: false, plannedMatchWrites: 1, plannedReadinessWrites: 80 });
+  });
+
+  it("plant één gedeelde matchkey voor alle zestien subscribers boven de oude limiet", () => {
+    const indices = Array.from({ length: 16 }, (_, index) => index);
+    const rows = sharedSubscribers(indices).filter((row) =>
+      row.dependency_match_keys.includes(sharedMatchKeys[0]),
+    );
+    const plan = buildBoundedRefreshPlan({
+      recipeIds: indices.map((index) => sharedRecipeIds[index]), matchKeys: [sharedMatchKeys[0]],
+    }, sharedKeysByPeople(indices), rows, indices.map((index) => sharedRecipeIds[index]));
+    expect(plan).toMatchObject({ blocked: false, plannedMatchWrites: 1, plannedReadinessWrites: 160 });
+  });
+
+  it("dedupliceert 16 olie- plus 9 ui-recepten met vijf overlaps tot exact twintig", () => {
+    const indices = Array.from({ length: 20 }, (_, index) => index);
+    const plan = buildBoundedRefreshPlan({
+      recipeIds: sharedRecipeIds, matchKeys: sharedMatchKeys,
+    }, sharedKeysByPeople(indices), sharedSubscribers(indices), sharedRecipeIds);
+    expect(plan).toMatchObject({
+      blocked: false, requestedRecipeIds: sharedRecipeIds, resolvedRecipeIds: sharedRecipeIds,
+      requestedMatchKeys: [...sharedMatchKeys].sort(), plannedMatchWrites: 2,
+      plannedReadinessWrites: 200, unexpectedDependencies: [],
+    });
+    expect(plan).toHaveProperty("planToken", expect.stringMatching(/^[a-f0-9]{64}$/));
+  });
+
+  it("faalt gesloten bij een ontbrekende subscriber, een extra recipe_id en een gewijzigde subscriberset", () => {
+    const indices = Array.from({ length: 16 }, (_, index) => index);
+    const requestedIds = indices.map((index) => sharedRecipeIds[index]);
+    const matchKey = sharedMatchKeys[0];
+    const completeRows = sharedSubscribers(indices).filter((row) => row.dependency_match_keys.includes(matchKey));
+    const missingRows = completeRows.filter((row) => row.recipe_id !== requestedIds[15]);
+    const missing = buildBoundedRefreshPlan({ recipeIds: requestedIds, matchKeys: [matchKey] },
+      sharedKeysByPeople(indices), missingRows, requestedIds);
+    expect(missing).toMatchObject({ blocked: true, reason: "subscriber_scope_mismatch", plannedMatchWrites: 0, plannedReadinessWrites: 0 });
+
+    const extraId = "10000000-0000-4000-8000-000000000021";
+    const extraRequestIds = [...requestedIds, extraId];
+    const extraMaps = sharedKeysByPeople(indices);
+    for (const people of Array.from({ length: 10 }, (_, index) => index + 1)) {
+      extraMaps.get(people)?.set(extraId, [matchKey, sharedUnrelated]);
+    }
+    const extra = buildBoundedRefreshPlan({ recipeIds: extraRequestIds, matchKeys: [matchKey] },
+      extraMaps, completeRows, extraRequestIds);
+    expect(extra).toMatchObject({ blocked: true, reason: "subscriber_scope_mismatch", plannedMatchWrites: 0, plannedReadinessWrites: 0 });
+
+    const changedRows = [...completeRows, {
+      ...completeRows[0], recipe_id: sharedRecipeIds[16], dependency_match_keys: [matchKey],
+    }];
+    const changed = buildBoundedRefreshPlan({ recipeIds: requestedIds, matchKeys: [matchKey] },
+      sharedKeysByPeople(indices), changedRows, requestedIds);
+    expect(changed).toMatchObject({ blocked: true, reason: "dependency_outside_allowlist", plannedMatchWrites: 0, plannedReadinessWrites: 0 });
   });
 });
