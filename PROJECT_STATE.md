@@ -1,3 +1,16 @@
+# Checkpoint — PR #90 gemerged; Shanghai bounded write veilig geblokkeerd — 13 oktober 2026
+
+- PR #90 is gemerged en gesloten. Actuele remote `main` is exact **`955186670a63f161c3a94fc966ef61bcf60f88e9`**, de geteste PR-head was `dacbfecd52e9d617e08c1083ad94047617781f60`. De acht codebestanden zijn inhoudelijk gelijk aan de geteste PR-head. CI #542 en de Vercel status-check op de mergecommit zijn groen.
+- Bestaande workflow-runs voor **Shanghai one-SKU writepad** gecontroleerd: #1 op main (vóór merge) was `dry-run`, geblokkeerd met lege bevestiging en nul writes; #27–#30 waren bounded dry-runs op de PR-branch; #29 en #30 rapporteerden `safe_to_write=true`. Na merge bestond nog geen write-run. Daarom is exact één write-dispatch gestart.
+- Production deployment voor mergecommit `9551866` staat in Vercel op **READY**, target `production`: deployment `dpl_3tjzbdsZVHpqEbo8Piiu534qXuur`. Dit bevestigt de code-deployment, niet de Shanghai-datawrite.
+- De enige post-merge write-run is **#31**, Actions run `38411445134`, job `115344547664`, branch/ref `main`, commit `955186670a63f161c3a94fc966ef61bcf60f88e9`, attempt 1, mode `write`, exacte bevestiging `WRITE_ONLY_SHANGHAI_231215000`. De volledige joblog is gecontroleerd.
+- Run #31 bereikte de bestaande fail-closed preflight. SKU/productidentiteit, source fetch (HTTP 200, juiste finale Shanghai-URL), parser/source verification en recipe projection slaagden. De bron leverde de zeven verwachte aanvullingen en hoeveelheden. De preflight-blokkade is **`supplement_match_not_current`**. Het rapport toont geen veldniveau per match, dus de exacte verouderde currentness-conditie is nog niet bewezen.
+- De gate rapporteerde `safe_to_write=false`, `blocked=true`, nul geplande records en nul write-operaties. **Er zijn geen Production-records gewijzigd; Production-write: niet uitgevoerd.** Een tweede write-run is niet gestart. Er zijn daarom geen post-write verificatie en geen post-write smoke test uitgevoerd. Er is geen bewijs van onverwachte writes.
+- **Roadmap 1B blijft open**; `ROADMAP.md` is niet als afgerond gemarkeerd. De huidige Production-deployment draait de gemergede code, maar de Shanghai-dataflow is niet compleet.
+- **Volgende stap:** eerst de precieze oorzaak achter `supplement_match_not_current` vaststellen met een geautoriseerde, strikt read-only diagnose die binnen het bestaande veilige pad blijft. Daarna is een expliciete keuze nodig voor een eventuele nieuwe bounded write-dispatch; deze checkpoint-run #31 heeft veilig nul writes verricht en mag niet als succesvolle write worden aangemerkt.
+
+---
+
 # Checkpoint — Shanghai safe_to_write PASS, write-volgorde geblokkeerd, 13 oktober 2026
 
 - Branch `codex/shanghai-source-diagnostic-20261012`, Draft PR #90 open en mergeable. Remote main `46cd27f21e130c2dede46805eec65db08e10f42e`; geteste PR-head vóór deze documentatiecommit `8d74a3b27ed1c3394a457e83523fb012ea93b8e8`.
