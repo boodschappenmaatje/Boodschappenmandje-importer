@@ -104,6 +104,21 @@ test("parses the exact comma-separated Knorr Chinese Beef Shanghai source and to
   assert.equal(parseMealMixSource(otherSku).reason, "supplement_ambiguous:225 g mager rundergehakt 250 g champignons 125 g tauge 3 bosuien 1 ui 1 prei olie");
 });
 
+test("accepts only the exact SKU-specific Shanghai Hoogvliet redirect route", () => {
+  const snapshot = JSON.parse(readFileSync(new URL('./fixtures/knorr-chinese-beef-shanghai-source.json', import.meta.url)));
+  const finalUrl = "https://hoogvliet.nl/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai-231215000";
+  const redirected = parseMealMixSource({ ...snapshot, sourceUrl: finalUrl });
+  assert.equal(redirected.status, "verified", redirected.reason);
+  assert.equal(redirected.profile.sourceUrl, finalUrl);
+
+  const otherSku = { ...snapshot, sourceUrl: finalUrl, product: { ...snapshot.product, sku: "231215001" } };
+  assert.equal(parseMealMixSource(otherSku).reason, "source_identity_mismatch");
+  assert.equal(parseMealMixSource({ ...snapshot, sourceUrl: finalUrl.replace("hoogvliet.nl", "www.hoogvliet.nl") }).reason,
+    "source_identity_mismatch");
+  assert.equal(parseMealMixSource({ ...snapshot, sourceUrl: finalUrl.replace("-231215000", "-231215001") }).reason,
+    "source_identity_mismatch");
+});
+
 test("never borrows serving counts or ingredients from a similar branded variant", () => {
   const existing = { productName: "Knorr Wereldgerechten Lasagne", productAliases: ["Knorr Lasagne"], brand: "Knorr", verificationStatus: "verified", servingsPerPackage: 3 };
   assert.equal(matchingExistingMixProfile({ ...product, name: "Knorr Maaltijdmix lasagne" }, [existing]), null);
