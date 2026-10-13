@@ -100,7 +100,12 @@ test("parses the exact comma-separated Knorr Chinese Beef Shanghai source and to
     ["prei", 1, "piece"],
     ["olie", 30, "ml"],
   ]);
-  const otherSku = { ...snapshot, product: { ...snapshot.product, sku: "231215001" } };
+  const expandedPage = { ...snapshot, text: `Nog zelf toevoegen: 350 g rundergehakt, 1 prei, 100 g taugé, olie\nGebruiksaanwijzing ${snapshot.text}` };
+  const fromExpandedPage = parseMealMixSource(expandedPage);
+  assert.equal(fromExpandedPage.status, "verified", fromExpandedPage.reason);
+  assert.deepEqual(fromExpandedPage.profile.supplements.map(({ name, quantity, unit }) => [name, quantity, unit]),
+    parsed.profile.supplements.map(({ name, quantity, unit }) => [name, quantity, unit]));
+    const otherSku = { ...snapshot, product: { ...snapshot.product, sku: "231215001" } };
   assert.equal(parseMealMixSource(otherSku).reason, "supplement_ambiguous:225 g mager rundergehakt 250 g champignons 125 g tauge 3 bosuien 1 ui 1 prei olie");
 });
 

@@ -115,13 +115,17 @@ export function parseMealMixSource(source: MealMixSource, existingProfiles: read
   servings.splice(0, servings.length, ...new Set(servings));
   if (!servings.length && existing?.verificationStatus === "verified") servings.push(existing.servingsPerPackage);
   if (servings.length !== 1 || servings[0] < 1 || servings[0] > 12) return fail(servings.length > 1 ? "servings_conflict" : "package_servings_missing");
-  const start = /(?:Zelf toevoegen|Boodschappenlijstje)\s*:?\s*/i.exec(text);
+  const isChineseBeefShanghai = source.product.sku === SHANGHAI_SKU;
+  // Shanghai pages also show a product-description "Nog zelf toevoegen" list.
+  // Parse only the explicit instruction-panel shopping-list label for this SKU.
+  const start = isChineseBeefShanghai
+    ? /Boodschappenlijstje\s*:?\s*/i.exec(text)
+    : /(?:Zelf toevoegen|Boodschappenlijstje)\s*:?\s*/i.exec(text);
   if (!start) return fail("supplement_list_missing");
   const after = text.slice(start.index + start[0].length);
   const end = /(?:Variatie\s*tip|Dagje zonder|Algemene bereidingswijze|Bereidingstijd|Voorbereiding|Zo maak|Netto-inhoud|\n1[. )]\s*(?:Kook|Verwarm|Verhit|Snij|Breng|Strooi)\b)/i.exec(after);
   if (!end) return fail("supplement_list_boundary_missing");
   const list = after.slice(0, end.index).trim();
-  const isChineseBeefShanghai = source.product.sku === "231215000";
   const rowList = isChineseBeefShanghai
     ? list.replace(/,\s*(?=(?:\d+(?:[.,]\d+)?\s+(?:g\b|gram\b|kg\b|ml\b|el\b|eetl\.?|eetlepels?\b|bosui(?:en)?\b|ui(?:en)?\b|prei\b)|olie\b))/gi, "\n")
       .replace(/\bbosuien\b/gi, "bosui")
