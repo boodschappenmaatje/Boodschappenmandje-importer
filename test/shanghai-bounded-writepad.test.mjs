@@ -11,6 +11,7 @@ import {
   buildShanghaiWriteSummary,
   runShanghaiCommit,
   safeReadinessMatchChange,
+  safeToWriteShanghaiPlan,
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
   validateShanghaiReadinessResolution,
@@ -47,6 +48,16 @@ const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatj
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
+
+test("Shanghai safe_to_write requires a complete bounded plan and zero blockers", () => {
+  const plan = buildShanghaiWriteSummary(["meal-mix-ingredient:catalog-mix-product-231215000:piece:mealMix:Knorr"]);
+  assert.equal(safeToWriteShanghaiPlan([], plan), true);
+  assert.equal(safeToWriteShanghaiPlan(["source_not_verified"], plan), false);
+  assert.equal(safeToWriteShanghaiPlan([], null), false);
+  assert.equal(safeToWriteShanghaiPlan([], { ...plan, matchKeys: [] }), false);
+  assert.equal(safeToWriteShanghaiPlan([], { ...plan, uniqueRecords: { ...plan.uniqueRecords, total: 14 } }), false);
+  assert.ok(runner.includes("safe_to_write: safeToWriteShanghaiPlan(blockers, planned)"));
+});
 
 test("Shanghai projects the prospective recipe through current persistent matches and fails closed on unavailable cache", () => {
   const resolved = { cacheAvailable: true, persistentHitCount: 0, fallbackCount: 1,
