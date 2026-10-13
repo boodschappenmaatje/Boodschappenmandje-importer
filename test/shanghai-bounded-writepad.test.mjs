@@ -19,6 +19,8 @@ import {
   dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
   safeShanghaiParserReason,
+  safeShanghaiSourceFacts,
+  shanghaiOilMeasurementCount,
   validateShanghaiContentRoot,
 } from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
 
@@ -56,6 +58,19 @@ test("Shanghai parser diagnostics expose bounded reason and allowlisted item onl
   });
   assert.equal(safeShanghaiParserReason("secret token=hidden"), null);
   assert.equal(safeShanghaiParserReason(undefined), null);
+});
+
+test("Shanghai source read waits for both explicit preparation oil quantities without logging text", () => {
+  const complete = "Boodschappenlijstje: Olie. Zo maak je 't: Verhit 1 el olie. Verhit nog 1 el olie.";
+  const incomplete = "Boodschappenlijstje: Olie. Zo maak je 't: Verhit tot gaar.";
+  assert.equal(shanghaiOilMeasurementCount(complete), 2);
+  assert.equal(shanghaiOilMeasurementCount(incomplete), 0);
+  assert.deepEqual(safeShanghaiSourceFacts(complete), { instruction_oil_measurement_count: 2 });
+  assert.doesNotMatch(JSON.stringify(safeShanghaiSourceFacts(complete)), /Verhit|olie/i);
+  assert.match(runner, /selectorSubstage = "instructions_content"/);
+  assert.match(runner, /await page\.waitForFunction\(/);
+  assert.match(runner, /oilMeasurementsBeforeWait/);
+  assert.match(runner, /oilMeasurementsAfterWait/);
 });
 
 test("runner imports the Shanghai product name used by the normal source-read flow", () => {
