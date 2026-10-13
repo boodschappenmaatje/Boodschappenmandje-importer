@@ -83,6 +83,10 @@ async function parseCurrentSource(browser, product) {
       const namesInstructions = buttons.filter((button) => buttonText(button) === "gebruiksaanwijzing");
       const contentRoots = [...document.querySelectorAll("main:has(h1)")];
       const controlledPanels = namesInstructions.map((button) => document.getElementById(button.getAttribute("aria-controls") || "")).filter(Boolean);
+      const controlledPanelText = controlledPanels[0]?.textContent ?? "";
+      const instructionPreparationStart = controlledPanelText.search(/\bZo maak\b/i);
+      const instructionPreparationText = instructionPreparationStart >= 0 ? controlledPanelText.slice(instructionPreparationStart) : "";
+      const instructionOilMeasurementCount = [...instructionPreparationText.matchAll(/\b\d+(?:[.,]\d+)?\s*(?:el|eetl\.?|eetlepels?)\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\b/gi)].length;
       const consent = buttons.filter((button) => /cookie|consent|accepteren|toestaan|weigeren|afwijzen|reject/.test(buttonText(button)));
       const visibleConsent = consent.filter(visible);
       const rejectOnlyConsent = visibleConsent.filter((button) => /alleen noodzakelijke|only necessary|reject optional|weigeren|afwijzen/.test(buttonText(button)));
@@ -131,7 +135,7 @@ async function parseCurrentSource(browser, product) {
         instructions_aria_controls_count: namesInstructions.filter((button) => Boolean(button.getAttribute("aria-controls"))).length,
         controlled_panel_present_count: controlledPanels.length,
         visible_controlled_panel_count: controlledPanels.filter(visible).length,
-        instruction_oil_measurement_count: shanghaiOilMeasurementCount(controlledPanels[0]?.textContent ?? ""),
+        instruction_oil_measurement_count: instructionOilMeasurementCount,
         panel_within_content_root_count: controlledPanels.filter((panel) => contentRoots.some((root) => root.contains(panel))).length,
         consent_control_count: consent.length,
         consent_control_visible_count: visibleConsent.length,
