@@ -31,6 +31,33 @@ function isTimeout(error) {
   return /timeout/i.test(typeof error?.name === "string" ? error.name : "");
 }
 
+function safeDocumentDiagnostic(value) {
+  if (!value || typeof value !== "object") return null;
+  const count = (key) => Number.isInteger(value[key]) ? Math.max(0, Math.min(value[key], 99)) : 0;
+  return {
+    ready_state: ["loading", "interactive", "complete"].includes(value.ready_state) ? value.ready_state : "unknown",
+    main_count: count("main_count"),
+    main_with_h1_count: count("main_with_h1_count"),
+    h1_count: count("h1_count"),
+    visible_h1_count: count("visible_h1_count"),
+    matching_product_h1_count: count("matching_product_h1_count"),
+    title_matches_product: value.title_matches_product === true,
+    body_contains_product_name: value.body_contains_product_name === true,
+    has_package_marker: value.has_package_marker === true,
+    has_people_marker: value.has_people_marker === true,
+    has_shopping_list_marker: value.has_shopping_list_marker === true,
+    instructions_button_count: count("instructions_button_count"),
+    visible_instructions_button_count: count("visible_instructions_button_count"),
+    consent_control_count: count("consent_control_count"),
+    challenge_signals: {
+      cloudflare: value.challenge_signals?.cloudflare === true,
+      human_check: value.challenge_signals?.human_check === true,
+      access_denied: value.challenge_signals?.access_denied === true,
+      captcha: value.challenge_signals?.captcha === true,
+    },
+  };
+}
+
 export function validateShanghaiContentRoot(source) {
   if (source?.title !== SHANGHAI_PRODUCT_NAME || typeof source?.text !== "string" ||
       SHANGHAI_SOURCE_MARKERS.some((marker) => !source.text.includes(marker))) {
@@ -45,6 +72,7 @@ export async function inspectShanghaiSource({
   waitForSelector,
   readSource,
   parseSource,
+  diagnose,
   selector = SHANGHAI_CONTENT_ROOT,
 }) {
   let stage = "navigation";
@@ -88,6 +116,10 @@ export async function inspectShanghaiSource({
     };
   } catch (error) {
     await currentUrl();
+    let documentDiagnostic = null;
+    if (stage === "selector" && typeof diagnose === "function") {
+      try { documentDiagnostic = safeDocumentDiagnostic(await diagnose()); } catch { /* keep the original failure */ }
+    }
     return {
       error: "source_unavailable",
       diagnostic: {
@@ -100,6 +132,7 @@ export async function inspectShanghaiSource({
         selector_status: rootFound ? "matched" : stage === "selector" ? "failed" : "not_reached",
         parser_status: stage === "parser" ? "failed" : "not_reached",
         timeout: isTimeout(error),
+        ...(documentDiagnostic ? { document_diagnostic: documentDiagnostic } : {}),
       },
     };
   }
