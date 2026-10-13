@@ -13,10 +13,16 @@ const sql = (query) => docker(args, { input: query, stdio: ["pipe", "pipe", "pip
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const json = (value) => `${quote(JSON.stringify(value))}::jsonb`;
 const array = (values, type = "text") => `array[${values.map(quote).join(",")}]::${type}[]`;
-const ids = [1, 2, 3, 4].map(n => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`);
+const ids = Array.from({ length: 24 }, (_, index) => `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`);
 const keys = ["a", "b", "c", "d"].map(k => `${k}:g:ingredient:generic`);
+const sharedKeys = [
+  "meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic",
+];
+const sharedIds = ids.slice(4);
 const product = "10000000-0000-4000-8000-000000000001";
 let preservedExistingData = false;
+let sharedDependencies = new Map();
 
 function matchRow(key) {
   return { match_key: key, ingredient_id: null, ingredient_source_key: key[0], requirement_unit: "g",
@@ -25,10 +31,11 @@ function matchRow(key) {
     invalidated_at: null, invalidation_reason: null, product_updated_at: null, price_updated_at: null,
     matched_at: "2026-10-02T12:00:00Z", checked_at: "2026-10-02T12:00:00Z" };
 }
-function readinessRow(id, key, people = 1) {
+function readinessRow(id, dependencyKeys, people = 1) {
+  const dependencies = Array.isArray(dependencyKeys) ? dependencyKeys : [dependencyKeys];
   return { recipe_id: id, people_count: people, readiness_status: "READY", required_ingredient_count: 1,
     ready_required_ingredient_count: 1, problem_count: 0, readiness_payload: { recipeId: id, ready: true },
-    dependency_match_keys: [key], evaluator_version: 5, refresh_status: "current", invalidated_at: null,
+    dependency_match_keys: dependencies, evaluator_version: 5, refresh_status: "current", invalidated_at: null,
     invalidation_reason: null, evaluated_at: "2026-10-02T12:00:00Z", expires_at: "2026-10-03T12:00:00Z" };
 }
 function plan(indices = [0], dependencyKeys = indices.map(i => keys[i])) {
@@ -44,6 +51,29 @@ function call(p) {
 function insertReadiness(row) {
   const columns = Object.keys(row).join(",");
   return `insert into public.recipe_readiness_cache(${columns}) select ${columns} from jsonb_populate_record(null::public.recipe_readiness_cache, ${json(row)});`;
+}
+function configureSharedScope(entries) {
+  sharedDependencies = new Map(sharedIds.map(id => [id, []]));
+  for (const [key, recipeIds] of entries) {
+    for (const id of recipeIds) sharedDependencies.get(id)?.push(key);
+  }
+  const matchRows = [...new Set(entries.map(([key]) => key))].map(key => ({
+    ...matchRow(key), updated_at: "2026-10-02T12:00:00Z",
+  }));
+  const cases = sharedIds.map(id => `when ${quote(id)}::uuid then ${array(sharedDependencies.get(id) ?? [])}`).join(" ");
+  sql(`set role service_role;
+    insert into public.ingredient_product_matches select *
+      from jsonb_populate_recordset(null::public.ingredient_product_matches, ${json(matchRows)});
+    update public.recipe_readiness_cache set dependency_match_keys = case recipe_id ${cases} else array[]::text[] end
+      where recipe_id = any(${array(sharedIds, "uuid")});`);
+}
+function sharedPlan(recipeIds = sharedIds, matchKeys = sharedKeys) {
+  const dependencyKeys = [...new Set(recipeIds.flatMap(id => sharedDependencies.get(id) ?? []))].sort();
+  const result = JSON.parse(sql(`set role service_role; select public.bounded_readiness_plan(
+    ${array(recipeIds, "uuid")}, ${array(matchKeys)}, ${array(dependencyKeys)});`));
+  return { recipeIds, matchKeys, dependencyKeys, token: result.planToken,
+    matches: matchKeys.map(matchRow),
+    rows: recipeIds.flatMap(id => Array.from({ length: 10 }, (_, n) => readinessRow(id, sharedDependencies.get(id) ?? [], n + 1))) };
 }
 const commit = p => JSON.parse(sql(`set role service_role; ${call(p)}`));
 const state = () => JSON.parse(sql(`select jsonb_build_object(
@@ -107,6 +137,8 @@ before(async () => {
   const existing = sql("select to_jsonb(r) from public.recipe_readiness_cache r;");
   sql(readFileSync(new URL("../../supabase/migrations/20261002220202_transactional_bounded_readiness.sql", import.meta.url), "utf8"));
   assert.equal(sql("select to_jsonb(r) from public.recipe_readiness_cache r;"), existing);
+  sql(readFileSync(new URL("../../supabase/migrations/20261013153408_secure_shared_match_readiness.sql", import.meta.url), "utf8"));
+  assert.equal(sql("select to_jsonb(r) from public.recipe_readiness_cache r;"), existing);
   preservedExistingData = true;
 });
 after(() => { docker(["rm", "-f", container], { stdio: "ignore" }); });
@@ -123,7 +155,11 @@ beforeEach(() => {
       values ${keys.map(k => `(${quote(k)},${quote(k[0])},'g','ingredient','invalid','no_catalog_product',4)`).join(",")};
     insert into recipe_readiness_cache(recipe_id,people_count,readiness_status,required_ingredient_count,ready_required_ingredient_count,problem_count,readiness_payload,dependency_match_keys,evaluator_version,expires_at)
     select id,n,'NOT_READY',1,0,1,'{}',array[k],4,now()+interval '1 day'
-    from (values ${ids.map((id, i) => `(${quote(id)}::uuid,${quote(keys[i])})`).join(",")}) v(id,k) cross join generate_series(1,10) n;`);
+    from (values ${ids.slice(0, keys.length).map((id, i) => `(${quote(id)}::uuid,${quote(keys[i])})`).join(",")}) v(id,k) cross join generate_series(1,10) n;
+    insert into recipe_readiness_cache(recipe_id,people_count,readiness_status,required_ingredient_count,ready_required_ingredient_count,problem_count,readiness_payload,dependency_match_keys,evaluator_version,expires_at)
+    select id,n,'NOT_READY',1,0,1,'{}',array[]::text[],4,now()+interval '1 day'
+    from (values ${sharedIds.map(id => `(${quote(id)}::uuid)`).join(",")}) v(id) cross join generate_series(1,10) n;`);
+  sharedDependencies = new Map();
 });
 
 test("additive migration preserves existing readiness rows byte-for-byte", () => {
@@ -293,6 +329,95 @@ test("read-only dependency match changes also invalidate CAS", () => {
 test("payload scope and duplicate variants fail closed", () => {
   const p = plan(); p.rows[9] = p.rows[0]; rejectsUnchanged(p, /bounded_payload_scope_mismatch/);
   const outside = plan(); outside.matches[0].match_key = keys[1]; rejectsUnchanged(outside, /bounded_payload_scope_mismatch/);
+});
+
+test("one shared matchkey with eight subscribers keeps the normal small transaction", () => {
+  const recipients = sharedIds.slice(0, 8);
+  configureSharedScope([[sharedKeys[0], recipients]]);
+  const result = commit(sharedPlan(recipients, [sharedKeys[0]]));
+  assert.equal(result.matchWrites, 1);
+  assert.equal(result.readinessWrites, 80);
+});
+
+test("one shared matchkey refreshes all sixteen subscribers in one transaction", () => {
+  const recipients = sharedIds.slice(0, 16);
+  configureSharedScope([[sharedKeys[0], recipients]]);
+  const result = commit(sharedPlan(recipients, [sharedKeys[0]]));
+  assert.equal(result.matchWrites, 1);
+  assert.equal(result.readinessWrites, 160);
+  assert.equal(result.validatedScope.recipeIds.length, 16);
+});
+
+test("overlapping 16 oil and 9 ui subscribers refresh exactly 20 unique recipes and 200 rows", () => {
+  configureSharedScope([
+    [sharedKeys[0], sharedIds.slice(0, 16)],
+    [sharedKeys[1], sharedIds.slice(11, 20)],
+  ]);
+  const p = sharedPlan();
+  const result = commit(p);
+  assert.equal(result.matchWrites, 2);
+  assert.equal(result.readinessWrites, 200);
+  assert.equal(result.validatedScope.recipeIds.length, 20);
+  assert.equal(result.validatedScope.matchKeys.length, 2);
+  assert.equal(state().readiness.filter(row => sharedIds.includes(row.recipe_id) && row.refresh_status === "current" && row.readiness_status === "READY").length, 200);
+});
+
+test("a caller cannot omit one of the shared-key subscribers", () => {
+  configureSharedScope([
+    [sharedKeys[0], sharedIds.slice(0, 16)],
+    [sharedKeys[1], sharedIds.slice(11, 20)],
+  ]);
+  const missing = sharedPlan().recipeIds.slice(0, 19);
+  assert.throws(() => sql(`set role service_role; select public.bounded_readiness_plan(
+    ${array(missing, "uuid")}, ${array(sharedKeys)}, ${array(sharedKeys)});`), /bounded_outside_subscriber/);
+});
+
+test("a caller cannot add an unrelated recipe to a 19-subscriber shared scope", () => {
+  configureSharedScope([
+    [sharedKeys[0], sharedIds.slice(0, 15)],
+    [sharedKeys[1], sharedIds.slice(10, 19)],
+  ]);
+  const unauthorizedScope = [...sharedIds.slice(0, 19), sharedIds[19]];
+  assert.throws(() => sql(`set role service_role; select public.bounded_readiness_plan(
+    ${array(unauthorizedScope, "uuid")}, ${array(sharedKeys)}, ${array(sharedKeys)});`), /bounded_subscriber_set_mismatch/);
+});
+
+test("a changed shared subscriber set after planning fails closed before writes", () => {
+  configureSharedScope([
+    [sharedKeys[0], sharedIds.slice(0, 16)],
+    [sharedKeys[1], sharedIds.slice(11, 20)],
+  ]);
+  const p = sharedPlan();
+  sql(`set role service_role; update recipe_readiness_cache set dependency_match_keys=array[]::text[]
+    where recipe_id=${quote(sharedIds[19])}::uuid;`);
+  rejectsUnchanged(p, /bounded_subscriber_set_mismatch/);
+});
+
+test("a shared-match partial database error rolls back both matches, all readiness and revisions", () => {
+  configureSharedScope([
+    [sharedKeys[0], sharedIds.slice(0, 16)],
+    [sharedKeys[1], sharedIds.slice(11, 20)],
+  ]);
+  const p = sharedPlan();
+  sql(`create function test_injection() returns trigger language plpgsql as $$ begin
+    raise exception using errcode='XX000', message='injected_shared_after_match'; end $$;
+    create trigger zz_test_injection after update on ingredient_product_matches for each row execute function test_injection();`);
+  rejectsUnchanged(p, /XX000.*injected_shared_after_match/);
+});
+
+test("shared refresh changes only its two keys and the exact twenty subscribers", () => {
+  configureSharedScope([
+    [sharedKeys[0], sharedIds.slice(0, 16)],
+    [sharedKeys[1], sharedIds.slice(11, 20)],
+  ]);
+  const before = state();
+  const result = commit(sharedPlan());
+  const after = state();
+  assert.equal(result.outsideScopeEffects, 0);
+  assert.deepEqual(after.matches.filter(row => !sharedKeys.includes(row.match_key)),
+    before.matches.filter(row => !sharedKeys.includes(row.match_key)));
+  assert.deepEqual(after.readiness.filter(row => !sharedIds.includes(row.recipe_id)),
+    before.readiness.filter(row => !sharedIds.includes(row.recipe_id)));
 });
 test("RPC execute and revision writes are denied to public/browser roles", () => {
   const p = plan(); const before = state();

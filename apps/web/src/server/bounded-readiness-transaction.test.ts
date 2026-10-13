@@ -22,14 +22,33 @@ const input = { recipeIds: [recipeId], matchKeys: [key], expectedPlanToken: toke
 const result = { blocked: false, reason: null, matchWrites: 1, readinessWrites: 10, outsideScopeEffects: 0,
   finalPlanToken: "b".repeat(64), validatedScope: { recipeIds: input.recipeIds, matchKeys: input.matchKeys } };
 
-function client(commitError: { code: string; message: string } | null = null) {
-  const rpc = vi.fn(async (name: string) => {
+function client(
+  commitError: { code: string; message: string } | null = null,
+  scope = { recipeIds: [recipeId], matchKeys: [key] },
+) {
+  const subscriberRows = scope.recipeIds.flatMap((id) => Array.from({ length: 10 }, (_, index) => ({
+    recipe_id: id, people_count: index + 1, updated_at: "2026-10-02T10:00:00.000Z", dependency_match_keys: scope.matchKeys,
+  })));
+  const scopeResult = { ...result, matchWrites: scope.matchKeys.length,
+    readinessWrites: scope.recipeIds.length * 10, validatedScope: scope };
+  const resources = [
+    ...scope.matchKeys.map((matchKey) => [`k:${matchKey}`, "0"]),
+    ...scope.recipeIds.map((id) => [`r:${id}`, "0"]),
+  ];
+  const rpc = vi.fn(async (name: string, params?: unknown) => {
     if (name === "bounded_readiness_source_revision") return { data: "17", error: null };
-    if (name === "bounded_readiness_plan") return { data: { planToken: token, sourceRevision: "17", state: { resources: [[`k:${key}`, "0"], [`r:${recipeId}`, "0"]] } }, error: null };
-    if (name === "commit_bounded_readiness") return { data: commitError ? null : result, error: commitError };
+    if (name === "bounded_readiness_plan") return { data: { planToken: token, sourceRevision: "17", state: { resources } }, error: null };
+    if (name === "commit_bounded_readiness") {
+      const submitted = params as { p_recipe_ids: string[]; p_match_keys: string[]; p_readiness_rows: unknown[] };
+      return { data: commitError ? null : {
+        ...scopeResult, matchWrites: submitted.p_match_keys.length,
+        readinessWrites: submitted.p_readiness_rows.length,
+        validatedScope: { recipeIds: submitted.p_recipe_ids, matchKeys: submitted.p_match_keys },
+      }, error: commitError };
+    }
     throw new Error(`unexpected RPC ${name}`);
   });
-  const limit = vi.fn().mockResolvedValue({ data: [], error: null });
+  const limit = vi.fn().mockResolvedValue({ data: subscriberRows, error: null });
   const from = vi.fn(() => ({ select: () => ({ overlaps: () => ({ limit }) }) }));
   return { value: { rpc, from } as unknown as SupabaseClient, rpc, from };
 }
@@ -58,6 +77,35 @@ describe("bounded transaction integration", () => {
       p_readiness_rows: Array.from({ length: 10 }, (_, i) => expect.objectContaining({ recipe_id: recipeId, people_count: i + 1 })),
     }));
     expect(db.from).toHaveBeenCalledExactlyOnceWith("recipe_readiness_cache"); // subscriber SELECT only, no upsert API
+  });
+  it("evaluates and commits the exact shared 16+9 subscriber union as one 200-row RPC", async () => {
+    const recipeIds = Array.from({ length: 20 }, (_, index) =>
+      `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`);
+    const matchKeys = [
+      "meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic",
+      "meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic",
+    ];
+    const dependenciesByRecipe = new Map(recipeIds.map((id, index) => [
+      id, index < 11 ? [matchKeys[0]] : index < 16 ? matchKeys : [matchKeys[1]],
+    ]));
+    vi.mocked(loadCatalog).mockResolvedValue({ recipes: recipeIds.map((id) => ({ id })), ingredients: [], relations: [] } as unknown as Awaited<ReturnType<typeof loadCatalog>>);
+    vi.mocked(requirementKeysForRecipes).mockReturnValue(dependenciesByRecipe);
+    vi.mocked(rowsForGate).mockImplementation((_gate, people) => ({
+      matchRows: matchKeys.map((matchKey) => ({ match_key: matchKey, product_id: null, match_status: "invalid", failure_reason: "no_catalog_product" })),
+      readinessRows: recipeIds.map((id) => ({ recipe_id: id, people_count: people, dependency_match_keys: dependenciesByRecipe.get(id) })),
+    } as ReturnType<typeof rowsForGate>));
+    const db = client(null, { recipeIds, matchKeys });
+    const resultForSharedScope = await writeBoundedReadiness(db.value, {
+      recipeIds, matchKeys, expectedPlanToken: token,
+    });
+    expect(resultForSharedScope).toMatchObject({ blocked: false, matchWrites: 2, readinessWrites: 200, outsideScopeEffects: 0 });
+    expect(db.rpc).toHaveBeenLastCalledWith("commit_bounded_readiness", expect.objectContaining({
+      p_recipe_ids: recipeIds,
+      p_match_keys: matchKeys,
+      p_readiness_rows: expect.any(Array),
+    }));
+    const commitArgs = db.rpc.mock.calls.at(-1)?.[1] as unknown as { p_readiness_rows: unknown[] };
+    expect(commitArgs.p_readiness_rows).toHaveLength(200);
   });
   it.each(["bounded_stale_plan", "bounded_outside_subscriber", "bounded_outside_readiness_scope"])("surfaces %s as an atomic conflict", async (message) => {
     const db = client({ code: "P0001", message });
