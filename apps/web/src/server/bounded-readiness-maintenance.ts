@@ -45,6 +45,46 @@ const APPROVED_MATCH_KEYS = [
   "meal-mix-ingredient:mix-supplement-pitabroodjes:g:ingredient:generic",
   "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
 ].sort();
+const SHANGHAI_SHARED_RECIPE_IDS = [
+  "0dd9fbc7-6fa9-4b50-ab47-b1fa1e4cca8d",
+  "17966cab-93ca-4364-b99c-c6fe7aff36ac",
+  "189d9b3c-073a-43c7-8930-8191b22421bb",
+  "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+  "39189d5d-21c6-4d57-a462-f95b63c0dda5",
+  "3bbe1561-d757-422e-aded-3d802310805c",
+  "4f871e07-a684-4014-843a-f72a11b4c01d",
+  "5c655d2e-97f1-4d8c-8b97-10881e5589b0",
+  "672ea259-71bc-446f-881c-8e59cf675fe2",
+  "6a85d19f-5654-440b-b296-325c8f9fbd30",
+  "6bb5396c-ee59-46bd-bb75-12f68c142fc2",
+  "7ba39ebe-a057-4044-a47b-f9e79e2ef52f",
+  "8f8c6883-2a58-4671-b5c4-13cd588d72ba",
+  "ac562f36-fa92-4540-9e2d-4e073ca6b989",
+  "af9c3407-a24d-4142-b8b6-cc18bc63defd",
+  "bd423b61-4eb8-458e-8d32-bb64a9b38bda",
+  "c4ace2a9-237b-4884-93d4-12fdc066274b",
+  "c6903433-cfd0-4c97-ae1f-350f1625636b",
+  "de621d70-dab9-4ad0-9747-43605a34af2a",
+  "e33fcd95-34c9-471d-befe-76095b9d96e9",
+].sort();
+const SHANGHAI_SHARED_MATCH_KEYS = [
+  "meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic",
+].sort();
+
+function exactScope(actual: string[], expected: string[]): boolean {
+  return JSON.stringify([...actual].sort()) === JSON.stringify(expected);
+}
+
+export function boundedVerificationScope(input: BoundedRefreshInput) {
+  if (exactScope(input.recipeIds, APPROVED_RECIPE_IDS) && exactScope(input.matchKeys, APPROVED_MATCH_KEYS)) {
+    return { recipeIds: APPROVED_RECIPE_IDS, matchKeys: APPROVED_MATCH_KEYS };
+  }
+  if (exactScope(input.recipeIds, SHANGHAI_SHARED_RECIPE_IDS) && exactScope(input.matchKeys, SHANGHAI_SHARED_MATCH_KEYS)) {
+    return { recipeIds: SHANGHAI_SHARED_RECIPE_IDS, matchKeys: SHANGHAI_SHARED_MATCH_KEYS };
+  }
+  return null;
+}
 
 export function isBoundedDatabaseConflict(error: { code?: string; message?: string }): boolean {
   return ["40001", "40P01", "55P03"].includes(error.code ?? "") ||
@@ -287,22 +327,23 @@ export async function writeBoundedReadiness(client: SupabaseClient, input: Bound
 
 /** Read-only post-commit verification for the fixed, approved one-time scope. */
 export async function verifyBoundedReadiness(client: SupabaseClient, input: BoundedRefreshInput, now = new Date()) {
-  if (JSON.stringify([...input.recipeIds].sort()) !== JSON.stringify(APPROVED_RECIPE_IDS) ||
-      JSON.stringify([...input.matchKeys].sort()) !== JSON.stringify(APPROVED_MATCH_KEYS)) {
-    throw new Error("bounded_verification_scope_invalid");
-  }
+  const scope = boundedVerificationScope(input);
+  if (!scope) throw new Error("bounded_verification_scope_invalid");
+  const { recipeIds, matchKeys } = scope;
+  const expectedMatchWrites = matchKeys.length;
+  const expectedReadinessWrites = recipeIds.length * PLANNER_MAINTENANCE_PEOPLE_COUNTS.length;
   const plan = await dryRunBoundedReadiness(client, input);
-  const expectedSubscribers = APPROVED_RECIPE_IDS.flatMap((recipeId) =>
+  const expectedSubscribers = recipeIds.flatMap((recipeId) =>
     PLANNER_MAINTENANCE_PEOPLE_COUNTS.map((peopleCount) => `${recipeId}:${peopleCount}`)).sort();
   const subscribers = (plan.subscriberScope ?? []).map((entry) => `${entry.recipeId}:${entry.peopleCount}`).sort();
-  if (plan.blocked || plan.transactional !== true || plan.plannedMatchWrites !== 3 ||
-      plan.plannedReadinessWrites !== 70 || subscribers.length !== 70 ||
+  if (plan.blocked || plan.transactional !== true || plan.plannedMatchWrites !== expectedMatchWrites ||
+      plan.plannedReadinessWrites !== expectedReadinessWrites || subscribers.length !== expectedReadinessWrites ||
       JSON.stringify(subscribers) !== JSON.stringify(expectedSubscribers) ||
       !Array.isArray(plan.casRevisions) || !plan.sourceRevision) {
     throw new Error("bounded_verification_plan_mismatch");
   }
   const expectedResources = new Set([
-    ...APPROVED_RECIPE_IDS.map((recipeId) => `r:${recipeId}`),
+    ...recipeIds.map((recipeId) => `r:${recipeId}`),
     ...(plan.dependencyKeys ?? []).map((key) => `k:${key}`),
   ]);
   const casResources = plan.casRevisions.map(([resource]) => resource);
@@ -317,18 +358,18 @@ export async function verifyBoundedReadiness(client: SupabaseClient, input: Boun
   const [matches, readiness] = await Promise.all([
     client.from("ingredient_product_matches")
       .select("match_key,ingredient_source_key,product_id,match_status,failure_reason,refresh_status,invalidated_at,invalidation_reason,matcher_version,product_updated_at,price_updated_at,matched_at,checked_at,updated_at")
-      .in("match_key", APPROVED_MATCH_KEYS),
+      .in("match_key", matchKeys),
     client.from("recipe_readiness_cache")
       .select("recipe_id,people_count,readiness_status,required_ingredient_count,ready_required_ingredient_count,problem_count,readiness_payload,dependency_match_keys,evaluator_version,refresh_status,invalidated_at,invalidation_reason,evaluated_at,expires_at,updated_at")
-      .in("recipe_id", APPROVED_RECIPE_IDS)
+      .in("recipe_id", recipeIds)
       .in("people_count", [...PLANNER_MAINTENANCE_PEOPLE_COUNTS]),
   ]);
-  if (matches.error || !Array.isArray(matches.data) || matches.data.length !== 3 ||
-      readiness.error || !Array.isArray(readiness.data) || readiness.data.length !== 70) {
+  if (matches.error || !Array.isArray(matches.data) || matches.data.length !== matchKeys.length ||
+      readiness.error || !Array.isArray(readiness.data) || readiness.data.length !== expectedReadinessWrites) {
     throw new Error("bounded_verification_rows_missing");
   }
-  const matchKeys = matches.data.map((row) => row.match_key).sort();
-  if (JSON.stringify(matchKeys) !== JSON.stringify(APPROVED_MATCH_KEYS) || matches.data.some((row) =>
+  const observedMatchKeys = matches.data.map((row) => row.match_key).sort();
+  if (JSON.stringify(observedMatchKeys) !== JSON.stringify(matchKeys) || matches.data.some((row) =>
     row.refresh_status !== "current" || row.invalidated_at !== null || row.invalidation_reason !== null ||
     !["valid", "invalid"].includes(row.match_status) || !Number.isInteger(row.matcher_version) ||
     row.matcher_version !== matcherVersionForSourceKey(row.ingredient_source_key) ||
@@ -352,7 +393,7 @@ export async function verifyBoundedReadiness(client: SupabaseClient, input: Boun
         !["READY", "NOT_READY"].includes(row.readiness_status) ||
         !Number.isInteger(row.evaluator_version) || !Array.isArray(dependencyKeys) ||
         dependencyKeys.some((key) => typeof key !== "string" || !plan.dependencyKeys?.includes(key)) ||
-        !dependencyKeys.some((key) => APPROVED_MATCH_KEYS.includes(key)) ||
+        !dependencyKeys.some((key) => matchKeys.includes(key)) ||
         row.evaluator_version !== readinessVersionForMatchKeys(dependencyKeys) ||
         !Number.isInteger(row.required_ingredient_count) || !Number.isInteger(row.ready_required_ingredient_count) ||
         !Number.isInteger(row.problem_count) || row.ready_required_ingredient_count > row.required_ingredient_count ||
@@ -374,7 +415,8 @@ export async function verifyBoundedReadiness(client: SupabaseClient, input: Boun
   }
   return {
     blocked: false,
-    recipeCount: APPROVED_RECIPE_IDS.length,
+    reason: null,
+    recipeCount: recipeIds.length,
     matchKeyCount: matches.data.length,
     subscriberCount: readiness.data.length,
     currentMatchRows: matches.data.length,

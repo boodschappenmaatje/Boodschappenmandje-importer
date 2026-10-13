@@ -78,6 +78,47 @@ describe("bounded transaction integration", () => {
     }));
     expect(db.from).toHaveBeenCalledExactlyOnceWith("recipe_readiness_cache"); // subscriber SELECT only, no upsert API
   });
+
+  it("commits the exact 20-recipe Shanghai shared scope in one transaction", async () => {
+    const recipeIds = [
+      "0dd9fbc7-6fa9-4b50-ab47-b1fa1e4cca8d", "17966cab-93ca-4364-b99c-c6fe7aff36ac",
+      "189d9b3c-073a-43c7-8930-8191b22421bb", "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+      "39189d5d-21c6-4d57-a462-f95b63c0dda5", "3bbe1561-d757-422e-aded-3d802310805c",
+      "4f871e07-a684-4014-843a-f72a11b4c01d", "5c655d2e-97f1-4d8c-8b97-10881e5589b0",
+      "672ea259-71bc-446f-881c-8e59cf675fe2", "6a85d19f-5654-440b-b296-325c8f9fbd30",
+      "6bb5396c-ee59-46bd-bb75-12f68c142fc2", "7ba39ebe-a057-4044-a47b-f9e79e2ef52f",
+      "8f8c6883-2a58-4671-b5c4-13cd588d72ba", "ac562f36-fa92-4540-9e2d-4e073ca6b989",
+      "af9c3407-a24d-4142-b8b6-cc18bc63defd", "bd423b61-4eb8-458e-8d32-bb64a9b38bda",
+      "c4ace2a9-237b-4884-93d4-12fdc066274b", "c6903433-cfd0-4c97-ae1f-350f1625636b",
+      "de621d70-dab9-4ad0-9747-43605a34af2a", "e33fcd95-34c9-471d-befe-76095b9d96e9",
+    ];
+    const matchKeys = [
+      "meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic",
+      "meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic",
+    ];
+    const shanghaiScope = { recipeIds, matchKeys };
+    const db = client(null, shanghaiScope);
+    vi.mocked(loadCatalog).mockResolvedValue({
+      recipes: recipeIds.map((id) => ({ id })), ingredients: [], relations: [],
+    } as unknown as Awaited<ReturnType<typeof loadCatalog>>);
+    vi.mocked(requirementKeysForRecipes).mockReturnValue(new Map(recipeIds.map((id) => [id, matchKeys])));
+    vi.mocked(rowsForGate).mockImplementation((_gate, people) => ({
+      matchRows: matchKeys.map((match_key) => ({ match_key, product_id: null, match_status: "invalid", failure_reason: "no_catalog_product" })),
+      readinessRows: recipeIds.map((recipe_id) => ({ recipe_id, people_count: people, dependency_match_keys: matchKeys })),
+    } as ReturnType<typeof rowsForGate>));
+
+    const result = await writeBoundedReadiness(db.value, { ...shanghaiScope, expectedPlanToken: token });
+    expect(result).toMatchObject({ blocked: false, matchWrites: 2, readinessWrites: 200, outsideScopeEffects: 0 });
+    expect(db.rpc.mock.calls.filter(([name]) => name === "commit_bounded_readiness")).toHaveLength(1);
+    expect(db.rpc).toHaveBeenLastCalledWith("commit_bounded_readiness", expect.objectContaining({
+      p_recipe_ids: recipeIds, p_match_keys: matchKeys,
+      p_expected_plan_token: token,
+      p_match_rows: expect.arrayContaining(matchKeys.map((match_key) => expect.objectContaining({ match_key }))),
+      p_readiness_rows: expect.arrayContaining(recipeIds.map((recipe_id) => expect.objectContaining({ recipe_id }))),
+    }));
+    const submitted = db.rpc.mock.calls.at(-1)?.[1] as { p_readiness_rows: unknown[] };
+    expect(submitted.p_readiness_rows).toHaveLength(200);
+  });
   it("evaluates and commits the exact shared 16+9 subscriber union as one 200-row RPC", async () => {
     const recipeIds = Array.from({ length: 20 }, (_, index) =>
       `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`);
