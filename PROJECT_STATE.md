@@ -1,3 +1,13 @@
+# Checkpoint — PR #90 gemerged; bounded write wacht op toegestane workflowbediening, 13 oktober 2026
+
+- PR #90 is na expliciet gewijzigde merge/write-volgorde uit Draft gehaald en squash-gemerged. Finale geteste PR-head `dacbfecd52e9d617e08c1083ad94047617781f60`, CI #542 groen, Vercel-check groen. Merge/main-commit `955186670a63f161c3a94fc966ef61bcf60f88e9`. Na merge bleken alle acht gewijzigde bestanden op main exact dezelfde blob-SHA te hebben als op de geteste PR-head.
+- Dry-runs #27/#28 PASS; acceptance #29/#30 op code-head `8d74a3b` PASS met letterlijk `safe_to_write=true`, blockers [], juiste SKU 231215000, zeven supplementen, acht matchkeys, tien readiness-projecties. Geen functionele codewijziging daarna, alleen documentatie.
+- **Production-write is nog NIET gestart (0).** De poging om de bestaande GitHub Actions-workflow via browser te openen werd vóór elke dispatch tegengehouden door een gebruikslimiet voor automatische goedkeuring. Niet via een alternatief kanaal omzeilen. De main-only ref-/confirmation-gates zijn niet gewijzigd. Geen post-write verificatie of Shanghai-smoke uitgevoerd.
+- Read-only GitHub-hercontrole na merge: PR gesloten/merged, commit `9551866`; GitHub Vercel-status op die commit `success`. Dit bewijst geen geslaagde Shanghai-datawrite en is geen post-write acceptatie.
+- Exacte volgende stap zodra de goedkeuring/browserbediening weer beschikbaar is: controleer op main of er inmiddels een bounded write-run voor SKU 231215000 bestaat; zo niet, dispatch één bestaande `Shanghai one-SKU writepad` workflow vanaf main met mode `write` en de exacte bestaande bevestiging. Lees volledig runrapport, verifieer daarna read-only records, profiel/hoeveelheden/matches/readiness, bron/projectie, geen €0 en geen andere SKU's. Alleen bij PASS release/smoke afronden en dan PROJECT_STATE.md plus ROADMAP.md op main finaliseren. Geen dubbele write blind starten.
+
+---
+
 # Checkpoint — Shanghai safe_to_write PASS, write-volgorde geblokkeerd, 13 oktober 2026
 
 - Branch `codex/shanghai-source-diagnostic-20261012`, Draft PR #90 open en mergeable. Remote main `46cd27f21e130c2dede46805eec65db08e10f42e`; geteste PR-head vóór deze documentatiecommit `8d74a3b27ed1c3394a457e83523fb012ea93b8e8`.
