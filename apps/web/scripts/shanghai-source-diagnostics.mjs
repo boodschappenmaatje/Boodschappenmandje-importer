@@ -57,17 +57,13 @@ function safeDocumentSnapshot(value) {
     consent_reject_only_count: count("consent_reject_only_count"),
     consent_accept_all_count: count("consent_accept_all_count"),
     instructions_intersects_viewport: value.instructions_intersects_viewport === true,
-    instructions_expanded_count: count("instructions_expanded_count"),
-    consent_control_visible_count: count("consent_control_visible_count"),
-    consent_reject_only_count: count("consent_reject_only_count"),
-    consent_accept_all_count: count("consent_accept_all_count"),
-    instructions_intersects_viewport: value.instructions_intersects_viewport === true,
     instructions_center_hit_target: value.instructions_center_hit_target === true,
     instructions_center_hit_by_consent: value.instructions_center_hit_by_consent === true,
     instructions_center_hit_kind: ["button", "a", "input", "svg", "path", "div", "span", "body", "main", "section", "dialog", "iframe", "other"].includes(value.instructions_center_hit_kind)
       ? value.instructions_center_hit_kind : "none",
     instructions_center_hit_has_click_surface: value.instructions_center_hit_has_click_surface === true,
     instructions_center_hit_inside_content_root: value.instructions_center_hit_inside_content_root === true,
+    instructions_expanded_count: count("instructions_expanded_count"),
     instructions_aria_controls_count: count("instructions_aria_controls_count"),
     controlled_panel_present_count: count("controlled_panel_present_count"),
     visible_controlled_panel_count: count("visible_controlled_panel_count"),
@@ -88,7 +84,6 @@ function safeDocumentSnapshot(value) {
     },
   };
 }
-
 function safeDocumentDiagnostic(value) {
   if (!value || typeof value !== "object") return null;
   const substages = ["content_root", "product_heading", "instructions_button", "optional_consent", "instructions_click", "aria_controls", "instructions_panel"];
