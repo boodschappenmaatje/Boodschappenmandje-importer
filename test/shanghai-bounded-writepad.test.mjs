@@ -59,9 +59,9 @@ test("Shanghai projects the prospective recipe through current persistent matche
     { ...resolved, gate: { recipes: [{ recipeId: "unrelated" }] } },
     { ...resolved, gate: { recipes: [] } },
   ]) assert.equal(validateShanghaiReadinessResolution(invalid, "prospective-shanghai"), false);
-  assert.match(runner, /resolveRecipeReadiness\\(/);
-  assert.match(runner, /new SupabasePersistentRecipeReadinessRepository\\(client\\)/);
-  assert.match(runner, /validateShanghaiReadinessResolution\\(resolved, recipeId\\)/);
+  assert.match(runner, /resolveRecipeReadiness\(/);
+  assert.match(runner, /new SupabasePersistentRecipeReadinessRepository\(client\)/);
+  assert.match(runner, /validateShanghaiReadinessResolution\(resolved, recipeId\)/);
 });
 
 test("Shanghai parser diagnostics expose bounded reason and allowlisted item only", () => {
