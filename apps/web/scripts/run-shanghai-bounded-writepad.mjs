@@ -449,6 +449,7 @@ async function preflight(client, browser) {
   const emptyCounts = { recipes: 0, mealMixProfiles: 0, ingredientProductMatches: 0, readiness: 0, total: 0 };
   return {
     blocked,
+    safe_to_write: !blocked && planned !== null,
     sku: SHANGHAI_SKU,
     sourceKey: SHANGHAI_SOURCE_KEY,
     recipeId,
