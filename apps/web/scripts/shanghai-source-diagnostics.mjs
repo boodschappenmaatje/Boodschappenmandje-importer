@@ -36,6 +36,9 @@ function safeDocumentSnapshot(value) {
   const count = (key) => Number.isInteger(value[key]) ? Math.max(0, Math.min(value[key], 99)) : 0;
   return {
     ready_state: ["loading", "interactive", "complete"].includes(value.ready_state) ? value.ready_state : "unknown",
+    playwright_root_count: count("playwright_root_count"),
+    heading_locator_count: count("heading_locator_count"),
+    instructions_locator_count: count("instructions_locator_count"),
     main_count: count("main_count"),
     main_visible_count: count("main_visible_count"),
     main_zero_rect_count: count("main_zero_rect_count"),
@@ -47,6 +50,14 @@ function safeDocumentSnapshot(value) {
     h1_count: count("h1_count"),
     visible_h1_count: count("visible_h1_count"),
     matching_product_h1_count: count("matching_product_h1_count"),
+    playwright_root_visible: value.playwright_root_visible === true,
+    heading_locator_visible: value.heading_locator_visible === true,
+    instructions_locator_visible: value.instructions_locator_visible === true,
+    instructions_expanded_count: count("instructions_expanded_count"),
+    instructions_aria_controls_count: count("instructions_aria_controls_count"),
+    controlled_panel_present_count: count("controlled_panel_present_count"),
+    visible_controlled_panel_count: count("visible_controlled_panel_count"),
+    panel_within_content_root_count: count("panel_within_content_root_count"),
     title_matches_product: value.title_matches_product === true,
     body_contains_product_name: value.body_contains_product_name === true,
     has_package_marker: value.has_package_marker === true,
@@ -66,7 +77,9 @@ function safeDocumentSnapshot(value) {
 
 function safeDocumentDiagnostic(value) {
   if (!value || typeof value !== "object") return null;
+  const substages = ["content_root", "product_heading", "instructions_button", "instructions_click", "aria_controls", "instructions_panel"];
   return {
+    selector_substage: substages.includes(value.selector_substage) ? value.selector_substage : "unknown",
     at_domcontentloaded: safeDocumentSnapshot(value.at_domcontentloaded),
     after_wait: safeDocumentSnapshot(value.after_wait),
   };
