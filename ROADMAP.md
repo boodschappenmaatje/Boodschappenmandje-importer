@@ -52,8 +52,9 @@ Vaste regels:
 | 1A | Honig/Knorr NOT_READY | ✅ Afgerond | Hoog | Betrouwbare recepten zonder verkeerde producten/verpakkingen | Codex → Work | — | Veilige fixes gereleased; AFTER-audit gedaan; alleen echte datablokkades blijven |
 | 1A.1 | Externe scrapingfallback voor Hoogvliet | 🔵 Open — technische acceptatie bewezen; financiële check resteert | Middel | Minder storingen door source_challenge/Incapsula en minder afhankelijkheid van GitHub-runnerfetches | Codex → Work | 1A afronden | Zyte-proof 6/6; volledige Production-snapshot met 0 fallback-attempts. Leg nog een controleerbare Bright Data/Zyte-kostenvergelijking vast uit bestaande provider-/factuurgegevens; directe importer blijft primary en fallback geldt alleen voor bewezen eligible windows |
 | 1B | Honig/Knorr NO_RECIPE | 🔵 Actief — 7 Knorr-links + readiness-refresh Production bevestigd; overige NO_RECIPE open | Hoog | Meer maaltijdmixen bruikbaar maken | Codex → Work | 1A + scrapingfallback-besluit | Veilige readiness-ondersteuning voor bewezen `needs_review` recipe-links staat in Production. 7 bewezen Knorr-koppelingen en 70 readinesscache-rijen zijn in Production bevestigd (6 READY, Japanse teriyaki NOT_READY); 1B blijft open voor brongebaseerde beoordeling van overige NO_RECIPE-profielen |
-| 1C | Overige receptkwaliteit + Data Health (incl. product_type-classifier) | Daarna | Hoog | Minder plannerfouten en betere productmatching | Codex → Work | 1B | Overige kritieke profiel-, package- en matchproblemen aantoonbaar beheerst |
-| 2 | Budgetbewuste productselectie | ⭐ Hoge prioriteit | **Zeer hoog** | Altijd de goedkoopste geschikte kassacombinatie kiezen | Codex → Work | Receptkwaliteit betrouwbaar | Hele verpakkingen, aanbiedingen, huismerk en producthergebruik worden correct geoptimaliseerd binnen budget |
+| 1C | Slim Zoeken 2.0 — premium ontdekken, vergelijken en direct toevoegen | ⭐ **Volgende — werkende fysieke boodschappentest prioriteit** | **Hoog** | Producten snel vinden, visueel door categorieën bladeren, actuele aanbiedingen zien en betrouwbare goedkopere alternatieven direct aan de lijst toevoegen | Codex → Work | 1B afronden; bestaande Hoogvliet-catalogus/prijzen bruikbaar | Eerst een echt werkende shopping-flow op iPhone: Home→Zoeken, categorieën, echte productresultaten/prijzen, filter Goedkoopste/Aanbiedingen, +/− naar bestaande lijst en veilige persistence. Daarna premium wow-polish. Preview + fysieke iPhone-boodschappentest akkoord |
+| 1D | Overige receptkwaliteit + Data Health (incl. product_type-classifier) | Daarna | Hoog | Minder plannerfouten en betere productmatching | Codex → Work | 1B | Overige kritieke profiel-, package- en matchproblemen aantoonbaar beheerst |
+| 2 | Budgetbewuste productselectie voor menu's | ⭐ Hoge prioriteit — **na Slim Zoeken 2.0** | **Zeer hoog** | Altijd de goedkoopste geschikte kassacombinatie kiezen | Codex → Work | Slim Zoeken 2.0 functioneel + receptkwaliteit betrouwbaar | Hele verpakkingen, aanbiedingen, huismerk en producthergebruik worden correct geoptimaliseerd binnen budget |
 | 3 | Betrouwbare opslag + geschiedenis | Gepland | Middel | Geen verlies van week, lijst, recepten of keuzes | Codex → Work | Stabiele kernflows | Week/lijst/herstel en weekhistorie betrouwbaar bewezen |
 | 4 | Voorraadkast + terugkerende producten | Gepland | **Zeer hoog** | Eerst gebruiken wat echt thuis is en minder onnodig kopen | Codex → Work | Opslagfundament | Voorraad telt alleen na bevestiging; restverpakkingen kunnen veilig als vermoedelijke voorraad terugkomen |
 | 5 | Eigen recepten — vervolg | Gepland | Middel | Meer flexibiliteit zonder budget-/lijstregressies | Codex → Work | Opslag stabiel | Eigen recepten robuust bewerken/bewaren en correct laten meedoen in prijs/lijst |
@@ -65,6 +66,71 @@ Vaste regels:
 | 11 | Accounts & synchronisatie | Na kern + launch-polish | Laag | Data tussen apparaten bewaren | Codex → Work | Opslag + launch-polish | Login en synchronisatie betrouwbaar zonder lokale data stil te verliezen |
 | 12 | BoodschappenMaatje Plus | Na accounts | Laag | Verdienmodel met extra gemak | Codex → Work | Accounts stabiel | Plus voegt waarde toe zonder gratis kern kunstmatig te beperken |
 
+## Definitief productplan — Slim Zoeken 2.0
+
+**Doel:** zoeken moet aanvoelen als een exclusieve BoodschappenMaatje-ervaring: snel, visueel en aantoonbaar behulpzaam. Het wow-effect komt uit kwaliteit en vloeiende interactie, niet uit onnodige functies.
+
+### Vaste schermflow
+
+1. **Home-ingang** — grote afgeronde zoekbalk direct onder de bestaande metallic-blauwe Home-header en mascotte: `Zoek producten, merken of recepten…`.
+2. **Ontdek & bespaar** — aparte ontdekpagina met originele mascotte, zoekbalk, Aanbiedingen, Voordelig kiezen, Alle categorieën en Favoriete producten.
+3. **Categorieën** — visueel 2-koloms grid met productcollages, geïnspireerd op een moderne supermarktindeling maar volledig in BoodschappenMaatje-stijl. Hoofdcategorieën omvatten onder meer groente/fruit, vlees/vis/vega, zuivel, bakkerij, ontbijt/beleg, pasta/rijst/wereldkeuken, diepvries, dranken, snacks, huishoudelijk, drogisterij, baby/kind en huisdier.
+4. **Categorie-detail** — subcategoriechips, populaire producten en daarna alle producten; zoeken binnen de gekozen categorie blijft mogelijk.
+5. **Zoekresultaten** — compacte echte productresultaten met foto, naam, verpakking, actuele betrouwbare prijs, eenheidsprijs waar betrouwbaar, en directe plusknop. Filters: Relevant, Goedkoopste, Aanbiedingen, Merk en waar nuttig Categorie.
+6. **Slim vergelijken** — alleen bij betrouwbare vergelijkbare producten een uitklapbaar goedkoper alternatief tonen met echte prijs/eenheidsprijs en direct toevoegen.
+7. **Boodschappenlijst** — toevoegen gebruikt bestaande lijst-/budgetservices; `+` verandert naar compacte `− aantal +`; handmatige bestaande bijdragen blijven beschermd.
+
+### Wow-momenten
+
+- Home→Zoeken krijgt een korte vloeiende overgang waarbij de zoekbalk visueel doorloopt naar `Ontdek & bespaar`.
+- Categoriekaarten gebruiken rustige hoogwaardige productbeelden, zachte diepte en bestaande metallic-blauwe tokens; geen kopie van Hoogvliet-UI.
+- Resultaten laden met stabiele skeletons in plaats van een springende spinnerlayout.
+- Toevoegen geeft subtiele micro-interactie; geen overdadige effecten.
+- Bij een echte expliciete productvergelijking mag `Maatje bespaart je €…` worden getoond, uitsluitend berekend uit aantoonbaar gekozen/vergeleken producten; nooit een fictieve besparing.
+- Lege staten gebruiken Maatje en geven altijd een bruikbare vervolgstap (`Zoek opnieuw` / `Bekijk categorieën`).
+
+### Uitvoering binnen 1C — functioneel eerst
+
+**1C-A — werkende boodschappentest (eerste acceptatie):**
+- Home-zoekingang werkt op iPhone;
+- `Ontdek & bespaar` en categorieën zijn navigeerbaar;
+- zoeken gebruikt echte bestaande Hoogvliet-catalogusdata;
+- alleen betrouwbare positieve prijzen worden getoond;
+- `Goedkoopste` en `Aanbiedingen` werken op echte data en geven geen nepclaims;
+- product toevoegen/verlagen werkt daadwerkelijk in de bestaande boodschappenlijst en overleeft normale navigatie/heropenen volgens de bestaande opslaglogica;
+- handmatige lijstwijzigingen worden niet overschreven;
+- geen scanner, AI-chat, spraakzoeken of andere supermarkt in deze eerste testscope;
+- passende regressietests, Vercel Preview en fysieke iPhone-test vóór merge/Production.
+
+**1C-B — premium wow-polish binnen dezelfde roadmapstap:**
+- vloeiende Home→Zoeken-transitie;
+- hoogwaardige categoriecollages en categorie-detail;
+- recent gezocht/favorieten waar betrouwbare opslag aanwezig is;
+- skeleton loading en subtiele micro-interacties;
+- vergelijkbare alternatieven en besparingsfeedback alleen wanneer de bestaande prijs-/matchdata dit betrouwbaar bewijst;
+- toegankelijkheid, reduced motion en performancecontrole.
+
+### Vast besluit — toekomstige multi-supermarktwerking
+
+- **Eerste keuze:** bij eerste gebruik van Zoeken kiest de gebruiker verplicht één supermarkt; BoodschappenMaatje onthoudt die keuze.
+- **Actieve supermarkt zichtbaar:** boven `Ontdek & bespaar` staat compact `Boodschappen bij [ supermarkt ▾ ]`; wisselen gebeurt vanuit die selector.
+- **Geen gemengde zoekresultaten:** zoeken, categorieën, aanbiedingen, prijzen en alternatieven zijn altijd begrensd tot de actieve supermarkt. Zoekresultaten van verschillende ketens worden nooit standaard door elkaar getoond.
+- **Lijst per supermarkt:** wisselt de gebruiker terwijl een actieve lijst al producten bevat, dan volgt een waarschuwing en wordt voor de nieuwe supermarkt een aparte lijst gestart. Er vindt geen stille vermenging of automatische productomzetting plaats.
+- **Vormgeving:** supermarktkeuze blijft in BoodschappenMaatje-stijl met officiële supermarktlogo's; de huisstijl van de keten neemt het scherm niet over.
+- **Keuzeniveau:** in de eerste multi-supermarktversie kiest de gebruiker een keten, niet verplicht een specifieke vestiging.
+- **Toekomstige ketens:** architectuur voorbereiden op **Albert Heijn, Jumbo, Lidl en Dirk** naast Hoogvliet. Deze ketens worden nu nog niet als product-/prijsbron aangesloten; eerst wordt Hoogvliet functioneel bewezen.
+- **Providerarchitectuur:** 1C mag Hoogvliet niet diep hardcoden in zoek-/filter-/lijstlogica. Producten, prijzen, categorieën, aanbiedingen en lijstcontext krijgen een expliciete supermarkt/provider-context zodat een nieuwe keten later zonder tweede zoek- of winkelwagenimplementatie kan aansluiten.
+- **Vergelijken tussen winkels:** later komt een aparte functie `Vergelijk supermarkten`; normaal zoeken blijft altijd binnen één actieve supermarkt.
+- Een nieuwe supermarkt wordt pas actief nadat bron, productidentiteit, actuele prijsbetrouwbaarheid, aanbiedingen, juridische randvoorwaarden en veilige lijst-/budgetintegratie afzonderlijk zijn bewezen.
+
+### Data- en veiligheidsregels
+
+- Hoogvliet blijft de enige prijs-/productbron in de huidige 1C-A testscope, maar de zoekarchitectuur wordt provider-aware voorbereid op meerdere supermarkten.
+- Geen fictieve €0-prijzen, nepaanbiedingen, nepresultaataantallen, geforceerde matches of misleidende afbeeldingen.
+- Maaltijdbudget en totaal weekbudget blijven afzonderlijk.
+- Zoeken en ontdekken mogen de boodschappenlijst niet vervangen: de lijst blijft het centrale eindpunt.
+- Gebruik bestaande componenten, product-/prijsservices en lijstmutaties waar mogelijk; geen tweede parallelle winkelwagenlogica.
+
 ---
 
 # Later
@@ -74,7 +140,8 @@ Vaste regels:
 | Meldingen | Laag | Codex → Work | Alleen nuttige herinneringen |
 | Offline/PWA-robuustheid | Middel | Codex → Work | Geen schijnbaar actuele onbetrouwbare prijsdata |
 | Kassabon / werkelijke uitgaven | Hoog | Codex → Work | Betrouwbare invoer/herkenning beschikbaar |
-| Meerdere supermarkten | **Zeer hoog** | Codex → Work | Hoogvliet-kern en providerarchitectuur betrouwbaar |
+| Meerdere supermarkten — AH / Jumbo / Lidl / Dirk naast Hoogvliet | **Zeer hoog** | Codex → Work | Slim Zoeken provider-aware; Hoogvliet-flow bewezen; elke nieuwe bron afzonderlijk gevalideerd |
+| Vergelijk supermarkten | **Zeer hoog** | Codex → Work | Meerdere betrouwbare supermarktbronnen actief; vergelijking is een aparte flow en vermengt nooit gewone zoekresultaten |
 
 ---
 
