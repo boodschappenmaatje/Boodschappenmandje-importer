@@ -1,3 +1,13 @@
+# Checkpoint — Shanghai dry-run PASS, expliciete write-gate wacht op CI, 13 oktober 2026
+
+- Bestaande branch `codex/shanghai-source-diagnostic-20261012`, PR #90 open/Draft; remote `main` laatst `46cd27f21e130c2dede46805eec65db08e10f42e`. Code-head vóór dit checkpoint: `143877e69d647f88b3ec4ed704c7fe9f339c37dd`.
+- Volledige CI **#534** / run `38372009141` op `758044a`: groen, inclusief importer, PostgreSQL, webtests, seedchecks, ESLint, TypeScript, Production-build; Vercel Preview groen.
+- Bounded Shanghai dry-run **#27** / run `38372720686`, op `758044a`: **PASS**. Identiteit SKU 231215000/product `837af4a6-b7b6-4fd4-8eea-3437d4f138a7`, HTTP 200, finale Shanghai-URL, contentroot `main:has(h1)`, instructiepaneel en Boodschappenlijstje goed. Parser/source `verified`; zeven supplementen: 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, 30 ml olie. Acht matchkeys (zeven bestaande supplementmatches, één geplande pakketmatch), tien persoonsprojecties, source revision `22372`, `blocked=false`, blockers [], 13 unieke geplande records/14 write-operaties. **Geen write uitgevoerd**. Gelijktijdig gestarte tweede dry-run **#28** / run `38372724153` op dezelfde head ook groen; lees volledige rapport bij hervatting.
+- Omdat de bestaande uitvoer geen letterlijk `safe_to_write` veld bevatte, voegen `2409366`, `ccead21`, `b293a9d` en test `143877e` een expliciete fail-closed data-gate toe: geen blockers, exact één pakketmatch, 13 unieke records, tien readiness-aantallen. Geen write-arming, ref-beperking of andere safety-gate versoepeld. Volledige CI **#538** / run `38373016820` op `143877e` was nog pending bij dit checkpoint.
+- **Production-writes: 0.** Geen merge, deployment of smoke test. Exacte volgende stap: wacht op volledige groene CI op actuele head, doe één bounded dry-run en controleer `safe_to_write=true`. De bestaande Production-write workflow eist `refs/heads/main`; PR #90 is nog Draft en de gevraagde volgorde vereist write vóór merge. Verzwak die gate niet: bepaal na PASS een veilige, expliciet geautoriseerde volgorde of rapporteer deze concrete volgordeblokkade.
+
+---
+
 # Checkpoint — Shanghai readiness-preflight via bestaande cache, 13 oktober 2026
 
 - Branch `codex/shanghai-source-diagnostic-20261012`, PR #90 open/Draft. Remote `main` laatst `46cd27f21e130c2dede46805eec65db08e10f42e`. Laatste code-head vóór dit checkpoint: `87a40e3a3065536d994dea4272e2df7790fb30c2`.
