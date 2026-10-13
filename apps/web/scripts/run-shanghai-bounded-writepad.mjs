@@ -212,10 +212,10 @@ async function parseCurrentSource(browser, product) {
         selectorSubstage = "instructions_content";
         await page.waitForFunction((id) => {
           const text = document.getElementById(id)?.textContent ?? "";
-          const start = text.search(/\\bZo maak\\b/i);
+          const start = text.search(/\bZo maak\b/i);
           if (start < 0) return false;
           const preparation = text.slice(start).split(/Netto-inhoud/i)[0];
-          return [...preparation.matchAll(/\\b\\d+(?:[.,]\\d+)?\\s*(?:el|eetl\\.?|eetlepels?)\\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\\b/gi)].length >= 2;
+          return [...preparation.matchAll(/\b\d+(?:[.,]\d+)?\s*(?:el|eetl\.?|eetlepels?)\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\b/gi)].length >= 2;
         }, panelId, { timeout: 15000 });
         oilMeasurementsAfterWait = shanghaiOilMeasurementCount(await instructionsPanel.textContent());
       },
