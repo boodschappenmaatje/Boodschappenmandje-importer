@@ -37,7 +37,13 @@ function safeDocumentSnapshot(value) {
   return {
     ready_state: ["loading", "interactive", "complete"].includes(value.ready_state) ? value.ready_state : "unknown",
     main_count: count("main_count"),
+    main_visible_count: count("main_visible_count"),
+    main_zero_rect_count: count("main_zero_rect_count"),
+    main_display_contents_count: count("main_display_contents_count"),
     main_with_h1_count: count("main_with_h1_count"),
+    visible_main_with_h1_count: count("visible_main_with_h1_count"),
+    content_root_query_count: count("content_root_query_count"),
+    visible_content_root_count: count("visible_content_root_count"),
     h1_count: count("h1_count"),
     visible_h1_count: count("visible_h1_count"),
     matching_product_h1_count: count("matching_product_h1_count"),
