@@ -260,20 +260,26 @@ function projectedRecipe(id, recipeRow) {
   };
 }
 
-async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile) {
+async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, setStage = () => {}) {
+  setStage("catalog_load");
   const catalog = await loadCatalog(client);
+  setStage("recipe_source_key_check");
   if (catalog.recipes.some((item) => item.sourceKey === SHANGHAI_SOURCE_KEY)) throw new Error("recipe_source_key_conflict");
   const prospectiveProfile = { ...parsedProfile, recipeId, productId: parsedProfile.productId };
+  setStage("catalog_enrichment");
   catalog.mealMixProfiles = [...(catalog.mealMixProfiles ?? []), prospectiveProfile];
   catalog.ingredients = enrichIngredientsForMealMixes(catalog.ingredients, catalog.mealMixProfiles);
+  setStage("recipe_projection");
   const recipe = projectedRecipe(recipeId, recipeRow);
   catalog.recipes = [...catalog.recipes, recipe];
   const repository = new SupabaseCatalogRepository(client);
   const byMatchKey = new Map();
   const readinessRows = [];
   for (const peopleCount of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
+    setStage("readiness_evaluation");
     const gate = await evaluateRecipeReadiness([recipe], peopleCount, catalog, repository);
     if (gate.recipes.length !== 1 || gate.recipes[0]?.recipeId !== recipeId) throw new Error("evaluator_recipe_scope_mismatch");
+    setStage("readiness_row_projection");
     const rows = rowsForGate(gate, peopleCount, new Date());
     if (rows.readinessRows.length !== 1 || rows.readinessRows[0]?.recipe_id !== recipeId) throw new Error("readiness_scope_mismatch");
     readinessRows.push(rows.readinessRows[0]);
@@ -285,6 +291,7 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile) {
       byMatchKey.set(row.match_key, row);
     }
   }
+  setStage("readiness_scope_validation");
   const matchRows = [...byMatchKey.values()];
   const expectedSourceKeys = new Set([parsedProfile.productIngredientSourceKey, ...parsedProfile.supplements.map((row) => row.sourceKey)]);
   if (matchRows.length !== 8 || matchRows.some((row) => !expectedSourceKeys.has(row.ingredient_source_key)) || readinessRows.length !== 10) {
@@ -321,25 +328,33 @@ async function preflight(client, browser) {
   let planned = null;
   const cas = null;
   let sourceRevision = null;
+  let readinessPreflightStage = null;
   if (product && parsed?.status === "verified" && recipeRow) {
     try {
-      evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile);
+      evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile, (stage) => {
+        readinessPreflightStage = stage;
+      });
+      readinessPreflightStage = "supplement_match_read";
       const missingKey = evaluated.matchRows.filter((row) => row.ingredient_source_key === "catalog-mix-product-231215000");
       const supplementKeys = evaluated.matchRows.filter((row) => row.ingredient_source_key.startsWith("mix-supplement-")).map((row) => row.match_key);
       const oldResult = await client.from("ingredient_product_matches").select("*").in("match_key", supplementKeys);
       const existingRows = requireData(oldResult, "supplement_match_read_failed") ?? [];
+      readinessPreflightStage = "supplement_match_validation";
       matchValidation = validateShanghaiMatchScope({ matchRows: evaluated.matchRows, expectedSourceKeys: evaluated.expectedSourceKeys,
         existingRows, matcherVersionForSourceKey });
       blockers.push(...matchValidation.blockers);
       if (missingKey.length !== 1) blockers.push("package_match_scope_mismatch");
       else {
+        readinessPreflightStage = "package_match_read";
         const packageMatchResult = await client.from("ingredient_product_matches").select("match_key")
           .eq("match_key", missingKey[0].match_key).maybeSingle();
         const packageMatchRow = requireData(packageMatchResult, "package_match_read_failed");
         if (packageMatchRow) blockers.push("package_match_cache_already_exists");
+        readinessPreflightStage = "source_revision_read";
         const sourceResult = await client.rpc("bounded_readiness_source_revision");
         if (sourceResult.error || typeof sourceResult.data !== "string") throw new Error("source_revision_unavailable");
         sourceRevision = sourceResult.data;
+        readinessPreflightStage = null;
         // bounded_readiness_state is intentionally not granted to service_role.
         // The executable CAS snapshot/token is obtained later through the
         // existing bounded planner, after the exact recipe/profile are linked.
@@ -357,6 +372,7 @@ async function preflight(client, browser) {
     sourceFingerprint: parsed?.fingerprint ?? null,
     recipeConflicts,
     sourceRevision,
+    readinessPreflightStage,
   };
   const blocked = blockers.length > 0;
   const emptyCounts = { recipes: 0, mealMixProfiles: 0, ingredientProductMatches: 0, readiness: 0, total: 0 };
@@ -381,6 +397,7 @@ async function preflight(client, browser) {
     existingSupplementMatches: matchValidation.blocked ? [] : 7,
     readinessPeopleCounts: planned?.readinessPeopleCounts ?? [1,2,3,4,5,6,7,8,9,10],
     sourceRevision,
+    readinessPreflightStage,
     casRevisions: cas,
     casRevisionStatus: cas ? "captured" : "will_be_captured_by_bounded_dry_run_after_link",
     dependencyKeys: evaluated ? [...new Set(evaluated.readinessRows.flatMap((row) => row.dependency_match_keys))].sort() : [],
