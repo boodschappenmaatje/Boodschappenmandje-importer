@@ -63,8 +63,8 @@ async function parseCurrentSource(browser, product) {
     const title = contentRoot.getByRole("heading", { level: 1, name: SHANGHAI_PRODUCT_NAME, exact: true });
     const instructions = contentRoot.getByRole("button", { name: "Gebruiksaanwijzing", exact: true });
     const inspectDocument = () => page.evaluate((expectedName) => {
-      const normalize = (value) => String(value ?? "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
-        .toLocaleLowerCase("nl-NL").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+      const normalize = (value) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("nl-NL").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
       const visible = (element) => {
         const style = window.getComputedStyle(element);
         return style.visibility !== "hidden" && style.display !== "none" && element.getClientRects().length > 0;
