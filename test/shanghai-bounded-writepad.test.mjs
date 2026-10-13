@@ -50,9 +50,11 @@ test("runner imports the Shanghai product name used by the normal source-read fl
   assert.match(runner.slice(coreImportStart, coreImportEnd), /\bSHANGHAI_PRODUCT_NAME\b/);
   assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
   assert.ok(runner.includes("dismissShanghaiRejectOptionalConsent(rejectOptionalCookies)"));
-  const consentMatcher = runner.match(/const rejectOptionalCookies = page\\.getByRole\\("button", \\{\\s*name: (\\/.*\\/i),/);
-  assert.ok(consentMatcher, "runner must select consent semantically");
-  assert.doesNotMatch(consentMatcher[1], /accept|accepteren/i);
+  const consentSelectorStart = runner.indexOf('const rejectOptionalCookies = page.getByRole("button", {');
+  const consentSelectorEnd = runner.indexOf("$/i", consentSelectorStart);
+  assert.ok(consentSelectorStart >= 0 && consentSelectorEnd > consentSelectorStart,
+    "runner must select consent semantically");
+  assert.doesNotMatch(runner.slice(consentSelectorStart, consentSelectorEnd), /accept|accepteren/i);
 });
 
 test("reject-only consent action is unique, visible, enabled and never accepts optional cookies", async () => {
