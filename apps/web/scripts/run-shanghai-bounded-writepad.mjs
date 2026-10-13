@@ -176,7 +176,7 @@ async function parseCurrentSource(browser, product) {
         if (await instructions.count() !== 1) throw new Error("source-structure-mismatch");
         selectorSubstage = "optional_consent";
         const rejectOptionalCookies = page.getByRole("button", {
-          name: /^(?:alleen noodzakelijke(?: cookies)?|only necessary(?: cookies)?|reject optional(?: cookies)?|weiger(?: optionele)? cookies|weigeren|afwijzen)$/i,
+          name: /(?:alleen noodzakelijke|only necessary|reject optional|weigeren|afwijzen)/i,
         });
         await dismissShanghaiRejectOptionalConsent(rejectOptionalCookies);
         selectorSubstage = "instructions_click";
