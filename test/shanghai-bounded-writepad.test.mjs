@@ -40,6 +40,7 @@ const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatj
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
+const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
 
 test("runner imports the Shanghai product name used by the normal source-read flow", () => {
   const coreImportEnd = runner.indexOf('} from "./shanghai-writepad-core.mjs";');
@@ -82,6 +83,11 @@ Chinese Beef Shanghai, gehaktballetjes met mie. Voor 2-3 personen.
 Bereidingswijze: Recept met lekker veel groente: Boodschappenlijstje:
 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, Olie.`,
 };
+
+test("runner uses the exact measured Shanghai CSS content-root selector", () => {
+  assert.match(runner, /page\\.locator\\(SHANGHAI_CONTENT_ROOT\\)/);
+  assert.doesNotMatch(runner, /page\\.locator\\("main"\\)\\.filter\\(\\{\\s*has:\\s*page\\.locator\\("h1"\\)/);
+});
 
 test("uses the current semantic Shanghai root, opens source content and reaches the parser", async () => {
   let waitedFor = null;
