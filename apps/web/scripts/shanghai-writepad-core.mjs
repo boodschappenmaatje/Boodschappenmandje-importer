@@ -5,6 +5,36 @@ export const SHANGHAI_PARSER_VERSION = 5;
 export const SHANGHAI_CONFIRMATION = "WRITE_ONLY_SHANGHAI_231215000";
 export const SHANGHAI_PACKAGE_TEXT = "239 gram";
 
+const READINESS_VARIATION_LABELS = new Map([
+  ["catalog-mix-product-231215000", "package"],
+  ["mix-supplement-mager-rundergehakt", "mager-rundergehakt"],
+  ["mix-supplement-champignons", "champignons"],
+  ["mix-supplement-tauge", "tauge"],
+  ["mix-supplement-bosui", "bosui"],
+  ["mix-supplement-ui", "ui"],
+  ["mix-supplement-prei", "prei"],
+  ["mix-supplement-olie", "olie"],
+]);
+const READINESS_VARIATION_FIELDS = new Set([
+  "product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at",
+]);
+
+export function safeReadinessMatchChange(sourceKey, firstPeopleCount, currentPeopleCount, changedFields) {
+  const label = READINESS_VARIATION_LABELS.get(sourceKey);
+  if (!label || !Number.isInteger(firstPeopleCount) || firstPeopleCount < 1 || firstPeopleCount > 10 ||
+      !Number.isInteger(currentPeopleCount) || currentPeopleCount < 1 || currentPeopleCount > 10 ||
+      !Array.isArray(changedFields)) return null;
+  const safeChangedFields = [...new Set(changedFields.filter((field) => READINESS_VARIATION_FIELDS.has(field)))].sort();
+  if (safeChangedFields.length === 0) return null;
+  return {
+    match_kind: label === "package" ? "package" : "supplement",
+    ingredient: label === "package" ? null : label,
+    previous_people_count: firstPeopleCount,
+    current_people_count: currentPeopleCount,
+    changed_fields: safeChangedFields,
+  };
+}
+
 const SHANGHAI_SOURCE_URLS = new Set([
   "https://www.hoogvliet.com/product/knorr-wereldgerechten-maaltijdpakket-chinese-beef-shanghai",
   "https://www.hoogvliet.com/product/knorr-wereldgerecht-maaltijdpakket-chinese-beef-shanghai",
