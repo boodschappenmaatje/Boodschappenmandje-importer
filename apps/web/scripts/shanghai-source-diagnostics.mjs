@@ -31,7 +31,7 @@ function isTimeout(error) {
   return /timeout/i.test(typeof error?.name === "string" ? error.name : "");
 }
 
-function safeDocumentDiagnostic(value) {
+function safeDocumentSnapshot(value) {
   if (!value || typeof value !== "object") return null;
   const count = (key) => Number.isInteger(value[key]) ? Math.max(0, Math.min(value[key], 99)) : 0;
   return {
@@ -55,6 +55,14 @@ function safeDocumentDiagnostic(value) {
       access_denied: value.challenge_signals?.access_denied === true,
       captcha: value.challenge_signals?.captcha === true,
     },
+  };
+}
+
+function safeDocumentDiagnostic(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    at_domcontentloaded: safeDocumentSnapshot(value.at_domcontentloaded),
+    after_wait: safeDocumentSnapshot(value.after_wait),
   };
 }
 
