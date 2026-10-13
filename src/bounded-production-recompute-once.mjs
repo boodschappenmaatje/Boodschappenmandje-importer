@@ -1,12 +1,14 @@
 import { appendFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import {
-  ALLOWED_MATCH_KEYS,
-  ALLOWED_RECIPE_IDS,
   ENDPOINT_PATH,
   PRODUCTION_ORIGIN,
-  validateDryRun,
 } from "./bounded-production-recompute.mjs";
+import {
+  ALLOWED_MATCH_KEYS,
+  ALLOWED_RECIPE_IDS,
+  validateDryRun,
+} from "./bounded-production-recompute-once-scope.mjs";
 
 const WORKFLOW_FILE = "bounded-production-recompute-once.yml";
 const CONFIRMATION = "COMMIT_BOUNDED_READINESS_ONCE";

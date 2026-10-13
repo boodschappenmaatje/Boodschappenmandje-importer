@@ -4,18 +4,30 @@ import { pathToFileURL } from "node:url";
 export const PRODUCTION_ORIGIN = "https://boodschappenmaatje-pwa.vercel.app";
 export const ENDPOINT_PATH = "/api/internal/planner-readiness/bounded-refresh";
 export const ALLOWED_RECIPE_IDS = Object.freeze([
-  "4e60b9b6-abd3-46e7-b6a1-b10f73ccbec3",
-  "baf31144-bb45-4c2b-aa2f-2f9be588b01c",
-  "3bbe1561-d757-422e-aded-3d802310805c",
-  "5726609e-82a3-4fa7-b5b0-dab78b2b59f1",
-  "4f871e07-a684-4014-843a-f72a11b4c01d",
+  "0dd9fbc7-6fa9-4b50-ab47-b1fa1e4cca8d",
+  "17966cab-93ca-4364-b99c-c6fe7aff36ac",
+  "189d9b3c-073a-43c7-8930-8191b22421bb",
   "2825125a-4ec4-4fae-a5f3-b44be2afb0aa",
+  "39189d5d-21c6-4d57-a462-f95b63c0dda5",
+  "3bbe1561-d757-422e-aded-3d802310805c",
+  "4f871e07-a684-4014-843a-f72a11b4c01d",
+  "5c655d2e-97f1-4d8c-8b97-10881e5589b0",
+  "672ea259-71bc-446f-881c-8e59cf675fe2",
   "6a85d19f-5654-440b-b296-325c8f9fbd30",
+  "6bb5396c-ee59-46bd-bb75-12f68c142fc2",
+  "7ba39ebe-a057-4044-a47b-f9e79e2ef52f",
+  "8f8c6883-2a58-4671-b5c4-13cd588d72ba",
+  "ac562f36-fa92-4540-9e2d-4e073ca6b989",
+  "af9c3407-a24d-4142-b8b6-cc18bc63defd",
+  "bd423b61-4eb8-458e-8d32-bb64a9b38bda",
+  "c4ace2a9-237b-4884-93d4-12fdc066274b",
+  "c6903433-cfd0-4c97-ae1f-350f1625636b",
+  "de621d70-dab9-4ad0-9747-43605a34af2a",
+  "e33fcd95-34c9-471d-befe-76095b9d96e9",
 ]);
 export const ALLOWED_MATCH_KEYS = Object.freeze([
-  "meal-mix-ingredient:mix-supplement-hacheevlees:g:ingredient:generic",
-  "meal-mix-ingredient:mix-supplement-tomaten:piece:ingredient:generic",
-  "meal-mix-ingredient:mix-supplement-pitabroodjes:g:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-olie:ml:ingredient:generic",
+  "meal-mix-ingredient:mix-supplement-ui:piece:ingredient:generic",
 ]);
 const PEOPLE_COUNTS = Object.freeze(Array.from({ length: 10 }, (_, index) => index + 1));
 const SHA256 = /^[a-f0-9]{64}$/;
@@ -40,7 +52,7 @@ export function validateDryRun(plan) {
     fail("dry-run-recipe-scope-mismatch");
   }
   if (!sameValues(plan.requestedMatchKeys, ALLOWED_MATCH_KEYS)) fail("dry-run-matchkey-scope-mismatch");
-  if (plan.plannedMatchWrites !== ALLOWED_MATCH_KEYS.length || plan.plannedReadinessWrites !== 70) {
+  if (plan.plannedMatchWrites !== ALLOWED_MATCH_KEYS.length || plan.plannedReadinessWrites !== 200) {
     fail("dry-run-write-count-mismatch");
   }
   if (!Array.isArray(plan.unexpectedDependencies) || plan.unexpectedDependencies.length !== 0) {
@@ -65,7 +77,7 @@ export function validateDryRun(plan) {
   const actualSubscribers = Array.isArray(plan.subscriberScope)
     ? plan.subscriberScope.map((entry) => `${entry?.recipeId}:${entry?.peopleCount}`)
     : [];
-  if (!sameValues(actualSubscribers, expectedSubscribers) || actualSubscribers.length !== 70) {
+  if (!sameValues(actualSubscribers, expectedSubscribers) || actualSubscribers.length !== 200) {
     fail("dry-run-subscriber-scope-mismatch");
   }
   return plan;

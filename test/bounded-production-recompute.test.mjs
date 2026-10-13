@@ -28,8 +28,8 @@ function dryRun(overrides = {}) {
       Array.from({ length: 10 }, (_, index) => ({ recipeId, peopleCount: index + 1 }))),
     sourceRevision: "368",
     casRevisions: [["r:recipe", "4"], ["k:match", "2"]],
-    plannedMatchWrites: 3,
-    plannedReadinessWrites: 70,
+    plannedMatchWrites: 2,
+    plannedReadinessWrites: 200,
     unexpectedDependencies: [],
     blocked: false,
     reason: null,
@@ -52,7 +52,7 @@ function fetchSequence(responses, calls = []) {
   };
 }
 
-test("stuurt exact één geauthenticeerde dry-run met uitsluitend de vaste scope", async () => {
+test("exact 20 recepten / 2 matchkeys / 200 subscribers accepteert en verstuurt alleen dry-run", async () => {
   const calls = [];
   const result = await runBoundedRecompute({ env: envBase, fetchImpl: fetchSequence([response(dryRun())], calls) });
   assert.equal(result.mode, "dry-run");
@@ -67,6 +67,9 @@ test("stuurt exact één geauthenticeerde dry-run met uitsluitend de vaste scope
     matchKeys: [...ALLOWED_MATCH_KEYS],
     mode: "dry-run",
   });
+  assert.equal(ALLOWED_RECIPE_IDS.length, 20);
+  assert.equal(ALLOWED_MATCH_KEYS.length, 2);
+  assert.equal(result.plan.subscriberScope.length, 200);
   assert.equal(calls[0].body.expectedPlanToken, undefined);
 });
 
@@ -81,12 +84,14 @@ test("ontbrekende auth faalt vóór netwerkverkeer", async () => {
 
 for (const [name, mutate] of [
   ["blocked response", (plan) => ({ ...plan, blocked: true })],
-  ["onverwacht recept", (plan) => ({ ...plan, resolvedRecipeIds: [...ALLOWED_RECIPE_IDS.slice(0, 6), "11111111-1111-4111-8111-111111111111"] })],
-  ["onverwachte matchkey", (plan) => ({ ...plan, requestedMatchKeys: [...ALLOWED_MATCH_KEYS.slice(0, 2), "meal-mix-ingredient:other:g:ingredient:generic"] })],
+  ["19 recepten", (plan) => ({ ...plan, requestedRecipeIds: ALLOWED_RECIPE_IDS.slice(1), resolvedRecipeIds: ALLOWED_RECIPE_IDS.slice(1) })],
+  ["21 recepten", (plan) => ({ ...plan, requestedRecipeIds: [...ALLOWED_RECIPE_IDS, "11111111-1111-4111-8111-111111111111"], resolvedRecipeIds: [...ALLOWED_RECIPE_IDS, "11111111-1111-4111-8111-111111111111"] })],
+  ["extra matchkey", (plan) => ({ ...plan, requestedMatchKeys: [...ALLOWED_MATCH_KEYS, "meal-mix-ingredient:other:g:ingredient:generic"] })],
   ["onverwachte dependency", (plan) => ({ ...plan, unexpectedDependencies: ["outside-recipe:4"] })],
-  ["onverwachte subscriber", (plan) => ({ ...plan, subscriberScope: [...plan.subscriberScope, { recipeId: "11111111-1111-4111-8111-111111111111", peopleCount: 4 }] })],
+  ["ontbrekende subscriber", (plan) => ({ ...plan, subscriberScope: plan.subscriberScope.slice(1) })],
+  ["extra subscriber", (plan) => ({ ...plan, subscriberScope: [...plan.subscriberScope, { recipeId: "11111111-1111-4111-8111-111111111111", peopleCount: 4 }] })],
   ["ontbrekend plan-token", (plan) => ({ ...plan, planToken: null })],
-  ["te veel readinessrijen", (plan) => ({ ...plan, plannedReadinessWrites: 71 })],
+  ["planned readiness writes wijkt af", (plan) => ({ ...plan, plannedReadinessWrites: 199 })],
   ["ontbrekende CAS-revisies", (plan) => ({ ...plan, casRevisions: [] })],
 ]) {
   test(`${name} stopt fail-closed na alleen de dry-run`, async () => {
