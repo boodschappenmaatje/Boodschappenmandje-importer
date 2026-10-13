@@ -135,6 +135,13 @@ public sealed class TrayApp : ApplicationContext
                         result.StartsWith("Gemini works") ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
+    private void SetLanguage(string language)
+    {
+        if (settings.Language == language) return;
+        settings.Language = language;
+        RestartIfAwake();  // the new language takes effect with his next session
+    }
+
     private void EditPersonality()
     {
         var (choice, text) = Dialogs.EditPersonality(RealtimeHost.Personality);
@@ -184,6 +191,10 @@ public sealed class TrayApp : ApplicationContext
                                          (int)Math.Round(settings.PhonePosition * 100) == pos));
         menu.Items.Add(phone);
 
+        var language = new ToolStripMenuItem("Language / Taal");
+        language.DropDownItems.Add(Item("Nederlands", () => SetLanguage("nl"), null, settings.Language == "nl"));
+        language.DropDownItems.Add(Item("English", () => SetLanguage("en"), null, settings.Language == "en"));
+        menu.Items.Add(language);
         menu.Items.Add(Item("Personality…", EditPersonality));
         var brain = new ToolStripMenuItem("AI");
         brain.DropDownItems.Add(Item("Gemini (free tier)", () => SetProvider("gemini"), null, settings.Provider == "gemini"));

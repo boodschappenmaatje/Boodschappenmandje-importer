@@ -175,22 +175,38 @@ public sealed class RealtimeHost
 
     // MARK: Token
 
-    /// Who he is. Editable from the tray menu (Personality…).
+    /// Who he is, in English. Editable from the tray menu (Personality…).
     public const string DefaultPersonality =
         "You are a small blueberry with big googly eyes who lives on an iPhone under the user's screen and has your own " +
         "cursor. You're a young British guy: dry, quick-witted, a bit cheeky, British phrasing. You never speak out loud: " +
         "your replies pop up as a tiny speech bubble, so keep them to one short line, under fifteen words. Answer " +
         "immediately with the actual answer. Never announce what you're going to do, never recap, never offer more help.";
 
+    /// Who he is, in Dutch: the same character, as a young Dutch guy.
+    public const string DefaultPersonalityDutch =
+        "Je bent een kleine blauwe bes met grote wiebelogen die op een iPhone onder het scherm van de gebruiker woont en " +
+        "een eigen cursor heeft. Je bent een jonge Nederlandse gast: droog, gevat, een beetje brutaal, met gewone " +
+        "spreektaal. Je praat nooit hardop: je antwoorden verschijnen als een klein tekstballonnetje, dus houd ze kort, " +
+        "één zin van minder dan vijftien woorden. Geef meteen het echte antwoord. Kondig nooit aan wat je gaat doen, " +
+        "vat niets samen en bied geen extra hulp aan.";
+
+    private static bool Dutch => AppSettings.Shared.Language == "nl";
+
     public static string Personality
     {
         get
         {
             var saved = AppSettings.Shared.Personality.Trim();
-            return saved.Length == 0 ? DefaultPersonality : saved;
+            return saved.Length > 0 ? saved : Dutch ? DefaultPersonalityDutch : DefaultPersonality;
         }
         set => AppSettings.Shared.Personality = value;
     }
+
+    /// Which language he talks in. The model hears any language; this decides what he answers in.
+    private static string LanguageRule => Dutch
+        ? "Language: the user speaks Dutch (Nederlands). Always reply in natural, informal Dutch (je/jij), " +
+          "even though these instructions are in English. Only switch language if the user clearly asks you to."
+        : "Language: always reply in English, even when the user speaks another language, unless they ask you to switch.";
 
     /// How the conversation works with OpenAI: he overhears everything, and only answers when asked.
     private const string OpenAIGuide =
@@ -211,7 +227,7 @@ public sealed class RealtimeHost
         "say so in a few words. When the user says goodbye or asks you to sleep, reply with a very short goodbye and call go_to_sleep.";
 
     private static string Instructions(bool gemini) =>
-        Personality + "\n\n" + (gemini ? GeminiGuide : OpenAIGuide) + "\n\n" + ToolGuide;
+        Personality + "\n\n" + (gemini ? GeminiGuide : OpenAIGuide) + "\n\n" + ToolGuide + "\n\n" + LanguageRule;
 
     /// Gets the phone what it needs to start a voice session, with whichever AI is picked in the menu.
     /// For OpenAI that's a bare short-lived key; for Gemini it's JSON the phone connects with:
@@ -241,7 +257,11 @@ public sealed class RealtimeHost
                     ["silence_duration_ms"] = 500, ["create_response"] = false, ["interrupt_response"] = false,
                 },
                 ["noise_reduction"] = new JsonObject { ["type"] = "near_field" },
-                ["transcription"] = new JsonObject { ["model"] = "gpt-4o-mini-transcribe" },
+                ["transcription"] = new JsonObject
+                {
+                    ["model"] = "gpt-4o-mini-transcribe",
+                    ["language"] = Dutch ? "nl" : "en",
+                },
             },
         },
         ["tools"] = OpenAITools,
@@ -356,7 +376,7 @@ public sealed class RealtimeHost
                         ["turns"] = new JsonArray(new JsonObject
                         {
                             ["role"] = "user",
-                            ["parts"] = new JsonArray(new JsonObject { ["text"] = "Say a quick, cheerful hi in under eight words." }),
+                            ["parts"] = new JsonArray(new JsonObject { ["text"] = Dutch ? "Zeg kort en vrolijk hoi, in minder dan acht woorden." : "Say a quick, cheerful hi in under eight words." }),
                         }),
                         ["turnComplete"] = true,
                     },

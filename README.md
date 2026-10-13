@@ -48,6 +48,10 @@ In stap 1 kun je dus al met Bluey praten. Zijn antwoorden verschijnen als tekstb
 
 Bluey zit in het systeemvak (rechtsonder, bij de klok). Klik op het blauwe besje voor het menu.
 
+## Taal
+
+Bluey praat standaard **Nederlands** en verstaat je ook in het Nederlands. Wissel via het menu **Language / Taal** naar Engels. De nieuwe taal geldt vanaf zijn volgende gesprek (als hij wakker is, start hij vanzelf opnieuw). Heb je zelf een persoonlijkheid ingesteld, dan blijft die staan, maar hij antwoordt wel in de gekozen taal.
+
 ## Sneltoetsen
 
 Op de Mac zijn dit ⌃⌥-toetsen; op Windows **Ctrl+Alt**:

@@ -110,6 +110,12 @@ public sealed class AppSettings
     }
     /// The Gemini Live model. Kept as a setting so a renamed model needs no new app.
     public string GeminiModel { get => Get("geminiModel", "gemini-3.8-live"); set => Set("geminiModel", value); }
+    /// The language he talks in: "nl" (Dutch, default) or "en".
+    public string Language
+    {
+        get => Get("language", "nl") == "en" ? "en" : "nl";
+        set => Set("language", value);
+    }
     /// Who he is (empty = the built-in default).
     public string Personality { get => Get("personality", ""); set => Set("personality", value); }
 }
