@@ -579,7 +579,6 @@ final class LiveVoice: NSObject, ObservableObject {
         converter = AVAudioConverter(from: inputFormat, to: wireFormat)
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 2400, format: inputFormat) { [weak self] buffer, _ in
-            self?.recorder.append(buffer)
             self?.sendMic(buffer)
         }
         player.volume = Float(volume)

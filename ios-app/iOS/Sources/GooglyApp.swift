@@ -117,7 +117,7 @@ struct RootView: View {
         }
         live.onSessionStart = { [store, live] in
             store.start()
-            if let id = store.currentID { live.recorder.start(session: id) }
+            // No background recording: he only hears what you say while you hold the screen.
         }
         live.resumeContext = { [store] in store.recentText() }
         live.recorder.onChunk = { [store, link] chunk in

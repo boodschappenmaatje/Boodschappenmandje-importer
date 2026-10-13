@@ -78,7 +78,7 @@ struct BlueyAppView: View {
 
                 Text(live.state == .asleep
                      ? "Houd zijn gezicht vast terwijl je iets vraagt, laat los en hij antwoordt."
-                     : "Sessie loopt. Houd zijn gezicht vast om iets te vragen; het gesprek wordt hier bewaard.")
+                     : "Sessie loopt. Houd zijn gezicht vast om iets te vragen; je vragen en zijn antwoorden worden hier bewaard.")
                     .font(.plexSans(12))
                     .foregroundStyle(Color(hex: Palette.inkSoft))
 

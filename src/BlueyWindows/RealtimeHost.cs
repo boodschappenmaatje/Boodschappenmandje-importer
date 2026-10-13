@@ -60,8 +60,9 @@ public sealed class RealtimeHost
                 }
                 break;
             case "transcribe":
-                // Meeting notes come in a later step; answer so the phone doesn't wait.
-                reply(new Packet { Command = "transcribed", CallID = packet.CallID });
+                // No meeting notes: the audio is not kept or transcribed. An empty transcript lets an older
+                // phone app drop chunks it recorded earlier instead of retrying them forever.
+                reply(new Packet { Command = "transcribed", CallID = packet.CallID, Text = "{\"segments\":[]}" });
                 break;
             case "notes":
                 reply(new Packet { Command = "notes", CallID = packet.CallID });
