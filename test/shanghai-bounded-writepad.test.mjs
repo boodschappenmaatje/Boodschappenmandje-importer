@@ -44,9 +44,16 @@ const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatj
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
 
-test("Shanghai parser diagnostics expose only bounded reason codes, never source fragments", () => {
-  assert.equal(safeShanghaiParserReason("supplement_quantity_missing:unreviewed source detail"), "supplement_quantity_missing");
-  assert.equal(safeShanghaiParserReason("corroboration_source_changed"), "corroboration_source_changed");
+test("Shanghai parser diagnostics expose bounded reason and allowlisted item only", () => {
+  assert.deepEqual(safeShanghaiParserReason("supplement_quantity_missing:225 g mager rundergehakt"), {
+    code: "supplement_quantity_missing", item: "rundergehakt",
+  });
+  assert.deepEqual(safeShanghaiParserReason("supplement_quantity_missing:secret token=hidden"), {
+    code: "supplement_quantity_missing", item: null,
+  });
+  assert.deepEqual(safeShanghaiParserReason("corroboration_source_changed"), {
+    code: "corroboration_source_changed", item: null,
+  });
   assert.equal(safeShanghaiParserReason("secret token=hidden"), null);
   assert.equal(safeShanghaiParserReason(undefined), null);
 });
