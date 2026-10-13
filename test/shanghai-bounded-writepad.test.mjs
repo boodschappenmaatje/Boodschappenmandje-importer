@@ -85,8 +85,8 @@ Bereidingswijze: Recept met lekker veel groente: Boodschappenlijstje:
 };
 
 test("runner uses the exact measured Shanghai CSS content-root selector", () => {
-  assert.match(runner, /page\\.locator\\(SHANGHAI_CONTENT_ROOT\\)/);
-  assert.doesNotMatch(runner, /page\\.locator\\("main"\\)\\.filter\\(\\{\\s*has:\\s*page\\.locator\\("h1"\\)/);
+  assert.ok(runner.includes("page.locator(SHANGHAI_CONTENT_ROOT)"));
+  assert.ok(!runner.includes('page.locator("main").filter({ has: page.locator("h1") })'));
 });
 
 test("uses the current semantic Shanghai root, opens source content and reaches the parser", async () => {
