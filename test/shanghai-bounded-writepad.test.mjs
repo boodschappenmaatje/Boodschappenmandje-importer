@@ -49,7 +49,7 @@ test("runner imports the Shanghai product name used by the normal source-read fl
   assert.notEqual(coreImportEnd, -1);
   assert.match(runner.slice(coreImportStart, coreImportEnd), /\bSHANGHAI_PRODUCT_NAME\b/);
   assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
-  assert.match(runner, /dismissShanghaiRejectOptionalConsent\\(rejectOptionalCookies\\)/);
+  assert.ok(runner.includes("dismissShanghaiRejectOptionalConsent(rejectOptionalCookies)"));
   const consentMatcher = runner.match(/const rejectOptionalCookies = page\\.getByRole\\("button", \\{\\s*name: (\\/.*\\/i),/);
   assert.ok(consentMatcher, "runner must select consent semantically");
   assert.doesNotMatch(consentMatcher[1], /accept|accepteren/i);
