@@ -69,6 +69,8 @@ test("Shanghai source read waits for both explicit preparation oil quantities wi
   assert.doesNotMatch(JSON.stringify(safeShanghaiSourceFacts(complete)), /Verhit|olie/i);
   assert.match(runner, /selectorSubstage = "instructions_content"/);
   assert.match(runner, /await page\.waitForFunction\(/);
+  assert.doesNotMatch(runner, /shanghaiOilMeasurementCount\(controlledPanels/);
+  assert.match(runner, /instructionOilMeasurementCount/);
   assert.match(runner, /oilMeasurementsBeforeWait/);
   assert.match(runner, /oilMeasurementsAfterWait/);
 });
