@@ -146,8 +146,11 @@ test("readiness preflight reports only a bounded stage when evaluation stops", (
   assert.match(runner, /requirement_key_types/);
   assert.match(runner, /candidate_product_lists/);
   const safeDiagnostics = runner.slice(runner.indexOf("function safeReadinessGateShape"), runner.indexOf("function projectedRecipe"));
-  assert.doesNotMatch(safeDiagnostics, /error\.message|error\.stack|JSON\.stringify\(error/);
+  assert.doesNotMatch(safeDiagnostics, /error\.stack|JSON\.stringify\(error/);
   assert.match(safeDiagnostics, /\["TypeError", "RangeError", "Error"\]/);
+  assert.match(safeDiagnostics, /SAFE_READINESS_PREFLIGHT_CODES\.has\(error\?\.message\)/);
+  assert.match(safeDiagnostics, /return error\.message/);
+  assert.match(safeDiagnostics, /unclassified_readiness_preflight_error/);
   for (const stage of ["catalog_load", "recipe_source_key_check", "catalog_enrichment", "recipe_projection",
     "readiness_evaluation", "readiness_row_projection", "readiness_scope_validation", "supplement_match_read",
     "supplement_match_validation", "package_match_read", "source_revision_read"]) {
