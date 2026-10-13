@@ -56,7 +56,7 @@ test("runner imports the Shanghai product name used by the normal source-read fl
   assert.ok(consentSelectorStart >= 0 && consentSelectorEnd > consentSelectorStart,
     "runner must select consent semantically");
   const consentSelector = runner.slice(consentSelectorStart, consentSelectorEnd);
-  assert.match(consentSelector, /alleen noodzakelijke\|only necessary\|reject optional\|weigeren\|afwijzen/);
+  assert.match(consentSelector, /alleen noodzakelijke|only necessary|reject optional|weigeren|afwijzen/);
   assert.doesNotMatch(consentSelector, /accept|accepteren|\^|\$/i);
 });
 
