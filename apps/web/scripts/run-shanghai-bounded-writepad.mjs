@@ -286,6 +286,19 @@ function safeReadinessErrorCode(error) {
     : "unclassified_readiness_preflight_error";
 }
 
+function safeReadinessMatchChange(row, previousPeopleCount, currentPeopleCount, changedFields) {
+  const matchKind = row.ingredient_source_key === "catalog-mix-product-231215000"
+    ? "package"
+    : row.ingredient_source_key?.startsWith("mix-supplement-") ? "supplement" : "unknown";
+  const allowedFields = new Set(["product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at"]);
+  return {
+    match_kind: matchKind,
+    previous_people_count: PLANNER_MAINTENANCE_PEOPLE_COUNTS.includes(previousPeopleCount) ? previousPeopleCount : null,
+    current_people_count: PLANNER_MAINTENANCE_PEOPLE_COUNTS.includes(currentPeopleCount) ? currentPeopleCount : null,
+    changed_fields: changedFields.filter((field) => allowedFields.has(field)),
+  };
+}
+
 function projectedRecipe(id, recipeRow) {
   return {
     id,
@@ -302,7 +315,7 @@ function projectedRecipe(id, recipeRow) {
   };
 }
 
-async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, setStage = () => {}) {
+async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, setStage = () => {}, setMismatch = () => {}) {
   setStage("catalog_load");
   const catalog = await loadCatalog(client);
   setStage("recipe_source_key_check");
@@ -316,6 +329,7 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, s
   catalog.recipes = [...catalog.recipes, recipe];
   const repository = new SupabaseCatalogRepository(client);
   const byMatchKey = new Map();
+  const firstPeopleCountByMatchKey = new Map();
   const readinessRows = [];
   for (const peopleCount of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
     setStage("readiness_evaluation");
@@ -327,9 +341,16 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, s
     readinessRows.push(rows.readinessRows[0]);
     for (const row of rows.matchRows) {
       const existing = byMatchKey.get(row.match_key);
-      if (existing && (existing.product_id !== row.product_id || existing.match_status !== row.match_status ||
-          existing.failure_reason !== row.failure_reason || existing.product_updated_at !== row.product_updated_at ||
-          existing.price_updated_at !== row.price_updated_at)) throw new Error("match_changes_across_people");
+      if (existing) {
+        const changedFields = ["product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at"]
+          .filter((field) => existing[field] !== row[field]);
+        if (changedFields.length > 0) {
+          setMismatch(safeReadinessMatchChange(row, firstPeopleCountByMatchKey.get(row.match_key), peopleCount, changedFields));
+          throw new Error("match_changes_across_people");
+        }
+      } else {
+        firstPeopleCountByMatchKey.set(row.match_key, peopleCount);
+      }
       byMatchKey.set(row.match_key, row);
     }
   }
@@ -374,11 +395,14 @@ async function preflight(client, browser) {
   let readinessGateShape = null;
   let readinessPreflightErrorType = null;
   let readinessPreflightErrorCode = null;
+  let readinessPreflightMismatch = null;
   if (product && parsed?.status === "verified" && recipeRow) {
     try {
       evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile, (stage, gate) => {
         readinessPreflightStage = stage;
         if (stage === "readiness_row_projection") readinessGateShape = safeReadinessGateShape(gate);
+      }, (mismatch) => {
+        readinessPreflightMismatch = mismatch;
       });
       readinessPreflightStage = "supplement_match_read";
       const missingKey = evaluated.matchRows.filter((row) => row.ingredient_source_key === "catalog-mix-product-231215000");
@@ -424,6 +448,7 @@ async function preflight(client, browser) {
     readinessGateShape,
     readinessPreflightErrorType,
     readinessPreflightErrorCode,
+    readinessPreflightMismatch,
   };
   const blocked = blockers.length > 0;
   const emptyCounts = { recipes: 0, mealMixProfiles: 0, ingredientProductMatches: 0, readiness: 0, total: 0 };
@@ -452,6 +477,7 @@ async function preflight(client, browser) {
     readinessGateShape,
     readinessPreflightErrorType,
     readinessPreflightErrorCode,
+    readinessPreflightMismatch,
     casRevisions: cas,
     casRevisionStatus: cas ? "captured" : "will_be_captured_by_bounded_dry_run_after_link",
     dependencyKeys: evaluated ? [...new Set(evaluated.readinessRows.flatMap((row) => row.dependency_match_keys))].sort() : [],
