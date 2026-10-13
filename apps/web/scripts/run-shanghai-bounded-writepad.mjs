@@ -269,6 +269,23 @@ function safeReadinessErrorType(error) {
   return ["TypeError", "RangeError", "Error"].includes(error?.name) ? error.name : "unknown";
 }
 
+const SAFE_READINESS_PREFLIGHT_CODES = new Set([
+  "recipe_source_key_conflict",
+  "evaluator_recipe_scope_mismatch",
+  "readiness_scope_mismatch",
+  "match_changes_across_people",
+  "computed_scope_mismatch",
+  "supplement_match_read_failed",
+  "package_match_read_failed",
+  "source_revision_unavailable",
+]);
+
+function safeReadinessErrorCode(error) {
+  return SAFE_READINESS_PREFLIGHT_CODES.has(error?.message)
+    ? error.message
+    : "unclassified_readiness_preflight_error";
+}
+
 function projectedRecipe(id, recipeRow) {
   return {
     id,
@@ -356,6 +373,7 @@ async function preflight(client, browser) {
   let readinessPreflightStage = null;
   let readinessGateShape = null;
   let readinessPreflightErrorType = null;
+  let readinessPreflightErrorCode = null;
   if (product && parsed?.status === "verified" && recipeRow) {
     try {
       evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile, (stage, gate) => {
@@ -390,6 +408,7 @@ async function preflight(client, browser) {
       }
     } catch (error) {
       readinessPreflightErrorType = safeReadinessErrorType(error);
+      readinessPreflightErrorCode = safeReadinessErrorCode(error);
       blockers.push("readiness_preflight_unavailable");
     }
   }
@@ -404,6 +423,7 @@ async function preflight(client, browser) {
     readinessPreflightStage,
     readinessGateShape,
     readinessPreflightErrorType,
+    readinessPreflightErrorCode,
   };
   const blocked = blockers.length > 0;
   const emptyCounts = { recipes: 0, mealMixProfiles: 0, ingredientProductMatches: 0, readiness: 0, total: 0 };
@@ -431,6 +451,7 @@ async function preflight(client, browser) {
     readinessPreflightStage,
     readinessGateShape,
     readinessPreflightErrorType,
+    readinessPreflightErrorCode,
     casRevisions: cas,
     casRevisionStatus: cas ? "captured" : "will_be_captured_by_bounded_dry_run_after_link",
     dependencyKeys: evaluated ? [...new Set(evaluated.readinessRows.flatMap((row) => row.dependency_match_keys))].sort() : [],
