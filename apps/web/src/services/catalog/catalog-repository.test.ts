@@ -14,6 +14,8 @@ import {
   productSearchRelevance,
   sortProductsForQuery,
   SupabaseCatalogRepository,
+  createCatalogRepository,
+  CatalogReadError,
 } from "./catalog-repository";
 import type { Product } from "@/types/catalog";
 
@@ -72,6 +74,14 @@ describe("cataloguspaginering", () => {
 });
 
 describe("catalogusquery", () => {
+  it("weigert een provider zonder catalogusintegratie zonder Hoogvliet-fallback", () => {
+    expect(() => createCatalogRepository("ah")).toThrowError(
+      expect.objectContaining<Partial<CatalogReadError>>({
+        code: "unsupported-provider",
+      }),
+    );
+  });
+
   it("normaliseert filters, maximumprijs, sortering en serverpaginering", () => {
     const normalized = normalizeCatalogQueryRequest({
       term: "  CoLa  ",

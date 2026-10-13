@@ -111,7 +111,7 @@ export function CatalogSearchView() {
       setState({ status: "loading" });
       setLoadMoreError(null);
       try {
-        const result = await createCatalogRepository().query({
+        const result = await createCatalogRepository(shoppingList.supermarketId).query({
           ...query,
           page: 1,
           pageSize: DEFAULT_CATALOG_PAGE_SIZE,
@@ -135,13 +135,13 @@ export function CatalogSearchView() {
 
     void loadProducts();
     return () => controller.abort();
-  }, [query, queryKey]);
+  }, [query, queryKey, shoppingList.supermarketId]);
 
   useEffect(() => {
     const controller = new AbortController();
     async function loadFilters() {
       try {
-        const result = await createCatalogRepository().getFilterOptions({
+        const result = await createCatalogRepository(shoppingList.supermarketId).getFilterOptions({
           term: query.term,
           category: query.category,
           signal: controller.signal,
@@ -162,7 +162,7 @@ export function CatalogSearchView() {
     }
     void loadFilters();
     return () => controller.abort();
-  }, [query.brand, query.category, query.term]);
+  }, [query.brand, query.category, query.term, shoppingList.supermarketId]);
 
   async function loadMore() {
     if (state.status !== "loaded" || !state.hasMore || isLoadingMore) return;
@@ -172,7 +172,7 @@ export function CatalogSearchView() {
     setIsLoadingMore(true);
     setLoadMoreError(null);
     try {
-      const result = await createCatalogRepository().query({
+      const result = await createCatalogRepository(shoppingList.supermarketId).query({
         ...query,
         page: state.nextPage,
         pageSize: DEFAULT_CATALOG_PAGE_SIZE,

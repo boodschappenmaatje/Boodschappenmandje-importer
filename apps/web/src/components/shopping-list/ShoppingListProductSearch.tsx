@@ -224,7 +224,7 @@ export function ShoppingListProductSearch({
     const controller = new AbortController();
     const debounceTimer = window.setTimeout(async () => {
       try {
-        const result = await createCatalogRepository().query({
+        const result = await createCatalogRepository(shoppingList.supermarketId).query({
           ...query,
           page: 1,
           pageSize: CATALOG_SEARCH_LIMIT,
@@ -248,7 +248,7 @@ export function ShoppingListProductSearch({
       window.clearTimeout(debounceTimer);
       controller.abort();
     };
-  }, [online, open, query]);
+  }, [online, open, query, shoppingList.supermarketId]);
 
   useEffect(() => {
     if (!open || !online) return;
@@ -256,7 +256,7 @@ export function ShoppingListProductSearch({
     const debounceTimer = window.setTimeout(async () => {
       try {
         const normalized = normalizeCatalogSearchRequest(query.term);
-        const result = await createCatalogRepository().getFilterOptions({
+        const result = await createCatalogRepository(shoppingList.supermarketId).getFilterOptions({
           term: normalized?.term ?? "",
           category: query.category,
           signal: controller.signal,
@@ -282,7 +282,7 @@ export function ShoppingListProductSearch({
       window.clearTimeout(debounceTimer);
       controller.abort();
     };
-  }, [online, open, query.brand, query.category, query.term]);
+  }, [online, open, query.brand, query.category, query.term, shoppingList.supermarketId]);
 
   useEffect(() => {
     if (!open) return;

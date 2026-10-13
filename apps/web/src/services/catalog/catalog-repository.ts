@@ -18,6 +18,11 @@ import type {
   CatalogSort,
   Product,
 } from "@/types/catalog";
+import {
+  DEFAULT_SUPERMARKET_ID,
+  SUPERMARKETS,
+  type SupermarketId,
+} from "@/types/supermarket";
 
 export const DEFAULT_CATALOG_PAGE_SIZE = 20;
 export const MAX_CATALOG_PAGE_SIZE = 20;
@@ -369,6 +374,7 @@ const FACET_FIELDS = "brand,category,product_type";
 
 export type CatalogReadErrorCode =
   | "not-configured"
+  | "unsupported-provider"
   | "products-unavailable"
   | "invalid-response";
 
@@ -405,7 +411,26 @@ function valuesFromFacetRows(
 
 export class SupabaseCatalogRepository implements CatalogRepository {
   private candidateCatalog: { expiresAt: number; result: Promise<CatalogProductsResult> } | null = null;
-  constructor(private readonly client: SupabaseClient, private readonly now = Date.now) {}
+  private readonly supermarketId: SupermarketId;
+  private readonly now: () => number;
+
+  constructor(
+    private readonly client: SupabaseClient,
+    supermarketOrNow: SupermarketId | (() => number) = DEFAULT_SUPERMARKET_ID,
+    now = Date.now,
+  ) {
+    this.supermarketId = typeof supermarketOrNow === "string"
+      ? supermarketOrNow
+      : DEFAULT_SUPERMARKET_ID;
+    this.now = typeof supermarketOrNow === "function" ? supermarketOrNow : now;
+    if (!SUPERMARKETS[this.supermarketId]?.catalogSupported) {
+      throw new CatalogReadError("unsupported-provider");
+    }
+  }
+
+  private get supermarketName(): string {
+    return SUPERMARKETS[this.supermarketId].name;
+  }
 
   invalidateProducts(productIds: string[]): void {
     if (productIds.length) this.candidateCatalog = null;
@@ -436,7 +461,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     for (let start = 0; ; start += batchSize) {
       const { data, error } = await this.client.from("products")
         .select(`${PRODUCT_FIELDS},current_price:product_prices(${PRICE_FIELDS})`)
-        .eq("supermarket", "Hoogvliet").order("id", { ascending: true })
+        .eq("supermarket", this.supermarketName).order("id", { ascending: true })
         .range(start, start + batchSize - 1);
       if (error) throw new CatalogReadError("products-unavailable");
       if (!Array.isArray(data)) throw new CatalogReadError("invalid-response");
@@ -497,7 +522,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       let priceQuery = this.client
         .from("product_prices")
         .select(`${PRICE_FIELDS},product:products!inner(${PRODUCT_FIELDS})`)
-        .eq("product.supermarket", "Hoogvliet");
+        .eq("product.supermarket", this.supermarketName);
 
       if (searchFilter) {
         priceQuery = priceQuery.or(searchFilter, { referencedTable: "product" });
@@ -548,7 +573,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     let productQuery = this.client
       .from("products")
       .select(`${PRODUCT_FIELDS},${priceRelation}`)
-      .eq("supermarket", "Hoogvliet");
+      .eq("supermarket", this.supermarketName);
 
     if (searchFilter) {
       productQuery = productQuery.or(searchFilter);
@@ -617,7 +642,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     let productQuery = this.client
       .from("products")
       .select(PRODUCT_FIELDS)
-      .eq("supermarket", "Hoogvliet")
+      .eq("supermarket", this.supermarketName)
       .in("id", uniqueIds)
       .order("name", { ascending: true })
       .order("id", { ascending: true });
@@ -677,7 +702,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     let facetQuery = this.client
       .from("products")
       .select(FACET_FIELDS)
-      .eq("supermarket", "Hoogvliet")
+      .eq("supermarket", this.supermarketName)
       .limit(CATALOG_FILTER_SAMPLE_LIMIT);
 
     if (search) {
@@ -698,8 +723,13 @@ export class SupabaseCatalogRepository implements CatalogRepository {
   }
 }
 
-export function createCatalogRepository(): CatalogRepository {
+export function createCatalogRepository(
+  supermarketId: SupermarketId = DEFAULT_SUPERMARKET_ID,
+): CatalogRepository {
+  if (!SUPERMARKETS[supermarketId]?.catalogSupported) {
+    throw new CatalogReadError("unsupported-provider");
+  }
   const client = getSupabaseBrowserClient();
   if (!client) throw new CatalogReadError("not-configured");
-  return new SupabaseCatalogRepository(client);
+  return new SupabaseCatalogRepository(client, supermarketId);
 }

@@ -31,7 +31,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
 
     async function loadProduct() {
       try {
-        const result = await createCatalogRepository().getByIds(
+        const result = await createCatalogRepository(shoppingList.supermarketId).getByIds(
           [productId],
           controller.signal,
         );
@@ -47,7 +47,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
 
     void loadProduct();
     return () => controller.abort();
-  }, [productId]);
+  }, [productId, shoppingList.supermarketId]);
 
   async function addProduct(product: Product) {
     if (shoppingList.status !== "ready" || isAdding) return;

@@ -7,6 +7,10 @@ import {
   type ShoppingListPriceReference,
 } from "@/types/shopping-list";
 import {
+  DEFAULT_SUPERMARKET_ID,
+  type SupermarketId,
+} from "@/types/supermarket";
+import {
   SHOPPING_LIST_STORE_NAME,
   openBoodschappenmaatjeDatabase,
 } from "@/services/storage/indexeddb";
@@ -35,8 +39,19 @@ export class ShoppingListStorageError extends Error {
 }
 
 export interface ShoppingListStorage {
-  load(): Promise<ActiveShoppingList | null>;
-  save(list: ActiveShoppingList): Promise<void>;
+  load(supermarketId?: SupermarketId): Promise<ActiveShoppingList | null>;
+  save(list: ActiveShoppingList, supermarketId?: SupermarketId): Promise<void>;
+}
+
+export function supermarketShoppingListKey(supermarketId: SupermarketId): string {
+  return `active:${supermarketId}`;
+}
+
+interface StoredProviderShoppingList {
+  key: string;
+  providerId: SupermarketId;
+  schemaVersion: typeof SHOPPING_LIST_SCHEMA_VERSION;
+  list: ActiveShoppingList;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -246,14 +261,76 @@ export function encodeStoredActiveShoppingList(
   };
 }
 
-function requestResult<T>(
-  request: IDBRequest<T>,
-  code: ShoppingListStorageErrorCode,
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(new ShoppingListStorageError(code));
-  });
+export function encodeStoredProviderShoppingList(
+  list: ActiveShoppingList,
+  supermarketId: SupermarketId,
+): StoredProviderShoppingList {
+  return {
+    key: supermarketShoppingListKey(supermarketId),
+    providerId: supermarketId,
+    schemaVersion: SHOPPING_LIST_SCHEMA_VERSION,
+    list,
+  };
+}
+
+export function decodeStoredProviderShoppingList(
+  value: unknown,
+  supermarketId: SupermarketId,
+): ActiveShoppingList {
+  if (!isRecord(value)) throw new ShoppingListStorageError("invalid-data");
+  if (value.schemaVersion !== SHOPPING_LIST_SCHEMA_VERSION) {
+    throw new ShoppingListStorageError("unsupported-version");
+  }
+  const list = value.list;
+  if (
+    value.key !== supermarketShoppingListKey(supermarketId) ||
+    value.providerId !== supermarketId ||
+    !isRecord(list) ||
+    list.schemaVersion !== SHOPPING_LIST_SCHEMA_VERSION ||
+    typeof list.startedAt !== "string" ||
+    typeof list.updatedAt !== "string" ||
+    !Array.isArray(list.items) ||
+    !list.items.every(isShoppingListItem)
+  ) {
+    throw new ShoppingListStorageError("invalid-data");
+  }
+  return list as unknown as ActiveShoppingList;
+}
+
+export interface ProviderShoppingListLoadResolution {
+  list: ActiveShoppingList | null;
+  migratedRecord: StoredProviderShoppingList | null;
+  removeLegacy: boolean;
+}
+
+export function resolveProviderShoppingListLoad(
+  target: unknown,
+  legacy: unknown,
+  supermarketId: SupermarketId,
+): ProviderShoppingListLoadResolution {
+  if (target !== undefined && legacy !== undefined) {
+    throw new ShoppingListStorageError("invalid-data");
+  }
+  if (target !== undefined) {
+    return {
+      list: decodeStoredProviderShoppingList(target, supermarketId),
+      migratedRecord: null,
+      removeLegacy: false,
+    };
+  }
+  if (legacy !== undefined) {
+    if (supermarketId !== DEFAULT_SUPERMARKET_ID) {
+      throw new ShoppingListStorageError("invalid-data");
+    }
+    const list = decodeStoredActiveShoppingList(legacy);
+    if (!list) throw new ShoppingListStorageError("invalid-data");
+    return {
+      list,
+      migratedRecord: encodeStoredProviderShoppingList(list, DEFAULT_SUPERMARKET_ID),
+      removeLegacy: true,
+    };
+  }
+  return { list: null, migratedRecord: null, removeLegacy: false };
 }
 
 function transactionComplete(
@@ -278,30 +355,83 @@ export class IndexedDbShoppingListStorage implements ShoppingListStorage {
     }
   }
 
-  async load(): Promise<ActiveShoppingList | null> {
+  async load(
+    supermarketId: SupermarketId = DEFAULT_SUPERMARKET_ID,
+  ): Promise<ActiveShoppingList | null> {
     const database = await this.openDatabase();
     try {
-      const transaction = database.transaction(SHOPPING_LIST_STORE_NAME, "readonly");
-      const request = transaction
-        .objectStore(SHOPPING_LIST_STORE_NAME)
-        .get(ACTIVE_LIST_KEY);
-      const [stored] = await Promise.all([
-        requestResult<unknown>(request, "read-failed"),
-        transactionComplete(transaction, "read-failed"),
-      ]);
-      return decodeStoredActiveShoppingList(stored);
+      const transaction = database.transaction(SHOPPING_LIST_STORE_NAME, "readwrite");
+      const store = transaction.objectStore(SHOPPING_LIST_STORE_NAME);
+      const targetRequest = store.get(supermarketShoppingListKey(supermarketId));
+      const legacyRequest = supermarketId === DEFAULT_SUPERMARKET_ID
+        ? store.get(ACTIVE_LIST_KEY)
+        : null;
+      const completion = transactionComplete(transaction, "read-failed");
+
+      const migratedList = new Promise<ActiveShoppingList | null>((resolve, reject) => {
+        let targetReady = false;
+        let legacyReady = legacyRequest === null;
+        let target: unknown;
+        let legacy: unknown;
+        let settled = false;
+
+        const fail = (error: unknown) => {
+          if (settled) return;
+          settled = true;
+          try { transaction.abort(); } catch { /* already inactive */ }
+          reject(error instanceof ShoppingListStorageError
+            ? error
+            : new ShoppingListStorageError("read-failed"));
+        };
+
+        const finishReads = () => {
+          if (settled || !targetReady || !legacyReady) return;
+          try {
+            const resolution = resolveProviderShoppingListLoad(target, legacy, supermarketId);
+            if (resolution.migratedRecord) {
+              store.put(resolution.migratedRecord);
+              if (resolution.removeLegacy) store.delete(ACTIVE_LIST_KEY);
+            }
+            resolve(resolution.list);
+            settled = true;
+          } catch (error) {
+            fail(error);
+          }
+        };
+
+        targetRequest.onsuccess = () => {
+          target = targetRequest.result;
+          targetReady = true;
+          finishReads();
+        };
+        targetRequest.onerror = () => fail(new ShoppingListStorageError("read-failed"));
+        if (legacyRequest) {
+          legacyRequest.onsuccess = () => {
+            legacy = legacyRequest.result;
+            legacyReady = true;
+            finishReads();
+          };
+          legacyRequest.onerror = () => fail(new ShoppingListStorageError("read-failed"));
+        }
+      });
+
+      const [list] = await Promise.all([migratedList, completion]);
+      return list;
     } finally {
       database.close();
     }
   }
 
-  async save(list: ActiveShoppingList): Promise<void> {
+  async save(
+    list: ActiveShoppingList,
+    supermarketId: SupermarketId = DEFAULT_SUPERMARKET_ID,
+  ): Promise<void> {
     const database = await this.openDatabase();
     try {
       const transaction = database.transaction(SHOPPING_LIST_STORE_NAME, "readwrite");
       transaction
         .objectStore(SHOPPING_LIST_STORE_NAME)
-        .put(encodeStoredActiveShoppingList(list));
+        .put(encodeStoredProviderShoppingList(list, supermarketId));
       await transactionComplete(transaction, "write-failed");
     } finally {
       database.close();

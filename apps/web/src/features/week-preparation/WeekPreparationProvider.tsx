@@ -242,8 +242,9 @@ export function WeekPreparationProvider({
   }>({ source: undefined, repository: null });
   const catalogRepositoryCacheRef = useRef<{
     source: CatalogRepository | undefined;
+    supermarketId: string | null;
     repository: CatalogRepository | null;
-  }>({ source: undefined, repository: null });
+  }>({ source: undefined, supermarketId: null, repository: null });
   const planningSnapshotCacheRef = useRef(
     createWeekPlanningSnapshotCache({
       persistentRepository: createPersistentRecipeReadinessRepository(),
@@ -266,16 +267,21 @@ export function WeekPreparationProvider({
   const catalogRepository = useCallback(
     () => {
       const cached = catalogRepositoryCacheRef.current;
-      if (!cached.repository || cached.source !== suppliedCatalogRepository) {
+      if (
+        !cached.repository ||
+        cached.source !== suppliedCatalogRepository ||
+        cached.supermarketId !== shoppingList.supermarketId
+      ) {
         cached.source = suppliedCatalogRepository;
+        cached.supermarketId = shoppingList.supermarketId;
         cached.repository = createCachedCatalogRepository(
-          suppliedCatalogRepository ?? createCatalogRepository(),
+          suppliedCatalogRepository ?? createCatalogRepository(shoppingList.supermarketId),
           { ttlMs: CATALOG_PRICE_REFRESH_MS },
         );
       }
       return cached.repository;
     },
-    [suppliedCatalogRepository],
+    [shoppingList.supermarketId, suppliedCatalogRepository],
   );
 
   const persist = useCallback((next: WeekPreparation): Promise<void> => {
@@ -458,7 +464,7 @@ export function WeekPreparationProvider({
     priceRefreshInFlightRef.current = true;
     try {
       // Bypass the planning request cache: a last-known price is never pinned.
-      const repository = suppliedCatalogRepository ?? createCatalogRepository();
+      const repository = suppliedCatalogRepository ?? createCatalogRepository(shoppingList.supermarketId);
       const ids = [...new Set(current.ingredients.flatMap(item => item.product ? [item.product.productId] : []))];
       const products: Product[] = [];
       for (let start = 0; start < ids.length; start += 100) products.push(...(await repository.getByIds(ids.slice(start, start + 100))).products);

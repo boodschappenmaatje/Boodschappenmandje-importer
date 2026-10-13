@@ -14,6 +14,11 @@ import {
 import { subscribeCatalogRefresh } from "@/services/catalog/auto-refresh";
 import { createCatalogRepository } from "@/services/catalog/catalog-repository";
 import {
+  activeSupermarketFromStorage,
+  browserSupermarketPreferenceStorage,
+  persistActiveSupermarket,
+} from "@/services/supermarket/active-supermarket";
+import {
   createIndexedDbShoppingListStorage,
   type ShoppingListStorage,
 } from "@/services/shopping-list/indexeddb-storage";
@@ -38,11 +43,19 @@ import type {
   RemovedShoppingListItem,
   ShoppingListTotal,
 } from "@/types/shopping-list";
+import {
+  DEFAULT_SUPERMARKET_ID,
+  isSupermarketId,
+  productBelongsToSupermarket,
+  type SupermarketId,
+} from "@/types/supermarket";
 
 type ShoppingListStatus = "loading" | "ready" | "error";
 
 interface ActiveShoppingListContextValue {
   status: ShoppingListStatus;
+  supermarketId: SupermarketId;
+  setActiveSupermarket: (supermarketId: SupermarketId) => Promise<boolean>;
   list: ActiveShoppingList | null;
   total: ShoppingListTotal;
   persistenceWarning: string | null;
@@ -91,26 +104,39 @@ export function ActiveShoppingListProvider({
   const [status, setStatus] = useState<ShoppingListStatus>(
     initialList ? "ready" : "loading",
   );
+  const [supermarketId, setSupermarketId] = useState<SupermarketId>(DEFAULT_SUPERMARKET_ID);
   const [list, setList] = useState<ActiveShoppingList | null>(initialList ?? null);
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
   const [lastRemoved, setLastRemoved] =
     useState<RemovedShoppingListItem | null>(null);
   const listRef = useRef<ActiveShoppingList | null>(initialList ?? null);
+  const supermarketIdRef = useRef<SupermarketId>(DEFAULT_SUPERMARKET_ID);
+  const switchingSupermarketRef = useRef(false);
+  const switchSequenceRef = useRef(0);
+  const lastPersistFailedRef = useRef(false);
   const storageRef = useRef<ShoppingListStorage | null>(suppliedStorage ?? null);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-  const persist = useCallback((next: ActiveShoppingList): Promise<void> => {
+  const persist = useCallback((
+    next: ActiveShoppingList,
+    providerId: SupermarketId = supermarketIdRef.current,
+  ): Promise<void> => {
     const storage = storageRef.current;
     if (!storage) {
+      lastPersistFailedRef.current = true;
       setPersistenceWarning("Je lijst kon niet veilig op dit apparaat worden opgeslagen.");
       return Promise.resolve();
     }
 
     saveQueueRef.current = saveQueueRef.current
       .catch(() => undefined)
-      .then(() => storage.save(next))
-      .then(() => setPersistenceWarning(null))
+      .then(() => storage.save(next, providerId))
+      .then(() => {
+        lastPersistFailedRef.current = false;
+        setPersistenceWarning(null);
+      })
       .catch(() => {
+        lastPersistFailedRef.current = true;
         setPersistenceWarning("Je wijziging is zichtbaar, maar lokaal opslaan lukte niet.");
       });
     return saveQueueRef.current;
@@ -118,6 +144,7 @@ export function ActiveShoppingListProvider({
 
   const commit = useCallback(
     (update: (current: ActiveShoppingList) => ActiveShoppingList) => {
+      if (switchingSupermarketRef.current) return Promise.resolve();
       const current = listRef.current;
       if (!current) return Promise.resolve();
       const next = update(current);
@@ -134,7 +161,7 @@ export function ActiveShoppingListProvider({
     if (!current || current.items.length === 0) return;
 
     try {
-      const result = await createCatalogRepository().getByIds(
+      const result = await createCatalogRepository(supermarketIdRef.current).getByIds(
         current.items.map((item) => item.productId),
       );
       await commit((latest) =>
@@ -155,14 +182,20 @@ export function ActiveShoppingListProvider({
       try {
         const storage = suppliedStorage ?? createIndexedDbShoppingListStorage();
         storageRef.current = storage;
-        const stored = await storage.load();
+        const preferenceStorage = browserSupermarketPreferenceStorage();
+        const selectedSupermarket = preferenceStorage
+          ? activeSupermarketFromStorage(preferenceStorage)
+          : DEFAULT_SUPERMARKET_ID;
+        supermarketIdRef.current = selectedSupermarket;
+        setSupermarketId(selectedSupermarket);
+        const stored = await storage.load(selectedSupermarket);
         if (!active) return;
         const restored = stored ?? createEmptyActiveShoppingList();
         listRef.current = restored;
         setList(restored);
         setStatus("ready");
         if (!stored) {
-          await persist(restored);
+          await persist(restored, selectedSupermarket);
         }
         void refreshPrices();
       } catch {
@@ -183,10 +216,64 @@ export function ActiveShoppingListProvider({
 
   useEffect(() => subscribeCatalogRefresh(() => { void refreshPrices(); }), [refreshPrices]);
 
-  const refreshFromProducts = useCallback((products: Product[]) => commit(current => refreshShoppingListFromCatalog(current, products)), [commit]);
+  const setActiveSupermarket = useCallback(async (nextSupermarketId: SupermarketId) => {
+    if (!isSupermarketId(nextSupermarketId)) return false;
+    if (nextSupermarketId === supermarketIdRef.current) return true;
+
+    const sequence = ++switchSequenceRef.current;
+    switchingSupermarketRef.current = true;
+    setStatus("loading");
+    setLastRemoved(null);
+    try {
+      saveQueueRef.current = saveQueueRef.current.catch(() => undefined);
+      await saveQueueRef.current;
+      if (sequence !== switchSequenceRef.current) return false;
+      if (lastPersistFailedRef.current) {
+        throw new Error("active-list-has-unsaved-changes");
+      }
+      const storage = storageRef.current ?? suppliedStorage ?? createIndexedDbShoppingListStorage();
+      storageRef.current = storage;
+      const stored = await storage.load(nextSupermarketId);
+      if (sequence !== switchSequenceRef.current) return false;
+      const nextList = stored ?? createEmptyActiveShoppingList();
+      if (!stored) {
+        await storage.save(nextList, nextSupermarketId);
+      }
+      const preferenceStorage = browserSupermarketPreferenceStorage();
+      if (!preferenceStorage) throw new Error("supermarket-preference-storage-unavailable");
+      persistActiveSupermarket(preferenceStorage, nextSupermarketId);
+      supermarketIdRef.current = nextSupermarketId;
+      listRef.current = nextList;
+      setSupermarketId(nextSupermarketId);
+      setList(nextList);
+      setStatus("ready");
+      setPersistenceWarning(null);
+      switchingSupermarketRef.current = false;
+      void refreshPrices();
+      return true;
+    } catch {
+      if (sequence === switchSequenceRef.current) {
+        switchingSupermarketRef.current = false;
+        setStatus("ready");
+        setPersistenceWarning("Winkelen bij deze supermarkt kon niet veilig worden geopend.");
+      }
+      return false;
+    }
+  }, [refreshPrices, suppliedStorage]);
+
+  const refreshFromProducts = useCallback((products: Product[]) => {
+    const scopedProducts = products.filter((product) =>
+      productBelongsToSupermarket(product.supermarket, supermarketIdRef.current),
+    );
+    return commit(current => refreshShoppingListFromCatalog(current, scopedProducts));
+  }, [commit]);
 
   const addProduct = useCallback(
     async (product: Product) => {
+      if (!productBelongsToSupermarket(product.supermarket, supermarketIdRef.current)) {
+        setPersistenceWarning("Dit product hoort niet bij de actieve supermarkt en is niet toegevoegd.");
+        return;
+      }
       setLastRemoved(null);
       await commit((current) => addCatalogProduct(current, product, "catalog"));
     },
@@ -198,6 +285,7 @@ export function ActiveShoppingListProvider({
       requirements: WeekIngredientRequirement[],
       weekPreparationId: string,
     ) => {
+      if (supermarketIdRef.current !== DEFAULT_SUPERMARKET_ID) return;
       setLastRemoved(null);
       await commit((current) =>
         completeShoppingListFromWeek(current, requirements, weekPreparationId),
@@ -208,6 +296,7 @@ export function ActiveShoppingListProvider({
 
   const removeMealPlanForWeek = useCallback(
     async (weekPreparationId: string): Promise<ActiveShoppingList | null> => {
+      if (switchingSupermarketRef.current) return null;
       const current = listRef.current;
       if (!current) return null;
       setLastRemoved(null);
@@ -248,6 +337,7 @@ export function ActiveShoppingListProvider({
 
   const remove = useCallback(
     async (productId: string) => {
+      if (switchingSupermarketRef.current) return;
       const current = listRef.current;
       if (!current) return;
       const result = removeShoppingListItem(current, productId);
@@ -285,6 +375,8 @@ export function ActiveShoppingListProvider({
   const value = useMemo<ActiveShoppingListContextValue>(
     () => ({
       status,
+      supermarketId,
+      setActiveSupermarket,
       list,
       total,
       persistenceWarning,
@@ -305,6 +397,7 @@ export function ActiveShoppingListProvider({
     }),
     [
       addProduct,
+      setActiveSupermarket,
       refreshFromProducts,
       completeFromWeek,
       decrease,
@@ -320,6 +413,7 @@ export function ActiveShoppingListProvider({
       removeMealPlanForWeek,
       remove,
       status,
+      supermarketId,
       total,
       undoRemove,
     ],
