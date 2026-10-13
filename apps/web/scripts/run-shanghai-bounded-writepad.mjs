@@ -32,6 +32,7 @@ import {
   runShanghaiCommit,
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
+  validateShanghaiReadinessResolution,
   safeReadinessMatchChange,
 } from "./shanghai-writepad-core.mjs";
 
@@ -325,11 +326,10 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, s
     const resolved = await resolveRecipeReadiness(
       [recipe], peopleCount, catalog, repository, new SupabasePersistentRecipeReadinessRepository(client),
     );
-    if (!resolved.cacheAvailable || resolved.persistentHitCount !== 0 || resolved.fallbackCount !== 1) {
+    if (!validateShanghaiReadinessResolution(resolved, recipeId)) {
       throw new Error("readiness_cache_preflight_unavailable");
     }
     const gate = resolved.gate;
-    if (gate.recipes.length !== 1 || gate.recipes[0]?.recipeId !== recipeId) throw new Error("evaluator_recipe_scope_mismatch");
     setStage("readiness_row_projection", gate);
     const rows = rowsForGate(gate, peopleCount, new Date());
     if (rows.readinessRows.length !== 1 || rows.readinessRows[0]?.recipe_id !== recipeId) throw new Error("readiness_scope_mismatch");
