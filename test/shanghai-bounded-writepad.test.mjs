@@ -52,10 +52,12 @@ test("runner imports the Shanghai product name used by the normal source-read fl
   assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
   assert.ok(runner.includes("dismissShanghaiRejectOptionalConsent(rejectOptionalCookies)"));
   const consentSelectorStart = runner.indexOf('const rejectOptionalCookies = page.getByRole("button", {');
-  const consentSelectorEnd = runner.indexOf("$/i", consentSelectorStart);
+  const consentSelectorEnd = runner.indexOf("/i,", consentSelectorStart);
   assert.ok(consentSelectorStart >= 0 && consentSelectorEnd > consentSelectorStart,
     "runner must select consent semantically");
-  assert.doesNotMatch(runner.slice(consentSelectorStart, consentSelectorEnd), /accept|accepteren/i);
+  const consentSelector = runner.slice(consentSelectorStart, consentSelectorEnd);
+  assert.match(consentSelector, /alleen noodzakelijke\|only necessary\|reject optional\|weigeren\|afwijzen/);
+  assert.doesNotMatch(consentSelector, /accept|accepteren|\^|\$/i);
 });
 
 test("Shanghai retries the instruction click only after one visible reject-only choice is confirmed", async () => {
