@@ -44,7 +44,7 @@ struct BlueyAppView: View {
                             Circle()
                                 .fill(link.connected ? Color(hex: 0x5BE49B) : Color(hex: Palette.inkSoft).opacity(0.5))
                                 .frame(width: 7, height: 7)
-                            Text(link.connected ? (link.macName ?? link.currentMac ?? "Mac") : "Looking for your Mac")
+                            Text(link.connected ? (link.macName ?? link.currentMac ?? "Computer") : "Zoekt je computer")
                                 .font(.plexSans(12))
                                 .foregroundStyle(Color(hex: Palette.inkSoft))
                                 .lineLimit(1)
@@ -59,7 +59,7 @@ struct BlueyAppView: View {
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: live.state == .asleep ? "play.fill" : "stop.fill")
-                        Text(live.state == .asleep ? "Start session" : "End session")
+                        Text(live.state == .asleep ? "Sessie starten" : "Sessie stoppen")
                     }
                     .font(.fredoka(18))
                     .foregroundStyle(.white)
@@ -77,21 +77,21 @@ struct BlueyAppView: View {
                 .opacity(!link.connected && live.state == .asleep ? 0.5 : 1)
 
                 Text(live.state == .asleep
-                     ? "He listens the whole session. Hold his face to ask something, let go and he answers."
-                     : "Session running. Hold his face to ask; everything you say is saved here.")
+                     ? "Houd zijn gezicht vast terwijl je iets vraagt, laat los en hij antwoordt."
+                     : "Sessie loopt. Houd zijn gezicht vast om iets te vragen; het gesprek wordt hier bewaard.")
                     .font(.plexSans(12))
                     .foregroundStyle(Color(hex: Palette.inkSoft))
 
                 Divider().overlay(Color.white.opacity(0.08))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    label("Chirp volume")
+                    label("Piepvolume")
                     Slider(value: Binding(get: { volume }, set: { volume = $0; live.volume = $0 }), in: 0...1)
                 }
 
                 if link.macs.count > 1 {
                     VStack(alignment: .leading, spacing: 4) {
-                        label("Mac")
+                        label("Computer")
                         ForEach(link.macs, id: \.self) { name in
                             Button { link.choose(name) } label: {
                                 HStack {
@@ -113,7 +113,7 @@ struct BlueyAppView: View {
                 Button(action: onClose) {
                     HStack(spacing: 8) {
                         Image(systemName: "face.smiling")
-                        Text("Back to his face")
+                        Text("Terug naar zijn gezicht")
                     }
                     .font(.plexSans(15).weight(.semibold))
                     .foregroundStyle(.white)
@@ -138,7 +138,7 @@ struct BlueyAppView: View {
     private var sessionList: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Sessions")
+                Text("Sessies")
                     .font(.fredoka(24))
                     .foregroundStyle(.white)
                 Spacer()
@@ -155,10 +155,10 @@ struct BlueyAppView: View {
                     Image(systemName: "text.bubble")
                         .font(.system(size: 34))
                         .foregroundStyle(Color(hex: Palette.berry2))
-                    Text("No sessions yet")
+                    Text("Nog geen sessies")
                         .font(.fredoka(18))
                         .foregroundStyle(.white)
-                    Text("Start one and your transcript and his replies show up here.")
+                    Text("Start er een, dan verschijnen jullie gesprek en zijn antwoorden hier.")
                         .font(.plexSans(13))
                         .foregroundStyle(Color(hex: Palette.inkSoft))
                 }
@@ -212,7 +212,7 @@ private struct SessionRow: View {
                 Text(Self.duration(session.duration))
                     .font(.plexMono(12))
                     .foregroundStyle(Color(hex: Palette.inkSoft))
-                Text("\(session.questionCount) asked")
+                Text("\(session.questionCount) gevraagd")
                     .font(.plexMono(11))
                     .foregroundStyle(Color(hex: Palette.berry1))
             }
@@ -240,18 +240,18 @@ struct SessionDetailView: View {
             // Show the Mac path with ~ for the home folder.
             if let range = p.range(of: "/Documents/Bluey Notes") { return "~" + p[range.lowerBound...] }
             return p
-        } ?? "\(root)/ (the folder starting \(session.started.formatted(.iso8601.year().month().day())))"
+        } ?? "\(root)/ (de map die begint met \(session.started.formatted(.iso8601.year().month().day())))"
         let prompt = """
-        I recorded a meeting with my Bluey app on \(session.started.formatted(date: .complete, time: .shortened)). \
-        The notes are on my Mac in \(path)
+        Ik heb een gesprek opgenomen met mijn Bluey-app op \(session.started.formatted(date: .complete, time: .shortened)). \
+        De notities staan op mijn computer in \(path)
 
-        - notes.md: the full transcript with timestamps and speaker labels (A, B, … per five-minute chunk), plus \
-        my questions to Bluey, its replies and research reports. Start here.
-        - session.json: the same data, structured.
-        - audio/: the original recording in five-minute chunks.
+        - notes.md: het volledige transcript met tijden en sprekers (A, B, … per blok van vijf minuten), plus \
+        mijn vragen aan Bluey, zijn antwoorden en onderzoeksverslagen. Begin hier.
+        - session.json: dezelfde gegevens, gestructureerd.
+        - audio/: de originele opname in blokken van vijf minuten.
 
-        All my sessions are in \(root)/, one folder per session (see README.md there). Read the notes, then help me \
-        with: 
+        Al mijn sessies staan in \(root)/, één map per sessie (zie README.md daar). Lees de notities en help me \
+        daarna met: 
         """
         #if canImport(UIKit)
         UIPasteboard.general.string = prompt
@@ -274,11 +274,11 @@ struct SessionDetailView: View {
                 }
                 .buttonStyle(.plain)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(session?.started.formatted(date: .abbreviated, time: .shortened) ?? "Session")
+                    Text(session?.started.formatted(date: .abbreviated, time: .shortened) ?? "Sessie")
                         .font(.fredoka(20))
                         .foregroundStyle(.white)
                     if let session {
-                        Text("\(SessionRow.duration(session.duration)) · \(session.questionCount) asked"
+                        Text("\(SessionRow.duration(session.duration)) · \(session.questionCount) gevraagd"
                              + (session.transcribing > 0 ? " · transcribing \(session.transcribing) chunk\(session.transcribing == 1 ? "" : "s")…" : ""))
                             .font(.plexMono(11))
                             .foregroundStyle(Color(hex: Palette.inkSoft))
@@ -289,7 +289,7 @@ struct SessionDetailView: View {
                     Button { copyPrompt(session) } label: {
                         HStack(spacing: 6) {
                             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                            Text(copied ? "Copied" : "Copy prompt for agent")
+                            Text(copied ? "Gekopieerd" : "Kopieer opdracht voor AI-assistent")
                         }
                         .font(.plexSans(13).weight(.semibold))
                         .padding(.horizontal, 14)
@@ -344,7 +344,7 @@ private struct EntryView: View {
         switch entry.kind {
         case .transcript:
             HStack(alignment: .top, spacing: 10) {
-                Text(entry.speaker.map { "Speaker \($0)" } ?? "Speaker")
+                Text(entry.speaker.map { "Spreker \($0)" } ?? "Spreker")
                     .font(.plexMono(11).weight(.medium))
                     .foregroundStyle(Self.speakerColor(entry.speaker))
                     .frame(width: 78, alignment: .leading)
@@ -368,7 +368,7 @@ private struct EntryView: View {
             HStack {
                 Spacer(minLength: 120)
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text("You asked")
+                    Text("Jij vroeg")
                         .font(.plexMono(10))
                         .foregroundStyle(Color(hex: Palette.berry1))
                     Text(entry.text)
@@ -396,7 +396,7 @@ private struct EntryView: View {
                 Button { withAnimation(.spring(duration: 0.3)) { open.toggle() } } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "doc.text.magnifyingglass").foregroundStyle(Color(hex: Palette.berry2))
-                        Text(lines.first ?? "Research")
+                        Text(lines.first ?? "Onderzoek")
                             .font(.fredoka(16))
                             .foregroundStyle(Color(hex: Palette.ink))
                             .multilineTextAlignment(.leading)

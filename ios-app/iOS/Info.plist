@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>nl</string>
 	<key>CFBundleDisplayName</key>
 	<string>Bluey</string>
 	<key>CFBundleExecutable</key>
@@ -25,9 +25,9 @@
 		<string>_googly._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Bluey finds the Mac app on your Wi-Fi so the character can look where it points.</string>
+	<string>Bluey zoekt de Bluey-app op je computer via je wifi, zodat hij kan kijken waar hij naar wijst.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Talk to your blueberry. He listens while he's awake (double tap him to wake him up or put him to sleep).</string>
+	<string>Praat met je blauwe bes. Hij luistert als je zijn gezicht vasthoudt (dubbeltik om hem wakker te maken of te laten slapen).</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fredoka.ttf</string>

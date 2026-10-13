@@ -10,22 +10,22 @@ struct PairingView: View {
                 .frame(width: 220, height: 190)
 
             VStack(alignment: .leading, spacing: 14) {
-                Text("Wake me up from your Mac")
+                Text("Maak me wakker vanaf je computer")
                     .font(.fredoka(32))
                     .foregroundStyle(Color(hex: 0xF4F1FA))
-                Text("Open Bluey in your Mac's menu bar. Keep both on the same Wi-Fi and I'll find it.")
+                Text("Start Bluey op je computer (Windows: rechtsonder bij de klok). Zorg dat beide op hetzelfde wifi zitten, dan vind ik hem.")
                     .font(.plexSans(16))
                     .foregroundStyle(Color(hex: Palette.inkSoft))
                     .frame(maxWidth: 380, alignment: .leading)
                 HStack(spacing: 10) {
                     ProgressView().tint(Color(hex: Palette.berry1))
-                    Text("Looking for your Mac")
+                    Text("Zoekt je computer")
                         .font(.plexMono(13))
                         .foregroundStyle(Color(hex: Palette.inkSoft))
                 }
                 .padding(.top, 4)
                 Button(action: onPlay) {
-                    Text("Play without the Mac")
+                    Text("Spelen zonder computer")
                         .font(.plexSans(15).weight(.semibold))
                         .foregroundStyle(Color(hex: 0xF4F1FA))
                         .padding(.horizontal, 18)

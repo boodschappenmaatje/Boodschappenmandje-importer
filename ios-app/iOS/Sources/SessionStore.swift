@@ -38,7 +38,7 @@ struct BlueySession: Codable, Identifiable, Equatable {
     var summary: String {
         let first = entries.first { $0.kind == .asked && !$0.text.isEmpty }
             ?? displayEntries.first { $0.kind == .transcript || $0.kind == .heard }
-        return first?.text ?? "Nothing said yet"
+        return first?.text ?? "Nog niets gezegd"
     }
 
     var duration: TimeInterval { (ended ?? Date()).timeIntervalSince(started) }
@@ -58,15 +58,15 @@ struct BlueySession: Codable, Identifiable, Equatable {
     var exportText: String {
         let time = DateFormatter()
         time.dateFormat = "h:mm:ss a"
-        var lines = ["Bluey session, \(started.formatted(date: .abbreviated, time: .shortened))", ""]
+        var lines = ["Bluey-sessie, \(started.formatted(date: .abbreviated, time: .shortened))", ""]
         for entry in displayEntries {
             let who: String
             switch entry.kind {
-            case .transcript: who = "Speaker \(entry.speaker ?? "?")"
-            case .heard: who = "You"
-            case .asked: who = "You asked"
+            case .transcript: who = "Spreker \(entry.speaker ?? "?")"
+            case .heard: who = "Jij"
+            case .asked: who = "Jij vroeg"
             case .reply: who = "Bluey"
-            case .report: who = "Research"
+            case .report: who = "Onderzoek"
             }
             lines.append("[\(time.string(from: entry.time))] \(who): \(entry.text)")
         }

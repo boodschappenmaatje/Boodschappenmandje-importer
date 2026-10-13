@@ -43,7 +43,7 @@ struct RootView: View {
                     .background(Circle().fill(Color.white.opacity(0.06)).frame(width: 34, height: 34))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open Bluey")
+            .accessibilityLabel("Bluey openen")
             .padding(.top, 10)
             .padding(.trailing, 62)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -112,7 +112,7 @@ struct RootView: View {
         }
         live.runTool = { [link] name, arguments, done in
             link.request(Packet(command: "tool", tool: name, text: arguments)) { reply in
-                done(reply?.text ?? "The Mac didn't answer.", reply?.image)
+                done(reply?.text ?? "De computer gaf geen antwoord.", reply?.image)
             }
         }
         live.onSessionStart = { [store, live] in
@@ -184,11 +184,11 @@ struct ModeIndicator: View {
     private var look: Look {
         switch state {
         case .asleep:    return Look(color: Color(hex: Palette.inkSoft), label: nil, icon: "eye.fill", border: 0, pulse: 0)
-        case .waking:    return Look(color: Color(hex: 0xFFD66B), label: "Waking up", icon: "sun.max.fill", border: 6, pulse: 1.6)
-        case .listening: return Look(color: Self.blue, label: "Listening · hold to ask", icon: "ear", border: 10, pulse: 0)
-        case .asking:    return Look(color: Self.blue, label: "I'm all ears", icon: "mic.fill", border: 16, pulse: 1.2)
-        case .thinking:  return Look(color: Color(hex: 0xC79BFF), label: "Thinking", icon: "sparkles", border: 8, pulse: 1.1)
-        case .speaking:  return Look(color: Color(hex: 0xFF9AD0), label: "Replying", icon: "bubble.left.fill", border: 8, pulse: 0)
+        case .waking:    return Look(color: Color(hex: 0xFFD66B), label: "Wordt wakker", icon: "sun.max.fill", border: 6, pulse: 1.6)
+        case .listening: return Look(color: Self.blue, label: "Luistert · vasthouden om te vragen", icon: "ear", border: 10, pulse: 0)
+        case .asking:    return Look(color: Self.blue, label: "Ik ben een en al oor", icon: "mic.fill", border: 16, pulse: 1.2)
+        case .thinking:  return Look(color: Color(hex: 0xC79BFF), label: "Denkt na", icon: "sparkles", border: 8, pulse: 1.1)
+        case .speaking:  return Look(color: Color(hex: 0xFF9AD0), label: "Antwoordt", icon: "bubble.left.fill", border: 8, pulse: 0)
         }
     }
 

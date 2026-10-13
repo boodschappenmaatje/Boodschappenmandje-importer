@@ -106,7 +106,7 @@ final class LiveVoice: NSObject, ObservableObject {
         AVAudioApplication.requestRecordPermission { granted in
             DispatchQueue.main.async {
                 guard granted else {
-                    self.onCaption?("I need the microphone. Turn it on for Bluey in the iPhone's Settings.", true)
+                    self.onCaption?("Ik heb de microfoon nodig. Zet hem aan voor Bluey bij Instellingen op je iPhone.", true)
                     self.wantAwake = false
                     self.setState(.asleep)
                     return
@@ -245,7 +245,7 @@ final class LiveVoice: NSObject, ObservableObject {
         do {
             try startAudio()
         } catch {
-            onCaption?("I couldn't start the microphone: \(error.localizedDescription)", true)
+            onCaption?("De microfoon wil niet starten: \(error.localizedDescription)", true)
             sleep()
             return
         }
@@ -498,7 +498,7 @@ final class LiveVoice: NSObject, ObservableObject {
                     }
                 }
             }
-            if let runTool { runTool(name, arguments, finish) } else { finish("The computer isn't connected.", nil) }
+            if let runTool { runTool(name, arguments, finish) } else { finish("De computer is niet verbonden.", nil) }
         }
     }
 
@@ -533,7 +533,7 @@ final class LiveVoice: NSObject, ObservableObject {
                     }
                 }
             }
-            if let runTool { runTool(name, arguments, finish) } else { finish("The Mac isn't connected.", nil) }
+            if let runTool { runTool(name, arguments, finish) } else { finish("De computer is niet verbonden.", nil) }
         }
     }
 
