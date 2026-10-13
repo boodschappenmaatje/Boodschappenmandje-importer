@@ -1,8 +1,20 @@
 export const SHANGHAI_CONTENT_ROOT = "main:has(h1)";
 
 export function safeShanghaiParserReason(value) {
-  const reason = typeof value === "string" ? value.split(":", 1)[0] : "";
-  return /^[a-z][a-z0-9_]{0,80}$/.test(reason) ? reason : null;
+  if (typeof value !== "string") return null;
+  const [code, detail = ""] = value.split(":", 2);
+  if (!/^[a-z][a-z0-9_]{0,80}$/.test(code)) return null;
+  const itemAliases = [
+    ["rundergehakt", /\\brundergehakt\\b/i],
+    ["champignons", /\\bchampignons\\b/i],
+    ["taugé", /\\btaug[eé]\\b/i],
+    ["bosui", /\\bbosuien?\\b/i],
+    ["prei", /\\bprei\\b/i],
+    ["olie", /\\bolie\\b/i],
+    ["ui", /\\bui\\b/i],
+  ];
+  const item = itemAliases.find(([, pattern]) => pattern.test(detail))?.[0] ?? null;
+  return { code, item };
 }
 
 const SHANGHAI_PRODUCT_NAME = "Knorr Wereldgerecht maaltijdpakket chinese beef shanghai";
