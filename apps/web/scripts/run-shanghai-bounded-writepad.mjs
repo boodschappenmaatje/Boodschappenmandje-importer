@@ -32,6 +32,7 @@ import {
   runShanghaiCommit,
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
+  safeReadinessMatchChange,
 } from "./shanghai-writepad-core.mjs";
 
 const SELECT_PRODUCT = "id,sku,name,brand,package_text,source_url,category,updated_at";
@@ -286,19 +287,6 @@ function safeReadinessErrorCode(error) {
     : "unclassified_readiness_preflight_error";
 }
 
-function safeReadinessMatchChange(row, previousPeopleCount, currentPeopleCount, changedFields) {
-  const matchKind = row.ingredient_source_key === "catalog-mix-product-231215000"
-    ? "package"
-    : row.ingredient_source_key?.startsWith("mix-supplement-") ? "supplement" : "unknown";
-  const allowedFields = new Set(["product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at"]);
-  return {
-    match_kind: matchKind,
-    previous_people_count: PLANNER_MAINTENANCE_PEOPLE_COUNTS.includes(previousPeopleCount) ? previousPeopleCount : null,
-    current_people_count: PLANNER_MAINTENANCE_PEOPLE_COUNTS.includes(currentPeopleCount) ? currentPeopleCount : null,
-    changed_fields: changedFields.filter((field) => allowedFields.has(field)),
-  };
-}
-
 function projectedRecipe(id, recipeRow) {
   return {
     id,
@@ -345,7 +333,7 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, s
         const changedFields = ["product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at"]
           .filter((field) => existing[field] !== row[field]);
         if (changedFields.length > 0) {
-          setMismatch(safeReadinessMatchChange(row, firstPeopleCountByMatchKey.get(row.match_key), peopleCount, changedFields));
+          setMismatch(safeReadinessMatchChange(row.ingredient_source_key, firstPeopleCountByMatchKey.get(row.match_key), peopleCount, changedFields));
           throw new Error("match_changes_across_people");
         }
       } else {
