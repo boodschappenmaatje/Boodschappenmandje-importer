@@ -59,7 +59,7 @@ async function parseCurrentSource(browser, product) {
   }
   const page = await browser.newPage();
   try {
-    const contentRoot = page.locator("main").filter({ has: page.locator("h1") });
+    const contentRoot = page.locator(SHANGHAI_CONTENT_ROOT);
     const title = contentRoot.getByRole("heading", { level: 1, name: SHANGHAI_PRODUCT_NAME, exact: true });
     const instructions = contentRoot.getByRole("button", { name: "Gebruiksaanwijzing", exact: true });
     const inspectDocument = () => page.evaluate((expectedName) => {
