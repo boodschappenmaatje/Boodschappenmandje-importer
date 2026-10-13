@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { parseMealMixSource } from "../src/server/meal-mix-source.ts";
 import { loadCatalog, rowsForGate, PLANNER_MAINTENANCE_PEOPLE_COUNTS } from "../src/server/planner-cache-service.ts";
 import { dryRunBoundedReadiness, writeBoundedReadiness } from "../src/server/bounded-readiness-maintenance.ts";
-import { evaluateRecipeReadiness } from "../src/services/week-preparation/recipe-readiness.ts";
+import { resolveRecipeReadiness, SupabasePersistentRecipeReadinessRepository } from "../src/services/week-preparation/persistent-readiness-cache.ts";
 import { SupabaseCatalogRepository } from "../src/services/catalog/catalog-repository.ts";
 import { enrichIngredientsForMealMixes } from "../src/services/week-preparation/meal-mix-profiles.ts";
 import { matcherVersionForSourceKey } from "../src/services/week-preparation/persistent-readiness-cache.ts";
@@ -279,6 +279,7 @@ const SAFE_READINESS_PREFLIGHT_CODES = new Set([
   "supplement_match_read_failed",
   "package_match_read_failed",
   "source_revision_unavailable",
+  "readiness_cache_preflight_unavailable",
 ]);
 
 function safeReadinessErrorCode(error) {
@@ -321,7 +322,13 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, s
   const readinessRows = [];
   for (const peopleCount of PLANNER_MAINTENANCE_PEOPLE_COUNTS) {
     setStage("readiness_evaluation");
-    const gate = await evaluateRecipeReadiness([recipe], peopleCount, catalog, repository);
+    const resolved = await resolveRecipeReadiness(
+      [recipe], peopleCount, catalog, repository, new SupabasePersistentRecipeReadinessRepository(client),
+    );
+    if (!resolved.cacheAvailable || resolved.persistentHitCount !== 0 || resolved.fallbackCount !== 1) {
+      throw new Error("readiness_cache_preflight_unavailable");
+    }
+    const gate = resolved.gate;
     if (gate.recipes.length !== 1 || gate.recipes[0]?.recipeId !== recipeId) throw new Error("evaluator_recipe_scope_mismatch");
     setStage("readiness_row_projection", gate);
     const rows = rowsForGate(gate, peopleCount, new Date());
