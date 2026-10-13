@@ -15,6 +15,7 @@ import {
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
 import {
   SHANGHAI_CONTENT_ROOT,
+  dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
   validateShanghaiContentRoot,
 } from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
@@ -48,6 +49,28 @@ test("runner imports the Shanghai product name used by the normal source-read fl
   assert.notEqual(coreImportEnd, -1);
   assert.match(runner.slice(coreImportStart, coreImportEnd), /\bSHANGHAI_PRODUCT_NAME\b/);
   assert.match(runner, /name: SHANGHAI_PRODUCT_NAME, exact: true/);
+  assert.match(runner, /dismissShanghaiRejectOptionalConsent\\(rejectOptionalCookies\\)/);
+  const consentMatcher = runner.match(/const rejectOptionalCookies = page\\.getByRole\\("button", \\{\\s*name: (\\/.*\\/i),/);
+  assert.ok(consentMatcher, "runner must select consent semantically");
+  assert.doesNotMatch(consentMatcher[1], /accept|accepteren/i);
+});
+
+test("reject-only consent action is unique, visible, enabled and never accepts optional cookies", async () => {
+  const noChoice = { count: async () => 0 };
+  assert.equal(await dismissShanghaiRejectOptionalConsent(noChoice), false);
+
+  const ambiguous = { count: async () => 2 };
+  await assert.rejects(dismissShanghaiRejectOptionalConsent(ambiguous), /source-consent-choice-ambiguous/);
+
+  let clicks = 0;
+  const hidden = { count: async () => 1, isVisible: async () => false, isEnabled: async () => true,
+    click: async () => clicks++ };
+  assert.equal(await dismissShanghaiRejectOptionalConsent(hidden), false);
+
+  const rejectOnly = { count: async () => 1, isVisible: async () => true, isEnabled: async () => true,
+    click: async (options) => { assert.deepEqual(options, { timeout: 5000 }); clicks++; } };
+  assert.equal(await dismissShanghaiRejectOptionalConsent(rejectOnly), true);
+  assert.equal(clicks, 1);
 });
 
 test("accepts only the exact Shanghai preflight identity and proven profile", () => {
