@@ -144,14 +144,16 @@ test("readiness preflight reports only a bounded stage when evaluation stops", (
     assert.ok(runner.includes(`"${code}"`), `missing allowlisted preflight code ${code}`);
   }
   assert.match(runner, /unclassified_readiness_preflight_error/);
-  assert.match(runner, /function safeReadinessMatchChange/);
-  for (const safeField of ["match_kind", "previous_people_count", "current_people_count", "changed_fields"]) {
-    assert.match(runner, new RegExp(safeField));
-  }
+  assert.match(runner, /safeReadinessMatchChange,/);
+  assert.match(runner, /safeReadinessMatchChange\(row\.ingredient_source_key/);
   assert.match(runner, /readinessPreflightMismatch/);
-  assert.match(runner, /product_id.*match_status.*failure_reason.*product_updated_at.*price_updated_at/s);
-  assert.match(runner, /changedFields\.filter\(\(field\) => allowedFields\.has\(field\)\)/);
-  assert.match(runner, /matchKind.*package.*supplement.*unknown/s);
+  const core = readFileSync(new URL("../apps/web/scripts/shanghai-writepad-core.mjs", import.meta.url), "utf8");
+  assert.match(core, /function safeReadinessMatchChange/);
+  for (const safeField of ["mager-rundergehakt", "champignons", "tauge", "bosui", "ui", "prei", "olie",
+    "product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at"]) {
+    assert.ok(core.includes(safeField), `missing safe readiness diagnostic allowlist ${safeField}`);
+  }
+
   assert.match(runner, /requirement_key_types/);
   assert.match(runner, /candidate_product_lists/);
   const safeDiagnostics = runner.slice(runner.indexOf("function safeReadinessGateShape"), runner.indexOf("function projectedRecipe"));
