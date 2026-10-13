@@ -133,6 +133,17 @@ test("reject-only consent action is unique, visible, enabled and never accepts o
   assert.equal(clicks, 1);
 });
 
+test("readiness preflight reports only a bounded stage when evaluation stops", () => {
+  assert.match(runner, /readinessPreflightStage/);
+  for (const stage of ["catalog_load", "recipe_source_key_check", "catalog_enrichment", "recipe_projection",
+    "readiness_evaluation", "readiness_row_projection", "readiness_scope_validation", "supplement_match_read",
+    "supplement_match_validation", "package_match_read", "source_revision_read"]) {
+    assert.ok(runner.includes(`"${stage}"`), `missing safe readiness stage ${stage}`);
+  }
+  assert.doesNotMatch(runner, /readinessPreflightStage[^;]*error\.message/);
+  assert.doesNotMatch(runner, /readinessPreflightStage[^;]*stack/);
+});
+
 test("accepts only the exact Shanghai preflight identity and proven profile", () => {
   assert.deepEqual(valid(), { blocked: false, blockers: [] });
   assert.equal(buildShanghaiWriteSummary(["catalog-mix-product-231215000:piece:mealMix:knorr"]).uniqueRecords.total, 13);
