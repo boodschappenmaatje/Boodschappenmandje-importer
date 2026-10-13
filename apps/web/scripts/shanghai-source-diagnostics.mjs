@@ -1,5 +1,17 @@
 export const SHANGHAI_CONTENT_ROOT = "main:has(h1)";
 
+export function shanghaiOilMeasurementCount(text) {
+  if (typeof text !== "string") return 0;
+  const start = text.search(/\\bZo maak\\b/i);
+  if (start < 0) return 0;
+  const preparation = text.slice(start).split(/Netto-inhoud/i)[0];
+  return [...preparation.matchAll(/\\b\\d+(?:[.,]\\d+)?\\s*(?:el|eetl\\.?|eetlepels?)\\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\\b/gi)].length;
+}
+
+export function safeShanghaiSourceFacts(text) {
+  return { instruction_oil_measurement_count: shanghaiOilMeasurementCount(text) };
+}
+
 export function safeShanghaiParserReason(value) {
   if (typeof value !== "string") return null;
   const [code, detail = ""] = value.split(":", 2);
@@ -93,6 +105,7 @@ function safeDocumentSnapshot(value) {
     has_package_marker: value.has_package_marker === true,
     has_people_marker: value.has_people_marker === true,
     has_shopping_list_marker: value.has_shopping_list_marker === true,
+    instruction_oil_measurement_count: count("instruction_oil_measurement_count"),
     instructions_button_count: count("instructions_button_count"),
     visible_instructions_button_count: count("visible_instructions_button_count"),
     consent_control_count: count("consent_control_count"),
@@ -106,7 +119,7 @@ function safeDocumentSnapshot(value) {
 }
 function safeDocumentDiagnostic(value) {
   if (!value || typeof value !== "object") return null;
-  const substages = ["content_root", "product_heading", "instructions_button", "optional_consent", "instructions_click", "aria_controls", "instructions_panel"];
+  const substages = ["content_root", "product_heading", "instructions_button", "optional_consent", "instructions_click", "aria_controls", "instructions_panel", "instructions_content"];
   const count = (key) => Number.isInteger(value[key]) ? Math.max(0, Math.min(value[key], 99)) : 0;
   return {
     selector_substage: substages.includes(value.selector_substage) ? value.selector_substage : "unknown",
