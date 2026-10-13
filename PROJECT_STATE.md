@@ -1,3 +1,14 @@
+# Checkpoint — PR #90 Shanghai readiness-drift diagnose, 13 oktober 2026
+
+- Remote `main`: `46cd27f21e130c2dede46805eec65db08e10f42e`. Bestaande branch `codex/shanghai-source-diagnostic-20261012`; PR #90 is open, Draft, mergeable. Laatste code-head vóór deze documentatiecommit: `d6f5f8813138e6d4a64bcb61348587ab93c3ff47`.
+- Na de eerdere Shanghai-specifieke parserfix `cc6af32` zijn source/headless-fixes en readinessdiagnostiek op dezelfde branch gevolgd. CI #521 op `2a4ffdc` was volledig groen. CI #519/#520 faalden uitsluitend op te strenge of syntax-specifieke diagnostiektestassertions; die zijn op dezelfde branch gecorrigeerd.
+- Bounded Production **dry-run #24**, Actions-run `38368528661`, attempt 1, op `2a4ffdc`: SKU `231215000`, juiste productidentiteit, HTTP 200, finale Shanghai-URL, contentroot `main:has(h1)` en instructiepaneel gevonden. De expliciete `Boodschappenlijstje`-sectie is geparsed; source/profile zijn `verified`. Zeven supplementen: 225 g mager rundergehakt, 250 g champignons, 125 g taugé, 3 bosuien, 1 ui, 1 prei, olie 30 ml. De bron vermeldde olie en twee bereidingsmetingen. De dry-run bleef `blocked` bij `readiness_row_projection` met exact `match_changes_across_people`; `sourceRevision=null`, `safe_to_write=false`, geplande/write-operaties 0.
+- Bewezen technische oorzaak tot nu toe: voor één match-key verschillen bij projectie over personen 1–10 één of meer van product, matchstatus, reden of brontimestamps. Welke sleutel en welk veld verschilt, was in #24 nog niet zichtbaar. Daarom is de fail-closed Shanghai-preflight in commit `92b8407` uitgebreid met uitsluitend veilig begrensde diagnosevelden (matchtype, persoonsaantallen, vooraf toegestane gewijzigde veldnamen); testcommit `d6f5f88` controleert die grens. Geen product-ID, raw error of secret wordt in de nieuwe diagnose gerapporteerd.
+- Volledige Core-CI **#523** / run `38368980882` op code-head `d6f5f88` is groen: importer **498/498**, PostgreSQL **28/28**, web **887/887** over 74 bestanden, plus seedchecks, ESLint, TypeScript en Production-build. Vercel Preview-check groen. De documentatiecommit kan een nieuwe CI-run starten; controleer die op de actuele PR-head.
+- **Production-writes: 0**. Geen merge, database-migratie, import of Production-release. Exacte volgende stap: na volledig groene CI op de actuele branch-head één bestaande bounded `dry-run` voor SKU 231215000 starten, volledig rapport lezen, de eerste gewijzigde matchveldnaam/het matchtype toetsen, alleen die bewezen Shanghai-oorzaak repareren, tests/CI herhalen en verder tot `safe_to_write=true`.
+
+---
+
 # Checkpoint — Shanghai runtime-importfix en één nieuwe dry-run — 12 oktober 2026
 
 ## Minimale runtimefix en verificatie
