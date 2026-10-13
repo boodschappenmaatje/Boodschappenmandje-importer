@@ -30,7 +30,7 @@ Privacy: in Nederland (EER) gelden volgens Google's voorwaarden de privacyregels
 | --- | --- | --- |
 | **1** | Verbinding met de iPhone, sleutel, vliegende cursor, tekstballon, sneltoetsen, tray-menu | ✅ klaar |
 | **2** | Naar het scherm kijken (schermafbeelding + tekstherkenning van Windows), dingen aanwijzen, web-onderzoek met verslagkaartje | ✅ deze versie |
-| 3 | Klikken, typen, toetsen, scrollen, slepen, apps/websites openen (met dezelfde veiligheidsregels) | later |
+| 3 | Klikken, typen, toetsen, scrollen, slepen, apps/websites openen | in de wacht (zie *Koppelen*) |
 | 4 | Vergadernotities (transcriptie met sprekers) | later |
 
 Vraag bijvoorbeeld (terwijl je het iPhone-scherm vasthoudt): *"wat is dit?"* terwijl je muis ergens op staat, *"waar moet ik klikken om op te slaan?"*, of *"zoek eens op wat dit kost"*. Hij kijkt dan naar je scherm, vliegt met zijn cursor naar het juiste woord en antwoordt in een tekstballon. Voor onderzoek verschijnt rechtsboven een kaartje met het verslag en de bronnen (sluiten met ×). Klikken en typen kan hij nog niet; dat is stap 3.
@@ -49,6 +49,12 @@ Tekstherkenning gebruikt de taal van je Windows (Nederlands op een Nederlandse W
 6. Zorg dat de iPhone en de pc op **hetzelfde wifi-netwerk** zitten. De iPhone vindt de pc dan vanzelf. In de iPhone-app kies je de pc via het luidsprekerknopje rechtsboven.
 
 Bluey zit in het systeemvak (rechtsonder, bij de klok). Klik op het blauwe besje voor het menu.
+
+## Koppelen (beveiliging)
+
+De pc doet alleen iets voor telefoons die jij hebt **toegestaan**. Als een telefoon voor het eerst verbindt, vraagt Bluey op de pc: *"Een telefoon wil verbinden met Bluey… Is dit jouw iPhone?"* Klik alleen op **Ja** voor je eigen telefoon. Een telefoon die niet is toegestaan krijgt niets: geen sleutels, geen schermafbeeldingen, geen commando's.
+
+Een toegestane telefoon krijgt een geheime sleutel (op de iPhone in de iOS-sleutelhanger, op de pc alleen een vingerafdruk ervan in `%APPDATA%\Bluey\phones.json`). Daarna hoeft het niet opnieuw. De oudere iPhone-app kent die sleutel niet; die vraagt dan bij elke verbinding opnieuw om toestemming. Via het menu **Forget Paired Phones** maak je alles ongedaan.
 
 ## Taal
 

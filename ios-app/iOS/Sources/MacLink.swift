@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Security
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -91,7 +92,8 @@ final class MacLink: ObservableObject {
             switch state {
             case .ready:
                 self.connected = true
-                link.send(Packet(hello: Self.deviceName))
+                // The token this computer gave us when the user allowed this phone there (none yet: it asks them).
+                link.send(Packet(hello: Self.deviceName, text: self.currentMac.flatMap(PairingToken.get)))
             case .failed, .cancelled:
                 self.connected = false
                 let waiting = self.waiting
@@ -108,6 +110,10 @@ final class MacLink: ObservableObject {
         }
         link.onPacket = { [weak self] packet in
             if let name = packet.hello { self?.macName = name }
+            if packet.command == "paired", let token = packet.text, let mac = self?.currentMac {
+                PairingToken.set(token, for: mac)
+                return
+            }
             if let face = packet.face { self?.onFace?(face) }
             guard let self, let command = packet.command else { return }
             if let callID = packet.callID, let done = self.waiting.removeValue(forKey: callID) {
@@ -140,5 +146,28 @@ final class MacLink: ObservableObject {
         #else
         return Host.current().localizedName ?? "Phone"
         #endif
+    }
+}
+
+/// The secret each computer hands this phone once the user allows it there, kept in the iOS Keychain.
+enum PairingToken {
+    private static let service = "bluey.pairing"
+
+    static func get(_ computer: String) -> String? {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                    kSecAttrAccount as String: computer, kSecReturnData as String: true]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    static func set(_ token: String, for computer: String) {
+        let match: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+                                    kSecAttrAccount as String: computer]
+        SecItemDelete(match as CFDictionary)
+        var add = match
+        add[kSecValueData as String] = Data(token.utf8)
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        SecItemAdd(add as CFDictionary, nil)
     }
 }

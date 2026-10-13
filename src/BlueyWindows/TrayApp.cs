@@ -40,6 +40,7 @@ public sealed class TrayApp : ApplicationContext
             if (names.Count == 0 && host.Awake) host.SetAwake(false);
         };
         server.OnRequest = (packet, reply) => host.Handle(packet, reply);
+        server.OnApprovalNeeded = AskToPair;
         try { server.Start(); }
         catch (Exception error) { serverProblem = error.Message; }
         host.OnChange = RefreshIcon;
@@ -135,6 +136,35 @@ public sealed class TrayApp : ApplicationContext
                         result.StartsWith("Gemini works") ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
+    /// A phone the user hasn't approved yet wants to connect. Nothing works for it until they say yes here.
+    private void AskToPair(string name, Action<bool> answer)
+    {
+        bool dutch = settings.Language == "nl";
+        var text = dutch
+            ? $"Een telefoon wil verbinden met Bluey:\n\n    {name}\n\nIs dit jouw iPhone? Sta alleen je eigen telefoon toe. " +
+              "Een toegestane telefoon kan Bluey op deze pc laten kijken en wijzen."
+            : $"A phone wants to connect to Bluey:\n\n    {name}\n\nIs this your iPhone? Only allow your own phone. " +
+              "An allowed phone can make Bluey look at and point at this PC's screen.";
+        using var owner = new Form { TopMost = true, ShowInTaskbar = false, StartPosition = FormStartPosition.CenterScreen, Size = new Size(1, 1) };
+        owner.Show();
+        owner.Activate();
+        var result = MessageBox.Show(owner, text, dutch ? "Bluey – nieuwe telefoon" : "Bluey – new phone",
+                                     MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        answer(result == DialogResult.Yes);
+    }
+
+    private void ForgetPhones()
+    {
+        bool dutch = settings.Language == "nl";
+        var sure = MessageBox.Show(dutch
+                ? "Alle gekoppelde telefoons vergeten? Ze moeten daarna opnieuw toestemming krijgen op deze pc."
+                : "Forget all paired phones? They'll need to be allowed again on this PC.",
+            "Bluey", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+        if (sure != DialogResult.Yes) return;
+        PairedPhones.Clear();
+        server.DisconnectAll();
+    }
+
     private void SetLanguage(string language)
     {
         if (settings.Language == language) return;
@@ -196,6 +226,7 @@ public sealed class TrayApp : ApplicationContext
         language.DropDownItems.Add(Item("English", () => SetLanguage("en"), null, settings.Language == "en"));
         menu.Items.Add(language);
         menu.Items.Add(Item("Personality…", EditPersonality));
+        menu.Items.Add(Item($"Forget Paired Phones ({PairedPhones.Count})", ForgetPhones));
         var brain = new ToolStripMenuItem("AI");
         brain.DropDownItems.Add(Item("Gemini (free tier)", () => SetProvider("gemini"), null, settings.Provider == "gemini"));
         brain.DropDownItems.Add(Item("OpenAI (paid)", () => SetProvider("openai"), null, settings.Provider == "openai"));
