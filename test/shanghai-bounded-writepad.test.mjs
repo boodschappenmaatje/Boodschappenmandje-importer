@@ -13,6 +13,7 @@ import {
   safeReadinessMatchChange,
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
+  validateShanghaiReadinessResolution,
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
 import {
   SHANGHAI_CONTENT_ROOT,
@@ -46,6 +47,22 @@ const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatj
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
+
+test("Shanghai projects the prospective recipe through current persistent matches and fails closed on unavailable cache", () => {
+  const resolved = { cacheAvailable: true, persistentHitCount: 0, fallbackCount: 1,
+    gate: { recipes: [{ recipeId: "prospective-shanghai" }] } };
+  assert.equal(validateShanghaiReadinessResolution(resolved, "prospective-shanghai"), true);
+  for (const invalid of [
+    { ...resolved, cacheAvailable: false },
+    { ...resolved, persistentHitCount: 1 },
+    { ...resolved, fallbackCount: 0 },
+    { ...resolved, gate: { recipes: [{ recipeId: "unrelated" }] } },
+    { ...resolved, gate: { recipes: [] } },
+  ]) assert.equal(validateShanghaiReadinessResolution(invalid, "prospective-shanghai"), false);
+  assert.match(runner, /resolveRecipeReadiness\\(/);
+  assert.match(runner, /new SupabasePersistentRecipeReadinessRepository\\(client\\)/);
+  assert.match(runner, /validateShanghaiReadinessResolution\\(resolved, recipeId\\)/);
+});
 
 test("Shanghai parser diagnostics expose bounded reason and allowlisted item only", () => {
   assert.deepEqual(safeShanghaiParserReason("supplement_quantity_missing:225 g mager rundergehakt"), {
