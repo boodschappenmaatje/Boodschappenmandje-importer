@@ -19,6 +19,11 @@ const READINESS_VARIATION_FIELDS = new Set([
   "product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at",
 ]);
 
+export function safeToWriteShanghaiPlan(blockers, planned) {
+  return Array.isArray(blockers) && blockers.length === 0 && planned?.matchKeys?.length === 1 &&
+    planned.uniqueRecords?.total === 13 && planned.readinessPeopleCounts?.length === 10;
+}
+
 export function validateShanghaiReadinessResolution(resolved, recipeId) {
   return Boolean(resolved?.cacheAvailable && resolved.persistentHitCount === 0 &&
     resolved.fallbackCount === 1 && resolved.gate?.recipes?.length === 1 &&
