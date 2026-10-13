@@ -10,6 +10,7 @@ import {
   assertShanghaiWriteArmed,
   buildShanghaiWriteSummary,
   runShanghaiCommit,
+  safeReadinessMatchChange,
   validateShanghaiMatchScope,
   validateShanghaiPreflight,
 } from "../apps/web/scripts/shanghai-writepad-core.mjs";
@@ -165,6 +166,23 @@ test("readiness preflight reports only a bounded stage when evaluation stops", (
   }
   assert.doesNotMatch(runner, /readinessPreflightStage[^;]*error\.message/);
   assert.doesNotMatch(runner, /readinessPreflightStage[^;]*stack/);
+});
+
+test("Shanghai match-variation diagnostics name only allowlisted ingredients and fields", () => {
+  assert.deepEqual(safeReadinessMatchChange("mix-supplement-mager-rundergehakt", 1, 4,
+    ["product_id", "price_updated_at", "secret_value", "product_id"]), {
+      match_kind: "supplement", ingredient: "mager-rundergehakt", previous_people_count: 1,
+      current_people_count: 4, changed_fields: ["price_updated_at", "product_id"],
+    });
+  assert.deepEqual(safeReadinessMatchChange("catalog-mix-product-231215000", 1, 4, ["match_status"]), {
+    match_kind: "package", ingredient: null, previous_people_count: 1, current_people_count: 4,
+    changed_fields: ["match_status"],
+  });
+  assert.equal(safeReadinessMatchChange("private-source-key", 1, 4, ["product_id"]), null);
+  assert.equal(safeReadinessMatchChange("mix-supplement-olie", 0, 4, ["product_id"]), null);
+  assert.equal(safeReadinessMatchChange("mix-supplement-olie", 1, 4, ["private_field"]), null);
+  assert.doesNotMatch(JSON.stringify(safeReadinessMatchChange("mix-supplement-olie", 1, 4, ["product_id"])),
+    /private|secret|uuid/i);
 });
 
 test("accepts only the exact Shanghai preflight identity and proven profile", () => {
