@@ -40,7 +40,6 @@ const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatj
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
-const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
 
 test("runner imports the Shanghai product name used by the normal source-read flow", () => {
   const coreImportEnd = runner.indexOf('} from "./shanghai-writepad-core.mjs";');
