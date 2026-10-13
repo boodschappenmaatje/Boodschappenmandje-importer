@@ -92,6 +92,12 @@ async function parseCurrentSource(browser, product) {
         (instructionCenterHit === instructionButton || instructionButton.contains(instructionCenterHit)));
       const instructionCenterHitByConsent = Boolean(instructionCenterHit && visibleConsent.some((button) =>
         button === instructionCenterHit || button.contains(instructionCenterHit)));
+      const instructionCenterHitTagRaw = instructionCenterHit?.tagName?.toLowerCase() ?? "none";
+      const instructionCenterHitKind = ["button", "a", "input", "svg", "path", "div", "span", "body", "main", "section", "dialog", "iframe"].includes(instructionCenterHitTagRaw)
+        ? instructionCenterHitTagRaw
+        : instructionCenterHit ? "other" : "none";
+      const instructionCenterHitHasClickSurface = Boolean(instructionCenterHit?.closest?.("button,a,input,[role=button]"));
+      const instructionCenterHitInsideContentRoot = Boolean(instructionCenterHit && contentRoots.some((root) => root.contains(instructionCenterHit)));
       const title = normalize(document.title);
       const challengeText = normalize((document.title ?? "") + " " + (document.body?.innerText ?? ""));
       const mains = [...document.querySelectorAll("main")];
@@ -127,6 +133,9 @@ async function parseCurrentSource(browser, product) {
         instructions_intersects_viewport: instructionIntersectsViewport,
         instructions_center_hit_target: instructionCenterHitTarget,
         instructions_center_hit_by_consent: instructionCenterHitByConsent,
+        instructions_center_hit_kind: instructionCenterHitKind,
+        instructions_center_hit_has_click_surface: instructionCenterHitHasClickSurface,
+        instructions_center_hit_inside_content_root: instructionCenterHitInsideContentRoot,
         challenge_signals: {
           cloudflare: challengeText.includes("cloudflare"),
           human_check: challengeText.includes("verify you are human") || challengeText.includes("checking your browser"),
