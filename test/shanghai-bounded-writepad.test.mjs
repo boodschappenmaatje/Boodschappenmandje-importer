@@ -137,6 +137,12 @@ test("readiness preflight reports only a bounded stage when evaluation stops", (
   assert.match(runner, /readinessPreflightStage/);
   assert.match(runner, /safeReadinessGateShape/);
   assert.match(runner, /safeReadinessErrorType/);
+  assert.match(runner, /SAFE_READINESS_PREFLIGHT_CODES/);
+  for (const code of ["readiness_scope_mismatch", "match_changes_across_people", "computed_scope_mismatch",
+    "supplement_match_read_failed", "package_match_read_failed", "source_revision_unavailable"]) {
+    assert.ok(runner.includes(`"${code}"`), `missing allowlisted preflight code ${code}`);
+  }
+  assert.match(runner, /unclassified_readiness_preflight_error/);
   assert.match(runner, /requirement_key_types/);
   assert.match(runner, /candidate_product_lists/);
   const safeDiagnostics = runner.slice(runner.indexOf("function safeReadinessGateShape"), runner.indexOf("function projectedRecipe"));
