@@ -1,0 +1,40 @@
+name: Build Bluey for Windows
+
+on:
+  push:
+    branches:
+      - bluey-windows
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish Bluey.exe
+        run: >
+          dotnet publish src/BlueyWindows/BlueyWindows.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o publish
+
+      - name: Upload Bluey for Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bluey-Windows
+          path: |
+            publish/Bluey.exe
+            README.md
+          if-no-files-found: error
+          retention-days: 30
