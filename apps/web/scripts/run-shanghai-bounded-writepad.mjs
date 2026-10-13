@@ -341,6 +341,7 @@ async function preflight(client, browser) {
     parsedProfile: parsed?.profile ?? null,
     sourceEvidence: parsed?.evidence ?? null,
     parsedStatus: parsed?.status ?? "unavailable",
+    parsedReason: safeParserReason(parsed),
     sourceDiagnostic,
     sourceFingerprint: parsed?.fingerprint ?? null,
     matchKeys: evaluated?.matchRows.map((row) => row.match_key).sort() ?? [],
@@ -358,6 +359,11 @@ async function preflight(client, browser) {
     blockers: [...new Set(blockers)],
     _snapshot: sourceSnapshot,
   };
+}
+
+function safeParserReason(parsed) {
+  const reason = typeof parsed?.reason === "string" ? parsed.reason.split(":", 1)[0] : "";
+  return /^[a-z][a-z0-9_]{0,80}$/.test(reason) ? reason : null;
 }
 
 function publicPlan(plan) {
