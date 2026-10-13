@@ -1,0 +1,65 @@
+name: Build Bluey iPhone app
+
+on:
+  push:
+    branches:
+      - bluey-windows
+    paths:
+      - ios-app/**
+      - .github/workflows/build-bluey-ipa.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build unsigned iPhone app
+        working-directory: ios-app
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/BlueyBuild"
+          xcodebuild \
+            -project GooglyEyes.xcodeproj \
+            -target GooglyEyes \
+            -configuration Release \
+            -sdk iphoneos \
+            CONFIGURATION_BUILD_DIR="$RUNNER_TEMP/BlueyBuild" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO \
+            build
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="$(find "$RUNNER_TEMP/BlueyBuild" -maxdepth 2 -type d -name '*.app' | head -n 1)"
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app bundle found"
+            find "$RUNNER_TEMP/BlueyBuild" -maxdepth 3 -print
+            exit 1
+          fi
+          rm -rf "$RUNNER_TEMP/Payload"
+          mkdir -p "$RUNNER_TEMP/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/Payload/"
+          cd "$RUNNER_TEMP"
+          /usr/bin/zip -qry Bluey-unsigned.ipa Payload
+          ls -lh Bluey-unsigned.ipa
+
+      - name: Upload Bluey IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bluey-iPhone-unsigned-ipa
+          path: ${{ runner.temp }}/Bluey-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30

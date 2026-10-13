@@ -53,10 +53,10 @@ public sealed class TrayApp : ApplicationContext
         hotKeys.Register(Keys.H, () => settings.ShowCursor = !settings.ShowCursor, "Ctrl+Alt+H");
         hotKeys.Register(Keys.T, () => overlay.TalkTest(), "Ctrl+Alt+T");
 
-        if (ApiKeys.Get(ApiKeys.OpenAI) == null)
+        if (ApiKeys.Get(settings.Provider == "openai" ? ApiKeys.OpenAI : ApiKeys.Gemini) == null)
         {
             var later = new System.Windows.Forms.Timer { Interval = 500 };
-            later.Tick += (_, _) => { later.Dispose(); EditKey(); };
+            later.Tick += (_, _) => { later.Dispose(); if (settings.Provider == "openai") EditOpenAIKey(); else EditGeminiKey(); };
             later.Start();
         }
         RefreshIcon();
@@ -98,10 +98,41 @@ public sealed class TrayApp : ApplicationContext
         later.Start();
     }
 
-    private void EditKey()
+    private void EditOpenAIKey()
     {
-        var key = Dialogs.AskForKey(ApiKeys.Get(ApiKeys.OpenAI) != null);
+        var key = Dialogs.AskForKey("OpenAI API Key", "From platform.openai.com/api-keys (paid per use).", "sk-…",
+                                    ApiKeys.Get(ApiKeys.OpenAI) != null);
         if (!string.IsNullOrEmpty(key)) ApiKeys.Set(ApiKeys.OpenAI, key);
+    }
+
+    private void EditGeminiKey()
+    {
+        var key = Dialogs.AskForKey("Gemini API Key", "From aistudio.google.com/apikey (free tier).", "AIza…",
+                                    ApiKeys.Get(ApiKeys.Gemini) != null);
+        if (!string.IsNullOrEmpty(key)) ApiKeys.Set(ApiKeys.Gemini, key);
+    }
+
+    private void SetProvider(string provider)
+    {
+        if (settings.Provider == provider) return;
+        settings.Provider = provider;
+        if (ApiKeys.Get(provider == "openai" ? ApiKeys.OpenAI : ApiKeys.Gemini) == null)
+        {
+            if (provider == "openai") EditOpenAIKey(); else EditGeminiKey();
+        }
+        RestartIfAwake();
+    }
+
+    /// Talks to Gemini straight from the PC, so the key and model can be checked without the phone.
+    private async void TestGemini()
+    {
+        overlay.Caption = "Testing Gemini…";
+        string result;
+        try { result = "Gemini works! He says: " + await RealtimeHost.TestGemini(); }
+        catch (Exception error) { result = "Gemini test failed: " + error.Message; }
+        overlay.Caption = null;
+        MessageBox.Show(result, "Bluey – Gemini test", MessageBoxButtons.OK,
+                        result.StartsWith("Gemini works") ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
     }
 
     private void EditPersonality()
@@ -154,7 +185,14 @@ public sealed class TrayApp : ApplicationContext
         menu.Items.Add(phone);
 
         menu.Items.Add(Item("Personality…", EditPersonality));
-        menu.Items.Add(Item("OpenAI Key…", EditKey));
+        var brain = new ToolStripMenuItem("AI");
+        brain.DropDownItems.Add(Item("Gemini (free tier)", () => SetProvider("gemini"), null, settings.Provider == "gemini"));
+        brain.DropDownItems.Add(Item("OpenAI (paid)", () => SetProvider("openai"), null, settings.Provider == "openai"));
+        brain.DropDownItems.Add(new ToolStripSeparator());
+        brain.DropDownItems.Add(Item("Gemini Key…", EditGeminiKey));
+        brain.DropDownItems.Add(Item("Test Gemini Connection", TestGemini));
+        brain.DropDownItems.Add(Item("OpenAI Key…", EditOpenAIKey));
+        menu.Items.Add(brain);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Item("Cursor Glow", () => settings.Glow = !settings.Glow, null, settings.Glow));
         menu.Items.Add(Item("Show Cursor", () => settings.ShowCursor = !settings.ShowCursor, "Ctrl+Alt+H", settings.ShowCursor));

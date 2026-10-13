@@ -9,6 +9,21 @@ Bluey bestaat uit twee delen:
 
 De iPhone ziet het verschil niet: de Windows-app spreekt hetzelfde protocol als de Mac-app (Bonjour `_googly._tcp` en regels JSON over TCP).
 
+## Gemini (gratis) of OpenAI (betaald)
+
+Bluey's "brein" kan **Google Gemini** zijn (standaard, gratis laag voor eigen gebruik) of **OpenAI** (betaald per gebruik). Kies het in het menu onder **AI**.
+
+| | Gemini | OpenAI |
+| --- | --- | --- |
+| Kosten | gratis laag (met limieten) | tegoed op platform.openai.com |
+| Sleutel | aistudio.google.com/apikey | platform.openai.com/api-keys |
+| Praten | **push-to-talk**: hij hoort je alleen terwijl je het scherm vasthoudt | hij luistert de hele sessie mee en antwoordt als je het scherm vasthoudt |
+| iPhone-app | de aangepaste app uit `ios-app/` (zie hieronder) | de originele app of die uit `ios-app/` |
+
+Voor Gemini is de **aangepaste iPhone-app** nodig: de code staat in `ios-app/` (een kopie van de originele Bluey, met alleen een Gemini-modus erbij in `ios-app/iOS/Sources/LiveVoice.swift`). GitHub bouwt hem via **Actions → Build Bluey iPhone app** (artifact *Bluey-iPhone-unsigned-ipa*); onderteken hem daarna bijvoorbeeld met Sideloadly.
+
+Privacy: in Nederland (EER) gelden volgens Google's voorwaarden de privacyregels van de betaalde versie, ook voor gratis gebruik. Gratis gebruik is alleen voor jezelf; wie Bluey aan anderen in de EER aanbiedt, moet de betaalde versie gebruiken.
+
 ## We bouwen het in stappen
 
 | Stap | Wat | Status |
@@ -26,9 +41,10 @@ In stap 1 kun je dus al met Bluey praten. Zijn antwoorden verschijnen als tekstb
 2. Pak de zip uit en start `Bluey.exe`. Er is geen installatie nodig.
    - Windows SmartScreen zegt misschien "Windows heeft uw pc beschermd", omdat de app niet ondertekend is. Klik op **Meer informatie → Toch uitvoeren**.
    - Windows Firewall vraagt of Bluey het netwerk mag gebruiken. Sta het toe voor **particuliere netwerken**, anders kan de iPhone de pc niet vinden.
-3. Bluey vraagt de eerste keer om je **OpenAI API-sleutel**. Die wordt versleuteld met je Windows-account opgeslagen in `%APPDATA%\Bluey\keys.json`. De iPhone krijgt alleen kortlevende sleutels van 10 minuten.
-4. Zet de Bluey-app op je iPhone (zie de IPA-build op branch `bluey-ipa-build-20261012`; die moet nog wel ondertekend worden, bijvoorbeeld met Sideloadly of AltStore).
-5. Zorg dat de iPhone en de pc op **hetzelfde wifi-netwerk** zitten. De iPhone vindt de pc dan vanzelf. In de iPhone-app kies je de pc via het luidsprekerknopje rechtsboven.
+3. Bluey vraagt de eerste keer om je **Gemini API-sleutel** (maak er gratis een op https://aistudio.google.com/apikey met je Google-account). Die wordt versleuteld met je Windows-account opgeslagen in `%APPDATA%\Bluey\keys.json`. De iPhone krijgt alleen kortlevende sleutels die één keer werken.
+4. Controleer of het werkt: menu **AI → Test Gemini Connection**. Bluey maakt dan vanaf de pc zelf verbinding met Gemini en laat zijn antwoord zien.
+5. Zet de aangepaste Bluey-app op je iPhone (zie *Gemini of OpenAI* hierboven; hij moet nog ondertekend worden, bijvoorbeeld met Sideloadly of AltStore).
+6. Zorg dat de iPhone en de pc op **hetzelfde wifi-netwerk** zitten. De iPhone vindt de pc dan vanzelf. In de iPhone-app kies je de pc via het luidsprekerknopje rechtsboven.
 
 Bluey zit in het systeemvak (rechtsonder, bij de klok). Klik op het blauwe besje voor het menu.
 
@@ -50,7 +66,8 @@ Als een andere app een sneltoets al gebruikt, staat dat onderaan in het menu.
 ## Werkt het niet?
 
 - **"Waiting for the phone app…" blijft staan**: controleer of iPhone en pc op hetzelfde wifi zitten (geen gastnetwerk) en of de firewall Bluey toestaat op particuliere netwerken. Op een netwerk dat Windows als "Openbaar" ziet, blokkeert de firewall dit standaard.
-- **Bluey zegt dat hij geen sessie kan starten**: kijk via **OpenAI Key…** of je sleutel klopt en of je OpenAI-account tegoed heeft.
+- **Bluey zegt dat hij geen sessie kan starten**: probeer **AI → Test Gemini Connection**; de melding zegt wat er misgaat. Bij OpenAI: kijk of je sleutel klopt en of je account tegoed heeft.
+- **Gemini zegt dat het model niet bestaat**: Google hernoemt soms modellen. Zet in `%APPDATA%\Bluey\settings.json` een regel `"geminiModel": "<nieuwe naam>"` (huidige namen staan op ai.google.dev/gemini-api/docs/live-guide) en start Bluey opnieuw. De iPhone-app hoeft daarvoor niet opnieuw.
 - Instellingen staan in `%APPDATA%\Bluey\settings.json`. Verwijder dat bestand om alles terug te zetten.
 
 ## Zelf bouwen

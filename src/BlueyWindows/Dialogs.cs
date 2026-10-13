@@ -5,20 +5,20 @@ namespace Bluey;
 /// Small windows for typing in a key or his personality.
 public static class Dialogs
 {
-    /// Asks for the OpenAI API key. Returns null when cancelled.
-    public static string? AskForKey(bool hasKey)
+    /// Asks for an API key. Returns null when cancelled.
+    public static string? AskForKey(string title, string where, string placeholder, bool hasKey)
     {
-        using var form = Window("OpenAI API Key", 460, 190);
+        using var form = Window(title, 460, 190);
         var label = new Label
         {
-            Text = "Saved privately on this PC, encrypted for your Windows account (not in the project files). " +
+            Text = where + " Saved privately on this PC, encrypted for your Windows account (not in the project files). " +
                    "The phone only ever gets short-lived keys.",
-            Location = new Point(14, 12), Size = new Size(420, 40),
+            Location = new Point(14, 8), Size = new Size(430, 48),
         };
         var field = new TextBox
         {
             Location = new Point(14, 60), Size = new Size(420, 24), UseSystemPasswordChar = true,
-            PlaceholderText = hasKey ? "Key saved. Paste a new one to replace it." : "sk-…",
+            PlaceholderText = hasKey ? "Key saved. Paste a new one to replace it." : placeholder,
         };
         var (ok, cancel) = Buttons(form, 110);
         form.Controls.AddRange(new Control[] { label, field, ok, cancel });

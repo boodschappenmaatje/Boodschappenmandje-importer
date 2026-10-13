@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - bluey-windows
+    paths:
+      - src/**
+      - README.md
+      - .github/workflows/build-bluey-windows.yml
   workflow_dispatch:
 
 permissions:
