@@ -154,6 +154,9 @@ test("selector diagnostics expose only bounded DOM facts, not page text", async 
   const result = await sourceProbe({
     waitForSelector: async () => { throw timeout; },
     diagnose: async () => ({
+      selector_substage: "instructions_panel", playwright_root_count: 1, playwright_root_visible: true,
+      heading_locator_count: 1, heading_locator_visible: true, instructions_locator_count: 1,
+      instructions_locator_visible: true,
       at_domcontentloaded: { ready_state: "interactive", main_count: 0, body_contains_product_name: false,
         challenge_signals: { human_check: true } },
       after_wait: { ready_state: "complete", main_count: 1, main_visible_count: 0, main_zero_rect_count: 1,
@@ -166,6 +169,9 @@ test("selector diagnostics expose only bounded DOM facts, not page text", async 
   assert.equal(result.diagnostic.document_diagnostic.at_domcontentloaded.ready_state, "interactive");
   assert.equal(result.diagnostic.document_diagnostic.at_domcontentloaded.challenge_signals.human_check, true);
   assert.equal(result.diagnostic.document_diagnostic.after_wait.challenge_signals.captcha, true);
+  assert.equal(result.diagnostic.document_diagnostic.selector_substage, "instructions_panel");
+  assert.equal(result.diagnostic.document_diagnostic.playwright_root_count, 1);
+  assert.equal(result.diagnostic.document_diagnostic.playwright_root_visible, true);
   assert.equal(result.diagnostic.document_diagnostic.after_wait.main_display_contents_count, 1);
   assert.equal(result.diagnostic.document_diagnostic.after_wait.content_root_query_count, 1);
   assert.equal(result.diagnostic.document_diagnostic.after_wait.visible_content_root_count, 0);
