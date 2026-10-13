@@ -18,6 +18,8 @@ import {
   dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
   safeShanghaiParserReason,
+  safeShanghaiSourceFacts,
+  shanghaiOilMeasurementCount,
   validateShanghaiContentRoot,
 } from "./shanghai-source-diagnostics.mjs";
 import {
@@ -129,6 +131,7 @@ async function parseCurrentSource(browser, product) {
         instructions_aria_controls_count: namesInstructions.filter((button) => Boolean(button.getAttribute("aria-controls"))).length,
         controlled_panel_present_count: controlledPanels.length,
         visible_controlled_panel_count: controlledPanels.filter(visible).length,
+        instruction_oil_measurement_count: shanghaiOilMeasurementCount(controlledPanels[0]?.textContent ?? ""),
         panel_within_content_root_count: controlledPanels.filter((panel) => contentRoots.some((root) => root.contains(panel))).length,
         consent_control_count: consent.length,
         consent_control_visible_count: visibleConsent.length,
@@ -150,7 +153,9 @@ async function parseCurrentSource(browser, product) {
     }, SHANGHAI_PRODUCT_NAME);
     let domAtDomContentLoaded = null;
     let selectorSubstage = "content_root";
-    return await inspectShanghaiSource({
+    let oilMeasurementsBeforeWait = null;
+    let oilMeasurementsAfterWait = null;
+    const inspected = await inspectShanghaiSource({
       diagnose: async () => {
         const afterWait = await inspectDocument();
         if (rejectOptionalCookies) {
@@ -201,7 +206,18 @@ async function parseCurrentSource(browser, product) {
         const panelId = await instructions.getAttribute("aria-controls");
         if (!panelId) throw new Error("source-instructions-panel-missing");
         selectorSubstage = "instructions_panel";
-        await contentRoot.locator(`[id=${JSON.stringify(panelId)}]`).waitFor({ timeout: 15000 });
+        const instructionsPanel = contentRoot.locator(`[id=${JSON.stringify(panelId)}]`);
+        await instructionsPanel.waitFor({ state: "visible", timeout: 15000 });
+        oilMeasurementsBeforeWait = shanghaiOilMeasurementCount(await instructionsPanel.textContent());
+        selectorSubstage = "instructions_content";
+        await page.waitForFunction((id) => {
+          const text = document.getElementById(id)?.textContent ?? "";
+          const start = text.search(/\\bZo maak\\b/i);
+          if (start < 0) return false;
+          const preparation = text.slice(start).split(/Netto-inhoud/i)[0];
+          return [...preparation.matchAll(/\\b\\d+(?:[.,]\\d+)?\\s*(?:el|eetl\\.?|eetlepels?)\\s+(?:(?:olijf|zonnebloem|arachide|rijst)?olie)\\b/gi)].length >= 2;
+        }, panelId, { timeout: 15000 });
+        oilMeasurementsAfterWait = shanghaiOilMeasurementCount(await instructionsPanel.textContent());
       },
       readSource: async () => validateShanghaiContentRoot({
         product,
@@ -212,6 +228,13 @@ async function parseCurrentSource(browser, product) {
       }),
       parseSource: async (source) => parseMealMixSource(source, MEAL_MIX_PROFILES, mealMixCorroborationFor(product)),
     });
+    if (!inspected.source) return inspected;
+    return { ...inspected, diagnostic: {
+      ...inspected.diagnostic,
+      ...safeShanghaiSourceFacts(inspected.source.text),
+      instruction_oil_measurements_before_wait: oilMeasurementsBeforeWait ?? 0,
+      instruction_oil_measurements_after_wait: oilMeasurementsAfterWait ?? 0,
+    } };
   } finally {
     await page.close();
   }
