@@ -1,3 +1,12 @@
+# Checkpoint — Shanghai readiness-preflight via bestaande cache, 13 oktober 2026
+
+- Branch `codex/shanghai-source-diagnostic-20261012`, PR #90 open/Draft. Remote `main` laatst `46cd27f21e130c2dede46805eec65db08e10f42e`. Laatste code-head vóór dit checkpoint: `87a40e3a3065536d994dea4272e2df7790fb30c2`.
+- Volledige CI #528 op `ab715ac` groen (importer 498/498, PostgreSQL 28/28, web 887/887; seedchecks, ESLint, TypeScript en build groen). Bounded dry-run #25, Actions `38369650436` op `d6f5f88`, en #26, Actions `38371283837` op `ab715ac`, faalden veilig met nul geplande/write-operaties. Beiden: juiste SKU/bron HTTP 200, contentroot, instructiepaneel, parser en zeven hoeveelheden verified. Eerste blocker `match_changes_across_people` voor supplement **champignons** van één naar vier personen: `product_id`, `product_updated_at`, `price_updated_at`. `safe_to_write=false`; Production-writes blijven **0**.
+- De Shanghai-preflight gebruikte de ongebufferde evaluator en eiste identieke producten voor alle persoonsaantallen. De bestaande planner gebruikt bij een actuele supplementmatch juist `resolveRecipeReadiness` met opgeslagen matches en kandidaatproducten. Commit `43b4c68` laat alleen deze Shanghai-preflight dat bestaande pad gebruiken; `0dc8d47`/`00e9b5a` voegen een fail-closed scopecheck toe; `87a40e3` test de cache-/recipegrenzen. Geen algemene evaluator, parser, schema of safety-gate aangepast. Volledige CI op actuele head nog te controleren.
+- Exacte volgende stap: wacht op volledige groene CI op de actuele PR-head; start daarna één bounded Shanghai `dry-run` op dezelfde branch. Lees het volledige rapport en verifieer vooral supplementmatch, projectie, `source_verified` en `safe_to_write`. Bij een nieuwe bewezen blocker uitsluitend die oorzaak repareren; geen Production-write zolang `safe_to_write` niet waar is. Bestaande write-workflow is bewust main-only en vereist exacte bevestiging; bij PASS moet de veilige merge/write-volgorde worden beoordeeld zonder die bewaking te verzwakken.
+
+---
+
 # Checkpoint — PR #90 Shanghai readiness-drift diagnose, 13 oktober 2026
 
 - Remote `main`: `46cd27f21e130c2dede46805eec65db08e10f42e`. Bestaande branch `codex/shanghai-source-diagnostic-20261012`; PR #90 is open, Draft, mergeable. Laatste code-head vóór deze documentatiecommit: `d6f5f8813138e6d4a64bcb61348587ab93c3ff47`.
