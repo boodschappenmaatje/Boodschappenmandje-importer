@@ -19,6 +19,12 @@ const READINESS_VARIATION_FIELDS = new Set([
   "product_id", "match_status", "failure_reason", "product_updated_at", "price_updated_at",
 ]);
 
+export function validateShanghaiReadinessResolution(resolved, recipeId) {
+  return Boolean(resolved?.cacheAvailable && resolved.persistentHitCount === 0 &&
+    resolved.fallbackCount === 1 && resolved.gate?.recipes?.length === 1 &&
+    resolved.gate.recipes[0]?.recipeId === recipeId);
+}
+
 export function safeReadinessMatchChange(sourceKey, firstPeopleCount, currentPeopleCount, changedFields) {
   const label = READINESS_VARIATION_LABELS.get(sourceKey);
   if (!label || !Number.isInteger(firstPeopleCount) || firstPeopleCount < 1 || firstPeopleCount > 10 ||
