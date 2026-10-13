@@ -28,12 +28,14 @@ Privacy: in Nederland (EER) gelden volgens Google's voorwaarden de privacyregels
 
 | Stap | Wat | Status |
 | --- | --- | --- |
-| **1** | Verbinding met de iPhone, OpenAI-sleutel, vliegende cursor, tekstballon, sneltoetsen, tray-menu | ✅ deze versie |
-| 2 | Naar het scherm kijken (schermafbeelding + tekstherkenning) en dingen aanwijzen, web-onderzoek | volgende |
+| **1** | Verbinding met de iPhone, sleutel, vliegende cursor, tekstballon, sneltoetsen, tray-menu | ✅ klaar |
+| **2** | Naar het scherm kijken (schermafbeelding + tekstherkenning van Windows), dingen aanwijzen, web-onderzoek met verslagkaartje | ✅ deze versie |
 | 3 | Klikken, typen, toetsen, scrollen, slepen, apps/websites openen (met dezelfde veiligheidsregels) | later |
 | 4 | Vergadernotities (transcriptie met sprekers) | later |
 
-In stap 1 kun je dus al met Bluey praten. Zijn antwoorden verschijnen als tekstballon boven de plek waar je telefoon staat, en zijn ogen op de iPhone volgen je muis. Vraag je hem iets over je scherm, dan zegt hij nog dat hij dat (nog) niet kan.
+Vraag bijvoorbeeld (terwijl je het iPhone-scherm vasthoudt): *"wat is dit?"* terwijl je muis ergens op staat, *"waar moet ik klikken om op te slaan?"*, of *"zoek eens op wat dit kost"*. Hij kijkt dan naar je scherm, vliegt met zijn cursor naar het juiste woord en antwoordt in een tekstballon. Voor onderzoek verschijnt rechtsboven een kaartje met het verslag en de bronnen (sluiten met ×). Klikken en typen kan hij nog niet; dat is stap 3.
+
+Tekstherkenning gebruikt de taal van je Windows (Nederlands op een Nederlandse Windows). Web-onderzoek met Gemini gebruikt Google Zoeken; daarvan zijn (volgens Google, oktober 2026) 5.000 zoekopdrachten per maand gratis.
 
 ## Installeren
 

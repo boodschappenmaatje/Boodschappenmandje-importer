@@ -19,6 +19,13 @@ public sealed class LayeredWindow : Form
 
     protected override bool ShowWithoutActivation => true;
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Keep his own cursor and bubbles out of screenshots, so he never "sees" himself.
+        try { Native.SetWindowDisplayAffinity(Handle, Native.WDA_EXCLUDEFROMCAPTURE); } catch (Exception) { }
+    }
+
     protected override CreateParams CreateParams
     {
         get
@@ -396,6 +403,8 @@ internal static class Native
     [DllImport("gdi32.dll")] public static extern bool DeleteDC(IntPtr hdc);
     [DllImport("gdi32.dll")] public static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
     [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr hObject);
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+    [DllImport("user32.dll")] public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint affinity);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
     [DllImport("user32.dll")]

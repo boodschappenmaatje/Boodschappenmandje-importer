@@ -5,10 +5,10 @@ using System.Text.Json.Nodes;
 
 namespace Bluey;
 
-/// The PC's half of live voice. The phone runs the OpenAI Realtime session (its mic, its speaker);
-/// the PC hands it a short-lived key, runs its tools and shows captions. Everything runs on the UI thread.
-/// Mirrors Mac/Sources/GooglyMac/RealtimeHost.swift. Step 1: no screen tools yet (looking, pointing at
-/// things and using the computer come in later steps).
+/// The PC's half of live voice. The phone runs the voice session (its mic) with OpenAI or Gemini;
+/// the PC hands it a short-lived key, runs its tools (look at the screen, point, research) and shows captions.
+/// Everything runs on the UI thread, alongside the cursor it drives. Mirrors RealtimeHost.swift
+/// (using the computer comes in a later step).
 public sealed class RealtimeHost
 {
     public const string Model = "gpt-realtime-2.1";
@@ -16,8 +16,12 @@ public sealed class RealtimeHost
     private static readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     private readonly CursorOverlay overlay;
+    private readonly ReportPanel reports = new();
+    private ScreenSnapshot? snapshot;
     private readonly System.Windows.Forms.Timer captionTimer = new();
     private Action? captionTimerAction;
+    /// Tools run one at a time, in the order he asked for them.
+    private Task toolChain = Task.CompletedTask;
 
     /// True while he's awake and talking with you (false = follow mode).
     public bool Awake { get; private set; }
@@ -33,6 +37,7 @@ public sealed class RealtimeHost
             captionTimerAction = null;
             action?.Invoke();
         };
+        overlay.OnFrame = _ => Choreograph();
     }
 
     private CursorEngine Engine => overlay.Engine;
@@ -69,28 +74,43 @@ public sealed class RealtimeHost
                 break;
             case "caption":
             {
-                // His reply, streaming in. It shows as a speech bubble above the phone.
+                // His reply, streaming in. It shows as a speech bubble by his cursor (or above the phone).
                 var text = packet.Text?.Trim() ?? "";
                 ShowCaption(text.Length == 0 ? null : text, 0);
+                if (text.Length > 0) SetSpeaking(true);
                 break;
             }
             case "captionDone":
             {
-                // Keep the bubble up long enough to read, then tidy away.
+                // Keep the bubble (and his pointing) up long enough to read, then tidy away.
                 var text = packet.Text ?? "";
                 if (text.Length > 0) ShowCaption(text, 0);
                 double words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
                 double readTime = Math.Min(Math.Max(2.8, 1.2 + words * 0.32), 12) + 3;
-                After(readTime, () => ShowCaption(null, 0));
+                After(readTime, () =>
+                {
+                    SetSpeaking(false);
+                    ShowCaption(null, 0);
+                });
                 break;
             }
             case "tool":
             {
-                var result = RunTool(packet.Tool ?? "");
-                reply(new Packet { Command = "toolResult", CallID = packet.CallID, Text = result });
+                var previous = toolChain;
+                var run = RunAfter(previous, packet.Tool ?? "", packet.Text ?? "{}");
+                toolChain = run;
+                var (text, image) = await run;
+                reply(new Packet { Command = "toolResult", CallID = packet.CallID, Text = text, Image = image });
                 break;
             }
         }
+    }
+
+    private async Task<(string, string?)> RunAfter(Task previous, string name, string arguments)
+    {
+        try { await previous; } catch (Exception) { }
+        try { return await RunTool(name, arguments); }
+        catch (Exception error) { return ($"That didn't work: {error.Message}", null); }
     }
 
     public void SetAwake(bool on)
@@ -101,6 +121,8 @@ public sealed class RealtimeHost
         Engine.GazeOverride = null;  // his eyes follow your mouse while he listens
         if (!on)
         {
+            queue.Clear();
+            choreographing = false;
             overlay.GoHome();
             overlay.SpeechTarget = null;
             ShowCaption(null, 0);
@@ -110,12 +132,40 @@ public sealed class RealtimeHost
 
     // MARK: Tools
 
-    /// The tools he has so far (name, description). Only what works on Windows yet; none take arguments.
-    private static readonly (string Name, string Description)[] ToolList =
+    private static readonly JsonObject GridX = new() { ["type"] = "number", ["description"] = "0 = left edge, 1000 = right edge of the screen" };
+    private static readonly JsonObject GridY = new() { ["type"] = "number", ["description"] = "0 = top edge, 1000 = bottom edge of the screen" };
+
+    private sealed record ToolSpec(string Name, string Description, JsonObject Properties, string[] Required);
+
+    private static ToolSpec Tool(string name, string description, JsonObject? properties = null, params string[] required) =>
+        new(name, description, properties ?? new JsonObject(), required);
+
+    /// Tool definitions for the session (kept here so they sit next to their code).
+    private static List<ToolSpec> ToolList => new()
     {
-        ("stop_pointing", "Bring your cursor back home when you're done pointing."),
-        ("go_to_sleep",
-         "Go back to quietly following the user's mouse with your eyes. Use when the user says bye, thanks that's all, or asks you to sleep."),
+        Tool("look_at_screen",
+             "Take a fresh look at the user's screen. Returns the front window's title, every piece of text (lines L#, words W#) with positions on a 0-1000 grid, and a screenshot. Call this before pointing, and again whenever the screen may have changed."),
+        Tool("point_at",
+             "Fly your cursor to something on screen and keep pointing there while you talk about it. Use the most specific id (a single word or number over a whole line). Call it right before you mention the thing.",
+             new JsonObject { ["target_id"] = new JsonObject { ["type"] = "string", ["description"] = "An id from look_at_screen, like W12 or L3." } },
+             "target_id"),
+        Tool("point_at_spot",
+             "Point at something that isn't text (a shape, arrow, chart bar, image) using its position on the 0-1000 grid of the last screenshot.",
+             new JsonObject { ["x"] = GridX.DeepClone(), ["y"] = GridY.DeepClone() }, "x", "y"),
+        Tool("web_research",
+             "Look something up on the web and put a short report (title plus up to four paragraphs, with sources) on the user's screen. Use for anything you're not sure of, anything recent, or anything that needs facts, prices, news or details. Before calling it, point at the relevant thing if there is one and reply with one short line that ends with \"doing some research…\" (in the user's language).",
+             new JsonObject { ["question"] = new JsonObject { ["type"] = "string", ["description"] = "What to research, as a clear, self-contained question." } },
+             "question"),
+        Tool("stop_pointing", "Bring your cursor back home when you're done pointing."),
+        Tool("go_to_sleep",
+             "Go back to quietly following the user's mouse with your eyes. Use when the user says bye, thanks that's all, or asks you to sleep."),
+    };
+
+    private static JsonObject Parameters(ToolSpec t) => new()
+    {
+        ["type"] = "object",
+        ["properties"] = t.Properties.DeepClone(),
+        ["required"] = new JsonArray(t.Required.Select(r => (JsonNode)JsonValue.Create(r)!).ToArray()),
     };
 
     /// OpenAI Realtime's tool format.
@@ -124,35 +174,178 @@ public sealed class RealtimeHost
         ["type"] = "function",
         ["name"] = t.Name,
         ["description"] = t.Description,
-        ["parameters"] = new JsonObject { ["type"] = "object", ["properties"] = new JsonObject(), ["required"] = new JsonArray() },
+        ["parameters"] = Parameters(t),
     }).ToArray());
 
     /// Gemini Live's tool format.
     private static JsonArray GeminiTools => new(new JsonObject
     {
-        ["functionDeclarations"] = new JsonArray(ToolList.Select(t => (JsonNode)new JsonObject
+        ["functionDeclarations"] = new JsonArray(ToolList.Select(t =>
         {
-            ["name"] = t.Name,
-            ["description"] = t.Description,
+            var declaration = new JsonObject { ["name"] = t.Name, ["description"] = t.Description };
+            if (t.Properties.Count > 0) declaration["parameters"] = Parameters(t);
+            return (JsonNode)declaration;
         }).ToArray()),
     });
 
-    private string RunTool(string name)
+    /// Separates his instructions from the report text, so the phone can save the report in the transcript.
+    private const string ReportMarker = "\n---REPORT---\n";
+
+    private async Task<(string Text, string? Image)> RunTool(string name, string arguments)
     {
+        JsonObject args;
+        try { args = JsonNode.Parse(arguments) as JsonObject ?? new JsonObject(); }
+        catch (JsonException) { args = new JsonObject(); }
+
         switch (name)
         {
+            case "look_at_screen":
+                return await Look();
+            case "point_at":
+            {
+                var id = (Str(args["target_id"]) ?? "").Trim();
+                if (snapshot == null) return ("Call look_at_screen first.", null);
+                if (snapshot.FindTarget(id) is not { } target) return ($"No target {id}. Use an id from the last look_at_screen.", null);
+                Point(new Pt(target.Rect.MidX, target.Rect.MaxY + 3), target.Rect);
+                return (queue.Count > 1 ? $"Queued: your cursor will point at \"{target.Text}\" after the earlier spots." : $"Pointing at \"{target.Text}\".", null);
+            }
+            case "point_at_spot":
+            {
+                if (Num(args["x"]) is not { } x || Num(args["y"]) is not { } y) return ("Give x and y.", null);
+                var spot = GridPoint(x, y);
+                Point(spot, new Box(spot.X - 16, spot.Y - 16, 32, 32));
+                return ("Pointing there.", null);
+            }
             case "stop_pointing":
-                overlay.GoHome();
-                overlay.SpeechTarget = null;
-                return "Your cursor is home.";
+                RequestHome();
+                return ("Your cursor will head home once you finish talking.", null);
+            case "web_research":
+            {
+                var question = (Str(args["question"]) ?? "").Trim();
+                if (question.Length == 0) return ("What should I research?", null);
+                reports.ShowLoading(question);
+                try
+                {
+                    var screenText = snapshot == null ? null : string.Join(" / ", snapshot.Lines.Take(40).Select(l => l.Line.Text));
+                    var report = await WebResearch.Research(question, screenText);
+                    reports.ShowReport(report);
+                    return ("The full report is now in a card on the user's screen. Reply with ONE short line: the key takeaway in your own words. Don't repeat the report." + ReportMarker + report.PlainText, null);
+                }
+                catch (Exception error)
+                {
+                    reports.ShowError(error.Message);
+                    return ($"Research failed: {error.Message}. Tell the user in a few words.", null);
+                }
+            }
             case "go_to_sleep":
                 // The phone closes the session after this call; the PC just tidies up.
-                return "Going to sleep. Say a very short goodbye.";
-            case "look_at_screen":
-                return "You can't see the user's screen on this Windows PC yet. Tell them in a few words.";
+                return ("Going to sleep. Say a very short goodbye.", null);
             default:
-                return $"{name} isn't available on this Windows PC yet. Tell the user in a few words.";
+                return ($"{name} isn't available on this Windows PC yet. Tell the user in a few words.", null);
         }
+    }
+
+    private async Task<(string, string?)> Look()
+    {
+        try
+        {
+            var shot = await ScreenReader.Snapshot();
+            snapshot = shot;
+            var text = shot.TargetList;
+            var mouse = CursorOverlay.MouseLocation;
+            int mx = (int)(Math.Clamp(mouse.X / shot.Size.Width, 0, 1) * 1000), my = (int)(Math.Clamp(mouse.Y / shot.Size.Height, 0, 1) * 1000);
+            text += $"\nThe user's mouse pointer is at @{mx},{my}";
+            if (shot.TargetNear(mouse) is { } under) text += $", on {under.Id} \"{under.Text}\"";
+            text += ". When they say \"this\", \"that\" or \"here\", they mean what's at their mouse pointer.";
+            return (text, Convert.ToBase64String(shot.Jpeg));
+        }
+        catch (Exception error)
+        {
+            return ($"I can't see the screen: {error.Message}", null);
+        }
+    }
+
+    private static string? Str(JsonNode? node) => node is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+
+    private static double? Num(JsonNode? node)
+    {
+        if (node is not JsonValue v) return null;
+        if (v.TryGetValue<double>(out var d)) return d;
+        if (v.TryGetValue<int>(out var i)) return i;
+        if (v.TryGetValue<long>(out var l)) return l;
+        if (v.TryGetValue<string>(out var s) && double.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, out var p)) return p;
+        return null;
+    }
+
+    private (double Width, double Height) ScreenSize => snapshot?.Size ?? CursorOverlay.ScreenSize;
+
+    private Pt GridPoint(double x, double y) =>
+        new(Math.Clamp(x, 0, 1000) / 1000 * ScreenSize.Width, Math.Clamp(y, 0, 1000) / 1000 * ScreenSize.Height);
+
+    // MARK: Pointing choreography
+    //
+    // He often asks to point at several things at once. Each spot gets its own flight and a hold long
+    // enough to talk about it, and the cursor only goes home once he's finished talking.
+
+    /// Spots to point at, with the thing being shown (so his speech bubble can sit above it, not on it).
+    private readonly Queue<(Pt Spot, Box Thing)> queue = new();
+    private double holdUntil, quietSince;
+    private bool homeRequested, speaking, choreographing;
+
+    /// How long a spot stays pointed at before the next one (after the flight lands).
+    private const double MinimumHold = 2.2;
+    /// Out and about with nothing more to say: go home after this much quiet.
+    private const double IdleHome = 5.0;
+
+    private void Point(Pt spot, Box thing)
+    {
+        queue.Enqueue((spot, thing));
+        homeRequested = false;
+        choreographing = true;
+    }
+
+    private void RequestHome()
+    {
+        homeRequested = true;
+        choreographing = true;
+    }
+
+    /// Runs every frame while he's pointing.
+    private void Choreograph()
+    {
+        if (!choreographing) return;
+        double now = Clock.Now;
+        if (now >= holdUntil && queue.Count > 0)
+        {
+            var (spot, thing) = queue.Dequeue();
+            overlay.SpeechTarget = thing;
+            if (!speaking) quietSince = now;  // give him time to start talking about it
+            Engine.GazeOverride = null;  // his eyes follow the cursor while pointing
+            overlay.Mode = new CursorMode.Pinned(spot);
+            // Flight time plus a comfortable hold; a lone point just holds while he talks.
+            holdUntil = now + 1.0 + MinimumHold;
+            return;
+        }
+        if (queue.Count > 0 || now < holdUntil) return;
+        if (overlay.Mode == overlay.IdleMode) { choreographing = false; return; }
+        // Go home once he's done talking: soon after he says so, or after a longer quiet spell.
+        double quietFor = speaking ? 0 : now - quietSince;
+        if ((homeRequested && quietFor > 1.2) || quietFor > IdleHome) GoHome();
+    }
+
+    private void GoHome()
+    {
+        overlay.GoHome();
+        Engine.GazeOverride = null;
+        overlay.SpeechTarget = null;
+        homeRequested = false;
+        choreographing = false;
+    }
+
+    private void SetSpeaking(bool on)
+    {
+        if (speaking && !on) quietSince = Clock.Now;
+        speaking = on;
     }
 
     // MARK: Captions
@@ -220,11 +413,23 @@ public sealed class RealtimeHost
         "How the conversation works: the user holds the phone screen while they talk to you, and lets go when they're " +
         "done. Everything you hear is meant for you, so answer it.";
 
-    /// What he can and can't do yet. Always included, whatever the personality says.
+    /// How he uses his tools. Always included, whatever the personality says.
     private const string ToolGuide =
-        "Reply in one short line. No lists, no markdown. Never write things like \"one moment\", \"sure\", \"okay\" or \"let me\".\n\n" +
-        "You live next to a Windows PC. For now you can't see its screen, point at things on it or use it; if the user asks, " +
-        "say so in a few words. When the user says goodbye or asks you to sleep, reply with a very short goodbye and call go_to_sleep.";
+        "Most important rule: when a request needs a tool, call the tool FIRST with no words before it (the one " +
+        "exception is web_research, described below). Never write things like \"one moment\", \"sure\", \"okay\" or " +
+        "\"let me\". Reply only after, in one short line. No lists, no markdown, never mention ids or coordinates.\n\n" +
+        "Point whenever you can. If the question is about anything on the screen (\"what's this?\", \"what does this " +
+        "mean?\"), call look_at_screen, then point_at (or point_at_spot) the thing you're talking about, then give your " +
+        "one-line answer; your bubble appears right by your cursor. \"This\", \"that\" and \"here\" mean what's at the user's " +
+        "mouse pointer, which look_at_screen tells you. Point at the most specific thing (a word or number rather than a " +
+        "whole line). For shapes, arrows or charts with no text, use point_at_spot. If the screen may have changed, look " +
+        "again. When the user says goodbye or asks you to sleep, reply with a very short goodbye and call go_to_sleep.\n\n" +
+        "Research: when answering well needs facts you're not sure of, anything recent, or details from the web, use " +
+        "web_research. In that one response: point at the relevant thing on screen if there is one, write one short " +
+        "line that ends with \"doing some research…\" (in the user's language), then call web_research. The report " +
+        "appears in a card on the screen; afterwards reply with just one short takeaway line.\n\n" +
+        "You live next to a Windows PC. You can look at its screen and point, but you can't click or type on it yet; " +
+        "if the user asks, say so in a few words.";
 
     private static string Instructions(bool gemini) =>
         Personality + "\n\n" + (gemini ? GeminiGuide : OpenAIGuide) + "\n\n" + ToolGuide + "\n\n" + LanguageRule;

@@ -110,6 +110,8 @@ public sealed class AppSettings
     }
     /// The Gemini Live model. Kept as a setting so a renamed model needs no new app.
     public string GeminiModel { get => Get("geminiModel", "gemini-3.8-live"); set => Set("geminiModel", value); }
+    /// The Gemini model for web research (with Google Search).
+    public string ResearchModel { get => Get("researchModel", "gemini-3.8-flash"); set => Set("researchModel", value); }
     /// The language he talks in: "nl" (Dutch, default) or "en".
     public string Language
     {
