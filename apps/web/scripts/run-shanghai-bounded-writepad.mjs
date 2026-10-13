@@ -244,6 +244,31 @@ async function parseCurrentSource(browser, product) {
   }
 }
 
+function safeReadinessGateShape(gate) {
+  const recipes = Array.isArray(gate?.recipes) ? gate.recipes : [];
+  const ingredients = recipes.flatMap((recipe) => Array.isArray(recipe?.ingredients) ? recipe.ingredients : []);
+  const candidates = gate?.candidatesByRequirement;
+  const matched = gate?.matchedProductsByRequirement;
+  return {
+    recipes_array: Array.isArray(gate?.recipes),
+    recipe_count: recipes.length,
+    recipe_ingredients_arrays: recipes.every((recipe) => Array.isArray(recipe?.ingredients)),
+    matched_products_lookup: typeof matched?.get === "function",
+    candidates_lookup: candidates === undefined || typeof candidates?.get === "function",
+    requirement_key_types: ingredients.every((item) => item?.requirementKey == null || typeof item.requirementKey === "string"),
+    source_key_types: ingredients.every((item) => typeof item?.sourceKey === "string"),
+    candidate_product_lists: typeof candidates?.get !== "function" || ingredients.every((item) => {
+      if (item?.requirementKey == null) return true;
+      const candidate = candidates.get(item.requirementKey);
+      return candidate == null || Array.isArray(candidate.products);
+    }),
+  };
+}
+
+function safeReadinessErrorType(error) {
+  return ["TypeError", "RangeError", "Error"].includes(error?.name) ? error.name : "unknown";
+}
+
 function projectedRecipe(id, recipeRow) {
   return {
     id,
@@ -279,7 +304,7 @@ async function evaluatePlannedRows(client, recipeId, recipeRow, parsedProfile, s
     setStage("readiness_evaluation");
     const gate = await evaluateRecipeReadiness([recipe], peopleCount, catalog, repository);
     if (gate.recipes.length !== 1 || gate.recipes[0]?.recipeId !== recipeId) throw new Error("evaluator_recipe_scope_mismatch");
-    setStage("readiness_row_projection");
+    setStage("readiness_row_projection", gate);
     const rows = rowsForGate(gate, peopleCount, new Date());
     if (rows.readinessRows.length !== 1 || rows.readinessRows[0]?.recipe_id !== recipeId) throw new Error("readiness_scope_mismatch");
     readinessRows.push(rows.readinessRows[0]);
@@ -329,10 +354,13 @@ async function preflight(client, browser) {
   const cas = null;
   let sourceRevision = null;
   let readinessPreflightStage = null;
+  let readinessGateShape = null;
+  let readinessPreflightErrorType = null;
   if (product && parsed?.status === "verified" && recipeRow) {
     try {
-      evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile, (stage) => {
+      evaluated = await evaluatePlannedRows(client, recipeId, recipeRow, parsed.profile, (stage, gate) => {
         readinessPreflightStage = stage;
+        if (stage === "readiness_row_projection") readinessGateShape = safeReadinessGateShape(gate);
       });
       readinessPreflightStage = "supplement_match_read";
       const missingKey = evaluated.matchRows.filter((row) => row.ingredient_source_key === "catalog-mix-product-231215000");
@@ -360,7 +388,8 @@ async function preflight(client, browser) {
         // existing bounded planner, after the exact recipe/profile are linked.
         planned = buildShanghaiWriteSummary([missingKey[0].match_key]);
       }
-    } catch {
+    } catch (error) {
+      readinessPreflightErrorType = safeReadinessErrorType(error);
       blockers.push("readiness_preflight_unavailable");
     }
   }
@@ -373,6 +402,8 @@ async function preflight(client, browser) {
     recipeConflicts,
     sourceRevision,
     readinessPreflightStage,
+    readinessGateShape,
+    readinessPreflightErrorType,
   };
   const blocked = blockers.length > 0;
   const emptyCounts = { recipes: 0, mealMixProfiles: 0, ingredientProductMatches: 0, readiness: 0, total: 0 };
@@ -398,6 +429,8 @@ async function preflight(client, browser) {
     readinessPeopleCounts: planned?.readinessPeopleCounts ?? [1,2,3,4,5,6,7,8,9,10],
     sourceRevision,
     readinessPreflightStage,
+    readinessGateShape,
+    readinessPreflightErrorType,
     casRevisions: cas,
     casRevisionStatus: cas ? "captured" : "will_be_captured_by_bounded_dry_run_after_link",
     dependencyKeys: evaluated ? [...new Set(evaluated.readinessRows.flatMap((row) => row.dependency_match_keys))].sort() : [],
