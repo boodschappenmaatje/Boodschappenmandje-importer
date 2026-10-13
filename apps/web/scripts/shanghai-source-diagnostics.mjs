@@ -1,5 +1,10 @@
 export const SHANGHAI_CONTENT_ROOT = "main:has(h1)";
 
+export function safeShanghaiParserReason(value) {
+  const reason = typeof value === "string" ? value.split(":", 1)[0] : "";
+  return /^[a-z][a-z0-9_]{0,80}$/.test(reason) ? reason : null;
+}
+
 const SHANGHAI_PRODUCT_NAME = "Knorr Wereldgerecht maaltijdpakket chinese beef shanghai";
 const SHANGHAI_SOURCE_MARKERS = ["239 gram", "Voor 2-3 personen", "Boodschappenlijstje:"];
 
