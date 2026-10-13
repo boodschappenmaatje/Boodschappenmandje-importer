@@ -75,11 +75,12 @@ async function parseCurrentSource(browser, product) {
       const buttons = [...document.querySelectorAll("button")];
       const buttonText = (button) => normalize(button.getAttribute("aria-label") || button.innerText || button.textContent);
       const namesInstructions = buttons.filter((button) => buttonText(button) === "gebruiksaanwijzing");
+      const contentRoots = [...document.querySelectorAll("main:has(h1)")];
+      const controlledPanels = namesInstructions.map((button) => document.getElementById(button.getAttribute("aria-controls") || "")).filter(Boolean);
       const consent = buttons.filter((button) => /cookie|consent|accepteren|toestaan/.test(buttonText(button)));
       const title = normalize(document.title);
       const challengeText = normalize((document.title ?? "") + " " + (document.body?.innerText ?? ""));
       const mains = [...document.querySelectorAll("main")];
-      const contentRoots = [...document.querySelectorAll("main:has(h1)")];
       return {
         ready_state: document.readyState,
         main_count: mains.length,
@@ -100,6 +101,11 @@ async function parseCurrentSource(browser, product) {
         has_shopping_list_marker: body.includes("boodschappenlijstje"),
         instructions_button_count: namesInstructions.length,
         visible_instructions_button_count: namesInstructions.filter(visible).length,
+        instructions_expanded_count: namesInstructions.filter((button) => button.getAttribute("aria-expanded") === "true").length,
+        instructions_aria_controls_count: namesInstructions.filter((button) => Boolean(button.getAttribute("aria-controls"))).length,
+        controlled_panel_present_count: controlledPanels.length,
+        visible_controlled_panel_count: controlledPanels.filter(visible).length,
+        panel_within_content_root_count: controlledPanels.filter((panel) => contentRoots.some((root) => root.contains(panel))).length,
         consent_control_count: consent.length,
         challenge_signals: {
           cloudflare: challengeText.includes("cloudflare"),
@@ -110,8 +116,19 @@ async function parseCurrentSource(browser, product) {
       };
     }, SHANGHAI_PRODUCT_NAME);
     let domAtDomContentLoaded = null;
+    let selectorSubstage = "content_root";
     return await inspectShanghaiSource({
-      diagnose: async () => ({ at_domcontentloaded: domAtDomContentLoaded, after_wait: await inspectDocument() }),
+      diagnose: async () => ({
+        selector_substage: selectorSubstage,
+        playwright_root_count: await contentRoot.count(),
+        playwright_root_visible: await contentRoot.isVisible().catch(() => false),
+        heading_locator_count: await title.count(),
+        heading_locator_visible: await title.isVisible().catch(() => false),
+        instructions_locator_count: await instructions.count(),
+        instructions_locator_visible: await instructions.isVisible().catch(() => false),
+        at_domcontentloaded: domAtDomContentLoaded,
+        after_wait: await inspectDocument(),
+      }),
       selector: SHANGHAI_CONTENT_ROOT,
       navigate: async () => {
         const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 25000 });
@@ -120,11 +137,18 @@ async function parseCurrentSource(browser, product) {
       },
       finalUrl: async () => page.url(),
       waitForSelector: async () => {
+        selectorSubstage = "content_root";
         await contentRoot.waitFor({ timeout: 15000 });
-        if (await title.count() !== 1 || await instructions.count() !== 1) throw new Error("source-structure-mismatch");
+        selectorSubstage = "product_heading";
+        if (await title.count() !== 1) throw new Error("source-structure-mismatch");
+        selectorSubstage = "instructions_button";
+        if (await instructions.count() !== 1) throw new Error("source-structure-mismatch");
+        selectorSubstage = "instructions_click";
         if (await instructions.getAttribute("aria-expanded") !== "true") await instructions.click();
+        selectorSubstage = "aria_controls";
         const panelId = await instructions.getAttribute("aria-controls");
         if (!panelId) throw new Error("source-instructions-panel-missing");
+        selectorSubstage = "instructions_panel";
         await contentRoot.locator(`[id=${JSON.stringify(panelId)}]`).waitFor({ timeout: 15000 });
       },
       readSource: async () => validateShanghaiContentRoot({
