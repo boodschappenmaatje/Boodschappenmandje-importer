@@ -214,6 +214,7 @@ test("selector diagnostics expose only bounded DOM facts, not page text", async 
         main_display_contents_count: 1, main_with_h1_count: 1, visible_main_with_h1_count: 0,
         content_root_query_count: 1, visible_content_root_count: 0, h1_count: 0, body_text: "secret cookie=hidden",
         consent_control_visible_count: 5, consent_reject_only_count: 1, consent_accept_all_count: 1,
+        reject_only_locator_count: 0, reject_only_locator_visible: false, reject_only_locator_enabled: false,
         instructions_intersects_viewport: true, instructions_center_hit_target: false, instructions_center_hit_by_consent: true,
         instructions_center_hit_kind: "div", instructions_center_hit_has_click_surface: false,
         instructions_center_hit_inside_content_root: false, challenge_signals: { captcha: true } },
@@ -234,6 +235,9 @@ test("selector diagnostics expose only bounded DOM facts, not page text", async 
   assert.equal(result.diagnostic.document_diagnostic.after_wait.instructions_center_hit_has_click_surface, false);
   assert.equal(result.diagnostic.document_diagnostic.after_wait.instructions_center_hit_inside_content_root, false);
   assert.equal(result.diagnostic.document_diagnostic.after_wait.consent_reject_only_count, 1);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.reject_only_locator_count, 0);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.reject_only_locator_visible, false);
+  assert.equal(result.diagnostic.document_diagnostic.after_wait.reject_only_locator_enabled, false);
   assert.doesNotMatch(JSON.stringify(result), /secret|cookie=|hidden|must not be returned/i);
 });
 
