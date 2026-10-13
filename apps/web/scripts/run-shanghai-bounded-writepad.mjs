@@ -77,7 +77,21 @@ async function parseCurrentSource(browser, product) {
       const namesInstructions = buttons.filter((button) => buttonText(button) === "gebruiksaanwijzing");
       const contentRoots = [...document.querySelectorAll("main:has(h1)")];
       const controlledPanels = namesInstructions.map((button) => document.getElementById(button.getAttribute("aria-controls") || "")).filter(Boolean);
-      const consent = buttons.filter((button) => /cookie|consent|accepteren|toestaan/.test(buttonText(button)));
+      const consent = buttons.filter((button) => /cookie|consent|accepteren|toestaan|weigeren|afwijzen|reject/.test(buttonText(button)));
+      const visibleConsent = consent.filter(visible);
+      const rejectOnlyConsent = visibleConsent.filter((button) => /alleen noodzakelijke|only necessary|reject optional|weigeren|afwijzen/.test(buttonText(button)));
+      const acceptAllConsent = visibleConsent.filter((button) => /alle cookies accepteren|alles accepteren|accept all|allow all/.test(buttonText(button)));
+      const instructionButton = namesInstructions[0] ?? null;
+      const instructionRect = instructionButton?.getBoundingClientRect();
+      const instructionIntersectsViewport = Boolean(instructionRect && instructionRect.bottom > 0 && instructionRect.top < window.innerHeight &&
+        instructionRect.right > 0 && instructionRect.left < window.innerWidth);
+      const instructionCenterHit = instructionIntersectsViewport
+        ? document.elementFromPoint(instructionRect.left + instructionRect.width / 2, instructionRect.top + instructionRect.height / 2)
+        : null;
+      const instructionCenterHitTarget = Boolean(instructionCenterHit && instructionButton &&
+        (instructionCenterHit === instructionButton || instructionButton.contains(instructionCenterHit)));
+      const instructionCenterHitByConsent = Boolean(instructionCenterHit && visibleConsent.some((button) =>
+        button === instructionCenterHit || button.contains(instructionCenterHit)));
       const title = normalize(document.title);
       const challengeText = normalize((document.title ?? "") + " " + (document.body?.innerText ?? ""));
       const mains = [...document.querySelectorAll("main")];
@@ -107,6 +121,12 @@ async function parseCurrentSource(browser, product) {
         visible_controlled_panel_count: controlledPanels.filter(visible).length,
         panel_within_content_root_count: controlledPanels.filter((panel) => contentRoots.some((root) => root.contains(panel))).length,
         consent_control_count: consent.length,
+        consent_control_visible_count: visibleConsent.length,
+        consent_reject_only_count: rejectOnlyConsent.length,
+        consent_accept_all_count: acceptAllConsent.length,
+        instructions_intersects_viewport: instructionIntersectsViewport,
+        instructions_center_hit_target: instructionCenterHitTarget,
+        instructions_center_hit_by_consent: instructionCenterHitByConsent,
         challenge_signals: {
           cloudflare: challengeText.includes("cloudflare"),
           human_check: challengeText.includes("verify you are human") || challengeText.includes("checking your browser"),
