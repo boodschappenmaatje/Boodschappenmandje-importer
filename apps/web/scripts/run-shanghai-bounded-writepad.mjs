@@ -64,6 +64,7 @@ async function parseCurrentSource(browser, product) {
     const contentRoot = page.locator(SHANGHAI_CONTENT_ROOT);
     const title = contentRoot.getByRole("heading", { level: 1, name: SHANGHAI_PRODUCT_NAME, exact: true });
     const instructions = contentRoot.getByRole("button", { name: "Gebruiksaanwijzing", exact: true });
+    let rejectOptionalCookies = null;
     const inspectDocument = () => page.evaluate((expectedName) => {
       const normalize = (value) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         .toLocaleLowerCase("nl-NL").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
@@ -149,17 +150,25 @@ async function parseCurrentSource(browser, product) {
     let domAtDomContentLoaded = null;
     let selectorSubstage = "content_root";
     return await inspectShanghaiSource({
-      diagnose: async () => ({
-        selector_substage: selectorSubstage,
-        playwright_root_count: await contentRoot.count(),
-        playwright_root_visible: await contentRoot.isVisible().catch(() => false),
-        heading_locator_count: await title.count(),
-        heading_locator_visible: await title.isVisible().catch(() => false),
-        instructions_locator_count: await instructions.count(),
-        instructions_locator_visible: await instructions.isVisible().catch(() => false),
-        at_domcontentloaded: domAtDomContentLoaded,
-        after_wait: await inspectDocument(),
-      }),
+      diagnose: async () => {
+        const afterWait = await inspectDocument();
+        if (rejectOptionalCookies) {
+          afterWait.reject_only_locator_count = await rejectOptionalCookies.count().catch(() => 0);
+          afterWait.reject_only_locator_visible = await rejectOptionalCookies.isVisible().catch(() => false);
+          afterWait.reject_only_locator_enabled = await rejectOptionalCookies.isEnabled().catch(() => false);
+        }
+        return {
+          selector_substage: selectorSubstage,
+          playwright_root_count: await contentRoot.count(),
+          playwright_root_visible: await contentRoot.isVisible().catch(() => false),
+          heading_locator_count: await title.count(),
+          heading_locator_visible: await title.isVisible().catch(() => false),
+          instructions_locator_count: await instructions.count(),
+          instructions_locator_visible: await instructions.isVisible().catch(() => false),
+          at_domcontentloaded: domAtDomContentLoaded,
+          after_wait: afterWait,
+        };
+      },
       selector: SHANGHAI_CONTENT_ROOT,
       navigate: async () => {
         const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 25000 });
@@ -175,7 +184,7 @@ async function parseCurrentSource(browser, product) {
         selectorSubstage = "instructions_button";
         if (await instructions.count() !== 1) throw new Error("source-structure-mismatch");
         selectorSubstage = "optional_consent";
-        const rejectOptionalCookies = page.getByRole("button", {
+        rejectOptionalCookies = page.getByRole("button", {
           name: /(?:alleen noodzakelijke|only necessary|reject optional|weigeren|afwijzen)/i,
         });
         await dismissShanghaiRejectOptionalConsent(rejectOptionalCookies);
