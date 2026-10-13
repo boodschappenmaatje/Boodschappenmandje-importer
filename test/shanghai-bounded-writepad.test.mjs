@@ -18,6 +18,7 @@ import {
   clickShanghaiInstructionsWithConsentFallback,
   dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
+  safeShanghaiParserReason,
   validateShanghaiContentRoot,
 } from "../apps/web/scripts/shanghai-source-diagnostics.mjs";
 
@@ -42,6 +43,13 @@ const context = { eventName: "workflow_dispatch", repository: "boodschappenmaatj
   ref: "refs/heads/main", runAttempt: "1" };
 const workflow = readFileSync(new URL("../.github/workflows/shanghai-bounded-writepad.yml", import.meta.url), "utf8");
 const runner = readFileSync(new URL("../apps/web/scripts/run-shanghai-bounded-writepad.mjs", import.meta.url), "utf8");
+
+test("Shanghai parser diagnostics expose only bounded reason codes, never source fragments", () => {
+  assert.equal(safeShanghaiParserReason("supplement_quantity_missing:unreviewed source detail"), "supplement_quantity_missing");
+  assert.equal(safeShanghaiParserReason("corroboration_source_changed"), "corroboration_source_changed");
+  assert.equal(safeShanghaiParserReason("secret token=hidden"), null);
+  assert.equal(safeShanghaiParserReason(undefined), null);
+});
 
 test("runner imports the Shanghai product name used by the normal source-read flow", () => {
   const coreImportEnd = runner.indexOf('} from "./shanghai-writepad-core.mjs";');
