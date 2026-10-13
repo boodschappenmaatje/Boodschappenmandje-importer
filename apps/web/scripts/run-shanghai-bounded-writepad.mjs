@@ -62,10 +62,53 @@ async function parseCurrentSource(browser, product) {
     const contentRoot = page.locator("main").filter({ has: page.locator("h1") });
     const title = contentRoot.getByRole("heading", { level: 1, name: SHANGHAI_PRODUCT_NAME, exact: true });
     const instructions = contentRoot.getByRole("button", { name: "Gebruiksaanwijzing", exact: true });
+    const inspectDocument = () => page.evaluate((expectedName) => {
+      const normalize = (value) => String(value ?? "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+        .toLocaleLowerCase("nl-NL").replace(/[^\\p{L}\\p{N}]+/gu, " ").trim();
+      const visible = (element) => {
+        const style = window.getComputedStyle(element);
+        return style.visibility !== "hidden" && style.display !== "none" && element.getClientRects().length > 0;
+      };
+      const product = normalize(expectedName);
+      const body = normalize(document.body?.innerText ?? "");
+      const headings = [...document.querySelectorAll("h1")];
+      const buttons = [...document.querySelectorAll("button")];
+      const buttonText = (button) => normalize(button.getAttribute("aria-label") || button.innerText || button.textContent);
+      const namesInstructions = buttons.filter((button) => buttonText(button) === "gebruiksaanwijzing");
+      const consent = buttons.filter((button) => /cookie|consent|accepteren|toestaan/.test(buttonText(button)));
+      const title = normalize(document.title);
+      const challengeText = normalize((document.title ?? "") + " " + (document.body?.innerText ?? ""));
+      const mains = [...document.querySelectorAll("main")];
+      return {
+        ready_state: document.readyState,
+        main_count: mains.length,
+        main_with_h1_count: mains.filter((main) => main.querySelector("h1")).length,
+        h1_count: headings.length,
+        visible_h1_count: headings.filter(visible).length,
+        matching_product_h1_count: headings.filter((heading) => normalize(heading.innerText || heading.textContent) === product).length,
+        title_matches_product: title === product,
+        body_contains_product_name: body.includes(product),
+        has_package_marker: body.includes("239 gram"),
+        has_people_marker: body.includes("voor 2 3 personen"),
+        has_shopping_list_marker: body.includes("boodschappenlijstje"),
+        instructions_button_count: namesInstructions.length,
+        visible_instructions_button_count: namesInstructions.filter(visible).length,
+        consent_control_count: consent.length,
+        challenge_signals: {
+          cloudflare: challengeText.includes("cloudflare"),
+          human_check: challengeText.includes("verify you are human") || challengeText.includes("checking your browser"),
+          access_denied: challengeText.includes("access denied"),
+          captcha: challengeText.includes("captcha"),
+        },
+      };
+    }, SHANGHAI_PRODUCT_NAME);
+    let domAtDomContentLoaded = null;
     return await inspectShanghaiSource({
+      diagnose: async () => ({ at_domcontentloaded: domAtDomContentLoaded, after_wait: await inspectDocument() }),
       selector: SHANGHAI_CONTENT_ROOT,
       navigate: async () => {
         const response = await page.goto(url.href, { waitUntil: "domcontentloaded", timeout: 25000 });
+        domAtDomContentLoaded = await inspectDocument();
         return { status: response?.status() ?? null };
       },
       finalUrl: async () => page.url(),
