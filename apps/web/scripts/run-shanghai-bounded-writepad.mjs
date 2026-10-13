@@ -14,6 +14,7 @@ import { MEAL_MIX_PROFILES } from "../src/services/week-preparation/meal-mix-pro
 import { MEAL_MIX_PARSER_VERSION, profileRecipeRow } from "../../../src/meal-mix-profile-maintenance.mjs";
 import {
   SHANGHAI_CONTENT_ROOT,
+  dismissShanghaiRejectOptionalConsent,
   inspectShanghaiSource,
   validateShanghaiContentRoot,
 } from "./shanghai-source-diagnostics.mjs";
@@ -172,6 +173,11 @@ async function parseCurrentSource(browser, product) {
         if (await title.count() !== 1) throw new Error("source-structure-mismatch");
         selectorSubstage = "instructions_button";
         if (await instructions.count() !== 1) throw new Error("source-structure-mismatch");
+        selectorSubstage = "optional_consent";
+        const rejectOptionalCookies = page.getByRole("button", {
+          name: /^(?:alleen noodzakelijke(?: cookies)?|only necessary(?: cookies)?|reject optional(?: cookies)?|weiger(?: optionele)? cookies|weigeren|afwijzen)$/i,
+        });
+        await dismissShanghaiRejectOptionalConsent(rejectOptionalCookies);
         selectorSubstage = "instructions_click";
         if (await instructions.getAttribute("aria-expanded") !== "true") await instructions.click();
         selectorSubstage = "aria_controls";
