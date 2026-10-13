@@ -1,0 +1,46 @@
+name: "SHANGHAI shared-match Production refresh — one-time"
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Select the explicit Shanghai shared-match refresh confirmation"
+        required: true
+        type: choice
+        default: NO_REFRESH
+        options:
+          - NO_REFRESH
+          - COMMIT_SHANGHAI_SHARED_MATCH_REFRESH
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: bounded-production-recompute-shanghai-once
+  cancel-in-progress: false
+
+jobs:
+  shanghai-shared-refresh:
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'boodschappenmaatje/Boodschappenmandje-importer' && github.ref == 'refs/heads/main' && github.run_attempt == 1 && inputs.confirmation == 'COMMIT_SHANGHAI_SHARED_MATCH_REFRESH'
+    name: "Shanghai shared-match one-time refresh"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PLANNER_CACHE_BASE_URL: https://boodschappenmaatje-pwa.vercel.app
+      PLANNER_CACHE_ADMIN_TOKEN: ${{ secrets.PLANNER_CACHE_ADMIN_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      BOUNDED_COMMIT_CONFIRMATION: ${{ inputs.confirmation }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Node installeren
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Verse Shanghai dry-run, één transactionele refresh en read-only verificatie
+        shell: bash
+        run: node src/bounded-production-recompute-shanghai-once.mjs
