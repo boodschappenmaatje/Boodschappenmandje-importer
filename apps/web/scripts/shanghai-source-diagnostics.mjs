@@ -5,13 +5,13 @@ export function safeShanghaiParserReason(value) {
   const [code, detail = ""] = value.split(":", 2);
   if (!/^[a-z][a-z0-9_]{0,80}$/.test(code)) return null;
   const itemAliases = [
-    ["rundergehakt", /\\brundergehakt\\b/i],
-    ["champignons", /\\bchampignons\\b/i],
-    ["taugé", /\\btaug[eé]\\b/i],
-    ["bosui", /\\bbosuien?\\b/i],
-    ["prei", /\\bprei\\b/i],
-    ["olie", /\\bolie\\b/i],
-    ["ui", /\\bui\\b/i],
+    ["rundergehakt", /\brundergehakt\b/i],
+    ["champignons", /\bchampignons\b/i],
+    ["taugé", /\btaug[eé]\b/i],
+    ["bosui", /\bbosuien?\b/i],
+    ["prei", /\bprei\b/i],
+    ["olie", /\bolie\b/i],
+    ["ui", /\bui\b/i],
   ];
   const item = itemAliases.find(([, pattern]) => pattern.test(detail))?.[0] ?? null;
   return { code, item };
