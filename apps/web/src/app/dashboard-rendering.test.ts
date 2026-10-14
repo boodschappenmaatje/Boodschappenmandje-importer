@@ -74,6 +74,9 @@ describe("dashboard rendering", () => {
     expect(html).toMatch(/home-discovery-store[\s\S]*?supermarket-selector[\s\S]*?home-discovery-search/);
     expect(html).toContain('placeholder="Zoek producten..."');
     expect(html).toContain("Zoek producten, merken of recepten</label>");
+    expect(html).toContain('class="home-discovery-icon"');
+    expect(html).toContain("Bekijk producten, aanbiedingen en categorieën");
+    expect(html).not.toContain('type="submit" aria-label="Zoek producten"');
     expect(html).not.toContain("Goed geregeld.");
     expect(html).not.toContain("Wat eten we deze week?");
     expect(html).toContain("Je week");

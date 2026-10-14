@@ -1,3 +1,11 @@
+# Checkpoint — Home-top zoeken + Ontdek-kaart volgens referentie — 14 oktober 2026
+
+- De supermarktkeuze was eerder op iPhone visueel geaccepteerd. Home-top volgt nu de nieuwe leidende referentie: bestaande blauwe hero met merknaam/subtitel, slogan links en officiële mascotte rechts; de bestaande grote witte kaart overlapt de hero/content-overgang.
+- Binnen de kaart blijft de bestaande supermarktselector met logo en sheet links. Rechts is een groot zoekveld zonder losse blauwe knop; de volledige zoekstrook focust het invoerveld en Enter/search behoudt de bestaande routering naar `/ontdek` of `/ontdek?q=...`.
+- `Ontdek & bespaar` staat direct onder de zoekrij als een brede, tweede actiekaart met rond prijslabel-icoon, titel, uitleg en chevron. Bestaande budget, maaltijdbudget, week, lijstactie en bottom navigation blijven behouden.
+- Provider-, lijst-, budget-, week- en zoeklogica zijn niet gewijzigd; alleen Home-presentatie en gerichte dashboard-test zijn aangepast. Gerichte dashboard-/selector-tests **5/5**; web `npm run check`: lint, typecheck, **910/910 tests** en production build; root `npm test`: **515/515**; root `npm run check` en `git diff --check` groen.
+- Chromium op **390×844** en **430×844** bevestigt geen horizontale overflow, winkelkeuze opent de bestaande sheet, hele zoekstrook focust, zoeken met `pasta` behoudt `/ontdek?q=pasta`, Ontdek-kaart opent `/ontdek` en de bestaande budget/week/list/navigation blijft aanwezig. Preview en fysieke iPhone-heracceptatie van deze Home-versie volgen na push/CI.
+
 # Checkpoint — Home-bovenkant volgens goedgekeurde visual — 14 oktober 2026
 
 - De supermarktkeuze was eerder op iPhone visueel geaccepteerd. Voor deze Home-stap is de bovenkant herwerkt: grotere linkse slogan en officiële mascotte rechts in de bestaande blauwe hero, gevolgd door een brede witte zoekkaart die de hero en contentlaag overlapt.

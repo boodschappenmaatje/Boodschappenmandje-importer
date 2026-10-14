@@ -17,6 +17,9 @@ import "./home-option-c.css";
 function Chevron() {
   return <svg width="20" height="24" viewBox="0 0 20 24" fill="none" aria-hidden="true"><path d="m7 5 7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 }
+function DiscoveryTagIcon() {
+  return <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2a2 2 0 0 1 0-2.8l7.2-7.2A2 2 0 0 1 12 3h8a1 1 0 0 1 1 1v8a2 2 0 0 1-.4 1.4Z"/><circle cx="16.5" cy="7.5" r="1"/></svg>;
+}
 function Cart({ basket = false }: { basket?: boolean }) {
   return <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{basket ? <path d="m3 9 2 11h14l2-11ZM8 9l3-6M16 9l-3-6M9 12v5M15 12v5" /> : <><path d="M2 3h3l3 12h11l3-9H6M8 18h11" /><circle cx="9" cy="21" r="1" fill="currentColor" /><circle cx="18" cy="21" r="1" fill="currentColor" /></>}</svg>;
 }
@@ -67,17 +70,22 @@ export function HomeDashboard() {
     </section>
     <div className="home-discovery-entry">
       <div className="home-discovery-store"><SupermarketSelector /></div>
-      <form className="home-discovery-search" onSubmit={(event) => {
+      <form className="home-discovery-search-form" role="search" onSubmit={(event) => {
         event.preventDefault();
         const term = searchTerm.trim();
         router.push(term ? `/ontdek?q=${encodeURIComponent(term)}` : "/ontdek");
       }}>
         <label className="visually-hidden" htmlFor="home-discovery-query">Zoek producten, merken of recepten</label>
-        <Icon name="search" size={22} />
-        <input id="home-discovery-query" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten..." />
-        <button type="submit" aria-label="Zoek producten">Zoek</button>
+        <label className="home-discovery-search" htmlFor="home-discovery-query">
+          <Icon name="search" size={22} />
+          <input id="home-discovery-query" type="search" enterKeyHint="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten..." />
+        </label>
       </form>
-      <Link className="home-discovery-link" href="/ontdek"><span><strong>Ontdek &amp; bespaar</strong><small>Bekijk producten, aanbiedingen en categorieën</small></span><Chevron /></Link>
+      <Link className="home-discovery-link" href="/ontdek">
+        <span className="home-discovery-icon"><DiscoveryTagIcon /></span>
+        <span className="home-discovery-copy"><strong>Ontdek &amp; bespaar</strong><small>Bekijk producten, aanbiedingen en categorieën</small></span>
+        <Chevron />
+      </Link>
     </div>
     {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
