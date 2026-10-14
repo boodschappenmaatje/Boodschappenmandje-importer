@@ -1,3 +1,11 @@
+# Checkpoint — Ontdek-tegels met Maatje-illustraties — 14 oktober 2026
+
+- De gebruiker koos illustratierichting 1 (**Maatje in actie**). De lijniconen in de drie Ontdek-tegels zijn vervangen door illustraties met de officiële mascotte uit `public/branding/maatje-home-c.webp` plus een voorwerp in dezelfde stijl (donkerblauwe contour, glanzende verlopen): Aanbiedingen met rood `%`-prijslabel, Voordelig kiezen met spaarvarken en euromunt, Alle categorieën met blauwe boodschappenmand met brood, appel en wortel.
+- Assets staan in `apps/web/public/branding/discover/` (`aanbiedingen.webp`, `voordelig-kiezen.webp`, `alle-categorieen.webp`, samen ca. 120 kB). De mascotte is ongewijzigd ingevoegd; de voorwerpen zijn getekend en als transparante WebP gerenderd.
+- De halve tegels tonen de illustratie bovenaan met titel, uitleg en chevron eronder; `Alle categorieën` blijft een brede kaart met de illustratie links. Glanslagen, tinten, druk-feedback en focusstijl zijn behouden. Acties, routes, filters, zoeklogica en categorieënrij zijn ongewijzigd.
+- Hiermee staan op de lege `/ontdek` vier mascottes (header + drie tegels), bewust volgens de gekozen richting; de eerdere regel "één mascotte" is daarmee door de gebruiker herzien, mits visueel akkoord.
+- Web `npm run check`: lint, typecheck, **912/912 tests** en production build groen. Chromium op **390×844** en **430×844**: geen horizontale overflow, alle drie illustraties geladen. Preview- en fysieke iPhone-acceptatie staan open; daarna krijgt de categorieënrij dezelfde uitstraling.
+
 # Checkpoint — Ontdek-tegels glanzend — 14 oktober 2026
 
 - Branch `codex/smart-search-2-0-foundation-20261013` is bijgewerkt met `origin/main` (`cef1df9`, PR #97 t/m #103) via een merge zonder conflicten; Draft PR #96 blijft de werkplek.
