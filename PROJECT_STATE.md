@@ -1,10 +1,9 @@
-# Checkpoint — Ontdek-tegels met Maatje-illustraties — 14 oktober 2026
+# Checkpoint — Ontdek-tegels met strakke voorwerpillustraties — 14 oktober 2026
 
-- De gebruiker koos illustratierichting 1 (**Maatje in actie**). De lijniconen in de drie Ontdek-tegels zijn vervangen door illustraties met de officiële mascotte uit `public/branding/maatje-home-c.webp` plus een voorwerp in dezelfde stijl (donkerblauwe contour, glanzende verlopen): Aanbiedingen met rood `%`-prijslabel, Voordelig kiezen met spaarvarken en euromunt, Alle categorieën met blauwe boodschappenmand met brood, appel en wortel.
-- Assets staan in `apps/web/public/branding/discover/` (`aanbiedingen.webp`, `voordelig-kiezen.webp`, `alle-categorieen.webp`, samen ca. 120 kB). De mascotte is ongewijzigd ingevoegd; de voorwerpen zijn getekend en als transparante WebP gerenderd.
-- De halve tegels tonen de illustratie bovenaan met titel, uitleg en chevron eronder; `Alle categorieën` blijft een brede kaart met de illustratie links. Glanslagen, tinten, druk-feedback en focusstijl zijn behouden. Acties, routes, filters, zoeklogica en categorieënrij zijn ongewijzigd.
-- Hiermee staan op de lege `/ontdek` vier mascottes (header + drie tegels), bewust volgens de gekozen richting; de eerdere regel "één mascotte" is daarmee door de gebruiker herzien, mits visueel akkoord.
-- Web `npm run check`: lint, typecheck, **912/912 tests** en production build groen. Chromium op **390×844** en **430×844**: geen horizontale overflow, alle drie illustraties geladen. Preview- en fysieke iPhone-acceptatie staan open; daarna krijgt de categorieënrij dezelfde uitstraling.
+- Eerst is richting 1 (**Maatje in actie**) gebouwd: per tegel de mascotte met een voorwerp. Op de Preview vond de gebruiker vier mascottes op `/ontdek` te druk en niet professioneel; de mascottes in de tegels zijn daarom weer verwijderd. De header-mascotte blijft de enige mascotte op het scherm.
+- De tegels tonen nu alleen een strak getekend voorwerp in Maatje-stijl (donkerblauwe contour, glanzende verlopen, geen sterretjes): Aanbiedingen een rood `%`-prijslabel, Voordelig kiezen een spaarvarken met euromunt, Alle categorieën een blauwe boodschappenmand met brood, appel en wortel. Assets: `apps/web/public/branding/discover/*.webp` (samen ca. 52 kB).
+- Halve tegels: voorwerp linksboven op vaste hoogte (64px, 56px onder 390px), titel/uitleg en chevron eronder op gelijke hoogte. `Alle categorieën` blijft een brede kaart met het voorwerp links. Glanslagen, tinten, druk-feedback en focusstijl behouden; acties, routes, filters, zoeklogica en categorieënrij ongewijzigd.
+- Web `npm run check`: lint, typecheck, **912/912 tests** en production build groen. Chromium op **390×844** en **430×844**: geen horizontale overflow. Preview- en fysieke iPhone-acceptatie staan open; daarna krijgt de categorieënrij dezelfde uitstraling.
 
 # Checkpoint — Ontdek-tegels glanzend — 14 oktober 2026
 

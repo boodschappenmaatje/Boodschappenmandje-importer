@@ -4883,18 +4883,19 @@ button.supermarket-choice.is-future:disabled { opacity: 1; cursor: default; }
   .ux-product-row .product-image { width: 62px; height: 72px; }
 }
 
-/* Ontdek-tegels: Maatje-illustraties in plaats van lijniconen */
-.discover-shortcuts button { grid-template-columns: minmax(0,1fr) 26px; grid-template-rows: auto auto; gap: 6px 6px; min-height: 0; padding: 8px 11px 12px; }
-.discover-shortcuts button > span.discover-tile-art { grid-column: 1 / -1; grid-row: 1; display: block; justify-self: center; width: 100%; max-width: 170px; }
-.discover-tile-art img { display: block; width: 100%; height: auto; filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--brand-deep) 12%, transparent)); }
-.discover-shortcuts button > span:nth-child(2) { grid-column: 1; grid-row: 2; align-self: center; }
-.discover-shortcuts button > span:nth-child(3) { grid-column: 2; grid-row: 2; align-self: center; }
-.discover-shortcuts button:nth-child(3) { grid-template-columns: 96px minmax(0,1fr) 26px; grid-template-rows: auto; gap: 12px; padding: 6px 13px 6px 10px; }
-.discover-shortcuts button:nth-child(3) > span.discover-tile-art { grid-column: 1; grid-row: 1; max-width: 96px; }
-.discover-shortcuts button:nth-child(3) > span:nth-child(2) { grid-column: 2; grid-row: 1; }
-.discover-shortcuts button:nth-child(3) > span:nth-child(3) { grid-column: 3; grid-row: 1; }
+/* Ontdek-tegels: strakke illustraties van voorwerpen in plaats van lijniconen */
+.discover-shortcuts button { grid-template-columns: minmax(0,1fr) 26px; grid-template-rows: 64px auto; gap: 10px 6px; min-height: 0; padding: 14px 13px 13px; }
+.discover-shortcuts button > span.discover-tile-art { grid-column: 1 / -1; grid-row: 1; display: flex; align-items: center; justify-content: flex-start; height: 64px; }
+.discover-tile-art img { display: block; width: auto; height: 100%; }
+.discover-shortcuts button > span:nth-child(2) { grid-column: 1; grid-row: 2; align-self: start; }
+.discover-shortcuts button > span:nth-child(3) { grid-column: 2; grid-row: 2; align-self: start; }
+.discover-shortcuts button:nth-child(3) { grid-template-columns: 74px minmax(0,1fr) 26px; grid-template-rows: auto; gap: 12px; padding: 12px 13px; }
+.discover-shortcuts button:nth-child(3) > span.discover-tile-art { grid-column: 1; grid-row: 1; justify-content: center; height: 56px; }
+.discover-shortcuts button:nth-child(3) > span:nth-child(2) { grid-column: 2; grid-row: 1; align-self: center; }
+.discover-shortcuts button:nth-child(3) > span:nth-child(3) { grid-column: 3; grid-row: 1; align-self: center; }
 @media (max-width: 390px) {
-  .discover-shortcuts button { min-height: 0; padding: 7px 9px 11px; }
-  .discover-shortcuts button:nth-child(3) { grid-template-columns: 86px minmax(0,1fr) 26px; padding: 6px 11px 6px 8px; }
-  .discover-shortcuts button:nth-child(3) > span.discover-tile-art { max-width: 86px; }
+  .discover-shortcuts button { min-height: 0; grid-template-rows: 56px auto; padding: 12px 11px 11px; }
+  .discover-shortcuts button > span.discover-tile-art { height: 56px; }
+  .discover-shortcuts button:nth-child(3) { grid-template-columns: 66px minmax(0,1fr) 26px; padding: 11px; }
+  .discover-shortcuts button:nth-child(3) > span.discover-tile-art { height: 50px; }
 }
