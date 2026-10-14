@@ -1,6 +1,8 @@
 import { pathToFileURL } from "node:url";
 
 import { loadConfig } from "./config.mjs";
+import { todaysDailyRuns } from "./daily-catalog-maintenance.mjs";
+import { eveningAlarmPush, sendPush } from "./notify.mjs";
 import { amsterdamDateKey } from "./daily-catalog-growth.mjs";
 import {
   ensureCatalogDailyJob,
@@ -217,8 +219,49 @@ export async function monitorDailyMaintenance(env = process.env, logger = consol
   return result;
 }
 
+// Evening check: was there at least one complete daily run today? If not,
+// the owner gets a high-priority push with the latest cause.
+export function evaluateEveningAlarm(runs, now = new Date()) {
+  const today = todaysDailyRuns(runs, now);
+  const success = today.find(run => run.status === "success") ?? null;
+  const finished = today.filter(run => run.status !== "running");
+  return {
+    ok: Boolean(success),
+    attemptsToday: finished.length,
+    partialPricesToday: today
+      .filter(run => run.status === "partial")
+      .reduce((sum, run) => sum + (Number(run.updated_count) || 0), 0),
+    latest: today[0] ?? null,
+    success,
+  };
+}
+
+export async function runEveningAlarm(env = process.env, logger = console, dependencies = {}) {
+  const config = loadConfig(env);
+  const fetchRuns = dependencies.fetchRuns ?? fetchCatalogImportRuns;
+  const push = dependencies.sendPush ?? sendPush;
+  const now = dependencies.now?.() ?? new Date();
+  const evaluation = evaluateEveningAlarm(await fetchRuns(config, { trigger: null, limit: 20 }), now);
+  if (evaluation.ok) {
+    logger.info(`Avondcontrole: vandaag geslaagd (${Number(evaluation.success.processed_count) || 0} producten gecontroleerd).`);
+    return evaluation;
+  }
+  const message = eveningAlarmPush(evaluation);
+  const delivery = await push(message, { env, logger });
+  logger.info(`Avondcontrole: geen complete run vandaag; alarm ${delivery?.sent ? "verstuurd" : "niet verstuurd"}.`);
+  throw new Error(`${message.title}. ${message.message}`);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  monitorDailyMaintenance().catch((error) => {
+  const argv = process.argv.slice(2);
+  const task = argv.includes("--test-push")
+    ? sendPush({
+      title: "Maatje-bewaker werkt",
+      message: "Test: je ontvangt hier voortaan de meldingen over de dagelijkse prijsupdate.",
+      tags: ["tada"],
+    }).then(result => { if (!result.sent) throw new Error(`Testmelding niet verstuurd (${result.reason}).`); })
+    : argv.includes("--evening-alarm") ? runEveningAlarm() : monitorDailyMaintenance();
+  task.catch((error) => {
     console.error(`Catalogusbewaking mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`);
     process.exitCode = 1;
   });

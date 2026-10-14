@@ -8,6 +8,7 @@ import {
   SourceBlockedError,
   withDailyCatalogSource,
 } from "./hoogvliet.mjs";
+import { dailyRunPush, sendPush } from "./notify.mjs";
 import {
   fetchCatalogImportRuns,
   fetchExistingPriceStates,
@@ -188,15 +189,44 @@ export async function assessDailyCatalogCandidates({
   return { productsToWrite, stats };
 }
 
-export function dailyMaintenanceDecision(runs, now = new Date()) {
-  if (!isDailyImportWindowOpen(now)) return { runAttempt: false, reason: "outside_daily_window" };
+// Scheduled runs count for "today". A manual run counts only when it scanned
+// the catalogue (the explicit-SKU catch-up also records trigger=manual but
+// handles a handful of SKUs); test runs never count.
+const MANUAL_CATALOG_RUN_MIN_PROCESSED = 1_000;
+
+function countsAsDailyRun(run) {
+  if (!run?.trigger || run.trigger === "schedule") return true;
+  return run.trigger === "manual" && Number(run.processed_count) >= MANUAL_CATALOG_RUN_MIN_PROCESSED;
+}
+export const DAILY_ZYTE_BUDGET = 60;
+export const ESCALATED_DAILY_ZYTE_BUDGET = 150;
+export const ESCALATE_AFTER_FAILED_ATTEMPTS = 2;
+
+export function todaysDailyRuns(runs, now = new Date()) {
   const today = amsterdamDateKey(now);
-  const todayRuns = (Array.isArray(runs) ? runs : [])
+  return (Array.isArray(runs) ? runs : [])
+    .filter(countsAsDailyRun)
     .filter(run => {
       const startedAt = new Date(run?.started_at ?? "");
       return !Number.isNaN(startedAt.getTime()) && amsterdamDateKey(startedAt) === today;
     })
     .sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at));
+}
+
+// The watchdog escalates by itself: after two unsuccessful attempts today the
+// next attempt may hand far more stalled pages to Zyte.
+export function dailyZyteBudget(runs, now = new Date()) {
+  const unsuccessful = todaysDailyRuns(runs, now)
+    .filter(run => run.status === "failed" || run.status === "partial").length;
+  return unsuccessful >= ESCALATE_AFTER_FAILED_ATTEMPTS ? ESCALATED_DAILY_ZYTE_BUDGET : DAILY_ZYTE_BUDGET;
+}
+
+export function dailyMaintenanceDecision(runs, now = new Date()) {
+  if (!isDailyImportWindowOpen(now)) return { runAttempt: false, reason: "outside_daily_window" };
+  const todayRuns = todaysDailyRuns(runs, now);
+  if (todayRuns.some(run => run.status === "success")) {
+    return { runAttempt: false, reason: "daily_maintenance_complete" };
+  }
   const latest = todayRuns[0];
   if (!latest) return { runAttempt: true, reason: "daily_maintenance_missing" };
   if (latest.status === "running") return { runAttempt: false, reason: "daily_maintenance_running" };
@@ -207,8 +237,8 @@ export function dailyMaintenanceDecision(runs, now = new Date()) {
 export async function inspectDailyCatalogMaintenance(config, dependencies = {}) {
   const fetchRuns = dependencies.fetchRuns ?? fetchCatalogImportRuns;
   const now = dependencies.now?.() ?? new Date();
-  const runs = await fetchRuns(config, { trigger: "schedule", limit: 20 });
-  return dailyMaintenanceDecision(runs, now);
+  const runs = await fetchRuns(config, { trigger: null, limit: 20 });
+  return { ...dailyMaintenanceDecision(runs, now), zyteBudget: dailyZyteBudget(runs, now) };
 }
 
 export function formatDailyMaintenanceSummary(result) {
@@ -353,6 +383,7 @@ export async function main(argv = process.argv.slice(2)) {
     const decision = await inspectDailyCatalogMaintenance(config);
     console.log(`run_attempt=${decision.runAttempt ? 1 : 0}`);
     console.log(`reason=${decision.reason}`);
+    console.log(`zyte_budget=${decision.zyteBudget}`);
     return decision;
   }
   if (config.updateMode !== "maintenance") {
@@ -362,6 +393,8 @@ export async function main(argv = process.argv.slice(2)) {
   const result = await runDailyCatalogMaintenance(config);
   githubAnnotation(result.status === "success" || result.status === "dry-run" ? "notice" : "warning",
     formatDailyMaintenanceSummary(result));
+  const push = dailyRunPush(result);
+  if (push) await sendPush(push);
   return result;
 }
 

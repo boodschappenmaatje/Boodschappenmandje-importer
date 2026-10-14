@@ -270,7 +270,12 @@ test("maintenanceworkflows geven Zyte-secret alleen aan de uitvoerende maintenan
     const workflow = await readFile(new URL(`../.github/workflows/${filename}`, import.meta.url), "utf8");
     assert.equal((workflow.match(/ZYTE_API_KEY: \$\{\{ secrets\.ZYTE_API_KEY \}\}/g) ?? []).length, 1, filename);
     assert.match(workflow, /ZYTE_LISTING_FALLBACK_ENABLED: "1"/);
-    assert.match(workflow, /ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "60"/);
+    if (filename === "retry-daily-catalog-import.yml") {
+      // The retry derives its budget from inspect:daily (60, or 150 after escalation).
+      assert.match(workflow, /ZYTE_LISTING_FALLBACK_MAX_REQUESTS: \$\{\{ steps\.due\.outputs\.zyte_budget \}\}/);
+    } else {
+      assert.match(workflow, /ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "60"/);
+    }
     assert.match(workflow, /DAILY_PARTIAL_SNAPSHOT_ENABLED: "1"/);
     assert.match(workflow, /DAILY_PARTIAL_MIN_SKUS: "1000"/);
     assert.match(workflow, /ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "45000"/);
