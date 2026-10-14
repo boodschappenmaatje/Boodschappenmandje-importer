@@ -235,3 +235,61 @@ test("price invalidation and expiry refresh only affected verified profiles with
   assert.deepEqual(refreshed, ["pending", "expired", "missing"]);
   assert.equal(writes.length, 3);
 });
+
+const rejectedRefresh = () => Object.assign(new Error("meal-mix-cache-refresh"),
+  { stage: "meal-mix-cache-refresh", status: 503, code: "cache-refresh-failed" });
+
+test("geweigerde cachevernieuwing stopt de wachtrij niet en laat de cache 'pending'", async () => {
+  const patches = [];
+  const queue = [
+    { product_id: "a", recipe_id: "ra", status: "verified", cache_status: "pending", parser_version: MEAL_MIX_PARSER_VERSION, updated_at: "t" },
+    { product_id: "b", recipe_id: "rb", status: "verified", cache_status: "pending", parser_version: MEAL_MIX_PARSER_VERSION, updated_at: "t" },
+  ];
+  const results = await maintainMealMixProfiles({
+    api: async (table, query, options) => { if (options) { patches.push(query.product_id); return [{}]; } return queue; },
+    readSource: async () => assert.fail("must not fetch"),
+    refreshRecipes: async ([id]) => { if (id === "ra") throw rejectedRefresh(); },
+  });
+  assert.deepEqual(results.map((row) => row.status), ["cache_refresh_rejected", "cache_refreshed"]);
+  assert.deepEqual(patches, ["eq.b"]);
+});
+
+test("nieuw profiel wordt opgeslagen ook als de cache geweigerd wordt; andere fouten blijven fataal", async () => {
+  let queue = { product_id: product.id, recipe_id: null, status: "pending", parser_version: 0, cache_status: "pending", updated_at: "initial" };
+  const api = async (table, query, options) => {
+    if (table === "products") return [{ ...product, updated_at: "catalog-update" }];
+    if (table === "recipes") return [{ id: "recipe" }];
+    if (options?.method === "PATCH") {
+      if (query.updated_at !== `eq.${queue.updated_at}`) return [];
+      queue = { ...queue, ...options.body }; return [queue];
+    }
+    return [queue];
+  };
+  const readSource = async () => source("voor 4 personen. Zelf toevoegen\n300 g spaghetti\nAlgemene bereidingswijze\nKook 20 min");
+  const [result] = await maintainMealMixProfiles({ api, readSource, refreshRecipes: async () => { throw rejectedRefresh(); } });
+  assert.equal(result.status, "verified");
+  assert.equal(result.cacheRefresh, "rejected");
+  assert.equal(queue.status, "verified");
+  assert.equal(queue.cache_status, "pending");
+
+  queue = { ...queue, status: "pending", updated_at: "again" };
+  const unauthorized = Object.assign(new Error("meal-mix-cache-refresh"), { stage: "meal-mix-cache-refresh", status: 401, code: "unauthorized" });
+  await assert.rejects(maintainMealMixProfiles({ api, readSource, refreshRecipes: async () => { throw unauthorized; } }), /meal-mix-cache-refresh/);
+});
+
+test("verlopen caches: geweigerde recepten worden overgeslagen en gerapporteerd", async () => {
+  const profiles = ["x", "y"].map((id) => ({ product_id: id, recipe_id: id, updated_at: "s" }));
+  const rejected = [];
+  const patched = [];
+  const refreshed = await refreshStaleMealMixCaches({
+    api: async (table, query, options) => {
+      if (options) { patched.push(query.product_id); return [{}]; }
+      return table === "meal_mix_profiles" ? profiles : [];
+    },
+    refreshRecipes: async ([id]) => { if (id === "x") throw rejectedRefresh(); },
+    rejected,
+  });
+  assert.deepEqual(refreshed, ["y"]);
+  assert.deepEqual(rejected, ["x"]);
+  assert.deepEqual(patched, ["eq.y"]);
+});
