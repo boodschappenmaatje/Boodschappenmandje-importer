@@ -66,15 +66,15 @@ export function HomeDashboard() {
       </div>
     </section>
     <div className="home-discovery-entry">
-      <div className="home-discovery-store"><span>Winkelen bij</span><SupermarketSelector /></div>
+      <div className="home-discovery-store"><SupermarketSelector /></div>
       <form className="home-discovery-search" onSubmit={(event) => {
         event.preventDefault();
         const term = searchTerm.trim();
         router.push(term ? `/ontdek?q=${encodeURIComponent(term)}` : "/ontdek");
       }}>
-        <label className="visually-hidden" htmlFor="home-discovery-query">Zoek producten</label>
+        <label className="visually-hidden" htmlFor="home-discovery-query">Zoek producten, merken of recepten</label>
         <Icon name="search" size={22} />
-        <input id="home-discovery-query" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten of merken" />
+        <input id="home-discovery-query" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten, merken of recepten..." />
         <button type="submit" aria-label="Zoek producten">Zoek</button>
       </form>
       <Link className="home-discovery-link" href="/ontdek"><span><strong>Ontdek &amp; bespaar</strong><small>Bekijk producten, aanbiedingen en categorieën</small></span><Chevron /></Link>
