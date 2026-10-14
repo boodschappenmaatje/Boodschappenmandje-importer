@@ -1,6 +1,6 @@
 import type { NavigationIcon } from "@/types/navigation";
 
-type IconName = "bowl" | "chef" | "book" | NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back";
+type IconName = "bowl" | "chef" | "book" | NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "search" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back" | "tag" | "piggy" | "grid" | "chevron";
 
 interface IconProps {
   name: IconName;
@@ -57,6 +57,8 @@ export function Icon({ name, size = 24 }: IconProps) {
       return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></svg>;
     case "catalog":
       return <svg {...common}><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5M8 17h3" /><path d="M4 3v2M20 3v2" /></svg>;
+    case "search":
+      return <svg {...common}><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>;
     case "trash":
       return <svg {...common}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></svg>;
     case "plus":
@@ -73,5 +75,13 @@ export function Icon({ name, size = 24 }: IconProps) {
       return <svg {...common}><path d="M9 18h6M10 22h4" /><path d="M8.5 15.5A7 7 0 1 1 15.5 15.5c-.9.7-1.5 1.5-1.5 2.5h-4c0-1-.6-1.8-1.5-2.5Z" /></svg>;
     case "back":
       return <svg {...common}><path d="m15 18-6-6 6-6" /></svg>;
+    case "tag":
+      return <svg {...common}><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z" /><circle cx="8" cy="8" r="1.6" /><path d="m10 15 5-5" /></svg>;
+    case "piggy":
+      return <svg {...common}><ellipse cx="11" cy="12.5" rx="7" ry="5.5" /><rect x="17.5" y="10.5" width="3" height="3.5" rx="1" /><path d="M7.5 8.2 7 4.8l3.4 2.1M8 17.5V20M14 17.5V20M9.5 9.3h3M14.6 11h.01M4.1 12c-1.3 0-2-.9-1.7-2" /></svg>;
+    case "grid":
+      return <svg {...common}><rect x="3.5" y="3.5" width="7" height="7" rx="2" /><rect x="13.5" y="3.5" width="7" height="7" rx="2" /><rect x="3.5" y="13.5" width="7" height="7" rx="2" /><rect x="13.5" y="13.5" width="7" height="7" rx="2" /></svg>;
+    case "chevron":
+      return <svg {...common}><path d="m9 6 6 6-6 6" /></svg>;
   }
 }

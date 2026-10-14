@@ -27,7 +27,7 @@ export function CatalogSearchField({
 }: CatalogSearchFieldProps) {
   return (
     <label className={["catalog-search-field", className].filter(Boolean).join(" ")}>
-      <Icon name="products" size={20} />
+      <Icon name="search" size={20} />
       <span className="visually-hidden">{ariaLabel}</span>
       <input
         ref={inputRef}

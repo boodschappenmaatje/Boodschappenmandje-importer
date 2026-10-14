@@ -7,6 +7,11 @@
   --brand-glow: #62BFFC;
   --brand-deep: #034ECD;
   --brand-ink: #0448B3;
+  /* Muted accents sampled from the supermarket marks for chooser banners. */
+  --supermarket-ah-accent: #00A9E0;
+  --supermarket-jumbo-accent: #F5C400;
+  --supermarket-lidl-accent: #0755A6;
+  --supermarket-dirk-accent: #E30613;
   --color-primary: var(--brand-blue);
   /* Primary/deep mix 55:45; white text >= 4.5:1. Tints mix primary with white:
      steel 40%, soft 13%, background 7%, border 24%. */

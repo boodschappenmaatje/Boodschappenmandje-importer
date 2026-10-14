@@ -1,5 +1,6 @@
 import { CatalogReadError } from "@/services/catalog/catalog-repository";
 import type { Product, ResolvedProductPrice } from "@/types/catalog";
+import { resolveCurrentPrice } from "@/services/catalog/price";
 
 const updateDateFormatter = new Intl.DateTimeFormat("nl-NL", {
   day: "numeric",
@@ -9,6 +10,9 @@ const updateDateFormatter = new Intl.DateTimeFormat("nl-NL", {
 export function catalogReadErrorMessage(error: unknown): string {
   if (error instanceof CatalogReadError && error.code === "not-configured") {
     return "De productcatalogus is nog niet gekoppeld aan deze omgeving.";
+  }
+  if (error instanceof CatalogReadError && error.code === "unsupported-provider") {
+    return "Producten zoeken bij deze supermarkt is nog niet beschikbaar.";
   }
 
   return "De producten konden nu niet worden geladen. Probeer het later opnieuw.";
@@ -42,6 +46,10 @@ export function mergeCatalogProducts(
       return true;
     }),
   ];
+}
+
+export function productsWithPositivePrices(products: Product[]): Product[] {
+  return products.filter((product) => (resolveCurrentPrice(product.currentPrice)?.amount ?? 0) > 0);
 }
 
 export function priceUpdatedLabel(

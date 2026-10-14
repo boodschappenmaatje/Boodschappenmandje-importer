@@ -2,7 +2,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  usePathname: () => "/ontdek",
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 import { ActiveShoppingListProvider } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { BudgetProvider } from "@/features/budget/BudgetProvider";
@@ -16,6 +20,7 @@ import type { Product } from "@/types/catalog";
 
 import HomePage from "./page";
 import ListPage from "./lijst/page";
+import DiscoverPage from "./ontdek/page";
 
 const product: Product = {
   id: "product-1",
@@ -62,6 +67,16 @@ describe("dashboard rendering", () => {
 
     expect(html).toContain("Slim kopen.");
     expect(html).toContain("Lekker eten.");
+    expect(html).toContain("Ontdek &amp; bespaar");
+    expect(html).toContain('href="/ontdek"');
+    expect(html).toContain("Zoek producten...");
+    expect(html).toContain('class="home-discovery-entry"');
+    expect(html).toMatch(/home-discovery-store[\s\S]*?supermarket-selector[\s\S]*?home-discovery-search/);
+    expect(html).toContain('placeholder="Zoek producten..."');
+    expect(html).toContain("Zoek producten, merken of recepten</label>");
+    expect(html).toContain('class="home-discovery-icon"');
+    expect(html).toContain("Bekijk producten, aanbiedingen en categorieën");
+    expect(html).not.toContain('type="submit" aria-label="Zoek producten"');
     expect(html).not.toContain("Goed geregeld.");
     expect(html).not.toContain("Wat eten we deze week?");
     expect(html).toContain("Je week");
@@ -74,6 +89,23 @@ describe("dashboard rendering", () => {
     expect(html).toContain('href="/week-voorbereiden"');
     expect(html).not.toContain("PWA-fundament");
     expect(html).not.toContain("mobiele testbasis");
+  });
+
+  it("opent Ontdek & bespaar met compacte winkelkeuze en de gedeelde cataloguszoeker", () => {
+    const html = renderWithList(createElement(DiscoverPage));
+
+    expect(html).toContain("Ontdek &amp; bespaar");
+    expect(html).toContain("Jouw supermarkt");
+    expect(html).toContain("Hoogvliet");
+    expect(html).toContain("Aanbiedingen");
+    expect(html).toContain("Voordelig kiezen");
+    expect(html).toContain("Alle categorieën");
+    expect(html).toContain('class="discover-header-mascot"');
+    expect(html).toMatch(/discover-header[\s\S]*?discover-header-mascot/);
+    expect(html).not.toContain("discover-welcome");
+    expect(html.match(/<img[^>]*discover-header-mascot[^>]*>/g)).toHaveLength(1);
+    expect(html).toContain("Zoek producten op naam, merk, verpakking of categorie");
+    expect(html).not.toContain("provider");
   });
 
   it("geeft de lege lijst een veilige ingang naar weekvoorbereiding", () => {

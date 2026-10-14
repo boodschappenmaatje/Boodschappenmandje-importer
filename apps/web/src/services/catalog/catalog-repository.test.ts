@@ -14,6 +14,8 @@ import {
   productSearchRelevance,
   sortProductsForQuery,
   SupabaseCatalogRepository,
+  createCatalogRepository,
+  CatalogReadError,
 } from "./catalog-repository";
 import type { Product } from "@/types/catalog";
 
@@ -72,6 +74,14 @@ describe("cataloguspaginering", () => {
 });
 
 describe("catalogusquery", () => {
+  it("weigert een provider zonder catalogusintegratie zonder Hoogvliet-fallback", () => {
+    expect(() => createCatalogRepository("ah")).toThrowError(
+      expect.objectContaining<Partial<CatalogReadError>>({
+        code: "unsupported-provider",
+      }),
+    );
+  });
+
   it("normaliseert filters, maximumprijs, sortering en serverpaginering", () => {
     const normalized = normalizeCatalogQueryRequest({
       term: "  CoLa  ",
@@ -344,7 +354,7 @@ describe("centrale server-side zoekengine", () => {
       brand: "Hoogvliet",
       offersOnly: true,
       maxPrice: 5,
-      sort: "price-asc",
+      sort: "relevance",
       now: new Date("2026-09-15T12:00:00Z"),
     });
 
@@ -357,9 +367,43 @@ describe("centrale server-side zoekengine", () => {
       p_brand: "Hoogvliet",
       p_offers_only: true,
       p_max_price: 5,
-      p_sort: "price-asc",
+      p_sort: "relevance",
       p_now: "2026-09-15",
     });
     expect(result.products[0]?.sku).toBe("123456789");
+  });
+
+  it("zoekt goedkoopste alleen tussen positieve prijzen binnen zoekterm en categorie", async () => {
+    const calls: string[] = [];
+    const productRow = {
+      id: "priced-product", supermarket: "Hoogvliet", sku: "123456789", name: "Cola zero",
+      brand: "Test", category: "Dranken/Frisdrank", product_type: "Frisdrank", package_text: "1 liter",
+      weight_grams: 1000, image_url: null, source_url: "https://example.com/cola", is_available: true,
+      updated_at: "2026-10-14T08:00:00Z",
+    };
+    const query = {
+      select(value: string) { calls.push(`select:${value}`); return this; },
+      eq(field: string, value: unknown) { calls.push(`eq:${field}:${String(value)}`); return this; },
+      gt(field: string, value: unknown) { calls.push(`gt:${field}:${String(value)}`); return this; },
+      or(value: string) { calls.push(`or:${value}`); return this; },
+      order(field: string, options: { ascending: boolean }) { calls.push(`order:${field}:${options.ascending}`); return this; },
+      range(start: number, end: number) { calls.push(`range:${start}:${end}`); return this; },
+      then(resolve: (value: unknown) => unknown) {
+        return Promise.resolve({
+          data: [{ product_id: productRow.id, price: 1.25, old_price: null, is_offer: true, offer_text: "Aanbieding", valid_from: null, valid_until: null, fetched_at: "2026-10-14T08:00:00Z", updated_at: null, product: productRow }],
+          error: null,
+        }).then(resolve);
+      },
+    };
+    const client = { from: (table: string) => { calls.push(`from:${table}`); return query; } } as unknown as SupabaseClient;
+    const result = await new SupabaseCatalogRepository(client).query({
+      term: "cola", category: "Dranken/Frisdrank", offersOnly: true, sort: "price-asc",
+    });
+
+    expect(calls).toContain("from:product_prices");
+    expect(calls).toContain("gt:price:0");
+    expect(calls).toContain("order:price:true");
+    expect(calls.some((call) => call.includes("category.ilike."))).toBe(true);
+    expect(result.products.map((product) => product.id)).toEqual(["priced-product"]);
   });
 });

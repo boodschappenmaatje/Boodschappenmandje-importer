@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { CatalogFilterSheet, categoryLabel } from "./CatalogFilterSheet";
 import { CatalogProductCard } from "./CatalogProductCard";
 import { CatalogSearchField } from "./CatalogSearchField";
-import { catalogSearchInstruction, CATALOG_PAGE_SEARCH_DEBOUNCE_MS } from "./CatalogSearchView";
+import { catalogSearchInstruction, CATALOG_PAGE_SEARCH_DEBOUNCE_MS, isCatalogSearchActive } from "./CatalogSearchView";
 import type { Product } from "@/types/catalog";
 
 const product: Product = {
@@ -31,6 +31,15 @@ describe("PWA 8 cataloguscomponenten", () => {
     expect(CATALOG_PAGE_SEARCH_DEBOUNCE_MS).toBeLessThanOrEqual(400);
     expect(catalogSearchInstruction("c")).toContain("1 teken");
     expect(catalogSearchInstruction("cola")).toBeNull();
+  });
+
+  it("scheidt de ontdeklanding van een actieve zoek-, categorie- of filtercontext", () => {
+    const empty = { term: "", category: null, brand: null, offersOnly: false, maxPrice: null, sort: "relevance" as const };
+    expect(isCatalogSearchActive(empty)).toBe(false);
+    expect(isCatalogSearchActive(empty, "pasta")).toBe(true);
+    expect(isCatalogSearchActive({ ...empty, category: "Dranken/Frisdrank" })).toBe(true);
+    expect(isCatalogSearchActive({ ...empty, offersOnly: true })).toBe(true);
+    expect(isCatalogSearchActive({ ...empty, sort: "price-asc" })).toBe(true);
   });
 
   it("biedt één toegankelijk mobiel zoekveld voor catalogus en selectiecontext", () => {
@@ -70,6 +79,24 @@ describe("PWA 8 cataloguscomponenten", () => {
     expect(html).toContain("Op je lijst · 2");
     expect(html).toContain(`/producten/${product.id}`);
     expect(html).not.toContain("€ 0");
+  });
+
+  it("bedient een onafhankelijke catalogusbijdrage met de bestaande hoeveelheidacties", () => {
+    const html = renderToStaticMarkup(createElement(CatalogProductCard, {
+      product,
+      listQuantity: 2,
+      isAdding: false,
+      listReady: true,
+      independentQuantity: true,
+      onAdd: () => undefined,
+      onIncrease: () => undefined,
+      onDecrease: () => undefined,
+    }));
+
+    expect(html).toContain('aria-label="Minder Een bijzonder lange productnaam die op mobiel leesbaar moet blijven"');
+    expect(html).toContain('aria-label="Meer Een bijzonder lange productnaam die op mobiel leesbaar moet blijven"');
+    expect(html).toContain("<span aria-live=\"polite\">2</span>");
+    expect(html).not.toContain("Op je lijst · 2");
   });
 
   it("maakt echte categorie- en merkopties mobiel selecteerbaar", () => {
