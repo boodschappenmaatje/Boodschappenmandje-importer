@@ -100,6 +100,10 @@ describe("dashboard rendering", () => {
     expect(html).toContain("Aanbiedingen");
     expect(html).toContain("Voordelig kiezen");
     expect(html).toContain("Alle categorieën");
+    expect(html).toContain('class="discover-header-mascot"');
+    expect(html).toMatch(/discover-header[\s\S]*?discover-header-mascot/);
+    expect(html).not.toContain("discover-welcome");
+    expect(html.match(/<img[^>]*discover-header-mascot[^>]*>/g)).toHaveLength(1);
     expect(html).toContain("Zoek producten op naam, merk, verpakking of categorie");
     expect(html).not.toContain("provider");
   });

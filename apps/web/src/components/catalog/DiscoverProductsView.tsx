@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Suspense } from "react";
 
 import { CatalogSearchView } from "@/components/catalog/CatalogSearchView";
+import { Icon } from "@/components/Icon";
 import { SupermarketSelector } from "@/components/supermarket/SupermarketSelector";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { SUPERMARKETS } from "@/types/supermarket";
@@ -18,11 +20,12 @@ export function DiscoverProductsView() {
   return (
     <main className="discover-page">
       <header className="discover-header">
-        <Link href="/" className="discover-back">← <span>Home</span></Link>
-        <div><h1>Ontdek &amp; bespaar</h1><p>Slim boodschappen doen</p></div>
+        <Link href="/" className="discover-back" aria-label="Terug naar Home"><Icon name="back" size={23} /><span>Home</span></Link>
+        <div className="discover-header-copy"><h1>Ontdek &amp; bespaar</h1><p>Bekijk producten, aanbiedingen en categorieën</p></div>
         <Link className="discover-list-link" href="/lijst" aria-label="Naar je boodschappenlijst">Lijst</Link>
+        <Image className="discover-header-mascot" src="/branding/maatje-home-c.webp" alt="" width={180} height={180} priority />
+        <div className="discover-store-row"><span>Jouw supermarkt</span><SupermarketSelector /></div>
       </header>
-      <div className="discover-store-row"><span>Jouw supermarkt</span><SupermarketSelector /></div>
       {supported ? <Suspense fallback={<SearchLoading />}><CatalogSearchView discovery /></Suspense> : (
         <section className="catalog-state" role="status">
           <h2>Producten bij {SUPERMARKETS[shoppingList.supermarketId].name} zijn binnenkort beschikbaar</h2>

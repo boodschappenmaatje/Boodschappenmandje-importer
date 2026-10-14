@@ -4790,29 +4790,34 @@ button.supermarket-choice.is-future:disabled { opacity: 1; cursor: default; }
 }
 
 .discover-page { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-.discover-header { min-height: 76px; margin: calc(-1 * max(8px, env(safe-area-inset-top))) -1px 0; padding: max(10px, env(safe-area-inset-top)) 10px 10px; border-radius: 0 0 23px 23px; background: linear-gradient(125deg, var(--brand-deep), var(--color-primary-action) 58%, var(--brand-blue)); box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-deep) 20%, transparent); }
-.discover-header h1 { font-size: 1.23rem; letter-spacing: -.02em; }
-.discover-header p { font-size: .76rem; }
-.discover-store-row { min-height: 50px; margin: 0 4px; color: var(--color-primary-dark); font-size: .8rem; font-weight: 650; }
-.discover-store-row .supermarket-selector { min-height: 44px; border-color: transparent; border-radius: 999px; background: var(--color-primary-soft); }
-.catalog-search-discovery .catalog-search-toolbar { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 5px; border: 1px solid color-mix(in srgb, var(--brand-blue) 22%, var(--color-surface)); border-radius: 17px; background: var(--color-surface); box-shadow: 0 5px 16px color-mix(in srgb, var(--brand-deep) 12%, transparent); }
+.discover-header { position: relative; display: block; min-height: 225px; margin: calc(-1 * max(8px, env(safe-area-inset-top))) -18px -32px; padding: max(10px, env(safe-area-inset-top)) 14px 18px; overflow: hidden; border-radius: 0 0 25px 25px; background: linear-gradient(125deg, var(--brand-deep), var(--color-primary-action) 58%, var(--brand-blue)); box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-deep) 20%, transparent); }
+.discover-header::after { position: absolute; right: -40px; bottom: -74px; width: 230px; height: 185px; border: 1px solid color-mix(in srgb, var(--color-on-primary) 14%, transparent); border-radius: 50%; background: color-mix(in srgb, var(--color-on-primary) 5%, transparent); content: ""; }
+.discover-header-copy { position: absolute; z-index: 1; top: 75px; left: 20px; width: min(66%, 270px); text-align: left !important; }
+.discover-header h1 { font-size: clamp(1.28rem, 5vw, 1.55rem); letter-spacing: -.03em; line-height: 1.1; }
+.discover-header p { max-width: 240px; margin-top: 7px; font-size: .84rem; line-height: 1.3; }
+.discover-header-mascot { position: absolute; z-index: 1; right: 5px; bottom: -8px; width: clamp(112px, 34vw, 145px); height: clamp(142px, 43vw, 170px); object-fit: contain; filter: drop-shadow(0 5px 7px color-mix(in srgb, var(--brand-deep) 22%, transparent)); }
+.discover-back,.discover-list-link { position: relative; z-index: 2; }
+.discover-back { position: absolute; top: max(10px, env(safe-area-inset-top)); left: 13px; }
+.discover-list-link { position: absolute; top: max(10px, env(safe-area-inset-top)); right: 13px; }
+.discover-store-row { position: absolute; z-index: 2; bottom: 30px; left: 17px; display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-height: 44px; margin: 0; color: var(--color-on-primary); font-size: .76rem; font-weight: 650; }
+.discover-store-row > span { display: none; }
+.discover-store-row .supermarket-selector { min-height: 44px; border-color: color-mix(in srgb, var(--brand-blue) 14%, var(--color-surface)); border-radius: 999px; background: color-mix(in srgb, var(--color-surface) 94%, transparent); box-shadow: 0 3px 9px color-mix(in srgb, var(--brand-deep) 17%, transparent); }
+.catalog-search-discovery .catalog-search-toolbar { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 5px; border: 1px solid color-mix(in srgb, var(--brand-blue) 22%, var(--color-surface)); border-radius: 20px; background: var(--color-surface); box-shadow: 0 7px 19px color-mix(in srgb, var(--brand-deep) 15%, transparent); }
+.catalog-search-discovery:not(.is-active-search) .catalog-search-toolbar { grid-template-columns: minmax(0,1fr); }
 .catalog-search-discovery .catalog-search-field { min-height: 48px; border: 0; background: transparent; box-shadow: none; }
 .catalog-search-discovery .catalog-filter-button { min-height: 44px; padding-inline: 11px; border-radius: 12px; }
-.discover-welcome { display: grid; grid-template-columns: 82px minmax(0,1fr); align-items: center; gap: 12px; min-height: 112px; margin: 13px 0 17px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--brand-blue) 14%, var(--color-surface)); border-radius: 19px; background: linear-gradient(125deg, var(--color-surface), var(--color-primary-soft)); box-shadow: 0 4px 14px color-mix(in srgb, var(--brand-deep) 8%, transparent); }
-.discover-mascot { width: 82px; height: 88px; object-fit: contain; }
-.discover-welcome strong { display: block; color: var(--color-primary-dark); font-size: 1rem; line-height: 1.25; }
-.discover-welcome p { margin: 5px 0 0; color: var(--color-muted); font-size: .82rem; line-height: 1.35; }
-.discover-section-title { margin: 0 0 9px; color: var(--color-primary-dark); font-size: 1.05rem; }
-.discover-shortcuts { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 9px; margin: 0 0 15px; }
-.discover-shortcuts button { display: grid; grid-template-columns: 42px minmax(0,1fr) 14px; align-items: center; gap: 8px; min-height: 82px; padding: 10px; border-radius: 17px; background: linear-gradient(145deg, var(--color-surface), var(--color-primary-soft)); box-shadow: 0 3px 11px color-mix(in srgb, var(--brand-deep) 7%, transparent); }
-.discover-shortcuts button:last-child { grid-column: 1 / -1; min-height: 70px; }
+.discover-shortcuts { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 12px 0 15px; }
+.discover-shortcuts button { display: grid; grid-template-columns: minmax(0,1fr) 18px; grid-template-rows: 48px minmax(0,1fr); align-items: center; gap: 9px 5px; min-height: 142px; padding: 13px; border-radius: 19px; background: linear-gradient(145deg, var(--color-surface), var(--color-primary-soft)); box-shadow: 0 4px 13px color-mix(in srgb, var(--brand-deep) 9%, transparent); }
 .discover-shortcuts button[aria-pressed="true"] { border-color: var(--brand-blue); background: linear-gradient(145deg, var(--color-surface), color-mix(in srgb, var(--color-primary-soft) 78%, var(--brand-blue))); }
-.discover-tile-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; color: var(--color-primary-dark); background: color-mix(in srgb, var(--brand-blue) 12%, var(--color-surface)); font-size: 1.15rem; font-weight: 800; }
+.discover-tile-icon { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; color: var(--color-primary-dark); background: color-mix(in srgb, var(--brand-blue) 12%, var(--color-surface)); font-size: 1.25rem; font-weight: 800; }
 .discover-shortcuts button:nth-child(1) .discover-tile-icon { color: var(--color-danger); background: var(--color-danger-soft); }
-.discover-shortcuts button:nth-child(2) .discover-tile-icon { color: var(--color-success-text); background: var(--color-success-soft); }
-.discover-shortcuts button > span:nth-child(2) { min-width: 0; }
-.discover-shortcuts strong { font-size: .86rem; line-height: 1.2; overflow-wrap: normal; }
-.discover-shortcuts small { margin-top: 4px; font-size: .72rem; line-height: 1.25; }
+.discover-shortcuts button:nth-child(2) .discover-tile-icon { color: var(--color-primary-dark); background: var(--color-primary-soft); }
+.discover-shortcuts button:nth-child(3) .discover-tile-icon { color: var(--color-success-text); background: var(--color-success-soft); }
+.discover-shortcuts button > span:nth-child(1) { grid-column: 1; grid-row: 1; }
+.discover-shortcuts button > span:nth-child(2) { grid-column: 1 / -1; grid-row: 2; min-width: 0; align-self: start; }
+.discover-shortcuts button > span:nth-child(3) { grid-column: 2; grid-row: 1; justify-self: end; align-self: start; }
+.discover-shortcuts strong { font-size: .91rem; line-height: 1.2; overflow-wrap: normal; }
+.discover-shortcuts small { margin-top: 5px; font-size: .75rem; line-height: 1.3; }
 .discover-tile-chevron { justify-self: end; color: var(--color-primary-dark); font-size: 1.45rem; line-height: 1; }
 .catalog-search-discovery .catalog-sort-controls { flex-wrap: nowrap; gap: 6px; margin: 8px 0 10px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
 .catalog-search-discovery .catalog-sort-controls::-webkit-scrollbar { display: none; }
@@ -4838,15 +4843,19 @@ button.supermarket-choice.is-future:disabled { opacity: 1; cursor: default; }
 .ux-product-row .catalog-quantity { grid-template-columns: 44px 24px 44px; border-radius: 999px; }
 .ux-product-row .catalog-quantity button { min-width: 44px; min-height: 44px; }
 .product-grid { gap: 8px; }
-.catalog-search-discovery.is-active-search .discover-welcome,
-.catalog-search-discovery.is-active-search .discover-section-title,
 .catalog-search-discovery.is-active-search .discover-shortcuts { display: none; }
+.catalog-search-discovery:not(.is-active-search) > :is(.catalog-sort-controls,.catalog-search-hint,.catalog-active-filters,.catalog-result-heading,.catalog-skeletons,.catalog-state,.catalog-notice,.product-add-feedback,.catalog-no-results,.product-grid,.catalog-inline-error,.catalog-load-more,.catalog-end) { display: none; }
 @media (max-width: 390px) {
-  .discover-shortcuts { gap: 7px; }
-  .discover-shortcuts button { grid-template-columns: 36px minmax(0,1fr) 10px; gap: 6px; padding: 8px; }
-  .discover-tile-icon { width: 36px; height: 36px; }
-  .discover-shortcuts strong { font-size: .81rem; }
-  .discover-shortcuts small { font-size: .68rem; }
+  .discover-header { min-height: 225px; }
+  .discover-header-copy { top: 72px; left: 17px; width: 67%; }
+  .discover-header h1 { font-size: 1.28rem; }
+  .discover-header p { max-width: 205px; font-size: .78rem; }
+  .discover-header-mascot { right: 1px; bottom: 24px; width: 112px; height: 142px; }
+  .discover-store-row { bottom: 30px; left: 17px; }
+  .discover-shortcuts { gap: 8px; }
+  .discover-shortcuts button { min-height: 136px; padding: 11px; }
+  .discover-shortcuts strong { font-size: .86rem; }
+  .discover-shortcuts small { font-size: .7rem; }
   .ux-product-row .product-detail-link { grid-template-columns: 62px minmax(0,1fr); }
   .ux-product-row .product-image { width: 62px; height: 72px; }
 }

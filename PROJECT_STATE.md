@@ -1,3 +1,12 @@
+# Checkpoint — Ontdek & bespaar lege startpagina — 14 oktober 2026
+
+- De supermarktkeuze en Home-top zijn door de gebruiker op fysieke iPhone visueel goedgekeurd. Deze stap wijzigt Home niet.
+- `/ontdek` toont in de lege staat nu een brede metallic-blauwe header met terugactie, titel/subtitel, de bestaande actieve supermarktselector en precies één officiële mascotte in de header. De zoekbalk sluit overlappend aan op de header.
+- Direct onder zoeken staat een 2-koloms raster met uitsluitend de drie bestaande acties: Aanbiedingen (bestaande `offer=1`-filter), Voordelig kiezen (bestaande prijs-sortering) en Alle categorieën (bestaande facet/filter-sheet). Er is geen vierde placeholder of tweede mascotte/welkomstkaart.
+- In lege discovery-state zijn sorteer-/resultaat-UI verborgen zodat het raster de eerste content na zoeken blijft; bij actieve zoek-/filtercontext blijft de bestaande compacte zoek- en resultaatpresentatie werken. De bestaande repository, ranking, filters, productresultaten en provider-/lijstlogica zijn niet gewijzigd.
+- Gerichte dashboard-renderingtest: **4/4**. Web `npm run check`: lint, typecheck, **910/910 tests** en production build groen. Root `npm test`: **515/515**; root `npm run check` groen. `git diff --check` groen.
+- Chromium op **390×844** en **430×844**: geen horizontale overflow; één mascotte in header; geen welkomstkaart; drie tegels in twee kolommen; Aanbiedingen zet `?offer=1`; Alle categorieën opent de bestaande filter-sheet; zoeken behoudt `/ontdek?q=pasta`. Preview en fysieke iPhone-acceptatie van stap 2 staan open.
+
 # Checkpoint — Home-top zoeken + Ontdek-kaart volgens referentie — 14 oktober 2026
 
 - De supermarktkeuze was eerder op iPhone visueel geaccepteerd. Home-top volgt nu de nieuwe leidende referentie: bestaande blauwe hero met merknaam/subtitel, slogan links en officiële mascotte rechts; de bestaande grote witte kaart overlapt de hero/content-overgang.
