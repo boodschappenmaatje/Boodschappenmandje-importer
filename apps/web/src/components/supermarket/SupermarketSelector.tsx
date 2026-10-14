@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 
 import { Icon } from "@/components/Icon";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -57,7 +58,7 @@ export function SupermarketSelector() {
         {hasChoice ? <Image src={SUPERMARKET_LOGOS[activeId]} alt="" width={28} height={28} className="supermarket-selector-logo" /> : null}
         <span>{hasChoice ? activeName : "Kies je supermarkt"}</span><span className="supermarket-selector-chevron" aria-hidden="true">▾</span>
       </button>
-      {open || !hasChoice ? (
+      {open || !hasChoice ? createPortal(
         <div className="supermarket-dialog-backdrop" role="presentation">
           <section className="supermarket-dialog" role="dialog" aria-modal="true" aria-labelledby="supermarket-dialog-title">
             {hasChoice ? <button className="supermarket-dialog-close" type="button" aria-label="Sluiten" onClick={() => setOpen(false)}>×</button> : null}
@@ -81,7 +82,8 @@ export function SupermarketSelector() {
             ))}
             {shoppingList.persistenceWarning ? <p role="alert">{shoppingList.persistenceWarning}</p> : null}
           </section>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

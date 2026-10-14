@@ -4754,6 +4754,10 @@ html {
 button.supermarket-choice.is-future:disabled { opacity: 1; cursor: default; }
 .supermarket-selector-logo { flex: 0 0 auto; width: 25px; height: 25px; border-radius: 50%; object-fit: cover; }
 .supermarket-selector-chevron { color: var(--color-primary-dark); }
+@media (max-width: 600px) {
+  .supermarket-dialog-backdrop { align-items: end; padding: max(14px, env(safe-area-inset-top)) 0 0; }
+  .supermarket-dialog { width: 100%; max-width: none; max-height: calc(100dvh - max(14px, env(safe-area-inset-top))); padding: 20px 18px max(24px, env(safe-area-inset-bottom)); border-right: 0; border-bottom: 0; border-left: 0; border-radius: 26px 26px 0 0; }
+}
 
 .discover-page { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 .discover-header { min-height: 76px; margin: calc(-1 * max(8px, env(safe-area-inset-top))) -1px 0; padding: max(10px, env(safe-area-inset-top)) 10px 10px; border-radius: 0 0 23px 23px; background: linear-gradient(125deg, var(--brand-deep), var(--color-primary-action) 58%, var(--brand-blue)); box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-deep) 20%, transparent); }

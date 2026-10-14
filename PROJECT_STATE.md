@@ -1,3 +1,10 @@
+# Checkpoint — Supermarktkeuze mobile sheet polish — 14 oktober 2026
+
+- De eerste keuze en winkelwissel openen op mobiel nu als een bottom sheet: de Home-hero blijft zichtbaar, de sheet vult de onderkant tot de veilige schermrand en de bottom navigation ligt er niet meer overheen. Desktop blijft een gecentreerde dialoog.
+- De bestaande modal wordt via een React portal boven de Home-stacking context gerenderd. Providerkeuze, disabled winkels, lijstisolatie en alle zoek-/opslaglogica blijven ongewijzigd.
+- De componenttest slaagt; web `npm run check` is groen: lint, typecheck, **910/910 tests** en production build. Chromium controle op 390×844 en 430×844 toont alle logo's, geen horizontale overflow en geen navigation-overlay op de sheet.
+- Nieuwe Preview en fysieke iPhone-heracceptatie zijn de volgende acceptatiestap; de gebruiker beslist over de visuele acceptatie.
+
 # Checkpoint — Supermarktkeuze banners en logo's — 14 oktober 2026
 
 - Eerste supermarktkeuze en wisselmodal zijn visueel bijgewerkt met vijf echte, ongewijzigde supermarktbeeldmerken. Herkomst staat bij de assets in `apps/web/public/branding/supermarkets/README.md`; merkrechten blijven bij de betreffende winkels.

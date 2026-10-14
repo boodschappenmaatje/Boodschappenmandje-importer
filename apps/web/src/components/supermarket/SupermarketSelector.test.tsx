@@ -25,8 +25,8 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
   root = createRoot(container);
   await act(async () => root!.render(h(ActiveShoppingListProvider, { initialList: createEmptyActiveShoppingList() }, h(SupermarketSelector))));
 
-  await vi.waitFor(() => expect(container?.querySelector('[role="dialog"]')).not.toBeNull());
-  const dialog = container!.querySelector('[role="dialog"]')!;
+  await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull());
+  const dialog = document.body.querySelector('[role="dialog"]')!;
   expect(dialog.textContent).toContain("Kies je supermarkt");
   expect(dialog.querySelectorAll(".supermarket-choice")).toHaveLength(5);
   expect(dialog.querySelectorAll(".supermarket-choice-logo img")).toHaveLength(5);
@@ -40,10 +40,10 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
   expect(hoogvliet?.disabled).toBe(false);
   await act(async () => hoogvliet?.click());
   expect(localStorage.getItem("boodschappenmaatje:active-supermarket")).toBe("hoogvliet");
-  expect(container?.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.body.querySelector('[role="dialog"]')).toBeNull();
   expect(container?.querySelector(".supermarket-selector-logo")?.getAttribute("src")).toContain("hoogvliet.png");
   await act(async () => container?.querySelector<HTMLButtonElement>(".supermarket-selector")?.click());
-  expect(container?.querySelector('[role="dialog"]')?.textContent).toContain("Wissel van supermarkt");
-  expect(container?.querySelector(".supermarket-choice-selected")?.textContent).toContain("Gekozen");
-  expect(container?.querySelectorAll(".supermarket-choice.is-future")).toHaveLength(4);
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("Wissel van supermarkt");
+  expect(document.body.querySelector(".supermarket-choice-selected")?.textContent).toContain("Gekozen");
+  expect(document.body.querySelectorAll(".supermarket-choice.is-future")).toHaveLength(4);
 });
