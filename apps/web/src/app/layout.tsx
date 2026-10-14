@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { MaatjeIntro } from "@/components/intro/MaatjeIntro";
 import { PwaRegistrar } from "@/components/PwaRegistrar";
 import { appConfig } from "@/config/app";
 import { appIconUrl } from "@/config/app-icons";
@@ -44,8 +45,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="nl">
+    // The intro boot script may set data-maatje-intro on <html> before hydration.
+    <html lang="nl" suppressHydrationWarning>
       <body>
+        <MaatjeIntro />
         <ActiveShoppingListProvider>
           <BudgetProvider>
             <WeekPreparationProvider>
