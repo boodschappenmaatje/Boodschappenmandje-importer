@@ -33,6 +33,20 @@
 }
 
 html[data-maatje-intro="done"] .mi-overlay { display: none; }
+
+/* Covers the app while it is in the background, so the screenshot iOS shows
+   on the next launch is Maatje-blue instead of the old app content. */
+.mi-launch-cover {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  background:
+    radial-gradient(120% 70% at 50% 62%, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 55%),
+    radial-gradient(circle at 50% 60%, #62BFFC 0%, #278EF7 34%, #1D87F7 52%, #034ECD 100%);
+  pointer-events: none;
+}
+html[data-maatje-cover="on"] .mi-launch-cover { display: block; }
 .mi-overlay[data-skip="true"] { animation: mi-exit 0.22s ease-in forwards; }
 
 /* Soft halo behind Maatje, like the app icon. */
