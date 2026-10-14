@@ -21,9 +21,16 @@ test('refresh acknowledges exact recipe IDs and preserves both auth headers acro
   await refreshMealMixRecipes(settings, ['recipe-one'], { wait: async ms => waits.push(ms), fetcher: async (url, options) => {
     calls.push(options); assert.equal(url.href, settings.url.href);
     assert.equal(options.redirect, 'manual'); assert.deepEqual(options.headers, settings.headers);
-    return calls.length < 3 ? json({ error: 'cache-refresh-failed' }, 503) : json({ refreshedRecipeIds: ['recipe-one'] });
+    return calls.length < 3 ? json({ error: 'cache-unavailable' }, 503) : json({ refreshedRecipeIds: ['recipe-one'] });
   } });
   assert.deepEqual(waits, [1000, 2000]); assert.equal(calls.length, 3);
+});
+test('a refused cache refresh (cache-refresh-failed) is final: no retry of the same write', async () => {
+  const settings = mealMixRefreshSettings(env), waits = []; let calls = 0;
+  await assert.rejects(refreshMealMixRecipes(settings, ['recipe-one'], { wait: async ms => waits.push(ms),
+    fetcher: async () => { calls += 1; return json({ error: 'cache-refresh-failed' }, 503); } }),
+    error => error.stage === 'meal-mix-cache-refresh' && error.code === 'cache-refresh-failed' && error.status === 503);
+  assert.equal(calls, 1); assert.deepEqual(waits, []);
 });
 test('auth, missing endpoint and redirect errors never retry and report actual HTTP status safely', async () => {
   for (const status of [301, 401, 403, 404]) {

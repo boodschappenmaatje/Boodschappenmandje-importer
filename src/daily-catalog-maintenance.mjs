@@ -8,6 +8,7 @@ import {
   SourceBlockedError,
   withDailyCatalogSource,
 } from "./hoogvliet.mjs";
+import { dailyRunPush, sendPush } from "./notify.mjs";
 import {
   fetchCatalogImportRuns,
   fetchExistingPriceStates,
@@ -188,15 +189,44 @@ export async function assessDailyCatalogCandidates({
   return { productsToWrite, stats };
 }
 
-export function dailyMaintenanceDecision(runs, now = new Date()) {
-  if (!isDailyImportWindowOpen(now)) return { runAttempt: false, reason: "outside_daily_window" };
+// Scheduled runs count for "today". A manual run counts only when it scanned
+// the catalogue (the explicit-SKU catch-up also records trigger=manual but
+// handles a handful of SKUs); test runs never count.
+const MANUAL_CATALOG_RUN_MIN_PROCESSED = 1_000;
+
+function countsAsDailyRun(run) {
+  if (!run?.trigger || run.trigger === "schedule") return true;
+  return run.trigger === "manual" && Number(run.processed_count) >= MANUAL_CATALOG_RUN_MIN_PROCESSED;
+}
+export const DAILY_ZYTE_BUDGET = 60;
+export const ESCALATED_DAILY_ZYTE_BUDGET = 150;
+export const ESCALATE_AFTER_FAILED_ATTEMPTS = 2;
+
+export function todaysDailyRuns(runs, now = new Date()) {
   const today = amsterdamDateKey(now);
-  const todayRuns = (Array.isArray(runs) ? runs : [])
+  return (Array.isArray(runs) ? runs : [])
+    .filter(countsAsDailyRun)
     .filter(run => {
       const startedAt = new Date(run?.started_at ?? "");
       return !Number.isNaN(startedAt.getTime()) && amsterdamDateKey(startedAt) === today;
     })
     .sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at));
+}
+
+// The watchdog escalates by itself: after two unsuccessful attempts today the
+// next attempt may hand far more stalled pages to Zyte.
+export function dailyZyteBudget(runs, now = new Date()) {
+  const unsuccessful = todaysDailyRuns(runs, now)
+    .filter(run => run.status === "failed" || run.status === "partial").length;
+  return unsuccessful >= ESCALATE_AFTER_FAILED_ATTEMPTS ? ESCALATED_DAILY_ZYTE_BUDGET : DAILY_ZYTE_BUDGET;
+}
+
+export function dailyMaintenanceDecision(runs, now = new Date()) {
+  if (!isDailyImportWindowOpen(now)) return { runAttempt: false, reason: "outside_daily_window" };
+  const todayRuns = todaysDailyRuns(runs, now);
+  if (todayRuns.some(run => run.status === "success")) {
+    return { runAttempt: false, reason: "daily_maintenance_complete" };
+  }
   const latest = todayRuns[0];
   if (!latest) return { runAttempt: true, reason: "daily_maintenance_missing" };
   if (latest.status === "running") return { runAttempt: false, reason: "daily_maintenance_running" };
@@ -207,8 +237,8 @@ export function dailyMaintenanceDecision(runs, now = new Date()) {
 export async function inspectDailyCatalogMaintenance(config, dependencies = {}) {
   const fetchRuns = dependencies.fetchRuns ?? fetchCatalogImportRuns;
   const now = dependencies.now?.() ?? new Date();
-  const runs = await fetchRuns(config, { trigger: "schedule", limit: 20 });
-  return dailyMaintenanceDecision(runs, now);
+  const runs = await fetchRuns(config, { trigger: null, limit: 20 });
+  return { ...dailyMaintenanceDecision(runs, now), zyteBudget: dailyZyteBudget(runs, now) };
 }
 
 export function formatDailyMaintenanceSummary(result) {
@@ -238,6 +268,8 @@ export function formatDailyMaintenanceSummary(result) {
     `fallback_failures=${result.snapshot.fallbackAccounting?.fallbackFailures ?? 0}`,
     `fallback_provider=${result.snapshot.fallbackAccounting?.fallbackProvider ?? "zyte"}`,
     `snapshot_complete=${result.snapshot.sourceExhausted === true && !result.snapshot.stallReason}`,
+    `snapshot_partial=${result.snapshot.partial === true}`,
+    `vastgelopen_routes=${Array.isArray(result.snapshot.stalledRoutes) ? result.snapshot.stalledRoutes.length : 0}`,
     `GraphQL_bulk_calls=${result.snapshot.catalogAPICalls}`,
     `duplicaten=${stats.duplicateCandidates + result.duplicateSKUsSkipped}`,
   ].join(" | ");
@@ -290,7 +322,11 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
       : (await services.fetchExistingSKUs(config)).size;
     const newCount = writeResult.imported.filter(product => product.inserted === true).length;
     const updatedCount = writeResult.imported.length - newCount;
-    const errorCount = assessment.stats.unresolvedExistingPrices + writeResult.errors.length;
+    // An incomplete (partial) snapshot still wrote what it saw, but stays
+    // visible as 'partial' so the retry workflow keeps going for a full scan.
+    const snapshotPartial = snapshot?.partial === true;
+    const errorCount = assessment.stats.unresolvedExistingPrices + writeResult.errors.length
+      + (snapshotPartial ? 1 : 0);
     const status = dryRun ? "dry-run" : errorCount > 0 ? "partial" : "success";
     const result = {
       status,
@@ -309,7 +345,12 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
       totalUniqueProductsAfter,
       duplicateSKUsSkipped: writeResult.duplicateSKUsSkipped,
       errorSummary: errorCount > 0
-        ? `${assessment.stats.unresolvedExistingPrices} bestaande prijsstatussen behielden last-known-good; ${writeResult.errors.length} schrijffouten.`
+        ? [
+          snapshotPartial
+            ? `Gedeeltelijke snapshot: alleen geziene producten bijgewerkt; ${snapshot.incompleteSummary ?? "onvolledig"}.`
+            : null,
+          `${assessment.stats.unresolvedExistingPrices} bestaande prijsstatussen behielden last-known-good; ${writeResult.errors.length} schrijffouten.`,
+        ].filter(Boolean).join(" ")
         : null,
     };
     if (run) await services.finishCatalogImportRun(config, run, result);
@@ -342,18 +383,34 @@ export async function main(argv = process.argv.slice(2)) {
     const decision = await inspectDailyCatalogMaintenance(config);
     console.log(`run_attempt=${decision.runAttempt ? 1 : 0}`);
     console.log(`reason=${decision.reason}`);
+    console.log(`zyte_budget=${decision.zyteBudget}`);
     return decision;
   }
   if (config.updateMode !== "maintenance") {
     throw new Error("Dagelijkse catalogusmaintenance vereist UPDATE_MODE=maintenance.");
   }
   config.productTypeSupported = await hasProductTypeColumn(config);
-  return runDailyCatalogMaintenance(config);
+  const result = await runDailyCatalogMaintenance(config);
+  githubAnnotation(result.status === "success" || result.status === "dry-run" ? "notice" : "warning",
+    formatDailyMaintenanceSummary(result));
+  const push = dailyRunPush(result);
+  if (push) await sendPush(push);
+  return result;
+}
+
+// GitHub Actions turns these lines into run annotations, which stay readable
+// through the checks API even when the full job log is not reachable.
+function githubAnnotation(level, message, env = process.env) {
+  if (env.GITHUB_ACTIONS !== "true") return;
+  const escaped = String(message).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  console.log(`::${level} title=Dagelijkse catalogusmaintenance::${escaped}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(error => {
-    console.error(`Dagelijkse catalogusmaintenance mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`);
+    const message = `Dagelijkse catalogusmaintenance mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`;
+    console.error(message);
+    githubAnnotation("error", message);
     process.exitCode = 1;
   });
 }

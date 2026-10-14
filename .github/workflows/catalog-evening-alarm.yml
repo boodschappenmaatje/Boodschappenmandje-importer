@@ -1,0 +1,58 @@
+name: Maatje-bewaker avondalarm
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: alarm = echte avondcontrole; test-push = alleen een testmelding sturen
+        type: choice
+        required: true
+        default: test-push
+        options:
+          - test-push
+          - alarm
+  schedule:
+    # Twee kansen per avond (19:05 en 20:05 UTC = 21:05/22:05 CEST,
+    # 20:05/21:05 CET), omdat GitHub geplande runs kan overslaan. Na een
+    # complete run vandaag stuurt de controle niets.
+    - cron: "5 19 * * *"
+    - cron: "5 20 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hoogvliet-evening-alarm
+  cancel-in-progress: false
+
+jobs:
+  evening-alarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      UPDATE_MODE: maintenance
+      CATALOG_BATCH: growth
+
+    steps:
+      - name: Repository ophalen
+        uses: actions/checkout@v4
+
+      - name: Node.js instellen
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Dependencies installeren
+        run: npm ci
+
+      - name: Testmelding versturen
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'test-push'
+        run: node src/catalog-monitor.mjs --test-push
+
+      - name: Avondcontrole uitvoeren
+        if: github.event_name == 'schedule' || inputs.mode == 'alarm'
+        run: node src/catalog-monitor.mjs --evening-alarm

@@ -2,17 +2,13 @@ name: Hoogvliet dagelijkse catalogusretry
 
 on:
   schedule:
-    # Vaste UTC-watchdogkandidaten rond 06:00 Europe/Amsterdam. Beide zijn
-    # veilig: buiten het lokale dagvenster doet inspect:daily niets; binnen
-    # het venster controleert het de schedule-runregistratie. Workflow-
-    # concurrency en de bestaande catalog_import_runs-lock voorkomen overlap.
-    - cron: "17 4 * * *"
-    - cron: "17 5 * * *"
-    # Drie kansen na de primaire import om 06:00 en bewaking om 08:30 NL.
-    # 08:17/13:17/18:17 UTC = 10:17/15:17/20:17 CEST of
-    # 09:17/14:17/19:17 CET. Minstens vijf uur tussen retries; de
-    # persistente dagstatus beslist of er werkelijk een attempt nodig is.
-    - cron: "17 8,13,18 * * *"
+    # Vaste UTC-watchdogkandidaten: ieder heel uur van 04:17 t/m 20:17 UTC
+    # (06:17-22:17 CEST, 05:17-21:17 CET). GitHub start geplande runs soms
+    # uren te laat of slaat ze over; met een kans per uur maakt dat niet uit.
+    # inspect:daily beslist per kans of er werkelijk een attempt nodig is:
+    # buiten het dagvenster of na een complete run vandaag doet hij niets.
+    # Workflow-concurrency en de catalog_import_runs-lock voorkomen overlap.
+    - cron: "17 4-20 * * *"
 
 permissions:
   contents: read
@@ -65,8 +61,13 @@ jobs:
           if [[ "$run_attempt" != "1" ]]; then
             run_attempt="0"
           fi
+          zyte_budget="$(printf '%s\n' "$decision" | sed -n 's/^zyte_budget=//p' | tail -1)"
+          if [[ ! "$zyte_budget" =~ ^[0-9]+$ ]]; then
+            zyte_budget="60"
+          fi
           echo "run_attempt=$run_attempt" >> "$GITHUB_OUTPUT"
           echo "reason=${reason:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "zyte_budget=$zyte_budget" >> "$GITHUB_OUTPUT"
 
       - name: Bestaande runner-Chrome selecteren
         if: steps.due.outputs.run_attempt == '1'
@@ -86,7 +87,12 @@ jobs:
         env:
           ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
           ZYTE_LISTING_FALLBACK_ENABLED: "1"
-          ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "3"
+          # 60 normaal; inspect:daily schaalt na twee mislukte pogingen vandaag
+          # zelf op naar 150 (harde cap in config.mjs).
+          ZYTE_LISTING_FALLBACK_MAX_REQUESTS: ${{ steps.due.outputs.zyte_budget }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          DAILY_PARTIAL_SNAPSHOT_ENABLED: "1"
+          DAILY_PARTIAL_MIN_SKUS: "1000"
           ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "45000"
         run: npm run import:daily
 
@@ -97,6 +103,7 @@ jobs:
             echo '## Dagelijkse volledige catalogusmaintenance'
             echo "Attempt uitgevoerd: ${{ steps.due.outputs.run_attempt }}"
             echo "Beslissing: ${{ steps.due.outputs.reason }}"
+            echo "Zyte-budget: ${{ steps.due.outputs.zyte_budget }}"
             echo 'Een retry beoordeelt opnieuw de volledige actuele listingset; er is geen nieuw-productdoel.'
             echo 'Last-known-good blijft bij een tijdelijke bronstoring beschikbaar.'
           } >> "$GITHUB_STEP_SUMMARY"

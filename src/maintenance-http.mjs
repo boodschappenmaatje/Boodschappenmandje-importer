@@ -22,7 +22,8 @@ export function maintenanceDiagnostic(error) {
   });
 }
 export async function maintenanceRequest(url, options, { stage, fetcher = fetch,
-  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), timeoutMs = 25000 } = {}) {
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), timeoutMs = 25000,
+  finalCodes = [] } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
       const response = await fetcher(url, { ...options, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
@@ -30,8 +31,8 @@ export async function maintenanceRequest(url, options, { stage, fetcher = fetch,
       const body = await response.json().catch(() => null);
       throw maintenanceError(stage, { status: response.status, code: body?.code ?? body?.error, host: url.hostname });
     } catch (error) {
-      const retryable = TRANSIENT.has(error.status) || Boolean(networkCode(error))
-        || ['TimeoutError', 'AbortError'].includes(error.name);
+      const retryable = !finalCodes.includes(error.code) && (TRANSIENT.has(error.status) || Boolean(networkCode(error))
+        || ['TimeoutError', 'AbortError'].includes(error.name));
       if (!retryable || attempt >= 2) {
         if (error.stage) throw error;
         throw maintenanceError(stage, { cause: error, host: url.hostname });
@@ -56,7 +57,10 @@ export function mealMixRefreshSettings(env) {
 }
 export async function refreshMealMixRecipes(settings, recipeIds, dependencies = {}) {
   const response = await maintenanceRequest(settings.url, { method: 'POST', headers: settings.headers,
-    body: JSON.stringify({ recipeIds }) }, { stage: 'meal-mix-cache-refresh', timeoutMs: 120000, ...dependencies });
+    body: JSON.stringify({ recipeIds }) }, { stage: 'meal-mix-cache-refresh', timeoutMs: 120000,
+    // The route answers 503 cache-refresh-failed when the database guard keeps
+    // the readiness pending; repeating the same write cannot change that.
+    finalCodes: ['cache-refresh-failed'], ...dependencies });
   const data = await response.json().catch(() => null);
   if (!Array.isArray(data?.refreshedRecipeIds) || data.refreshedRecipeIds.length !== recipeIds.length
     || recipeIds.some((id) => !data.refreshedRecipeIds.includes(id))) throw maintenanceError('invalid-cache-refresh-response');

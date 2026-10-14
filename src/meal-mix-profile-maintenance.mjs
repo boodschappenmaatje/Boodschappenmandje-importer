@@ -44,6 +44,24 @@ export function mealMixApi(config, fetcher = fetch) {
   };
 }
 
+// The planner route refuses to publish readiness that the database guard keeps
+// pending (resources maintained through the bounded transactional path). The
+// planner evaluates those recipes live, so this must not stop the queue: the
+// profile is still saved, its cache stays 'pending' and is retried next run.
+export function isRejectedCacheRefresh(error) {
+  return error?.stage === "meal-mix-cache-refresh" && error?.code === "cache-refresh-failed";
+}
+
+async function tryRefresh(refreshRecipes, recipeIds) {
+  try {
+    await refreshRecipes(recipeIds);
+    return true;
+  } catch (error) {
+    if (isRejectedCacheRefresh(error)) return false;
+    throw error;
+  }
+}
+
 /** Queue processing is bounded and idempotent, with compare-and-set writes. */
 export async function maintainMealMixProfiles({ api, readSource, refreshRecipes, limit = 100, now = new Date() }) {
   const renewBefore = new Date(now.getTime() - 20 * 60 * 60 * 1000).toISOString();
@@ -52,7 +70,10 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
   const results = [];
   for (const queue of queued) {
     if (queue.status === "verified") {
-      await refreshRecipes([queue.recipe_id]);
+      if (!await tryRefresh(refreshRecipes, [queue.recipe_id])) {
+        results.push({ productId: queue.product_id, status: "cache_refresh_rejected" });
+        continue;
+      }
       await api("meal_mix_profiles", { product_id: `eq.${queue.product_id}`, updated_at: `eq.${queue.updated_at}` }, { method: "PATCH", body: { cache_status: "current", updated_at: now.toISOString() } });
       results.push({ productId: queue.product_id, status: "cache_refreshed" });
       continue;
@@ -85,11 +106,15 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
       parser_version: MEAL_MIX_PARSER_VERSION, checked_at: new Date().toISOString(), updated_at: new Date().toISOString() };
     const saved = await api("meal_mix_profiles", { product_id: `eq.${product.id}`, updated_at: `eq.${queue.updated_at}` }, { method: "PATCH", body: patch });
     if (!saved.length) { results.push({ productId: product.id, status: "changed_during_fetch" }); continue; }
+    let cacheRefresh = null;
     if (verified) {
-      await refreshRecipes([recipeId]);
-      await api("meal_mix_profiles", { product_id: `eq.${product.id}`, updated_at: `eq.${patch.updated_at}` }, { method: "PATCH", body: { cache_status: "current" } });
+      cacheRefresh = await tryRefresh(refreshRecipes, [recipeId]) ? "current" : "rejected";
+      if (cacheRefresh === "current") {
+        await api("meal_mix_profiles", { product_id: `eq.${product.id}`, updated_at: `eq.${patch.updated_at}` }, { method: "PATCH", body: { cache_status: "current" } });
+      }
     }
-    results.push({ productId: product.id, name: product.name, status: result.status, reason: result.reason ?? null });
+    results.push({ productId: product.id, name: product.name, status: result.status, reason: result.reason ?? null,
+      ...(cacheRefresh ? { cacheRefresh } : {}) });
   }
   return results;
 }
@@ -97,7 +122,7 @@ export async function maintainMealMixProfiles({ api, readSource, refreshRecipes,
 /** Profile currency is not readiness currency: prices/dependencies and the
  * readiness TTL can change without altering the package source. Reuse verified
  * profiles and refresh only affected recipes through the existing service. */
-export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 100, now = new Date() }) {
+export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 100, now = new Date(), rejected = null }) {
   const profiles = await api("meal_mix_profiles", {
     select: "product_id,recipe_id,updated_at", status: "eq.verified", order: "updated_at.asc", limit: "100",
   });
@@ -109,17 +134,22 @@ export async function refreshStaleMealMixCaches({ api, refreshRecipes, limit = 1
     recipe_id: `in.(${ids.join(",")})`, people_count: "gte.1", and: "(people_count.lte.10)", limit: "1000",
   });
   const refreshed = [];
+  let attempted = 0;
   for (const profile of profiles) {
     if (!profile.recipe_id) continue;
     const current = new Set(rows.filter((row) => row.recipe_id === profile.recipe_id &&
       row.refresh_status === "current" && row.invalidated_at === null &&
       Date.parse(row.expires_at) > now.getTime()).map((row) => row.people_count));
     if (Array.from({ length: 10 }, (_, index) => index + 1).every((people) => current.has(people))) continue;
-    await refreshRecipes([profile.recipe_id]);
+    if (attempted >= Math.min(100, Math.max(1, limit))) break;
+    attempted += 1;
+    if (!await tryRefresh(refreshRecipes, [profile.recipe_id])) {
+      rejected?.push(profile.recipe_id);
+      continue;
+    }
     await api("meal_mix_profiles", { product_id: `eq.${profile.product_id}`, updated_at: `eq.${profile.updated_at}` },
       { method: "PATCH", body: { cache_status: "current" } });
     refreshed.push(profile.recipe_id);
-    if (refreshed.length >= Math.min(100, Math.max(1, limit))) break;
   }
   return refreshed;
 }
@@ -135,11 +165,28 @@ async function main() {
     const results = await maintainMealMixProfiles({ api, limit, refreshRecipes,
       readSource: async (product) => { const page = await browser.newPage(); try { return await readMealMixSource(page, product); } finally { await page.close(); } },
     });
-    const refreshedRecipeIds = await refreshStaleMealMixCaches({ api, refreshRecipes, limit });
-    console.log(JSON.stringify({ profiles: results, refreshedRecipeIds }, null, 2));
+    const rejectedRecipeIds = [];
+    const refreshedRecipeIds = await refreshStaleMealMixCaches({ api, refreshRecipes, limit, rejected: rejectedRecipeIds });
+    console.log(JSON.stringify({ profiles: results, refreshedRecipeIds, rejectedRecipeIds }, null, 2));
+    const rejectedProfiles = results.filter((row) => row.status === "cache_refresh_rejected" || row.cacheRefresh === "rejected").length;
+    const summary = `profielen_verwerkt=${results.length} | nieuw_of_gewijzigd=${results.filter((row) => row.status === "verified" || row.status === "needs_review").length}`
+      + ` | cache_ververst=${refreshedRecipeIds.length + results.filter((row) => row.status === "cache_refreshed" || row.cacheRefresh === "current").length}`
+      + ` | live_berekend_cache_geweigerd=${rejectedProfiles + rejectedRecipeIds.length}`;
+    console.log(`Maaltijdmixonderhoud: ${summary}`);
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::${rejectedProfiles + rejectedRecipeIds.length > 0 ? "warning" : "notice"} title=Maaltijdmixonderhoud::${summary}`);
+    }
   } finally { await browser.close(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => { console.error(`Maaltijdmixonderhoud mislukt: ${maintenanceDiagnostic(error)}`); process.exitCode = 1; });
+  main().catch((error) => {
+    const message = `Maaltijdmixonderhoud mislukt: ${maintenanceDiagnostic(error)}`;
+    console.error(message);
+    // Readable as a run annotation even when the full job log is not.
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::error title=Maaltijdmixonderhoud::${message.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
+    }
+    process.exitCode = 1;
+  });
 }

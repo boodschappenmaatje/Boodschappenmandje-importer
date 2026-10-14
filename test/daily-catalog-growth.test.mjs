@@ -714,7 +714,7 @@ test('daily supersede RPC krijgt volledige expected state en actorcontext', asyn
   assert.equal(request.body.p_actor_context, 'github_actions:test:123:abc');
 });
 
-test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenlange sleep", async () => {
+test("Actions heeft uurlijkse retryvensters, één lockgroep en geen urenlange sleep", async () => {
   const [initial, retry, monitor] = await Promise.all([
     readFile(new URL("../.github/workflows/import-hoogvliet-poc.yml", import.meta.url), "utf8"),
     readFile(new URL("../.github/workflows/retry-daily-catalog-import.yml", import.meta.url), "utf8"),
@@ -722,7 +722,7 @@ test("Actions heeft drie gespreide retryvensters, één lockgroep en geen urenla
   ]);
   assert.match(initial, /npm run import:daily/);
   assert.match(initial, /group: hoogvliet-supabase-update/);
-  assert.match(retry, /cron: "17 8,13,18 \* \* \*"/);
+  assert.match(retry, /cron: "17 4-20 \* \* \*"/);
   assert.doesNotMatch(retry, /\*\/10/);
   assert.match(retry, /npm run --silent inspect:daily/);
   assert.match(retry, /group: hoogvliet-supabase-update/);
