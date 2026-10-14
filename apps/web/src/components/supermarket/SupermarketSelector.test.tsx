@@ -28,6 +28,7 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
   await vi.waitFor(() => expect(document.body.querySelector('[role="dialog"]')).not.toBeNull());
   const dialog = document.body.querySelector('[role="dialog"]')!;
   expect(dialog.textContent).toContain("Kies je supermarkt");
+  expect(dialog.querySelector(".supermarket-choice-logo img.is-jumbo")).not.toBeNull();
   expect(dialog.querySelectorAll(".supermarket-choice")).toHaveLength(5);
   expect(dialog.querySelectorAll(".supermarket-choice-logo img")).toHaveLength(5);
   expect(dialog.querySelector('.supermarket-choice.is-supported .supermarket-choice-logo img')?.getAttribute("src")).toContain("hoogvliet.png");
@@ -44,6 +45,7 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
   expect(container?.querySelector(".supermarket-selector-logo")?.getAttribute("src")).toContain("hoogvliet.png");
   await act(async () => container?.querySelector<HTMLButtonElement>(".supermarket-selector")?.click());
   expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("Wissel van supermarkt");
+  expect(document.body.querySelector('[role="dialog"] .eyebrow')?.textContent).toBe("JE LIJSTEN BLIJVEN PER WINKEL APART");
   expect(document.body.querySelector(".supermarket-choice-selected")?.textContent).toContain("Gekozen");
   expect(document.body.querySelectorAll(".supermarket-choice.is-future")).toHaveLength(4);
 });

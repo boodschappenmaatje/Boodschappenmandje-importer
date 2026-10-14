@@ -1,3 +1,10 @@
+# Checkpoint — Supermarktkeuze laatste visuele tweaks — 14 oktober 2026
+
+- Na fysieke iPhone-feedback zijn drie presentatiedetails aangepast: Jumbo-logo iets vergroot met behoud van aspect ratio, alle vijf logovakken gelijkgetrokken naar 64×64px met dezelfde radius, en wissel-eyebrow exact gewijzigd naar `JE LIJSTEN BLIJVEN PER WINKEL APART`.
+- Mobile bottom sheet, portal, providerstate, `setActiveSupermarket`, lijstisolatie, disabled toekomstige winkels, assets, compacte selector en zoek-/opslaglogica zijn ongemoeid gelaten. Nieuwe iPhone-heracceptatie staat open.
+- Gerichte componenttest slaagt; web `npm run check` slaagt met lint, typecheck, **910/910 tests** en production build. Root `npm test`: **515/515**; root `npm run check` en `git diff --check` slagen.
+- Chromium op **390×844** en **430×844** bevestigt vijf geladen logo's, identieke 64×64px logovakken met 15px radius, grotere Jumbo-weergave zonder aspect-ratiovervorming, de volledige kopregel op één regel, geen horizontale overflow, sheet tot de viewportbodem boven de navigatie, en sluiten/winkelen wisselen blijft werken. Preview en laatste fysieke iPhone-heracceptatie volgen na CI.
+
 # Checkpoint — Supermarktkeuze mobile sheet polish — 14 oktober 2026
 
 - De eerste keuze en winkelwissel openen op mobiel nu als een bottom sheet: de Home-hero blijft zichtbaar, de sheet vult de onderkant tot de veilige schermrand en de bottom navigation ligt er niet meer overheen. Desktop blijft een gecentreerde dialoog.
