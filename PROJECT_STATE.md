@@ -5,7 +5,7 @@
 - Dezelfde bestaande selector/rendering wordt voor eerste keuze en wisselen gebruikt. De Home-selector, sheet/portal, providerstate, `setActiveSupermarket`, disabled toekomstige winkels en lijstisolatie zijn functioneel ongewijzigd.
 - Merkaccenten staan als benoemde supermarkt-tokens in `apps/web/src/styles/tokens.css`; componentstyling gebruikt uitsluitend die tokens plus de bestaande blauwe/semantische tokens. `DESIGN.md` en `ROADMAP.md` zijn ongewijzigd.
 - Web `npm run check`: lint, typecheck, **910/910 tests** en production build geslaagd. Root `npm test`: **515/515**; root `npm run check` en `git diff --check` geslaagd.
-- Chromium-controle op **390×844** en **430×844**: alle vijf logo's geladen; kaarten benutten de breedte (354/394px), geen horizontale overflow; Jumbo-logovak 64px met 73px brede onbeschadigde woordmarkering; eerste keuze en wisselsheet tonen dezelfde kaartstijl; bottom navigation valt niet over de sheet; selector openen, sluiten en kiezen werken. Nieuwe Preview en fysieke iPhone-heracceptatie staan nog open.
+- Chromium-controle op **390×844** en **430×844**: alle vijf logo's geladen; kaarten benutten de breedte (354/394px), geen horizontale overflow; Jumbo-logovak 64px met 73px brede onbeschadigde woordmarkering; eerste keuze en wisselsheet tonen dezelfde kaartstijl; bottom navigation valt niet over de sheet; selector openen, sluiten en kiezen werken. Nieuwe Preview is beschikbaar (HTTP 200); fysieke iPhone-heracceptatie staat open.
 
 # Checkpoint — Supermarktkeuze laatste visuele tweaks — 14 oktober 2026
 
