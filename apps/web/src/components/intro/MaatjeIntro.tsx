@@ -1,4 +1,5 @@
 import { MAATJE_INTRO_BOOT_SCRIPT } from "./intro-storage";
+import { LaunchSnapshotCover } from "./LaunchSnapshotCover";
 import { MaatjeIntroOverlay } from "./MaatjeIntroOverlay";
 
 /**
@@ -10,6 +11,7 @@ export function MaatjeIntro() {
     <>
       <script dangerouslySetInnerHTML={{ __html: MAATJE_INTRO_BOOT_SCRIPT }} />
       <MaatjeIntroOverlay />
+      <LaunchSnapshotCover />
     </>
   );
 }
