@@ -488,7 +488,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
     // Iedere zoekende consumer gebruikt dezelfde server-side ranking. De RPC
     // rangschikt de volledige gefilterde set vóór paginering; Producten en de
     // compacte lijstzoeker kunnen daardoor niet uiteenlopen.
-    if (query.term) {
+    if (query.term && query.sort !== "price-asc" && query.sort !== "price-desc") {
       let rankedQuery = this.client.rpc("search_catalog_products_v2", {
         p_term: query.term,
         p_page: page,
