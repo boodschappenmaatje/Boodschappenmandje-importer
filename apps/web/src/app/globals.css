@@ -4736,10 +4736,15 @@ html {
 .supermarket-dialog h2 { max-width: calc(100% - 36px); margin: 4px 0 5px; font-size: 1.28rem; }
 .supermarket-dialog .supermarket-dialog-description { margin: 0 0 11px; font-size: .9rem; line-height: 1.4; }
 .supermarket-dialog-close { top: 11px; right: 11px; border-radius: 50%; background: var(--color-surface); }
-.supermarket-choice { position: relative; display: flex; min-height: 74px; margin-top: 9px; padding: 8px 11px; border-color: color-mix(in srgb, var(--brand-blue) 15%, var(--color-surface)); border-radius: 18px; background: var(--color-surface); box-shadow: 0 3px 10px color-mix(in srgb, var(--brand-deep) 6%, transparent); }
+.supermarket-choice { position: relative; display: flex; min-height: 74px; margin-top: 9px; padding: 8px 11px; border-color: color-mix(in srgb, var(--brand-blue) 15%, var(--color-surface)); border-radius: 18px; background: var(--color-surface); box-shadow: 0 3px 10px color-mix(in srgb, var(--brand-deep) 6%, transparent); isolation: isolate; }
+.supermarket-choice::before,.supermarket-choice::after { position: absolute; z-index: 0; inset: 0; border-radius: inherit; content: ""; pointer-events: none; }
+.supermarket-choice::before { background: linear-gradient(150deg, color-mix(in srgb, var(--color-surface) 62%, transparent), transparent 43%); }
+.supermarket-choice::after { background: linear-gradient(123deg, transparent 48%, color-mix(in srgb, var(--color-surface) 48%, transparent) 48.5% 61%, transparent 61.5% 72%, color-mix(in srgb, var(--color-surface) 26%, transparent) 72.5% 79%, transparent 79.5%); }
+.supermarket-choice > * { position: relative; z-index: 1; }
 .supermarket-choice.is-supported { min-height: 88px; border: 0; color: var(--color-on-primary); background: linear-gradient(112deg, var(--brand-blue), var(--color-primary-action) 58%, var(--brand-blue)); box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-deep) 22%, transparent), inset 0 1px 0 color-mix(in srgb, var(--color-surface) 34%, transparent); }
 .supermarket-choice.is-supported:focus-visible { outline-color: var(--color-focus); }
 .supermarket-choice-logo { display: grid; place-items: center; flex: 0 0 64px; width: 64px; height: 64px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--brand-blue) 12%, var(--color-surface)); border-radius: 15px; background: var(--color-surface); }
+.supermarket-choice-logo.is-jumbo { overflow: visible; }
 .supermarket-choice-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .supermarket-choice-logo img.is-jumbo { width: 118%; height: auto; max-width: none; }
 .supermarket-choice-copy { display: grid; align-content: center; gap: 4px; min-width: 0; flex: 1; padding-inline: 3px; }
@@ -4750,6 +4755,11 @@ html {
 .supermarket-choice-coming-soon { color: var(--color-muted); background: var(--color-primary-soft); }
 .supermarket-choice-chevron { margin: 0 4px 0 7px; color: var(--color-on-primary); font-size: 1.8rem; line-height: 1; }
 .supermarket-choice.is-future { min-height: 76px; border-color: color-mix(in srgb, var(--brand-blue) 13%, var(--color-surface)); color: var(--color-text); background: linear-gradient(120deg, var(--color-surface), color-mix(in srgb, var(--color-primary-soft) 65%, var(--color-surface))); }
+/* Muted banner tints sample each official mark and sit inside the shared blue design system. */
+.supermarket-choice.market-ah.is-future { border-color: color-mix(in srgb, var(--supermarket-ah-accent) 20%, var(--color-surface)); background: linear-gradient(112deg, color-mix(in srgb, var(--supermarket-ah-accent) 8%, var(--color-surface)), color-mix(in srgb, var(--supermarket-ah-accent) 17%, var(--color-primary-soft))); }
+.supermarket-choice.market-jumbo.is-future { border-color: color-mix(in srgb, var(--supermarket-jumbo-accent) 28%, var(--color-surface)); background: linear-gradient(112deg, color-mix(in srgb, var(--supermarket-jumbo-accent) 15%, var(--color-surface)), color-mix(in srgb, var(--supermarket-jumbo-accent) 28%, var(--color-primary-soft))); }
+.supermarket-choice.market-lidl.is-future { border-color: color-mix(in srgb, var(--supermarket-lidl-accent) 18%, var(--color-surface)); background: linear-gradient(112deg, color-mix(in srgb, var(--supermarket-lidl-accent) 8%, var(--color-surface)), color-mix(in srgb, var(--brand-glow) 12%, var(--color-primary-soft))); }
+.supermarket-choice.market-dirk.is-future { border-color: color-mix(in srgb, var(--supermarket-dirk-accent) 17%, var(--color-surface)); background: linear-gradient(112deg, color-mix(in srgb, var(--supermarket-dirk-accent) 7%, var(--color-surface)), color-mix(in srgb, var(--supermarket-dirk-accent) 15%, var(--color-primary-soft))); }
 .supermarket-choice.is-future .supermarket-choice-copy strong { font-size: .98rem; }
 .supermarket-choice.is-future .supermarket-choice-copy small { display: none; }
 button.supermarket-choice.is-future:disabled { opacity: 1; cursor: default; }

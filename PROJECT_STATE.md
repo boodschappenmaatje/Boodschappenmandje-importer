@@ -1,3 +1,12 @@
+# Checkpoint — Supermarktkeuze glossy banneruitwerking — 14 oktober 2026
+
+- De meegestuurde goedgekeurde iPhone-visual is toegepast op de supermarktkeuze. Eerste keuze en wisselsheet delen dezelfde brede kaarten, hiërarchie, glanzende diagonale CSS-lagen en zachte tinten per supermarkt.
+- Hoogvliet blijft de prominente blauwe kaart; AH, Jumbo, Lidl en Dirk hebben een eigen subtiele merktoon met `Binnenkort`. De Jumbo-markering is breder weergegeven zonder vervorming of afkapping. Alle kaarten bevatten uitsluitend het officiële supermarktlogo en CSS-vlakken; er staan geen groenten, fruit of productfoto's in.
+- Dezelfde bestaande selector/rendering wordt voor eerste keuze en wisselen gebruikt. De Home-selector, sheet/portal, providerstate, `setActiveSupermarket`, disabled toekomstige winkels en lijstisolatie zijn functioneel ongewijzigd.
+- Merkaccenten staan als benoemde supermarkt-tokens in `apps/web/src/styles/tokens.css`; componentstyling gebruikt uitsluitend die tokens plus de bestaande blauwe/semantische tokens. `DESIGN.md` en `ROADMAP.md` zijn ongewijzigd.
+- Web `npm run check`: lint, typecheck, **910/910 tests** en production build geslaagd. Root `npm test`: **515/515**; root `npm run check` en `git diff --check` geslaagd.
+- Chromium-controle op **390×844** en **430×844**: alle vijf logo's geladen; kaarten benutten de breedte (354/394px), geen horizontale overflow; Jumbo-logovak 64px met 73px brede onbeschadigde woordmarkering; eerste keuze en wisselsheet tonen dezelfde kaartstijl; bottom navigation valt niet over de sheet; selector openen, sluiten en kiezen werken. Nieuwe Preview en fysieke iPhone-heracceptatie staan nog open.
+
 # Checkpoint — Supermarktkeuze laatste visuele tweaks — 14 oktober 2026
 
 - Na fysieke iPhone-feedback zijn drie presentatiedetails aangepast: Jumbo-logo iets vergroot met behoud van aspect ratio, alle vijf logovakken gelijkgetrokken naar 64×64px met dezelfde radius, en wissel-eyebrow exact gewijzigd naar `JE LIJSTEN BLIJVEN PER WINKEL APART`.

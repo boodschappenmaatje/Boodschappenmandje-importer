@@ -68,14 +68,14 @@ export function SupermarketSelector() {
             <p className="supermarket-dialog-description">{hasChoice ? "Kies een winkel om je producten en boodschappenlijst te bekijken." : "Zoek producten, bekijk aanbiedingen en maak je boodschappenlijst."}</p>
             {Object.values(SUPERMARKETS).map((market) => (
               <button
-                className={`supermarket-choice${market.catalogSupported ? " is-supported" : " is-future"}`}
+                className={`supermarket-choice market-${market.id}${market.catalogSupported ? " is-supported" : " is-future"}`}
                 key={market.id}
                 type="button"
                 disabled={!market.catalogSupported || changing}
                 aria-pressed={shoppingList.supermarketId === market.id && hasChoice}
                 onClick={() => void choose(market.id)}
               >
-                <span className="supermarket-choice-logo"><Image src={SUPERMARKET_LOGOS[market.id]} alt="" width={64} height={64} className={market.id === "jumbo" ? "is-jumbo" : undefined} /></span>
+                <span className={`supermarket-choice-logo${market.id === "jumbo" ? " is-jumbo" : ""}`}><Image src={SUPERMARKET_LOGOS[market.id]} alt="" width={64} height={64} className={market.id === "jumbo" ? "is-jumbo" : undefined} /></span>
                 <span className="supermarket-choice-copy"><strong>{market.name}</strong><small>{market.catalogSupported ? "Producten en prijzen beschikbaar" : "Binnenkort beschikbaar"}</small></span>
                 {shoppingList.supermarketId === market.id && hasChoice ? <span className="supermarket-choice-selected"><Icon name="check" size={14} />Gekozen</span> : market.catalogSupported ? <span className="supermarket-choice-chevron" aria-hidden="true">›</span> : <span className="supermarket-choice-coming-soon">Binnenkort</span>}
               </button>
