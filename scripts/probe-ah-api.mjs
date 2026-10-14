@@ -12,7 +12,50 @@ const HEADERS = {
 };
 const SEARCH_TERMS = ["spinazie", "melk", "gehakt"];
 
+const ZYTE_API_KEY = process.env.ZYTE_API_KEY?.trim() || null;
+let zyteRequests = 0;
+
+// AH's edge (Akamai) refuses GitHub runner addresses. With a Zyte key every
+// call goes through Zyte's HTTP mode with the same method, headers and body.
+async function callViaZyte(path, { method, token, body }) {
+  const started = Date.now();
+  const headers = { ...HEADERS, ...(token ? { authorization: `Bearer ${token}` } : {}) };
+  const request = {
+    url: `${BASE}${path}`,
+    httpResponseBody: true,
+    httpRequestMethod: method,
+    customHttpRequestHeaders: Object.entries(headers)
+      .filter(([name]) => name !== "user-agent")
+      .map(([name, value]) => ({ name, value })),
+    ...(body ? { httpRequestText: JSON.stringify(body) } : {}),
+  };
+  zyteRequests += 1;
+  try {
+    const response = await fetch("https://api.zyte.com/v1/extract", {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from(`${ZYTE_API_KEY}:`).toString("base64")}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(60_000),
+    });
+    const envelope = await response.json().catch(() => null);
+    if (!response.ok) {
+      return { status: 0, ms: Date.now() - started, json: null,
+        snippet: `Zyte HTTP ${response.status}: ${String(envelope?.title ?? envelope?.detail ?? "").slice(0, 120)}` };
+    }
+    const text = Buffer.from(envelope?.httpResponseBody ?? "", "base64").toString("utf8");
+    let json = null;
+    try { json = JSON.parse(text); } catch {}
+    return { status: envelope?.statusCode ?? 0, ms: Date.now() - started, json, snippet: json ? null : text.slice(0, 160) };
+  } catch (error) {
+    return { status: 0, ms: Date.now() - started, json: null, snippet: `Zyte ${error?.name ?? "network_error"}` };
+  }
+}
+
 async function call(path, { method = "GET", token, body } = {}) {
+  if (ZYTE_API_KEY) return callViaZyte(path, { method, token, body });
   const started = Date.now();
   try {
     const response = await fetch(`${BASE}${path}`, {
@@ -45,7 +88,7 @@ function summarizeProduct(product) {
   };
 }
 
-const lines = ["## AH-API proef (alleen lezen)", ""];
+const lines = ["## AH-API proef (alleen lezen)", "", `Route: ${ZYTE_API_KEY ? "via Zyte" : "direct vanaf GitHub"}`, ""];
 const findings = [];
 
 const auth = await call("/mobile-auth/v1/auth/token/anonymous", { method: "POST", body: { clientId: "appie" } });
@@ -75,7 +118,8 @@ if (token) {
   lines.push("", `Velden per product: ${[...fieldNames].sort().join(", ") || "geen"}`);
 }
 
-const summary = `AH-proef: ${findings.join(" | ")}`;
+lines.push("", `Zyte-aanvragen: ${zyteRequests}`);
+const summary = `AH-proef (${ZYTE_API_KEY ? "via Zyte" : "direct"}): ${findings.join(" | ")} | zyte_aanvragen=${zyteRequests}`;
 console.log(lines.join("\n"));
 if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
 if (process.env.GITHUB_ACTIONS === "true") console.log(`::notice title=AH-API proef::${summary}`);

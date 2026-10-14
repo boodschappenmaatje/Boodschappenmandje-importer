@@ -1,9 +1,19 @@
 name: AH-API proef (alleen lezen)
 
 # Handmatige, eenmalige proef: kan een GitHub-runner AH-productdata ophalen en
-# welke velden komen terug? Geen database, geen secrets, geen writes.
+# welke velden komen terug? Geen database en geen writes; alleen de Zyte-sleutel
+# wordt gebruikt als route=zyte (AH blokkeert GitHub-adressen).
 on:
   workflow_dispatch:
+    inputs:
+      route:
+        description: zyte = via Zyte (AH blokkeert GitHub-adressen); direct = rechtstreeks
+        type: choice
+        required: true
+        default: zyte
+        options:
+          - zyte
+          - direct
 
 permissions:
   contents: read
@@ -18,4 +28,6 @@ jobs:
         with:
           node-version: "22"
       - name: AH-productdata proberen op te halen
+        env:
+          ZYTE_API_KEY: ${{ inputs.route == 'zyte' && secrets.ZYTE_API_KEY || '' }}
         run: node scripts/probe-ah-api.mjs
