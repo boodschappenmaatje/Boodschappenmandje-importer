@@ -112,6 +112,8 @@ public sealed class AppSettings
     public string GeminiModel { get => Get("geminiModel", "gemini-3.8-live"); set => Set("geminiModel", value); }
     /// The Gemini model for web research (with Google Search).
     public string ResearchModel { get => Get("researchModel", "gemini-3.8-flash"); set => Set("researchModel", value); }
+    /// Lets him click, type, press keys and open things when you ask. Off until the user switches it on.
+    public bool ComputerControl { get => Get("computerControl", false); set => Set("computerControl", value); }
     /// The language he talks in: "nl" (Dutch, default) or "en".
     public string Language
     {

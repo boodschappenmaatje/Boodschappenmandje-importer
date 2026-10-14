@@ -10,10 +10,12 @@ namespace Bluey;
 /// One thing on screen he can point at: a line of text or a single word.
 public sealed record Target(string Id, string Text, Box Rect);
 
-/// What he saw on his last look. Mirrors ScreenSnapshot in ScreenReader.swift (without controls, for now).
+/// What he saw on his last look. Mirrors ScreenSnapshot in ScreenReader.swift.
 public sealed class ScreenSnapshot
 {
     public required byte[] Jpeg;
+    /// The front window's clickable controls.
+    public List<ScreenControl> Controls = new();
     public required List<(Target Line, List<Target> Words)> Lines;
     /// The primary screen's size in points.
     public required (double Width, double Height) Size;
@@ -21,6 +23,7 @@ public sealed class ScreenSnapshot
     public Target? FindTarget(string id)
     {
         id = id.Trim().ToUpperInvariant();
+        if (Controls.FirstOrDefault(c => c.Id == id) is { } control) return AsTarget(control);
         foreach (var (line, words) in Lines)
         {
             if (line.Id == id) return line;
@@ -32,7 +35,7 @@ public sealed class ScreenSnapshot
     /// What's under (or right next to) a point: the smallest word or line there.
     public Target? TargetNear(Pt point)
     {
-        var candidates = Lines.SelectMany(e => e.Words.Prepend(e.Line)).ToList();
+        var candidates = Controls.Select(AsTarget).Concat(Lines.SelectMany(e => e.Words.Prepend(e.Line))).ToList();
         var hit = candidates
             .Where(t => point.X >= t.Rect.X - 6 && point.X <= t.Rect.X + t.Rect.Width + 6
                      && point.Y >= t.Rect.Y - 6 && point.Y <= t.Rect.MaxY + 6)
@@ -44,6 +47,8 @@ public sealed class ScreenSnapshot
         return candidates.Where(t => Distance(t.Rect) < 60).MinBy(t => Distance(t.Rect));
     }
 
+    private static Target AsTarget(ScreenControl c) => new(c.Id, c.Label.Length == 0 ? c.Kind : c.Label, c.Rect);
+
     /// The list he picks from. Coordinates are on a 0–1000 grid so he can relate them to the image.
     public string TargetList
     {
@@ -52,6 +57,11 @@ public sealed class ScreenSnapshot
             string Grid(Box r) => $"@{(int)(r.MidX / Size.Width * 1000)},{(int)(r.MidY / Size.Height * 1000)}";
             var output = new List<string>();
             if (ScreenReader.FrontmostApp() is { } app) output.Add("Frontmost window: " + app);
+            if (Controls.Count > 0)
+            {
+                output.Add("Controls (click these by id):");
+                output.AddRange(Controls.Select(c => $"{c.Id} {c.Kind} {Grid(c.Rect)}" + (c.Label.Length == 0 ? "" : $" \"{c.Label}\"")));
+            }
             output.Add("Text on screen (L = line, W = word, @x,y on a 0-1000 grid):");
             if (Lines.Count == 0) output.Add("(no text found)");
             foreach (var (line, words) in Lines)
@@ -78,8 +88,10 @@ public static class ScreenReader
             g.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size, CopyPixelOperation.SourceCopy);
 
         var size = (bounds.Width / scale, bounds.Height / scale);
+        // Read the front window's controls at the same time as the text.
+        var controls = ControlsReader.Read();
         var lines = await Recognize(shot, scale);
-        return new ScreenSnapshot { Jpeg = Jpeg(shot, 1100), Lines = lines, Size = size };
+        return new ScreenSnapshot { Jpeg = Jpeg(shot, 1100), Lines = lines, Size = size, Controls = await controls };
     }
 
     private static async Task<List<(Target, List<Target>)>> Recognize(Bitmap shot, double scale)

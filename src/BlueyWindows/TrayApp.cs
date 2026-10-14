@@ -53,6 +53,8 @@ public sealed class TrayApp : ApplicationContext
         hotKeys.Register(Keys.D, overlay.GoHome, "Ctrl+Alt+D");
         hotKeys.Register(Keys.H, () => settings.ShowCursor = !settings.ShowCursor, "Ctrl+Alt+H");
         hotKeys.Register(Keys.T, () => overlay.TalkTest(), "Ctrl+Alt+T");
+        // Ctrl+Alt+S stops him using the computer right away.
+        hotKeys.Register(Keys.S, host.StopActions, "Ctrl+Alt+S");
 
         if (ApiKeys.Get(settings.Provider == "openai" ? ApiKeys.OpenAI : ApiKeys.Gemini) == null)
         {
@@ -142,9 +144,9 @@ public sealed class TrayApp : ApplicationContext
         bool dutch = settings.Language == "nl";
         var text = dutch
             ? $"Een telefoon wil verbinden met Bluey:\n\n    {name}\n\nIs dit jouw iPhone? Sta alleen je eigen telefoon toe. " +
-              "Een toegestane telefoon kan Bluey op deze pc laten kijken en wijzen."
+              "Een toegestane telefoon kan Bluey op deze pc laten kijken en wijzen, en (als je dat aanzet) klikken en typen."
             : $"A phone wants to connect to Bluey:\n\n    {name}\n\nIs this your iPhone? Only allow your own phone. " +
-              "An allowed phone can make Bluey look at and point at this PC's screen.";
+              "An allowed phone can make Bluey look at and point at this PC's screen, and (if you switch it on) click and type.";
         using var owner = new Form { TopMost = true, ShowInTaskbar = false, StartPosition = FormStartPosition.CenterScreen, Size = new Size(1, 1) };
         owner.Show();
         owner.Activate();
@@ -163,6 +165,25 @@ public sealed class TrayApp : ApplicationContext
         if (sure != DialogResult.Yes) return;
         PairedPhones.Clear();
         server.DisconnectAll();
+    }
+
+    /// Clicking and typing is off until the user switches it on here, knowingly.
+    private void ToggleComputerControl()
+    {
+        if (!settings.ComputerControl)
+        {
+            bool dutch = settings.Language == "nl";
+            var sure = MessageBox.Show(dutch
+                    ? "Bluey mag dan op deze pc klikken, typen, toetsen indrukken en programma's en websites openen, " +
+                      "als jij hem dat vraagt. Hij kan zich vergissen: gebruik het alleen als je erbij bent.\n\n" +
+                      "Stoppen kan altijd met Ctrl+Alt+S. Aanzetten?"
+                    : "Bluey will then be able to click, type, press keys and open apps and websites on this PC when you ask. " +
+                      "He can make mistakes: only use it while you're watching.\n\nYou can always stop him with Ctrl+Alt+S. Turn it on?",
+                "Bluey", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (sure != DialogResult.Yes) return;
+        }
+        settings.ComputerControl = !settings.ComputerControl;
+        RestartIfAwake();  // his tools change with this switch
     }
 
     private void SetLanguage(string language)
@@ -197,6 +218,11 @@ public sealed class TrayApp : ApplicationContext
         var wake = Item(host.Awake ? "Go to Sleep (Follow Mode)" : "Wake Up and Talk", ToggleAwake, "Ctrl+Alt+Space");
         wake.Enabled = phones.Count > 0;
         menu.Items.Add(wake);
+        menu.Items.Add(new ToolStripSeparator());
+
+        menu.Items.Add(Item(settings.Language == "nl" ? "Laat hem de computer gebruiken" : "Let Him Use the Computer",
+                            ToggleComputerControl, null, settings.ComputerControl));
+        menu.Items.Add(Item(settings.Language == "nl" ? "Stop hem" : "Stop Him", host.StopActions, "Ctrl+Alt+S"));
         menu.Items.Add(new ToolStripSeparator());
 
         menu.Items.Add(Item("Point Here", PointHere, "Ctrl+Alt+P"));

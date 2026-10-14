@@ -30,7 +30,7 @@ Privacy: in Nederland (EER) gelden volgens Google's voorwaarden de privacyregels
 | --- | --- | --- |
 | **1** | Verbinding met de iPhone, sleutel, vliegende cursor, tekstballon, sneltoetsen, tray-menu | ✅ klaar |
 | **2** | Naar het scherm kijken (schermafbeelding + tekstherkenning van Windows), dingen aanwijzen, web-onderzoek met verslagkaartje | ✅ deze versie |
-| 3 | Klikken, typen, toetsen, scrollen, slepen, apps/websites openen | in de wacht (zie *Koppelen*) |
+| **3** | Klikken, typen, toetsen, scrollen, slepen, apps/websites openen (standaard uit, zie *De computer laten gebruiken*) | ✅ deze versie |
 | 4 | Vergadernotities | vervallen: de iPhone neemt niets meer op buiten het vasthouden om |
 
 Vraag bijvoorbeeld (terwijl je het iPhone-scherm vasthoudt): *"wat is dit?"* terwijl je muis ergens op staat, *"waar moet ik klikken om op te slaan?"*, of *"zoek eens op wat dit kost"*. Hij kijkt dan naar je scherm, vliegt met zijn cursor naar het juiste woord en antwoordt in een tekstballon. Voor onderzoek verschijnt rechtsboven een kaartje met het verslag en de bronnen (sluiten met ×). Klikken en typen kan hij nog niet; dat is stap 3.
@@ -49,6 +49,21 @@ Tekstherkenning gebruikt de taal van je Windows (Nederlands op een Nederlandse W
 6. Zorg dat de iPhone en de pc op **hetzelfde wifi-netwerk** zitten. De iPhone vindt de pc dan vanzelf. In de iPhone-app kies je de pc via het luidsprekerknopje rechtsboven.
 
 Bluey zit in het systeemvak (rechtsonder, bij de klok). Klik op het blauwe besje voor het menu.
+
+## De computer laten gebruiken
+
+Bluey kan op je pc **klikken, typen, toetsen indrukken, scrollen, slepen en programma's of websites openen**, maar alleen als jij dat aanzet: menu **Laat hem de computer gebruiken** (standaard uit). Vraag dan bijvoorbeeld *"open Kladblok en typ een boodschappenlijstje"* of *"klik op opslaan"*.
+
+Veiligheid:
+- **Ctrl+Alt+S** (of menu **Stop hem**) stopt hem meteen; daarna weigert hij een paar seconden alles.
+- Hij doet alleen iets als jij het vraagt; tekst op je scherm (websites, mails) is voor hem nooit een opdracht.
+- Vóór versturen, verwijderen, kopen, formulieren insturen, instellingen wijzigen of niet-opgeslagen werk sluiten zegt hij eerst wat hij gaat doen en wacht hij op jouw "ja".
+- Hij typt niet in wachtwoordvelden en drukt geen sneltoetsen in die je pc vergrendelen, afmelden, Taakbeheer of "Uitvoeren" openen (Win+L, Ctrl+Alt+Del, Ctrl+Shift+Esc, Win+X, Win+R).
+- Na een klik zet hij je echte muis terug waar je hem liet.
+- Alleen telefoons die jij hebt toegestaan (zie *Koppelen*) kunnen hem iets laten doen.
+- Programma's die als administrator draaien kan hij niet bedienen (Windows staat dat niet toe).
+
+Hij kan zich vergissen: gebruik het alleen als je erbij bent.
 
 ## Opnemen
 

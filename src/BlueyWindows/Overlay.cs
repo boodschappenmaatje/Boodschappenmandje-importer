@@ -83,6 +83,10 @@ public sealed class CursorOverlay : IDisposable
     public readonly CursorEngine Engine = new();
     private readonly LayeredWindow cursorWindow = new();
     private readonly LayeredWindow speechWindow = new();
+    private readonly LayeredWindow labelWindow = new();
+    private string? labelText;
+    private double labelBorn, labelLife;
+    private string typed = "";
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 15 };
     private double lastTime;
     private Pt look = new(-0.7, -0.7);
@@ -180,6 +184,7 @@ public sealed class CursorOverlay : IDisposable
         {
             RenderCursor(now, dt, px, scale);
             RenderSpeech(now, px, scale, bounds);
+            RenderLabel(now, px, scale);
         }
         catch (Exception) { }  // a frame that fails to draw (e.g. while the screen changes) is just skipped
         OnFace?.Invoke(Engine.Face(bounds, now));
@@ -234,6 +239,73 @@ public sealed class CursorOverlay : IDisposable
         }
         var tip = new Point(px.X + (int)Math.Round(Engine.Tip.X * scale), px.Y + (int)Math.Round((Engine.Tip.Y + Engine.Hover(now)) * scale));
         cursorWindow.Present(bmp, new Point(tip.X - half, tip.Y - half), opacity);
+    }
+
+    // MARK: Action effects
+
+    /// A small label by his cursor, like "Ctrl+T" or what he's typing. The newest replaces any older one.
+    public void Bubble(string text, double life = 1.4)
+    {
+        if (!AppSettings.Shared.ShowCursor) return;
+        labelText = text;
+        labelBorn = Clock.Now;
+        labelLife = life;
+    }
+
+    /// He presses down as he clicks.
+    public void ClickEffect(bool right = false)
+    {
+        Engine.Press(0.14);
+        if (right) Bubble(AppSettings.Shared.Language == "nl" ? "rechtsklik" : "right-click", 0.9);
+    }
+
+    /// What he's typing, shown by his cursor as it goes in.
+    public void TypedEffect(string chunk)
+    {
+        Engine.Press(0.035);
+        if (Clock.Now - labelBorn > 1.5) typed = "";
+        typed = (typed + chunk).Replace('\n', ' ');
+        if (typed.Length > 24) typed = "…" + typed[^23..];
+        Bubble(typed, 1.6);
+    }
+
+    private void RenderLabel(double now, Rectangle px, double scale)
+    {
+        double age = now - labelBorn;
+        if (labelText == null || age > labelLife || Engine.Opacity < 0.1) { labelWindow.Conceal(); return; }
+        double alpha = Math.Min(1, age / 0.08) * Math.Min(1, (labelLife - age) / 0.3);
+        double pop = 1 - 0.4 * Math.Exp(-age * 10) * Math.Cos(age * 20);
+
+        using var font = Fonts.Display((float)(19 * scale));
+        using var probe = new Bitmap(1, 1);
+        SizeF size;
+        using (var g = Graphics.FromImage(probe)) size = g.MeasureString(labelText, font);
+        float padX = (float)(14 * scale), padY = (float)(7 * scale);
+        int w = (int)Math.Ceiling((size.Width + padX * 2) * 1.0), h = (int)Math.Ceiling(size.Height + padY * 2);
+        int margin = (int)Math.Ceiling(Math.Max(w, h) * 0.25);
+        using var bmp = new Bitmap(w + margin * 2, h + margin * 2, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            g.TranslateTransform(margin + w / 2f, margin + h / 2f);
+            g.ScaleTransform((float)pop, (float)pop);
+            g.TranslateTransform(-w / 2f, -h / 2f);
+            float r = (float)(14 * scale);
+            using var path = new GraphicsPath();
+            path.AddArc(0, 0, r * 2, r * 2, 180, 90);
+            path.AddArc(w - r * 2, 0, r * 2, r * 2, 270, 90);
+            path.AddArc(w - r * 2, h - r * 2, r * 2, r * 2, 0, 90);
+            path.AddArc(0, h - r * 2, r * 2, r * 2, 90, 90);
+            path.CloseFigure();
+            using (var fill = new SolidBrush(Palette.Ink.WithAlpha(0.92))) g.FillPath(fill, path);
+            using (var border = new Pen(Palette.Berry2.WithAlpha(0.9), (float)(2 * scale))) g.DrawPath(border, path);
+            g.DrawString(labelText, font, Brushes.White, new RectangleF(0, 0, w, h), CenteredText);
+        }
+        // Up and to the right of his cursor.
+        var at = new Point(px.X + (int)Math.Round((Engine.Tip.X + Engine.Size * 0.7) * scale) - margin,
+                           px.Y + (int)Math.Round((Engine.Tip.Y - 18) * scale) - h - margin);
+        labelWindow.Present(bmp, at, alpha);
     }
 
     // MARK: Speech bubble
@@ -371,6 +443,7 @@ public sealed class CursorOverlay : IDisposable
         timer.Dispose();
         cursorWindow.Dispose();
         speechWindow.Dispose();
+        labelWindow.Dispose();
         speechArt?.Dispose();
     }
 }
