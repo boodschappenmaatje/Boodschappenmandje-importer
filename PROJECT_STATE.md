@@ -1,3 +1,11 @@
+# Checkpoint — Supermarktkeuze banners en logo's — 14 oktober 2026
+
+- Eerste supermarktkeuze en wisselmodal zijn visueel bijgewerkt met vijf echte, ongewijzigde supermarktbeeldmerken. Herkomst staat bij de assets in `apps/web/public/branding/supermarkets/README.md`; merkrechten blijven bij de betreffende winkels.
+- Beide situaties gebruiken nu dezelfde brede afgeronde banners: Hoogvliet is een opvallende blauwe hoofdkaart met beschikbare producten/prijzen; AH, Jumbo, Lidl en Dirk zijn brede secundaire kaarten met de status `Binnenkort`. De wisselmodal markeert de actieve winkel met `Gekozen`.
+- De compacte selector toont ook het actieve beeldmerk. Providerstate, `setActiveSupermarket`, uitgeschakelde toekomstige winkels, winkelgebonden lijsten en alle opslag-/migratie-/zoeklogica zijn ongewijzigd.
+- Alleen de supermarktselector, bijbehorende CSS, gerichte componenttest, logo-assets en dit statusdocument zijn gewijzigd. De componenttest slaagt; web `npm run check` is groen met **910/910 tests**, lint, typecheck en production build. Root `npm test` is **515/515**, root `npm run check` en `git diff --check` zijn groen.
+- Chromium op 390×844 en 430×844 bevestigt dat beide modals alle logo's laden, binnen de viewport passen en geen horizontale overflow veroorzaken; toekomstige keuzes blijven disabled. Preview en fysieke iPhone-heracceptatie staan open; de gebruiker beslist over de visuele acceptatie. Draft PR #96 blijft open en wordt op dezelfde branch bijgewerkt.
+
 # Checkpoint — Slim Zoeken 2.0 visuele acceptatiefix — 14 oktober 2026
 
 - De bestaande kernflow is op een fysieke iPhone functioneel grotendeels goedgekeurd, maar visueel afgekeurd omdat Home-zoeken te los aanvoelde en `/ontdek` te vlak/druk was ten opzichte van de afgesproken drie-schermenreferentie. Stap 1B.1 blijft open; fysieke visuele heracceptatie is niet geclaimd.

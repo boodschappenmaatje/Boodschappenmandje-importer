@@ -27,7 +27,10 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
 
   await vi.waitFor(() => expect(container?.querySelector('[role="dialog"]')).not.toBeNull());
   const dialog = container!.querySelector('[role="dialog"]')!;
-  expect(dialog.textContent).toContain("Waar doe je boodschappen?");
+  expect(dialog.textContent).toContain("Kies je supermarkt");
+  expect(dialog.querySelectorAll(".supermarket-choice")).toHaveLength(5);
+  expect(dialog.querySelectorAll(".supermarket-choice-logo img")).toHaveLength(5);
+  expect(dialog.querySelector('.supermarket-choice.is-supported .supermarket-choice-logo img')?.getAttribute("src")).toContain("hoogvliet.png");
   for (const market of ["Albert Heijn", "Jumbo", "Lidl", "Dirk"]) {
     const option = [...dialog.querySelectorAll("button")].find(button => button.textContent?.includes(market));
     expect(option?.disabled).toBe(true);
@@ -38,4 +41,9 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
   await act(async () => hoogvliet?.click());
   expect(localStorage.getItem("boodschappenmaatje:active-supermarket")).toBe("hoogvliet");
   expect(container?.querySelector('[role="dialog"]')).toBeNull();
+  expect(container?.querySelector(".supermarket-selector-logo")?.getAttribute("src")).toContain("hoogvliet.png");
+  await act(async () => container?.querySelector<HTMLButtonElement>(".supermarket-selector")?.click());
+  expect(container?.querySelector('[role="dialog"]')?.textContent).toContain("Wissel van supermarkt");
+  expect(container?.querySelector(".supermarket-choice-selected")?.textContent).toContain("Gekozen");
+  expect(container?.querySelectorAll(".supermarket-choice.is-future")).toHaveLength(4);
 });
