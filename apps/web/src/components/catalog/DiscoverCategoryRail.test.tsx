@@ -3,7 +3,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { DiscoverCategoryRail } from "./DiscoverCategoryRail";
+import { discoverCategoryArt, DiscoverCategoryRail, visibleDiscoverCategories } from "./DiscoverCategoryRail";
 import type { CatalogQuery } from "@/types/catalog";
 
 let root: Root | null = null;
@@ -80,4 +80,32 @@ it("opens the existing all-category action and renders no invented categories fo
     onViewAll,
   })));
   expect(container.querySelector(".discover-category-section")).toBeNull();
+});
+
+it("kiest per categoriepad een passende illustratie en valt anders terug op de mand", () => {
+  expect(discoverCategoryArt("Aardappelen, groente, fruit/Groente/Champignons, paddenstoelen").src).toContain("groente-fruit");
+  expect(discoverCategoryArt("Baby, kind/Fruithapjes").src).toContain("baby");
+  expect(discoverCategoryArt("Alles voor de barbecue/Bier, wijn en mixdranken/Bier").src).toContain("dranken");
+  expect(discoverCategoryArt("Bakboter").src).toContain("zuivel");
+  expect(discoverCategoryArt("Badschuim, douchegel").src).toContain("huishouden");
+  expect(discoverCategoryArt("Azijn, balsamico").src).toBe("/branding/discover/alle-categorieen.webp");
+});
+
+it("toont eerst afwisselende categorieën in de bestaande facetvolgorde", () => {
+  expect(visibleDiscoverCategories([
+    "Groente/Friet",
+    "Groente/Kookaardappelen",
+    "Groente/Partjes",
+    "Baby, kind/Luiers",
+    "Bier",
+    "Zuivel/Kaas",
+  ])).toEqual(["Groente/Friet", "Baby, kind/Luiers", "Bier", "Zuivel/Kaas", "Groente/Kookaardappelen", "Groente/Partjes"]);
+});
+
+it("koppelt alleen op woordbegin, zodat sinaasappel geen drank wordt", () => {
+  expect(discoverCategoryArt("Aardappelen, groente, fruit/Fruit/Sinaasappel, mandarijn, overig citrusfruit").src).toContain("groente-fruit");
+  expect(discoverCategoryArt("Ananas, mango, kiwi, meloen").src).toContain("groente-fruit");
+  expect(discoverCategoryArt("Alles voor de barbecue/Groente, fruit en aardappel/Groente en fruit").src).toContain("groente-fruit");
+  expect(discoverCategoryArt("Alles voor de barbecue/Vlees, Vis, en Vega").src).toContain("vlees-vis");
+  expect(discoverCategoryArt("Frisdrank").src).toContain("dranken");
 });

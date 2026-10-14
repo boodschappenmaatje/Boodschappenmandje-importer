@@ -1,3 +1,11 @@
+# Checkpoint — Categorieënrij met voorwerpillustraties — 14 oktober 2026
+
+- De gebruiker heeft de strakke Ontdek-tegels (alleen voorwerpen, geen mascotte in de tegels) op de Preview goedgekeurd.
+- De categorieënrij krijgt dezelfde uitstraling: glanzende kaarten met dezelfde tint, glanslagen en druk-feedback als de tegels, en per kaart een voorwerp in dezelfde stijl in plaats van het lijnicoon. Er zijn acht groepen met assets in `apps/web/public/branding/categories/` (samen ca. 80 kB): groente-fruit, brood, zuivel, vlees-vis, dranken, snacks, baby en huishouden. Onbekende categorieën vallen terug op de boodschappenmand.
+- De koppeling (`discoverCategoryArt`) werkt op trefwoorden aan het begin of eind van een woord in het volledige facetpad, zodat Nederlandse samenstellingen werken (`bakboter`, `kookaardappelen`) en losse letters niet verkeerd matchen (`sinaasappel` is geen drank).
+- Presentatiekeuze: de rij toont nog steeds maximaal zeven echte facetwaarden in de bestaande volgorde, maar eerst één per illustratiegroep. Zo staan er niet meer zeven aardappel- en groentecategorieën achter elkaar. Bij selectie gaat de exacte facetwaarde mee, zoals voorheen. Namen breken met woordafbreking in plaats van midden in een woord.
+- Web `npm run check`: lint, typecheck, **915/915 tests** en production build groen. Chromium op 390×844 met echte Hoogvliet-facets (publishable key, alleen lokaal): afwisselende rij (Friet, Snackgroente- en fruit, Bier, Vlees/Vis/Vega, Groente- en maaltijdhapjes, Badschuim/douchegel, Ontbijt) en geen horizontale overflow. Preview- en fysieke iPhone-acceptatie staan open.
+
 # Checkpoint — Ontdek-tegels met strakke voorwerpillustraties — 14 oktober 2026
 
 - Eerst is richting 1 (**Maatje in actie**) gebouwd: per tegel de mascotte met een voorwerp. Op de Preview vond de gebruiker vier mascottes op `/ontdek` te druk en niet professioneel; de mascottes in de tegels zijn daarom weer verwijderd. De header-mascotte blijft de enige mascotte op het scherm.
