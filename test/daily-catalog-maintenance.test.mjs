@@ -12,6 +12,7 @@ import { loadConfig } from "../src/config.mjs";
 import {
   catalogAPIPriceState,
   chromiumLaunchOptions,
+  gateDailyCatalogSnapshot,
   SourceUnavailableError,
 } from "../src/hoogvliet.mjs";
 
@@ -352,4 +353,65 @@ test("maintenancecode raakt geen gebruikers-, recept- of readinessdata en bevat 
   assert.match(source, /fetchExistingProducts/);
   assert.match(source, /fetchExistingPriceStates/);
   assert.match(source, /upsertProducts/);
+});
+
+test("gedeeltelijke snapshot werkt geziene prijzen bij, raakt de rest niet en blijft 'partial' voor retries", async () => {
+  const seen = existing("111111111");
+  const unseen = existing("222222222");
+  const writes = [];
+  const finished = [];
+  const result = await runDailyCatalogMaintenance({ importTrigger: "schedule", maintenanceMaxDetailFallbacks: 500 },
+    { info() {}, error() {} }, {
+      fetchExistingProducts: async () => [seen, unseen],
+      fetchExistingPriceStates: async () => new Map([[seen.id, price(seen)], [unseen.id, price(unseen)]]),
+      fetchExistingSKUs: async () => new Set([seen.sku, unseen.sku]),
+      startCatalogImportRun: async () => ({ id: "run", started_at: now.toISOString() }),
+      finishCatalogImportRun: async (_config, _run, values) => { finished.push(values); return {}; },
+      withDailyCatalogSource: async (_config, handler) => handler({
+        partial: true,
+        candidates: [candidate(seen.sku, state({ price: 2.99 }))],
+        snapshot: {
+          partial: true,
+          incompleteSummary: "stopreden=category_listing_stagnated | vastgelopen_routes=1",
+          stallReason: "category_listing_stagnated",
+          stalledRoutes: [{ route: "https://hoogvliet.nl/zuivel", stallReason: "category_listing_stagnated" }],
+          sourceExhausted: false,
+          pagesFetched: 1,
+          catalogAPICalls: 1,
+        },
+        validateFallback: async () => null,
+      }),
+      upsertProducts: async (_config, products) => {
+        writes.push(...products);
+        return { imported: products.map(product => ({ ...product, inserted: false })), errors: [], duplicateSKUsSkipped: 0 };
+      },
+    });
+  assert.deepEqual(writes.map(product => [product.sku, product.price]), [[seen.sku, 2.99]]);
+  assert.equal(result.status, "partial");
+  assert.equal(result.updatedCount, 1);
+  assert.equal(result.stats.productionOnlyOrMissingSKUs, 1);
+  assert.equal(finished.length, 1);
+  assert.equal(finished[0].status, "partial");
+  assert.match(finished[0].errorSummary, /Gedeeltelijke snapshot: alleen geziene producten bijgewerkt; stopreden=category_listing_stagnated/);
+  assert.equal(dailyMaintenanceDecision([{ started_at: now.toISOString(), status: finished[0].status }], now).runAttempt, true);
+});
+
+test("snapshotpoort: compleet altijd door, onvolledig alleen in partiële modus met genoeg SKU's", () => {
+  assert.deepEqual(gateDailyCatalogSnapshot({ sourceExhausted: true, stallReason: null }, {}), { partial: false });
+  const incomplete = () => ({
+    sourceExhausted: false, stallReason: "category_listing_stagnated", stalledRoutes: [{}, {}],
+    rootCategoriesDiscovered: 21, rootListingRoutesSelected: 21, categoriesVisited: 21,
+    pagesFetched: 300, uniqueListingSKUs: 3710, duplicateCandidates: 48,
+  });
+  // Partial mode off: same fail-closed behaviour as before.
+  assert.throws(() => gateDailyCatalogSnapshot(incomplete(), { dailyPartialMinSKUs: 1000 }),
+    error => error instanceof SourceUnavailableError && /onvolledig; stopreden=category_listing_stagnated .*vastgelopen_routes=2/.test(error.message));
+  // Too few products seen (e.g. blocked at the start): still fail-closed.
+  assert.throws(() => gateDailyCatalogSnapshot({ ...incomplete(), uniqueListingSKUs: 0 },
+    { dailyPartialSnapshotEnabled: true, dailyPartialMinSKUs: 1000 }), SourceUnavailableError);
+  const snapshot = incomplete();
+  assert.deepEqual(gateDailyCatalogSnapshot(snapshot, { dailyPartialSnapshotEnabled: true, dailyPartialMinSKUs: 1000 }),
+    { partial: true });
+  assert.equal(snapshot.partial, true);
+  assert.match(snapshot.incompleteSummary, /unieke_SKUs=3710/);
 });

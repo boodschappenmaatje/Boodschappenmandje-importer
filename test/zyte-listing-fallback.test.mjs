@@ -238,7 +238,7 @@ test("runbudget stopt de vierde noodzakelijke fallback zonder vierde providerreq
   await fallback.close();
 });
 
-test("config begrenst requestmaximum op 10 en timeout op 60 seconden", () => {
+test("config begrenst requestmaximum op 150 en timeout op 60 seconden", () => {
   const config = loadConfig({
     DRY_RUN: "1",
     UPDATE_MODE: "maintenance",
@@ -249,7 +249,7 @@ test("config begrenst requestmaximum op 10 en timeout op 60 seconden", () => {
     ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "999999",
   });
   assert.equal(config.zyteListingFallbackEnabled, true);
-  assert.equal(config.zyteListingFallbackMaxRequests, 10);
+  assert.equal(config.zyteListingFallbackMaxRequests, 150);
   assert.equal(config.zyteListingFallbackTimeoutMs, 60_000);
   assert.equal(limits.defaultZyteListingFallbackMaxRequests, 3);
   assert.equal(limits.defaultZyteListingFallbackTimeoutMs, 45_000);
@@ -270,9 +270,61 @@ test("maintenanceworkflows geven Zyte-secret alleen aan de uitvoerende maintenan
     const workflow = await readFile(new URL(`../.github/workflows/${filename}`, import.meta.url), "utf8");
     assert.equal((workflow.match(/ZYTE_API_KEY: \$\{\{ secrets\.ZYTE_API_KEY \}\}/g) ?? []).length, 1, filename);
     assert.match(workflow, /ZYTE_LISTING_FALLBACK_ENABLED: "1"/);
-    assert.match(workflow, /ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "3"/);
+    assert.match(workflow, /ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "60"/);
+    assert.match(workflow, /DAILY_PARTIAL_SNAPSHOT_ENABLED: "1"/);
+    assert.match(workflow, /DAILY_PARTIAL_MIN_SKUS: "1000"/);
     assert.match(workflow, /ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "45000"/);
     const jobEnv = workflow.match(/^    env:\n([\s\S]*?)(?=^    steps:)/m)?.[1] ?? "";
     assert.doesNotMatch(jobEnv, /ZYTE_/);
   }
+});
+
+test("config: partiële dagsnapshot staat standaard uit en heeft een ondergrens", () => {
+  const defaults = loadConfig({ DRY_RUN: "1", UPDATE_MODE: "maintenance", CATALOG_BATCH: "growth" });
+  assert.equal(defaults.dailyPartialSnapshotEnabled, false);
+  assert.equal(defaults.dailyPartialMinSKUs, limits.defaultDailyPartialMinSKUs);
+  const low = loadConfig({
+    DRY_RUN: "1", UPDATE_MODE: "maintenance", CATALOG_BATCH: "growth",
+    DAILY_PARTIAL_SNAPSHOT_ENABLED: "1", DAILY_PARTIAL_MIN_SKUS: "5",
+  });
+  assert.equal(low.dailyPartialSnapshotEnabled, true);
+  assert.equal(low.dailyPartialMinSKUs, limits.safeDailyPartialMinSKUs);
+});
+
+test("echte Zyte-HTML: volgende-paginalink wordt gevolgd, laatste pagina is null", async t => {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch({ headless: true, executablePath: "/usr/bin/chromium" });
+  t.after(() => browser.close());
+  const page4 = "https://hoogvliet.nl/chips-zoutjes-noten/q/page/4";
+  const product = '<article><a href="/product/proof-product-123456789"><h2>Proof</h2></a></article>';
+  const htmlFor = url => url.endsWith("/4")
+    ? `<!doctype html><main>${product}<a href="/chips-zoutjes-noten/q/page/5">Volgende</a></main>`
+    : `<!doctype html><main>${product.replace("123456789", "123456780")}</main>`;
+  const fallback = createZyteListingFallback({
+    config: enabledConfig(), browser, logger: { info() {} },
+    requestImpl: async ({ targetURL: requested }) => ({ ok: true, provider: "zyte", apiStatus: 200,
+      sourceStatus: 200, finalResponseURL: requested, latencyMs: 1, htmlBytes: 10, html: htmlFor(requested) }),
+  });
+  t.after(() => fallback.close());
+  const first = await fallback.attempt({ targetURL: page4, routeURL: "https://hoogvliet.nl/chips-zoutjes-noten",
+    windowIndex: 3, triggerReason: "expected_next_stagnated" });
+  assert.equal(first.ok, true);
+  assert.equal(first.nextURL, "https://hoogvliet.nl/chips-zoutjes-noten/q/page/5");
+  const last = await fallback.attempt({ targetURL: first.nextURL, routeURL: "https://hoogvliet.nl/chips-zoutjes-noten",
+    windowIndex: 4, triggerReason: "expected_next_stagnated" });
+  assert.equal(last.ok, true);
+  assert.equal(last.nextURL, null);
+});
+
+test("fake parserpagina zonder linkondersteuning geeft onbekende nextURL, geen exhaustion", async () => {
+  const fallback = createZyteListingFallback({
+    config: enabledConfig(), browser: fakeBrowser(), logger: { info() {} },
+    requestImpl: async () => ({ ok: true, provider: "zyte", apiStatus: 200, sourceStatus: 200,
+      finalResponseURL: targetURL, latencyMs: 1, htmlBytes: listingHTML.length, html: listingHTML }),
+  });
+  const result = await fallback.attempt({ targetURL, routeURL: "https://hoogvliet.nl/chips-zoutjes-noten",
+    windowIndex: 3, triggerReason: "expected_next_stagnated" });
+  assert.equal(result.ok, true);
+  assert.equal(result.nextURL, undefined);
+  await fallback.close();
 });

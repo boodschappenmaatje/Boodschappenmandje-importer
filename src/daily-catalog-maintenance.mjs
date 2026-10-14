@@ -238,6 +238,8 @@ export function formatDailyMaintenanceSummary(result) {
     `fallback_failures=${result.snapshot.fallbackAccounting?.fallbackFailures ?? 0}`,
     `fallback_provider=${result.snapshot.fallbackAccounting?.fallbackProvider ?? "zyte"}`,
     `snapshot_complete=${result.snapshot.sourceExhausted === true && !result.snapshot.stallReason}`,
+    `snapshot_partial=${result.snapshot.partial === true}`,
+    `vastgelopen_routes=${Array.isArray(result.snapshot.stalledRoutes) ? result.snapshot.stalledRoutes.length : 0}`,
     `GraphQL_bulk_calls=${result.snapshot.catalogAPICalls}`,
     `duplicaten=${stats.duplicateCandidates + result.duplicateSKUsSkipped}`,
   ].join(" | ");
@@ -290,7 +292,11 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
       : (await services.fetchExistingSKUs(config)).size;
     const newCount = writeResult.imported.filter(product => product.inserted === true).length;
     const updatedCount = writeResult.imported.length - newCount;
-    const errorCount = assessment.stats.unresolvedExistingPrices + writeResult.errors.length;
+    // An incomplete (partial) snapshot still wrote what it saw, but stays
+    // visible as 'partial' so the retry workflow keeps going for a full scan.
+    const snapshotPartial = snapshot?.partial === true;
+    const errorCount = assessment.stats.unresolvedExistingPrices + writeResult.errors.length
+      + (snapshotPartial ? 1 : 0);
     const status = dryRun ? "dry-run" : errorCount > 0 ? "partial" : "success";
     const result = {
       status,
@@ -309,7 +315,12 @@ export async function runDailyCatalogMaintenance(config, logger = console, depen
       totalUniqueProductsAfter,
       duplicateSKUsSkipped: writeResult.duplicateSKUsSkipped,
       errorSummary: errorCount > 0
-        ? `${assessment.stats.unresolvedExistingPrices} bestaande prijsstatussen behielden last-known-good; ${writeResult.errors.length} schrijffouten.`
+        ? [
+          snapshotPartial
+            ? `Gedeeltelijke snapshot: alleen geziene producten bijgewerkt; ${snapshot.incompleteSummary ?? "onvolledig"}.`
+            : null,
+          `${assessment.stats.unresolvedExistingPrices} bestaande prijsstatussen behielden last-known-good; ${writeResult.errors.length} schrijffouten.`,
+        ].filter(Boolean).join(" ")
         : null,
     };
     if (run) await services.finishCatalogImportRun(config, run, result);
@@ -348,12 +359,25 @@ export async function main(argv = process.argv.slice(2)) {
     throw new Error("Dagelijkse catalogusmaintenance vereist UPDATE_MODE=maintenance.");
   }
   config.productTypeSupported = await hasProductTypeColumn(config);
-  return runDailyCatalogMaintenance(config);
+  const result = await runDailyCatalogMaintenance(config);
+  githubAnnotation(result.status === "success" || result.status === "dry-run" ? "notice" : "warning",
+    formatDailyMaintenanceSummary(result));
+  return result;
+}
+
+// GitHub Actions turns these lines into run annotations, which stay readable
+// through the checks API even when the full job log is not reachable.
+function githubAnnotation(level, message, env = process.env) {
+  if (env.GITHUB_ACTIONS !== "true") return;
+  const escaped = String(message).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A");
+  console.log(`::${level} title=Dagelijkse catalogusmaintenance::${escaped}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch(error => {
-    console.error(`Dagelijkse catalogusmaintenance mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`);
+    const message = `Dagelijkse catalogusmaintenance mislukt: ${error instanceof Error ? error.message : "onbekende fout"}`;
+    console.error(message);
+    githubAnnotation("error", message);
     process.exitCode = 1;
   });
 }

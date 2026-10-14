@@ -66,7 +66,11 @@ const SAFE_MAINTENANCE_MAX_LISTING_WINDOWS = 1_500;
 const DEFAULT_MAINTENANCE_MAX_DETAIL_FALLBACKS = 500;
 const SAFE_MAINTENANCE_MAX_DETAIL_FALLBACKS = 1_000;
 const DEFAULT_ZYTE_LISTING_FALLBACK_MAX_REQUESTS = 3;
-const SAFE_ZYTE_LISTING_FALLBACK_MAX_REQUESTS = 10;
+// Daily maintenance hands a stalled listing window to Zyte page by page, so a
+// run can need dozens of provider requests; this stays a hard budget per run.
+const SAFE_ZYTE_LISTING_FALLBACK_MAX_REQUESTS = 150;
+const DEFAULT_DAILY_PARTIAL_MIN_SKUS = 1_000;
+const SAFE_DAILY_PARTIAL_MIN_SKUS = 100;
 const DEFAULT_ZYTE_LISTING_FALLBACK_TIMEOUT_MS = 45_000;
 const SAFE_ZYTE_LISTING_FALLBACK_TIMEOUT_MS = 60_000;
 const DEFAULT_NAVIGATION_RETRIES = 2;
@@ -234,6 +238,14 @@ export function loadConfig(env = process.env) {
       SAFE_ZYTE_LISTING_FALLBACK_TIMEOUT_MS,
     ),
     zyteApiKey: env.ZYTE_API_KEY?.trim() || null,
+    // An incomplete daily snapshot may still refresh the prices it did see.
+    // Missing products are never touched; the run stays 'partial' for retries.
+    dailyPartialSnapshotEnabled: env.DAILY_PARTIAL_SNAPSHOT_ENABLED === "1"
+      || env.DAILY_PARTIAL_SNAPSHOT_ENABLED === "true",
+    dailyPartialMinSKUs: Math.max(
+      positiveInteger(env.DAILY_PARTIAL_MIN_SKUS, DEFAULT_DAILY_PARTIAL_MIN_SKUS),
+      SAFE_DAILY_PARTIAL_MIN_SKUS,
+    ),
     navigationRetries: Math.min(
       nonNegativeInteger(env.NAVIGATION_RETRIES, DEFAULT_NAVIGATION_RETRIES),
       SAFE_NAVIGATION_RETRIES,
@@ -317,6 +329,8 @@ export const limits = Object.freeze({
   safeGrowthMaxRuntimeMinutes: SAFE_GROWTH_MAX_RUNTIME_MINUTES,
   defaultZyteListingFallbackMaxRequests: DEFAULT_ZYTE_LISTING_FALLBACK_MAX_REQUESTS,
   safeZyteListingFallbackMaxRequests: SAFE_ZYTE_LISTING_FALLBACK_MAX_REQUESTS,
+  defaultDailyPartialMinSKUs: DEFAULT_DAILY_PARTIAL_MIN_SKUS,
+  safeDailyPartialMinSKUs: SAFE_DAILY_PARTIAL_MIN_SKUS,
   defaultZyteListingFallbackTimeoutMs: DEFAULT_ZYTE_LISTING_FALLBACK_TIMEOUT_MS,
   safeZyteListingFallbackTimeoutMs: SAFE_ZYTE_LISTING_FALLBACK_TIMEOUT_MS,
   defaultNavigationRetries: DEFAULT_NAVIGATION_RETRIES,
