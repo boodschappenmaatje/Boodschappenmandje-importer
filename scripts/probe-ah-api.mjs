@@ -23,6 +23,8 @@ async function callViaZyte(path, { method, token, body }) {
   const request = {
     url: `${BASE}${path}`,
     httpResponseBody: true,
+    // AH serves Dutch customers; route the request through a Dutch address.
+    geolocation: "NL",
     httpRequestMethod: method,
     customHttpRequestHeaders: Object.entries(headers)
       .filter(([name]) => name !== "user-agent")
