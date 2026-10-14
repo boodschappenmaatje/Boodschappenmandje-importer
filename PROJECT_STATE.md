@@ -1,3 +1,11 @@
+# Checkpoint — Ontdek & bespaar categorieënrij — 14 oktober 2026
+
+- Stap 2 is aangevuld met een horizontaal swipebare categorieënrij direct onder de bestaande drie hoofdacties. De neutrale kop `Categorieën` voorkomt een onbewezen populariteitsclaim; er is geen popularity-ranking toegevoegd.
+- De rij gebruikt uitsluitend de bestaande Hoogvliet-catalogusfilterfacets die `CatalogSearchView` al ophaalt via de catalogusrepository. Er worden maximaal zeven facetwaarden in de bestaande facetvolgorde getoond. Hiërarchische labels tonen de bestaande veilige leafnaam; bij selectie blijft de volledige facetwaarde intact in de query.
+- Een kaart activeert dezelfde `/ontdek`-zoekcontext met de gekozen categorie en bestaande term/filters behouden. `Bekijk alles` opent de bestaande filter-/sorteringssheet; bij lege facetdata verschijnt geen verzonnen categorieënrij. Home, hoofdtegels, zoekengine, provider-/lijstlogica en productresultaten zijn niet gewijzigd.
+- Componenttests dekken facetinput, leafpresentatie, exacte facetquery met behoud van bestaande querycontext, de bestaande filter-sheetactie en lege facetdata. Web `npm run check` is groen: lint, typecheck, **912/912 tests** en production build. Root `npm test`: **515/515**; root `npm run check` en `git diff --check` groen.
+- Chromium op **390×844** en **430×844**: de rij blijft binnen de paginabreedte, toont deels de volgende kaart, scrollt horizontaal en kan verticaal tot boven de vaste bottom navigation worden bewogen. De lokale omgeving heeft geen gekoppelde catalogus en leverde geen echte facets; de visuele railcontrole gebruikte tijdelijke browserpresentatiedata, terwijl componenttests controleren dat productie alleen aangeleverde facets toont. Preview- en fysieke iPhone-acceptatie van stap 2 blijven open.
+
 # Checkpoint — Ontdek & bespaar lege startpagina — 14 oktober 2026
 
 - De supermarktkeuze en Home-top zijn door de gebruiker op fysieke iPhone visueel goedgekeurd. Deze stap wijzigt Home niet.

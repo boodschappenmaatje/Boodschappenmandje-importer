@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { CatalogFilterSheet } from "@/components/catalog/CatalogFilterSheet";
+import { DiscoverCategoryRail } from "@/components/catalog/DiscoverCategoryRail";
 import { CatalogProductCard } from "@/components/catalog/CatalogProductCard";
 import { CatalogSearchField } from "@/components/catalog/CatalogSearchField";
 import { Icon } from "@/components/Icon";
@@ -291,6 +292,15 @@ export function CatalogSearchView({ discovery = false }: { discovery?: boolean }
               <span className="discover-tile-icon" aria-hidden="true">▦</span><span><strong>Alle categorieën</strong><small>Bekijk producten per categorie</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
             </button>
         </div>
+      ) : null}
+
+      {discovery && !searchActive ? (
+        <DiscoverCategoryRail
+          facets={filters.categories}
+          query={query}
+          onApply={updateQuery}
+          onViewAll={() => setFiltersOpen(true)}
+        />
       ) : null}
 
       {discovery && searchActive && query.category ? (
