@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 
+import { Icon } from "@/components/Icon";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { ACTIVE_SUPERMARKET_STORAGE_KEY } from "@/services/supermarket/active-supermarket";
 import { SUPERMARKETS, type SupermarketId } from "@/types/supermarket";
@@ -49,21 +50,21 @@ export function SupermarketSelector() {
         <div className="supermarket-dialog-backdrop" role="presentation">
           <section className="supermarket-dialog" role="dialog" aria-modal="true" aria-labelledby="supermarket-dialog-title">
             {hasChoice ? <button className="supermarket-dialog-close" type="button" aria-label="Sluiten" onClick={() => setOpen(false)}>×</button> : null}
-            <p className="eyebrow">Jouw boodschappenlijst blijft per winkel apart</p>
-            <h2 id="supermarket-dialog-title">{hasChoice ? "Wissel van supermarkt" : "Waar doe je je boodschappen?"}</h2>
-            <p>Kies een winkel om de bijbehorende producten en lijst te openen.</p>
+            <p className="eyebrow">{hasChoice ? "Je lijsten blijven per winkel apart" : "Kies je winkel"}</p>
+            <h2 id="supermarket-dialog-title">{hasChoice ? "Wissel van supermarkt" : "Waar doe je boodschappen?"}</h2>
+            <p className="supermarket-dialog-description">Kies een winkel voor je producten en boodschappenlijst.</p>
             {Object.values(SUPERMARKETS).map((market) => (
               <button
-                className="supermarket-choice"
+                className={`supermarket-choice${market.catalogSupported ? " is-supported" : " is-future"}`}
                 key={market.id}
                 type="button"
                 disabled={!market.catalogSupported || changing}
-                aria-pressed={shoppingList.supermarketId === market.id}
+                aria-pressed={shoppingList.supermarketId === market.id && hasChoice}
                 onClick={() => void choose(market.id)}
               >
-                <span className="supermarket-choice-mark" aria-hidden="true">{market.catalogSupported ? "✓" : "◷"}</span>
-                <span><strong>{market.name}</strong>{!market.catalogSupported ? <small>Binnenkort</small> : <small>Producten en prijzen beschikbaar</small>}</span>
-                {shoppingList.supermarketId === market.id && hasChoice ? <span className="visually-hidden">Gekozen</span> : null}
+                <span className="supermarket-choice-mark" aria-hidden="true"><Icon name={market.catalogSupported ? "check" : "store"} size={20} /></span>
+                <span className="supermarket-choice-copy"><strong>{market.name}</strong><small>{market.catalogSupported ? "Producten en prijzen beschikbaar" : "Binnenkort"}</small></span>
+                {shoppingList.supermarketId === market.id && hasChoice ? <span className="supermarket-choice-selected">Gekozen</span> : null}
               </button>
             ))}
             {shoppingList.persistenceWarning ? <p role="alert">{shoppingList.persistenceWarning}</p> : null}

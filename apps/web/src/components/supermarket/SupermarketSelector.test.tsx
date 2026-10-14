@@ -27,7 +27,7 @@ it("first choice offers only Hoogvliet and labels future stores without opening 
 
   await vi.waitFor(() => expect(container?.querySelector('[role="dialog"]')).not.toBeNull());
   const dialog = container!.querySelector('[role="dialog"]')!;
-  expect(dialog.textContent).toContain("Waar doe je je boodschappen?");
+  expect(dialog.textContent).toContain("Waar doe je boodschappen?");
   for (const market of ["Albert Heijn", "Jumbo", "Lidl", "Dirk"]) {
     const option = [...dialog.querySelectorAll("button")].find(button => button.textContent?.includes(market));
     expect(option?.disabled).toBe(true);

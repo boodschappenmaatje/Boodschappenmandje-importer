@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -58,6 +59,16 @@ export function catalogSearchInstruction(term: string): string | null {
   const trimmed = term.trim();
   if (trimmed.length === 0 || trimmed.length >= MIN_CATALOG_SEARCH_LENGTH) return null;
   return `Typ nog ${MIN_CATALOG_SEARCH_LENGTH - trimmed.length} teken om te zoeken.`;
+}
+
+export function isCatalogSearchActive(
+  query: CatalogQuery,
+  draftTerm = query.term,
+): boolean {
+  return Boolean(
+    draftTerm.trim() || query.category || query.brand || query.offersOnly ||
+    query.maxPrice !== null || query.sort !== "relevance",
+  );
 }
 
 export function CatalogSearchView({ discovery = false }: { discovery?: boolean }) {
@@ -241,11 +252,12 @@ export function CatalogSearchView({ discovery = false }: { discovery?: boolean }
   };
 
   const activeFilters = activeCatalogFilters(query);
+  const searchActive = isCatalogSearchActive(query, draftTerm);
   const instruction = catalogSearchInstruction(draftTerm);
   const visibleProducts = state.status === "loaded" ? productsWithPositivePrices(state.products) : [];
 
   return (
-    <section className={discovery ? "catalog-search catalog-search-discovery" : "catalog-search"} aria-labelledby="catalog-heading">
+    <section className={discovery ? `catalog-search catalog-search-discovery${searchActive ? " is-active-search" : ""}` : "catalog-search"} aria-labelledby="catalog-heading">
       <div className="catalog-search-toolbar">
         <CatalogSearchField
           value={draftTerm}
@@ -268,29 +280,32 @@ export function CatalogSearchView({ discovery = false }: { discovery?: boolean }
         </button>
       </div>
 
-      {discovery ? (
+      {discovery && !searchActive ? (
         <>
+          <section className="discover-welcome" aria-label="Welkom bij Ontdek & bespaar">
+            <Image className="discover-mascot" src="/branding/maatje-home-c.webp" alt="" width={180} height={180} />
+            <div><strong>Hoi! Wat heb je vandaag nodig?</strong><p>Zoek een product, bekijk aanbiedingen of laat je inspireren.</p></div>
+          </section>
+          <h2 className="discover-section-title">Ontdek op jouw manier</h2>
           <div className="discover-shortcuts" aria-label="Ontdek op jouw manier">
-            <button type="button" aria-pressed={query.offersOnly} onClick={() => updateQuery({ ...query, offersOnly: !query.offersOnly })}>
-              <strong>Aanbiedingen</strong><small>Actuele acties</small>
+            <button type="button" aria-pressed={query.offersOnly} onClick={() => updateQuery({ ...query, offersOnly: true })}>
+              <span className="discover-tile-icon" aria-hidden="true">%</span><span><strong>Aanbiedingen</strong><small>Actuele acties</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
             </button>
             <button type="button" aria-pressed={query.sort === "price-asc"} onClick={() => updateQuery({ ...query, sort: query.sort === "price-asc" ? "relevance" : "price-asc" })}>
-              <strong>Voordelig kiezen</strong><small>Sorteer op prijs</small>
+              <span className="discover-tile-icon" aria-hidden="true">€</span><span><strong>Voordelig kiezen</strong><small>Bekijk laagste prijzen</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
             </button>
             <button type="button" onClick={() => setFiltersOpen(true)}>
-              <strong>Alle categorieën</strong><small>{filters.categories.length ? `${filters.categories.length} categorieën` : "Bekijk categorieën"}</small>
+              <span className="discover-tile-icon" aria-hidden="true">▦</span><span><strong>Alle categorieën</strong><small>{filters.categories.length ? `${filters.categories.length} categorieën` : "Bekijk categorieën"}</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
             </button>
           </div>
-          {filters.categories.length ? (
-            <div className="discover-categories" aria-label="Categorieën">
-              <button type="button" aria-pressed={!query.category} onClick={() => updateQuery({ ...query, category: null })}>Alles</button>
-              {filters.categories.slice(0, 7).map((category) => (
-                <button key={category} type="button" aria-pressed={query.category === category} onClick={() => updateQuery({ ...query, category: query.category === category ? null : category })}>{category.split("/").filter(Boolean).at(-1) ?? category}</button>
-              ))}
-              {filters.categories.length > 7 ? <button type="button" onClick={() => setFiltersOpen(true)}>Meer…</button> : null}
-            </div>
-          ) : null}
         </>
+      ) : null}
+
+      {discovery && searchActive && query.category ? (
+        <div className="discover-category-context">
+          <span>Categorie</span><strong>{query.category.split("/").filter(Boolean).at(-1) ?? query.category}</strong>
+          <button type="button" onClick={() => updateQuery({ ...query, category: null })}>Alles</button>
+        </div>
       ) : null}
 
       <div className="catalog-sort-controls" aria-label="Producten sorteren en filteren">
@@ -334,7 +349,7 @@ export function CatalogSearchView({ discovery = false }: { discovery?: boolean }
         <div>
           <p>{shoppingList.supermarketId === "hoogvliet" ? "Producten bij Hoogvliet" : "Producten"}</p>
           <h2 id="catalog-heading">
-            {query.term ? `Resultaten voor “${query.term}”` : "Producten ontdekken"}
+            {query.term ? `Resultaten voor “${query.term}”` : searchActive && query.category ? `In ${query.category.split("/").filter(Boolean).at(-1) ?? query.category}` : "Producten ontdekken"}
           </h2>
         </div>
         {state.status === "loaded" ? <span>{state.products.length} geladen</span> : null}

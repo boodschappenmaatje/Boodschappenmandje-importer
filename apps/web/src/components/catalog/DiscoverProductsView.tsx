@@ -22,11 +22,7 @@ export function DiscoverProductsView() {
         <div><h1>Ontdek &amp; bespaar</h1><p>Slim boodschappen doen</p></div>
         <Link className="discover-list-link" href="/lijst" aria-label="Naar je boodschappenlijst">Lijst</Link>
       </header>
-      <div className="discover-store-row"><span>Winkelen bij</span><SupermarketSelector /></div>
-      <section className="discover-welcome">
-        <strong>Wat heb je vandaag nodig?</strong>
-        <p>Zoek een product of ontdek wat er in de aanbieding is.</p>
-      </section>
+      <div className="discover-store-row"><span>Jouw supermarkt</span><SupermarketSelector /></div>
       {supported ? <Suspense fallback={<SearchLoading />}><CatalogSearchView discovery /></Suspense> : (
         <section className="catalog-state" role="status">
           <h2>Producten bij {SUPERMARKETS[shoppingList.supermarketId].name} zijn binnenkort beschikbaar</h2>

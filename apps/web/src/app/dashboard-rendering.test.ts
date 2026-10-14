@@ -88,7 +88,7 @@ describe("dashboard rendering", () => {
     const html = renderWithList(createElement(DiscoverPage));
 
     expect(html).toContain("Ontdek &amp; bespaar");
-    expect(html).toContain("Winkelen bij");
+    expect(html).toContain("Jouw supermarkt");
     expect(html).toContain("Hoogvliet");
     expect(html).toContain("Aanbiedingen");
     expect(html).toContain("Voordelig kiezen");

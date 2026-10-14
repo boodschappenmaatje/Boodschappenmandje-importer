@@ -1,6 +1,6 @@
 import type { NavigationIcon } from "@/types/navigation";
 
-type IconName = "bowl" | "chef" | "book" | NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back";
+type IconName = "bowl" | "chef" | "book" | NavigationIcon | "week" | "budget" | "prepare" | "arrow" | "cloud" | "history" | "pantry" | "settings" | "info" | "catalog" | "search" | "trash" | "plus" | "minus" | "users" | "store" | "check" | "lightbulb" | "back";
 
 interface IconProps {
   name: IconName;
@@ -57,6 +57,8 @@ export function Icon({ name, size = 24 }: IconProps) {
       return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7h.01" /></svg>;
     case "catalog":
       return <svg {...common}><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5M8 17h3" /><path d="M4 3v2M20 3v2" /></svg>;
+    case "search":
+      return <svg {...common}><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></svg>;
     case "trash":
       return <svg {...common}><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></svg>;
     case "plus":

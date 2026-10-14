@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { CatalogFilterSheet, categoryLabel } from "./CatalogFilterSheet";
 import { CatalogProductCard } from "./CatalogProductCard";
 import { CatalogSearchField } from "./CatalogSearchField";
-import { catalogSearchInstruction, CATALOG_PAGE_SEARCH_DEBOUNCE_MS } from "./CatalogSearchView";
+import { catalogSearchInstruction, CATALOG_PAGE_SEARCH_DEBOUNCE_MS, isCatalogSearchActive } from "./CatalogSearchView";
 import type { Product } from "@/types/catalog";
 
 const product: Product = {
@@ -31,6 +31,15 @@ describe("PWA 8 cataloguscomponenten", () => {
     expect(CATALOG_PAGE_SEARCH_DEBOUNCE_MS).toBeLessThanOrEqual(400);
     expect(catalogSearchInstruction("c")).toContain("1 teken");
     expect(catalogSearchInstruction("cola")).toBeNull();
+  });
+
+  it("scheidt de ontdeklanding van een actieve zoek-, categorie- of filtercontext", () => {
+    const empty = { term: "", category: null, brand: null, offersOnly: false, maxPrice: null, sort: "relevance" as const };
+    expect(isCatalogSearchActive(empty)).toBe(false);
+    expect(isCatalogSearchActive(empty, "pasta")).toBe(true);
+    expect(isCatalogSearchActive({ ...empty, category: "Dranken/Frisdrank" })).toBe(true);
+    expect(isCatalogSearchActive({ ...empty, offersOnly: true })).toBe(true);
+    expect(isCatalogSearchActive({ ...empty, sort: "price-asc" })).toBe(true);
   });
 
   it("biedt één toegankelijk mobiel zoekveld voor catalogus en selectiecontext", () => {
