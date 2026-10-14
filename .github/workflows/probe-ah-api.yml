@@ -1,0 +1,21 @@
+name: AH-API proef (alleen lezen)
+
+# Handmatige, eenmalige proef: kan een GitHub-runner AH-productdata ophalen en
+# welke velden komen terug? Geen database, geen secrets, geen writes.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: AH-productdata proberen op te halen
+        run: node scripts/probe-ah-api.mjs
