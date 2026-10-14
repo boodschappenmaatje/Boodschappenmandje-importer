@@ -28,6 +28,7 @@ import {
 import {
   catalogReadErrorMessage,
   mergeCatalogProducts,
+  productsWithPositivePrices,
 } from "@/services/catalog/catalog-presentation";
 import type {
   CatalogFilterOptions,
@@ -59,7 +60,7 @@ export function catalogSearchInstruction(term: string): string | null {
   return `Typ nog ${MIN_CATALOG_SEARCH_LENGTH - trimmed.length} teken om te zoeken.`;
 }
 
-export function CatalogSearchView() {
+export function CatalogSearchView({ discovery = false }: { discovery?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -220,11 +221,31 @@ export function CatalogSearchView() {
     }
   }
 
+  async function adjustQuantity(product: Product, direction: "up" | "down") {
+    if (shoppingList.status !== "ready" || isAddingProductId) return;
+    setIsAddingProductId(product.id);
+    setAddMessage(null);
+    try {
+      if (direction === "up") await shoppingList.increase(product.id);
+      else await shoppingList.decrease(product.id);
+    } catch {
+      setAddMessage("Je hoeveelheid kon niet veilig worden aangepast.");
+    } finally {
+      setIsAddingProductId(null);
+    }
+  }
+
+  const detailHref = (productId: string) => {
+    const params = catalogQueryToSearchParams(query).toString();
+    return `/producten/${encodeURIComponent(productId)}?returnTo=${encodeURIComponent(`/ontdek${params ? `?${params}` : ""}`)}`;
+  };
+
   const activeFilters = activeCatalogFilters(query);
   const instruction = catalogSearchInstruction(draftTerm);
+  const visibleProducts = state.status === "loaded" ? productsWithPositivePrices(state.products) : [];
 
   return (
-    <section className="catalog-search" aria-labelledby="catalog-heading">
+    <section className={discovery ? "catalog-search catalog-search-discovery" : "catalog-search"} aria-labelledby="catalog-heading">
       <div className="catalog-search-toolbar">
         <CatalogSearchField
           value={draftTerm}
@@ -245,6 +266,39 @@ export function CatalogSearchView() {
           Filters
           {activeFilters.length ? <span>{activeFilters.length}</span> : null}
         </button>
+      </div>
+
+      {discovery ? (
+        <>
+          <div className="discover-shortcuts" aria-label="Ontdek op jouw manier">
+            <button type="button" aria-pressed={query.offersOnly} onClick={() => updateQuery({ ...query, offersOnly: !query.offersOnly })}>
+              <strong>Aanbiedingen</strong><small>Actuele acties</small>
+            </button>
+            <button type="button" aria-pressed={query.sort === "price-asc"} onClick={() => updateQuery({ ...query, sort: query.sort === "price-asc" ? "relevance" : "price-asc" })}>
+              <strong>Voordelig kiezen</strong><small>Sorteer op prijs</small>
+            </button>
+            <button type="button" onClick={() => setFiltersOpen(true)}>
+              <strong>Alle categorieën</strong><small>{filters.categories.length ? `${filters.categories.length} categorieën` : "Bekijk categorieën"}</small>
+            </button>
+          </div>
+          {filters.categories.length ? (
+            <div className="discover-categories" aria-label="Categorieën">
+              <button type="button" aria-pressed={!query.category} onClick={() => updateQuery({ ...query, category: null })}>Alles</button>
+              {filters.categories.slice(0, 7).map((category) => (
+                <button key={category} type="button" aria-pressed={query.category === category} onClick={() => updateQuery({ ...query, category: query.category === category ? null : category })}>{category.split("/").filter(Boolean).at(-1) ?? category}</button>
+              ))}
+              {filters.categories.length > 7 ? <button type="button" onClick={() => setFiltersOpen(true)}>Meer…</button> : null}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      <div className="catalog-sort-controls" aria-label="Producten sorteren en filteren">
+        {[{ label: "Relevant", sort: "relevance" as const }, { label: "Goedkoopste", sort: "price-asc" as const }].map((option) => (
+          <button key={option.sort} type="button" aria-pressed={query.sort === option.sort} onClick={() => updateQuery({ ...query, sort: option.sort })}>{option.label}</button>
+        ))}
+        <button type="button" aria-pressed={query.offersOnly} onClick={() => updateQuery({ ...query, offersOnly: !query.offersOnly })}>Aanbiedingen</button>
+        {filters.brands.length ? <button type="button" aria-pressed={Boolean(query.brand)} onClick={() => setFiltersOpen(true)}>{query.brand ?? "Merk"}</button> : null}
       </div>
 
       {instruction ? <p className="catalog-search-hint">{instruction}</p> : null}
@@ -278,7 +332,7 @@ export function CatalogSearchView() {
 
       <div className="catalog-result-heading">
         <div>
-          <p>Hoogvliet-catalogus</p>
+          <p>{shoppingList.supermarketId === "hoogvliet" ? "Producten bij Hoogvliet" : "Producten"}</p>
           <h2 id="catalog-heading">
             {query.term ? `Resultaten voor “${query.term}”` : "Producten ontdekken"}
           </h2>
@@ -318,11 +372,11 @@ export function CatalogSearchView() {
         </p>
       ) : null}
 
-      {state.status === "loaded" && state.products.length === 0 ? (
+      {state.status === "loaded" && visibleProducts.length === 0 ? (
         <div className="catalog-no-results" role="status">
           <Icon name="products" size={30} />
           <h2>Geen producten gevonden</h2>
-          <p>Pas je zoekterm aan of wis de actieve filters.</p>
+          <p>Pas je zoekterm aan, kies een categorie of wis de filters. Alleen producten met een positieve prijs worden getoond.</p>
           {activeFilters.length ? (
             <button type="button" onClick={() => updateQuery(clearCatalogFilters(query))}>
               Wis filters
@@ -331,10 +385,10 @@ export function CatalogSearchView() {
         </div>
       ) : null}
 
-      {state.status === "loaded" && state.products.length > 0 ? (
+      {state.status === "loaded" && visibleProducts.length > 0 ? (
         <>
           <div className="product-grid">
-            {state.products.map((product) => (
+            {visibleProducts.map((product) => (
               <CatalogProductCard
                 key={product.id}
                 product={product}
@@ -342,6 +396,10 @@ export function CatalogSearchView() {
                 isAdding={isAddingProductId === product.id}
                 listReady={shoppingList.status === "ready"}
                 onAdd={() => void addProduct(product)}
+                onIncrease={() => void adjustQuantity(product, "up")}
+                onDecrease={() => void adjustQuantity(product, "down")}
+                independentQuantity={Boolean(shoppingList.list?.items.find(item => item.productId === product.id && item.quantityContributions.mealPlans.length === 0))}
+                detailHref={detailHref(product.id)}
               />
             ))}
           </div>

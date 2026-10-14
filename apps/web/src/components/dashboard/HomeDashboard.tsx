@@ -2,8 +2,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { HomeWeekSlider } from "./HomeWeekSlider";
+import { SupermarketSelector } from "@/components/supermarket/SupermarketSelector";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
 import { useBudget } from "@/features/budget/BudgetProvider";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
@@ -39,6 +41,7 @@ function BudgetRow({ label, planned, limit, complete, icon }: {
 }
 export function HomeDashboard() {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = useState("");
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
@@ -62,6 +65,20 @@ export function HomeDashboard() {
         <Image className="home-c-mascot" src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
       </div>
     </section>
+    <div className="home-discovery-entry">
+      <SupermarketSelector />
+      <form className="home-discovery-search" onSubmit={(event) => {
+        event.preventDefault();
+        const term = searchTerm.trim();
+        router.push(term ? `/ontdek?q=${encodeURIComponent(term)}` : "/ontdek");
+      }}>
+        <label className="visually-hidden" htmlFor="home-discovery-query">Zoek producten</label>
+        <Icon name="catalog" size={22} />
+        <input id="home-discovery-query" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten of merken" />
+        <button type="submit" aria-label="Zoek producten">Zoek</button>
+      </form>
+      <Link className="home-discovery-link" href="/ontdek"><span><strong>Ontdek &amp; bespaar</strong><small>Bekijk producten, aanbiedingen en categorieën</small></span><Chevron /></Link>
+    </div>
     {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
       <span className="home-c-budget-chevron"><Chevron /></span>

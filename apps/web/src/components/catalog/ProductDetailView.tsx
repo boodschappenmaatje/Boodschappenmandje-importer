@@ -68,6 +68,19 @@ export function ProductDetailView({ productId }: { productId: string }) {
     }
   }
 
+  async function adjustQuantity(productId: string, direction: "up" | "down") {
+    if (shoppingList.status !== "ready" || isAdding) return;
+    setIsAdding(true);
+    try {
+      if (direction === "up") await shoppingList.increase(productId);
+      else await shoppingList.decrease(productId);
+    } catch {
+      setFeedback("Je hoeveelheid kon niet veilig worden aangepast.");
+    } finally {
+      setIsAdding(false);
+    }
+  }
+
   return (
     <section className="product-detail-view">
       <button className="product-detail-back" type="button" onClick={() => router.back()}>
@@ -110,7 +123,13 @@ export function ProductDetailView({ productId }: { productId: string }) {
             ) : null}
             <CatalogPriceBlock product={state.product} detail />
             <p className="product-price-source">Prijsbron: Hoogvliet</p>
-            <button
+            {shoppingList.quantityFor(state.product.id) > 0 && shoppingList.list?.items.find(item => item.productId === state.product.id)?.quantityContributions.mealPlans.length === 0 ? (
+              <div className="detail-quantity" aria-label={`Aantal ${shoppingList.quantityFor(state.product.id)}`}>
+                <button type="button" disabled={isAdding || shoppingList.quantityFor(state.product.id) <= 1} aria-label={`Minder ${state.product.name}`} onClick={() => void adjustQuantity(state.product.id, "down")}>−</button>
+                <output aria-live="polite">{shoppingList.quantityFor(state.product.id)}</output>
+                <button type="button" disabled={isAdding} aria-label={`Meer ${state.product.name}`} onClick={() => void adjustQuantity(state.product.id, "up")}>+</button>
+              </div>
+            ) : <button
               className="product-detail-add"
               type="button"
               disabled={shoppingList.status !== "ready" || isAdding}
@@ -122,7 +141,7 @@ export function ProductDetailView({ productId }: { productId: string }) {
                 : shoppingList.quantityFor(state.product.id) > 0
                   ? "Nog één toevoegen"
                   : "Toevoegen aan lijst"}
-            </button>
+            </button>}
             {shoppingList.quantityFor(state.product.id) > 0 ? (
               <p className="product-detail-list-status">
                 Op je lijst · {shoppingList.quantityFor(state.product.id)}

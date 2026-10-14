@@ -110,3 +110,17 @@ it("wisselt tussen providerlijsten zonder items te mengen en onthoudt de actieve
   expect(container?.querySelector("#active-products")?.textContent).toBe("ah-product:2");
   expect(storage.keys()).toEqual(["active:ah", "active:hoogvliet"]);
 });
+
+it("onthoudt een expliciete eerste Hoogvliet-keuze zonder de actieve lijst te vervangen", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const storage = new ProviderListStorage();
+  storage.seed("hoogvliet", addCatalogProduct(createEmptyActiveShoppingList(), hoogvlietProduct, "manual"));
+  await render(storage);
+
+  expect(localStorage.getItem("boodschappenmaatje:active-supermarket")).toBeNull();
+  expect(container?.querySelector("#active-products")?.textContent).toBe("hoogvliet-product:1");
+  await click("#switch-high", "hoogvliet");
+  expect(localStorage.getItem("boodschappenmaatje:active-supermarket")).toBe("hoogvliet");
+  expect(container?.querySelector("#active-products")?.textContent).toBe("hoogvliet-product:1");
+  expect(storage.keys()).toEqual(["active:hoogvliet"]);
+});

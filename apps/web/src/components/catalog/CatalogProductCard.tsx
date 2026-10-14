@@ -62,20 +62,28 @@ export function CatalogProductCard({
   isAdding,
   listReady,
   onAdd,
+  onIncrease,
+  onDecrease,
+  detailHref,
+  independentQuantity = false,
 }: {
   product: Product;
   listQuantity: number;
   isAdding: boolean;
   listReady: boolean;
   onAdd: () => void;
+  onIncrease?: () => void;
+  onDecrease?: () => void;
+  detailHref?: string;
+  independentQuantity?: boolean;
 }) {
   const description = [product.brand, product.packageText].filter(Boolean).join(" · ");
 
   return (
-    <article className="product-card ux-product-row">
+    <article className={independentQuantity && listQuantity > 0 ? "product-card ux-product-row has-quantity" : "product-card ux-product-row"}>
       <Link
         className="product-detail-link"
-        href={`/producten/${encodeURIComponent(product.id)}`}
+        href={detailHref ?? `/producten/${encodeURIComponent(product.id)}`}
         aria-label={`Bekijk ${product.name}`}
       >
         <ProductThumbnail className="product-image" imageUrl={product.imageUrl} name={product.name} />
@@ -86,19 +94,25 @@ export function CatalogProductCard({
         </div>
       </Link>
       <div className="product-add-row">
-        <button
-          className="product-add-button"
-          type="button"
-          disabled={!listReady || isAdding}
-          aria-label={`Voeg ${product.name} toe aan boodschappenlijst`}
-          onClick={onAdd}
-        >
-          <Icon name="plus" size={18} />
-          <span className="visually-hidden">{isAdding ? "Toevoegen…" : "Toevoegen"}</span>
-        </button>
-        {listQuantity > 0 ? (
-          <span className="product-list-quantity">Op je lijst · {listQuantity}</span>
-        ) : null}
+        {listQuantity > 0 && independentQuantity && onIncrease && onDecrease ? (
+          <div className="catalog-quantity" aria-label={`${product.name}, aantal ${listQuantity}`}>
+            <button type="button" disabled={!listReady || isAdding || listQuantity <= 1} aria-label={`Minder ${product.name}`} onClick={onDecrease}>−</button>
+            <span aria-live="polite">{listQuantity}</span>
+            <button type="button" disabled={!listReady || isAdding} aria-label={`Meer ${product.name}`} onClick={onIncrease}>+</button>
+          </div>
+        ) : (
+          <button
+            className="product-add-button"
+            type="button"
+            disabled={!listReady || isAdding}
+            aria-label={`${listQuantity > 0 ? "Voeg nog een" : "Voeg"} ${product.name} toe aan boodschappenlijst`}
+            onClick={onAdd}
+          >
+            <Icon name="plus" size={18} />
+            <span className="visually-hidden">{isAdding ? "Toevoegen…" : "Toevoegen"}</span>
+          </button>
+        )}
+        {listQuantity > 0 && !independentQuantity ? <span className="product-list-quantity">Op je lijst · {listQuantity}</span> : null}
       </div>
     </article>
   );

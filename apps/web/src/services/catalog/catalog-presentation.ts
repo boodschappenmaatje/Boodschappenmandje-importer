@@ -1,5 +1,6 @@
 import { CatalogReadError } from "@/services/catalog/catalog-repository";
 import type { Product, ResolvedProductPrice } from "@/types/catalog";
+import { resolveCurrentPrice } from "@/services/catalog/price";
 
 const updateDateFormatter = new Intl.DateTimeFormat("nl-NL", {
   day: "numeric",
@@ -45,6 +46,10 @@ export function mergeCatalogProducts(
       return true;
     }),
   ];
+}
+
+export function productsWithPositivePrices(products: Product[]): Product[] {
+  return products.filter((product) => (resolveCurrentPrice(product.currentPrice)?.amount ?? 0) > 0);
 }
 
 export function priceUpdatedLabel(

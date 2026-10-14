@@ -72,6 +72,24 @@ describe("PWA 8 cataloguscomponenten", () => {
     expect(html).not.toContain("€ 0");
   });
 
+  it("bedient een onafhankelijke catalogusbijdrage met de bestaande hoeveelheidacties", () => {
+    const html = renderToStaticMarkup(createElement(CatalogProductCard, {
+      product,
+      listQuantity: 2,
+      isAdding: false,
+      listReady: true,
+      independentQuantity: true,
+      onAdd: () => undefined,
+      onIncrease: () => undefined,
+      onDecrease: () => undefined,
+    }));
+
+    expect(html).toContain('aria-label="Minder Een bijzonder lange productnaam die op mobiel leesbaar moet blijven"');
+    expect(html).toContain('aria-label="Meer Een bijzonder lange productnaam die op mobiel leesbaar moet blijven"');
+    expect(html).toContain("<span aria-live=\"polite\">2</span>");
+    expect(html).not.toContain("Op je lijst · 2");
+  });
+
   it("maakt echte categorie- en merkopties mobiel selecteerbaar", () => {
     const html = renderToStaticMarkup(
       createElement(CatalogFilterSheet, {

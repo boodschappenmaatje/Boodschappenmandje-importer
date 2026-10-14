@@ -522,7 +522,8 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       let priceQuery = this.client
         .from("product_prices")
         .select(`${PRICE_FIELDS},product:products!inner(${PRODUCT_FIELDS})`)
-        .eq("product.supermarket", this.supermarketName);
+        .eq("product.supermarket", this.supermarketName)
+        .gt("price", 0);
 
       if (searchFilter) {
         priceQuery = priceQuery.or(searchFilter, { referencedTable: "product" });
@@ -587,6 +588,7 @@ export class SupabaseCatalogRepository implements CatalogRepository {
       const today = (request.now ?? new Date()).toISOString().slice(0, 10);
       productQuery = productQuery
         .eq("current_price.is_offer", true)
+        .gt("current_price.price", 0)
         .or(`valid_from.is.null,valid_from.lte.${today}`, {
           referencedTable: "current_price",
         })

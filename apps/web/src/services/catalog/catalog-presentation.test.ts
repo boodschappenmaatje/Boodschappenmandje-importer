@@ -4,6 +4,7 @@ import { CatalogReadError } from "./catalog-repository";
 import {
   catalogReadErrorMessage,
   mergeCatalogProducts,
+  productsWithPositivePrices,
   safeProductImageUrl,
 } from "./catalog-presentation";
 import type { Product } from "@/types/catalog";
@@ -26,6 +27,19 @@ describe("cataloguspresentatie", () => {
       first,
       second,
     ]);
+  });
+
+  it("toont alleen producten met een betrouwbare positieve actuele prijs", () => {
+    const base = { id: "p", name: "Product" } as Product;
+    const price = (amount: number) => ({
+      productId: "p", price: amount, oldPrice: null, isOffer: false, offerText: null,
+      validFrom: null, validUntil: null, fetchedAt: "2026-10-14T08:00:00Z", updatedAt: null,
+    });
+    expect(productsWithPositivePrices([
+      { ...base, id: "priced", currentPrice: price(1.25) },
+      { ...base, id: "zero", currentPrice: price(0) },
+      { ...base, id: "missing", currentPrice: null },
+    ]).map((product) => product.id)).toEqual(["priced"]);
   });
 
   it("vertaalt configuratie- en netwerkfouten naar veilige Nederlandse tekst", () => {

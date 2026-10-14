@@ -218,7 +218,17 @@ export function ActiveShoppingListProvider({
 
   const setActiveSupermarket = useCallback(async (nextSupermarketId: SupermarketId) => {
     if (!isSupermarketId(nextSupermarketId)) return false;
-    if (nextSupermarketId === supermarketIdRef.current) return true;
+    if (nextSupermarketId === supermarketIdRef.current) {
+      const preferenceStorage = browserSupermarketPreferenceStorage();
+      if (!preferenceStorage) return false;
+      try {
+        persistActiveSupermarket(preferenceStorage, nextSupermarketId);
+        return true;
+      } catch {
+        setPersistenceWarning("Je supermarktkeuze kon niet worden onthouden.");
+        return false;
+      }
+    }
 
     const sequence = ++switchSequenceRef.current;
     switchingSupermarketRef.current = true;
