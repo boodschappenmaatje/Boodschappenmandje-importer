@@ -4,7 +4,8 @@
 - De actieve supermarkt met bestaand logo en chevron staat nu links in dezelfde kaart als het zoekveld rechts. Beide blijven dezelfde `SupermarketSelector`, actieve providerstate, wisselsheet en bestaande `/ontdek`-routering gebruiken; query blijft via `?q=` meegaan. De bestaande `Ontdek & bespaar`-link blijft behouden.
 - Budget, maaltijdbudget, week, lijstactie, navigatie en Home-data zijn functioneel ongemoeid gelaten. Geen andere Slim Zoeken-schermen of backend-/databaselogica gewijzigd.
 - Home-renderingstest uitgebreid voor de geïntegreerde selector/zoekkaart en bestaande ontdekroute. Web `npm run check`: lint, typecheck, **910/910 tests** en production build groen; root `npm test`: **515/515**; root `npm run check` en `git diff --check` groen.
-- Chromium op **390×844** en **430×844** bevestigt volledige zichtbaarheid van de winkelnaam, geen horizontale overflow, kaart-overlap met de hero, correcte bestaande sheet-openactie en zoeken via `/ontdek?q=pasta`. Budget, week, lijstactie en bottom navigation blijven aanwezig. Preview na push/CI en fysieke iPhone-check van deze Home-stap staan nog open.
+- Chromium op **390×844** en **430×844** bevestigt volledige zichtbaarheid van de winkelnaam, geen horizontale overflow, kaart-overlap met de hero, correcte bestaande sheet-openactie en zoeken via `/ontdek?q=pasta`. Budget, week, lijstactie en bottom navigation blijven aanwezig.
+- Commit `02ea8d4` is gepusht op de bestaande branch en staat op Draft PR #96. CI-run **#571** en Vercel zijn groen; Preview alias geeft HTTP 200. Fysieke iPhone-check van deze Home-stap staat nog open.
 
 # Checkpoint — Supermarktkeuze glossy banneruitwerking — 14 oktober 2026
 
