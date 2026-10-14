@@ -283,13 +283,13 @@ export function CatalogSearchView({ discovery = false }: { discovery?: boolean }
       {discovery && !searchActive ? (
         <div className="discover-shortcuts" aria-label="Ontdek op jouw manier">
             <button type="button" aria-pressed={query.offersOnly} onClick={() => updateQuery({ ...query, offersOnly: true })}>
-              <span className="discover-tile-icon" aria-hidden="true">%</span><span><strong>Aanbiedingen</strong><small>Bekijk alle acties</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
+              <span className="discover-tile-icon" aria-hidden="true"><Icon name="tag" size={24} /></span><span><strong>Aanbiedingen</strong><small>Bekijk alle acties</small></span><span className="discover-tile-chevron" aria-hidden="true"><Icon name="chevron" size={18} /></span>
             </button>
             <button type="button" aria-pressed={query.sort === "price-asc"} onClick={() => updateQuery({ ...query, sort: query.sort === "price-asc" ? "relevance" : "price-asc" })}>
-              <span className="discover-tile-icon" aria-hidden="true">€</span><span><strong>Voordelig kiezen</strong><small>Producten met scherpe prijzen</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
+              <span className="discover-tile-icon" aria-hidden="true"><Icon name="piggy" size={28} /></span><span><strong>Voordelig kiezen</strong><small>Producten met scherpe prijzen</small></span><span className="discover-tile-chevron" aria-hidden="true"><Icon name="chevron" size={18} /></span>
             </button>
             <button type="button" onClick={() => setFiltersOpen(true)}>
-              <span className="discover-tile-icon" aria-hidden="true">▦</span><span><strong>Alle categorieën</strong><small>Bekijk producten per categorie</small></span><span className="discover-tile-chevron" aria-hidden="true">›</span>
+              <span className="discover-tile-icon" aria-hidden="true"><Icon name="grid" size={22} /></span><span><strong>Alle categorieën</strong><small>Bekijk producten per categorie</small></span><span className="discover-tile-chevron" aria-hidden="true"><Icon name="chevron" size={18} /></span>
             </button>
         </div>
       ) : null}
