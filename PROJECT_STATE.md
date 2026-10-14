@@ -3,6 +3,7 @@
 - Branch `codex/smart-search-2-0-foundation-20261013` is bijgewerkt met `origin/main` (`cef1df9`, PR #97 t/m #103) via een merge zonder conflicten; Draft PR #96 blijft de werkplek.
 - Op verzoek van de gebruiker zijn alleen de drie Ontdek-tegels visueel verbeterd: echte lijniconen (prijslabel, spaarvarken, raster) uit de gedeelde `Icon`-component in plaats van teksttekens, per tegel een zachte blauwtint met dezelfde diagonale glanslagen als de supermarktbanners, een rond chevron-vak en een subtiele druk-feedback (uit bij reduced motion). `Alle categorieën` beslaat nu de volle breedte als horizontale kaart, zodat er geen lege plek naast staat.
 - Acties, routes, filters, zoeklogica, categorieënrij en provider-/lijstlogica zijn ongewijzigd. Web `npm run check`: lint, typecheck, **912/912 tests** en production build groen. Chromium op 390×844 en 430×844: geen horizontale overflow. De categorieënrij krijgt in een volgende kleine stap dezelfde uitstraling. Fysieke iPhone-acceptatie staat open.
+- **Visueel afgekeurd door de gebruiker:** de glanzende icoontegels passen niet bij de app. De gebruiker wil per tegel een passende illustratie in Maatje-stijl. Schetsen van drie richtingen (Maatje in actie, 3D-voorwerpen, mix) staan in de projectbestanden; de keuze is nog open. Er zijn geen illustratie-assets beschikbaar; die moeten eerst worden gemaakt of aangeleverd.
 
 # Checkpoint — Ontdek & bespaar categorieënrij — 14 oktober 2026
 
