@@ -3,7 +3,8 @@
 // never logged. A missing topic or a failed send never fails an import run.
 const DEFAULT_NTFY_SERVER = "https://ntfy.sh";
 const TOPIC_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
-const PRIORITIES = new Set(["min", "low", "default", "high", "urgent"]);
+// ntfy's JSON publish API only accepts priority as a number (1 = min ... 5 = urgent).
+const PRIORITIES = new Map([["min", 1], ["low", 2], ["default", 3], ["high", 4], ["urgent", 5]]);
 
 export function pushConfig(env = process.env) {
   const topic = String(env.NTFY_TOPIC ?? "").trim();
@@ -33,7 +34,7 @@ export async function sendPush({ title, message, priority = "default", tags = []
     topic: config.topic,
     title: String(title ?? "BoodschappenMaatje").slice(0, 120),
     message: String(message ?? "").slice(0, 2_000),
-    priority: PRIORITIES.has(priority) ? priority : "default",
+    priority: PRIORITIES.get(priority) ?? PRIORITIES.get("default"),
     tags: (Array.isArray(tags) ? tags : []).map(String).slice(0, 5),
   };
   const controller = new AbortController();

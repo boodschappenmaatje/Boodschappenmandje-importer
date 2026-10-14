@@ -117,7 +117,7 @@ test("push: zonder geldig topic geen netwerkverkeer; met topic exact één JSON-
   assert.equal(requests.length, 1);
   assert.equal(requests[0].url, "https://ntfy.sh");
   assert.deepEqual(JSON.parse(requests[0].options.body), {
-    topic: "maatje-abcdef123456", title: "Prijzen ververst", message: "6.072 producten", priority: "default", tags: ["a"],
+    topic: "maatje-abcdef123456", title: "Prijzen ververst", message: "6.072 producten", priority: 3, tags: ["a"],
   });
 });
 
@@ -143,4 +143,16 @@ test("avondalarm-workflow: twee avondkansen, testknop en topic alleen als secret
     const source = await readFile(new URL(`../.github/workflows/${filename}`, import.meta.url), "utf8");
     assert.equal((source.match(/NTFY_TOPIC: \$\{\{ secrets\.NTFY_TOPIC \}\}/g) ?? []).length, 1, filename);
   }
+});
+
+test("push: prioriteit gaat als getal naar ntfy (JSON-API weigert tekst)", async () => {
+  const bodies = [];
+  for (const priority of ["high", "min", "urgent"]) {
+    await sendPush({ title: "t", priority }, {
+      env: { NTFY_TOPIC: "maatje-abcdef123456" },
+      fetchImpl: async (_url, options) => { bodies.push(JSON.parse(options.body)); return new Response("{}", { status: 200 }); },
+      logger: quietLogger,
+    });
+  }
+  assert.deepEqual(bodies.map(body => body.priority), [4, 1, 5]);
 });
