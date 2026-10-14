@@ -160,6 +160,17 @@ function isCurrentOffer(result) {
     && positive(result.observed.oldPrice) > positive(result.observed.price));
 }
 
+// Pass: five live offers parsed as offers (old price above price), every
+// regular sample parsed as regular, and no mutating request to Hoogvliet.
+// No fixed product or price is required: offers end every week.
+export function offerAuditPassed(result) {
+  return result?.samples?.offersCorrect?.total === SAMPLE_SIZE
+    && result.samples.offersCorrect.correct === SAMPLE_SIZE
+    && result.samples.regularCorrect?.total > 0
+    && result.samples.regularCorrect.correct === result.samples.regularCorrect.total
+    && Array.isArray(result.forbiddenRequests) && result.forbiddenRequests.length === 0;
+}
+
 export async function runOfferPriceAudit(env = process.env) {
   const base = String(env.SUPABASE_URL ?? "").trim();
   const key = String(env.SUPABASE_SECRET_KEY ?? "").trim();
@@ -181,7 +192,10 @@ export async function runOfferPriceAudit(env = process.env) {
     });
     const offers = offerPool.filter(isCurrentOffer).slice(0, SAMPLE_SIZE);
     const regular = await validateSample(browser, samples.regular);
-    const offerProof = [redBull[0], ...offers].slice(0, SAMPLE_SIZE);
+    // The Red Bull page is the original regression case for comparison-price
+    // markup. Its offer runs out, so it only counts while it is a live offer;
+    // otherwise five other live offers carry the proof.
+    const offerProof = [...redBull.filter(isCurrentOffer), ...offers].slice(0, SAMPLE_SIZE);
     return {
       mode: "read-only",
       database,
@@ -205,15 +219,7 @@ export async function runOfferPriceAudit(env = process.env) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runOfferPriceAudit().then(result => {
     console.log(JSON.stringify(result, null, 2));
-    if (!result.redBull.observed?.isOffer
-      || result.redBull.observed.price !== 1.39
-      || result.redBull.observed.oldPrice !== 1.72
-      || result.samples.offersCorrect.total !== SAMPLE_SIZE
-      || result.samples.offersCorrect.correct !== SAMPLE_SIZE
-      || result.samples.regularCorrect.correct !== result.samples.regularCorrect.total
-      || result.forbiddenRequests.length > 0) {
-      process.exitCode = 1;
-    }
+    if (!offerAuditPassed(result)) process.exitCode = 1;
   }).catch(error => {
     console.error(`Read-only offer-audit failed: ${error instanceof Error ? error.message : "unknown error"}`);
     process.exitCode = 1;
