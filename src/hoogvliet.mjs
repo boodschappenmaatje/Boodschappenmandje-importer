@@ -768,6 +768,9 @@ function fallbackHTMLWithBaseURL(html, targetURL) {
     : `${base}${html}`;
 }
 
+// Mirrors SAFE_ZYTE_LISTING_FALLBACK_MAX_REQUESTS in config.mjs.
+export const ZYTE_LISTING_FALLBACK_HARD_MAX_REQUESTS = 150;
+
 export function createZyteListingFallback({
   config = {},
   browser,
@@ -778,7 +781,7 @@ export function createZyteListingFallback({
   const accounting = emptyListingFallbackAccounting();
   const attemptedWindows = new Set();
   const maxProviderRequests = Math.min(
-    10,
+    ZYTE_LISTING_FALLBACK_HARD_MAX_REQUESTS,
     Math.max(1, Number.parseInt(config.zyteListingFallbackMaxRequests, 10) || 3),
   );
   let parseContext = null;
@@ -846,6 +849,9 @@ export function createZyteListingFallback({
       if (!provider?.ok) return fail(base, provider?.reason ?? "provider_error", provider);
 
       let candidates;
+      // undefined = unknown (never treated as the last page); null = proven
+      // last page because the rendered provider page has no next link.
+      let nextURL;
       try {
         if (!parseContext) {
           if (!browser?.newContext) return fail(base, "parser_context_unavailable", provider);
@@ -862,6 +868,10 @@ export function createZyteListingFallback({
             waitUntil: "domcontentloaded",
           });
           candidates = await extractCatalogListingCandidates(parsePage);
+          // The rendered provider page carries the same "Volgende" link the
+          // primary scan follows; null means this window is the last page.
+          nextURL = await findNextCatalogPageURL(parsePage, canonicalURL, new Set([identity]))
+            .catch(() => undefined);
         } finally {
           await parsePage.close();
         }
@@ -887,7 +897,7 @@ export function createZyteListingFallback({
         fallback_unique_sku_count: uniqueSKUs.size,
       };
       record(event, true);
-      return { ok: true, candidates, event };
+      return { ok: true, candidates, event, nextURL };
     },
     async close() {
       if (parseContext) await parseContext.close();
@@ -1287,6 +1297,62 @@ export async function collectCatalogListing(page, routeURL, {
     };
   };
 
+  // The primary page re-rendered the previous window instead of the expected
+  // next one (stale or throttled hydration). Fetch exactly that next window
+  // through the provider; continue only on new SKUs plus explicit next-page
+  // evidence from the provider page itself, otherwise stay fail-closed.
+  const takeOverStagnatedWindow = async windowSnapshot => {
+    if (!windowSnapshot.expectedByNext || windowSnapshot.fallbackAttemptReason !== null
+      || !listingFallback?.attempt || !windowSnapshot.canonicalURL
+      || windowSnapshot.primaryRawCandidateCount === 0) {
+      return { handled: false };
+    }
+    const eligibilityReason = "eligible_expected_next_stagnated";
+    const result = await listingFallback.attempt({
+      targetURL: expectedWindowURL,
+      routeURL,
+      windowIndex: windows.length,
+      triggerReason: "expected_next_stagnated",
+    });
+    if (!result?.ok) {
+      return { handled: false, eligibilityReason, attemptReason: result?.reason ?? "provider_failure" };
+    }
+    const freshDOM = (result.candidates ?? []).filter(candidate => !routeCandidates.has(candidate.sourceURL));
+    if (freshDOM.length === 0) {
+      return { handled: false, eligibilityReason, attemptReason: "fallback_without_new_candidates" };
+    }
+    let fresh;
+    try {
+      fresh = await hydrateCatalogListingCandidates(page, freshDOM);
+    } catch (error) {
+      if (error instanceof SourceBlockedError) throw error;
+      return { handled: false, eligibilityReason, attemptReason: "fallback_hydration_failed" };
+    }
+    catalogAPICalls += 1;
+    for (const candidate of fresh) routeCandidates.set(candidate.sourceURL, candidate);
+    currentSignature = [...routeCandidates.keys()].sort().join("|");
+    const fingerprint = [...new Set(fresh
+      .map(candidate => extractSKUFromProductURL(candidate.sourceURL))
+      .filter(Boolean))].sort().join("|");
+    if (fingerprint) seenFreshSKUFingerprints.add(fingerprint);
+    windows.push(fresh);
+    if (result.nextURL === null) return { handled: true, exhausted: true };
+    if (typeof result.nextURL !== "string" || visitedListingURLs.has(result.nextURL)) {
+      return { handled: false, eligibilityReason, attemptReason: "fallback_next_page_unproven" };
+    }
+    expectedWindowURL = result.nextURL;
+    listingFallback?.recordPrimaryWindow?.();
+    primaryWindowPreRecorded = true;
+    await navigateWindow(result.nextURL, {
+      routeKey: "catalog:category", cursor: visitedListingURLs.size, page: visitedListingURLs.size,
+      categoryURL: routeURL,
+    }, windows.length);
+    visitedListingURLs.add(result.nextURL);
+    visitedListingIdentities.add(catalogListingPageIdentity(result.nextURL));
+    transition = "next";
+    return { handled: true, exhausted: false };
+  };
+
   while (!shouldStop() && windows.length < maxWindows) {
     const windowSnapshot = await snapshot();
     const { fresh, rawDOM, signature } = windowSnapshot;
@@ -1303,6 +1369,19 @@ export async function collectCatalogListing(page, routeURL, {
       break;
     }
     if (signature === currentSignature && currentSignature) {
+      const takeover = await takeOverStagnatedWindow(windowSnapshot);
+      if (takeover.handled) {
+        if (takeover.exhausted) {
+          naturalExhaustion = true;
+          break;
+        }
+        continue;
+      }
+      if (takeover.attemptReason) {
+        windowSnapshot.fallbackEligible = true;
+        windowSnapshot.eligibilityReason = takeover.eligibilityReason;
+        windowSnapshot.fallbackAttemptReason = takeover.attemptReason;
+      }
       stagnated = true;
       stallReason = "category_listing_stagnated";
       const diagnosticEvidence = windowSnapshot.pageEvidence ?? await readCatalogPageEvidence(page);
@@ -1462,6 +1541,11 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
   let repeatedWindows = 0;
   let windowsWithoutNewSKUs = 0;
   let pageAliases = 0;
+  // Partial daily mode keeps scanning the other categories after one stalls;
+  // the snapshot then stays incomplete (stallReason set) but keeps every SKU
+  // that was seen, including the windows the stalled route did deliver.
+  const continueAfterStall = options.continueAfterStall === true;
+  const stalledRoutes = [];
 
   while (queue.length && !options.shouldStop?.()) {
     const routeURL = queue.shift();
@@ -1560,9 +1644,12 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     }
     sourceExhausted = listing.sourceExhausted;
     if (listing.stallReason) {
-      stallReason = listing.stallReason;
-      stallDiagnostic = listing.stallDiagnostic;
-      break;
+      stalledRoutes.push({ route: routeURL, stallReason: listing.stallReason, windows: listing.windowCount });
+      if (!stallReason) {
+        stallReason = listing.stallReason;
+        stallDiagnostic = listing.stallDiagnostic;
+      }
+      if (!continueAfterStall) break;
     }
     if (listing.initialCandidateCount === 0) {
       const childRoutes = await extractCatalogCategoryLinks(page);
@@ -1618,12 +1705,13 @@ export async function collectPublicCatalogCandidates(page, maxPages, options = {
     windowsWithoutNewSKUs,
     pageAliases,
     stallDiagnostic,
+    stalledRoutes,
     categoryDiagnostics,
     diagnosticUniqueSKUs: globallySeenSKUs.size,
     uniqueListingSKUs: new Set(allCandidates.map(candidate => candidate.sku)).size,
     primaryListingWindows: options.listingFallback?.accounting?.().primaryListingWindows ?? pagesFetched,
     fallbackAccounting: options.listingFallback?.accounting?.() ?? emptyListingFallbackAccounting(),
-    sourceExhausted: sourceExhausted && queue.length === 0,
+    sourceExhausted: sourceExhausted && queue.length === 0 && stalledRoutes.length === 0,
     stallReason,
     nextPage: sourceExhausted && queue.length === 0 ? 0 : nextPage,
   };
@@ -2381,9 +2469,39 @@ export async function refreshExistingProducts(config, candidates, logger = conso
   return { products, stats };
 }
 
+export function dailySnapshotIncompleteSummary(snapshot) {
+  const stalled = Array.isArray(snapshot?.stalledRoutes) ? snapshot.stalledRoutes.length : 0;
+  return `stopreden=${snapshot?.stallReason ?? "listing_window_limit"}`
+    + ` | root_categorieen=${snapshot?.rootCategoriesDiscovered}`
+    + ` | listing_routes=${snapshot?.rootListingRoutesSelected}`
+    + ` | bezochte_routes=${snapshot?.categoriesVisited}`
+    + ` | vastgelopen_routes=${stalled}`
+    + ` | listing_windows=${snapshot?.pagesFetched}`
+    + ` | unieke_SKUs=${snapshot?.uniqueListingSKUs}`
+    + ` | duplicate_kandidaten=${snapshot?.duplicateCandidates}`;
+}
+
+// Decides whether a daily snapshot may reach the maintenance writer. Complete
+// scans always pass; an incomplete scan passes only in partial mode and only
+// when it saw at least dailyPartialMinSKUs unique products. It is then marked
+// snapshot.partial so the run is recorded as 'partial' and retried later.
+export function gateDailyCatalogSnapshot(snapshot, config = {}) {
+  if (snapshot?.sourceExhausted && !snapshot.stallReason) return { partial: false };
+  const incomplete = dailySnapshotIncompleteSummary(snapshot);
+  const minSKUs = Number.isSafeInteger(config.dailyPartialMinSKUs) ? config.dailyPartialMinSKUs : 1_000;
+  if (config.dailyPartialSnapshotEnabled !== true || !(snapshot?.uniqueListingSKUs >= minSKUs)) {
+    throw new SourceUnavailableError(`Dagelijkse catalogussnapshot is onvolledig; ${incomplete}.`);
+  }
+  snapshot.partial = true;
+  snapshot.incompleteSummary = incomplete;
+  return { partial: true };
+}
+
 // Opens one paced source session for the complete daily catalog snapshot.
-// The handler only runs after root/category traversal proves source exhaustion;
-// incomplete/challenged scans therefore cannot reach any database writer.
+// The handler runs after root/category traversal proves source exhaustion, or,
+// when partial mode is enabled, for an incomplete scan that still saw at least
+// dailyPartialMinSKUs products (handler receives partial=true). Challenged
+// scans and small incomplete scans never reach any database writer.
 export async function withDailyCatalogSource(config, handler, options = {}) {
   if (typeof handler !== "function") throw new Error("Daily catalog handler ontbreekt.");
   const logger = options.logger ?? console;
@@ -2403,32 +2521,27 @@ export async function withDailyCatalogSource(config, handler, options = {}) {
   });
   let snapshotComplete = false;
   try {
+    const partialAllowed = config.dailyPartialSnapshotEnabled === true;
     const snapshot = await collectPublicCatalogCandidates(
       listingPage,
       config.maintenanceMaxListingWindows,
-      { navigationRetries: config.navigationRetries, listingFallback },
+      { navigationRetries: config.navigationRetries, listingFallback, continueAfterStall: partialAllowed },
     );
-    if (!snapshot.sourceExhausted || snapshot.stallReason) {
-      if (snapshot.stallReason === "category_listing_stagnated" && snapshot.stallDiagnostic) {
-        logger.warn(`category_listing_stagnated=${JSON.stringify(snapshot.stallDiagnostic)}`);
-      }
-      throw new SourceUnavailableError(
-        `Dagelijkse catalogussnapshot is onvolledig; stopreden=${snapshot.stallReason ?? "listing_window_limit"}`
-        + ` | root_categorieen=${snapshot.rootCategoriesDiscovered}`
-        + ` | listing_routes=${snapshot.rootListingRoutesSelected}`
-        + ` | bezochte_routes=${snapshot.categoriesVisited}`
-        + ` | listing_windows=${snapshot.pagesFetched}`
-        + ` | unieke_SKUs=${snapshot.uniqueListingSKUs}`
-        + ` | duplicate_kandidaten=${snapshot.duplicateCandidates}.`,
-      );
+    if (snapshot.stallReason === "category_listing_stagnated" && snapshot.stallDiagnostic) {
+      logger.warn(`category_listing_stagnated=${JSON.stringify(snapshot.stallDiagnostic)}`);
+    }
+    const { partial } = gateDailyCatalogSnapshot(snapshot, config);
+    if (partial) {
+      logger.warn(`Dagelijkse catalogussnapshot is gedeeltelijk; bijwerken wat gezien is; ${snapshot.incompleteSummary}.`);
     }
     if (!Array.isArray(snapshot.candidates) || snapshot.candidates.length === 0) {
       throw new SourceUnavailableError("Dagelijkse catalogussnapshot bevat geen productkandidaten.");
     }
-    snapshotComplete = true;
+    snapshotComplete = !partial;
     return await handler({
       candidates: snapshot.candidates,
       snapshot,
+      partial,
       validateFallback: (candidate, diagnostics = {}) => validateCandidate(detailPage, candidate, diagnostics),
     });
   } finally {

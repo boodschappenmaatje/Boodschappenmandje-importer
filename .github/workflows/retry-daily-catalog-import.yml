@@ -86,7 +86,9 @@ jobs:
         env:
           ZYTE_API_KEY: ${{ secrets.ZYTE_API_KEY }}
           ZYTE_LISTING_FALLBACK_ENABLED: "1"
-          ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "3"
+          ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "60"
+          DAILY_PARTIAL_SNAPSHOT_ENABLED: "1"
+          DAILY_PARTIAL_MIN_SKUS: "1000"
           ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "45000"
         run: npm run import:daily
 

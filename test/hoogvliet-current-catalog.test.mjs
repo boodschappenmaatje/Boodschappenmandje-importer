@@ -544,3 +544,160 @@ test("catalog URL guard accepts only current public category paths", () => {
   assert.equal(normalizeCatalogCategoryURL("https://hoogvliet.nl/INTERSHOP/web/WFS/catalog"), null);
   assert.equal(normalizeCatalogCategoryURL("https://evil.example/aardappelen-groente-fruit"), null);
 });
+
+// A throttled next page that re-renders the previous window: the primary scan
+// sees only SKUs it already has, so the expected next window "stagnates".
+const stalePaginationPage = paginationFixture.replace(/<script>[\s\S]*<\/script>/, "");
+
+test("stagnated next-window wordt via Zyte overgenomen en eindigt op de laatste pagina", async t => {
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? stalePaginationPage : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({ ok: true, candidates: tomatoesFallback, nextURL: null }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 1);
+  assert.deepEqual(fallback.calls[0], {
+    targetURL: "https://hoogvliet.nl/aardappelen-groente-fruit?page=2",
+    routeURL: "https://hoogvliet.nl/aardappelen-groente-fruit",
+    windowIndex: 1,
+    triggerReason: "expected_next_stagnated",
+  });
+  assert.equal(result.stallReason, null);
+  assert.equal(result.sourceExhausted, true);
+  assert.equal(result.pagesFetched, 2);
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000", "060936000",
+  ]);
+  assert.equal(result.candidates.at(-1).catalogAPIValidated, true);
+});
+
+test("stagnated next-window met mislukte Zyte-overname blijft onvolledig met diagnose", async t => {
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? stalePaginationPage : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({ ok: false, reason: "request_limit_reached" }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 1);
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(result.stallDiagnostic.fallback_eligible, true);
+  assert.equal(result.stallDiagnostic.fallback_eligibility_reason, "eligible_expected_next_stagnated");
+  assert.equal(result.stallDiagnostic.fallback_attempt_reason, "request_limit_reached");
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000",
+  ]);
+});
+
+test("Zyte-overname zonder bewijs voor een volgende pagina claimt geen exhaustion", async t => {
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => url.searchParams.get("page") === "2" ? stalePaginationPage : paginationFixture,
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({ ok: true, candidates: tomatoesFallback }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(result.sourceExhausted, false);
+  assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(result.stallDiagnostic.fallback_attempt_reason, "fallback_next_page_unproven");
+  // The taken-over window still counts: its SKUs are kept for a partial run.
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000", "060936000",
+  ]);
+});
+
+test("Zyte-overname volgt de volgende pagina en gaat daarna primair verder", async t => {
+  const h = await browserFor({
+    body: paginationFixture,
+    bodyForURL: url => {
+      const page = url.searchParams.get("page");
+      if (page === "2") return stalePaginationPage;
+      if (page === "3") return '<!doctype html><main id="catalog-listing"><p class="empty-state">Er zijn geen producten gevonden.</p></main>';
+      return paginationFixture;
+    },
+  });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({
+    ok: true,
+    candidates: tomatoesFallback,
+    nextURL: "https://hoogvliet.nl/aardappelen-groente-fruit?page=3",
+  }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(fallback.calls.length, 1);
+  assert.equal(result.listingURLsVisited, 3);
+  assert.equal(result.stallReason, null);
+  assert.equal(result.sourceExhausted, true);
+  assert.deepEqual(result.candidates.map(candidate => extractSKUFromProductURL(candidate.sourceURL)), [
+    "064786000", "081222000", "060936000",
+  ]);
+});
+
+test("load-more stagnatie gebruikt ook in de nieuwe overname geen Zyte", async t => {
+  const body = fixture.replace("document.querySelector('#load-more').remove();", "void 0;");
+  const h = await browserFor({ body });
+  t.after(() => h.browser.close());
+  const fallback = fallbackStub(async () => ({ ok: true, candidates: tomatoesFallback, nextURL: null }));
+  const result = await collectCatalogListing(h.page, "https://hoogvliet.nl/aardappelen-groente-fruit", {
+    maxWindows: 10,
+    listingFallback: fallback,
+  });
+  assert.equal(result.stallReason, "category_listing_stagnated");
+  assert.equal(fallback.calls.length, 0);
+});
+
+test("partiële modus scant na een vastgelopen categorie de overige categorieën", async t => {
+  const root = `<!doctype html><main>
+    <a href="/aardappelen-groente-fruit">Aardappelen, groente en fruit</a>
+    <a href="/brood-gebak">Brood en gebak</a>
+  </main>`;
+  const second = `<!doctype html><main id="catalog-listing">
+    <article class="product-card">
+      <a href="/product/trostomaten-verpakt-060936000"><h2>Trostomaten verpakt</h2></a>
+      <span class="package-size">500 gram</span><span class="price">€ 2,29</span>
+    </article></main>`;
+  const bodyForURL = url => {
+    if (url.pathname === "/producten") return root;
+    if (url.pathname === "/brood-gebak") return second;
+    return url.searchParams.get("page") === "2" ? stalePaginationPage : paginationFixture;
+  };
+  for (const continueAfterStall of [false, true]) {
+    const h = await browserFor({ rootBody: root, bodyForURL });
+    try {
+      const result = await collectPublicCatalogCandidates(h.page, 20, {
+        listingFallback: fallbackStub(),
+        continueAfterStall,
+      });
+      assert.equal(result.rootListingRoutesSelected, 2);
+      assert.equal(result.stallReason, "category_listing_stagnated");
+      assert.equal(result.sourceExhausted, false);
+      assert.equal(result.stalledRoutes.length, 1);
+      assert.equal(result.stalledRoutes[0].route, "https://hoogvliet.nl/aardappelen-groente-fruit");
+      if (continueAfterStall) {
+        assert.equal(result.categoriesVisited, 2);
+        assert.deepEqual(result.candidates.map(candidate => candidate.sku).sort(), [
+          "060936000", "064786000", "081222000",
+        ]);
+      } else {
+        assert.equal(result.categoriesVisited, 1);
+        assert.deepEqual(result.candidates, []);
+      }
+    } finally {
+      await h.browser.close();
+    }
+  }
+});
