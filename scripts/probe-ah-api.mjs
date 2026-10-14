@@ -94,7 +94,7 @@ const findings = [];
 const auth = await call("/mobile-auth/v1/auth/token/anonymous", { method: "POST", body: { clientId: "appie" } });
 const token = auth.json?.access_token ?? null;
 lines.push(`- Anonieme sessie: HTTP ${auth.status} in ${auth.ms} ms, token ${token ? "ontvangen" : "NIET ontvangen"}${auth.snippet ? ` (${auth.snippet})` : ""}`);
-findings.push(`token=${token ? "ok" : `fout_${auth.status}`}`);
+findings.push(`token=${token ? "ok" : `fout_${auth.status}${auth.snippet ? ` (${auth.snippet.replace(/\s+/g, " ").slice(0, 160)})` : ""}`}`);
 
 if (token) {
   let fieldNames = new Set();
