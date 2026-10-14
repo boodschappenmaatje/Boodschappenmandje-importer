@@ -97,7 +97,7 @@ test('normale daily maintenance heeft volledige dekking; legacy cap blijft allee
   assert.doesNotMatch(scheduled, /max_products="400"|DAILY_NEW_PRODUCT_TARGET|PRICE_SHARD_COUNT/);
   assert.match(primary, /npm run import:daily-growth/);
 
-  assert.deepEqual(cronEntries(retry), ['17 4 * * *', '17 5 * * *', '17 8,13,18 * * *']);
+  assert.deepEqual(cronEntries(retry), ['17 4-20 * * *']);
   assert.match(retry, /Vaste UTC-watchdogkandidaten/);
   assert.match(retry, /npm run --silent inspect:daily/);
   assert.match(retry, /npm run import:daily/);

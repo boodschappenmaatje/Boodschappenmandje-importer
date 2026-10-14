@@ -110,6 +110,7 @@ jobs:
           ZYTE_LISTING_FALLBACK_MAX_REQUESTS: "60"
           DAILY_PARTIAL_SNAPSHOT_ENABLED: "1"
           DAILY_PARTIAL_MIN_SKUS: "1000"
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           ZYTE_LISTING_FALLBACK_TIMEOUT_MS: "45000"
         run: npm run import:daily
 
