@@ -69,10 +69,11 @@ describe("dashboard rendering", () => {
     expect(html).toContain("Lekker eten.");
     expect(html).toContain("Ontdek &amp; bespaar");
     expect(html).toContain('href="/ontdek"');
-    expect(html).toContain("Zoek producten, merken of recepten...");
+    expect(html).toContain("Zoek producten...");
     expect(html).toContain('class="home-discovery-entry"');
     expect(html).toMatch(/home-discovery-store[\s\S]*?supermarket-selector[\s\S]*?home-discovery-search/);
-    expect(html).toContain('placeholder="Zoek producten, merken of recepten..."');
+    expect(html).toContain('placeholder="Zoek producten..."');
+    expect(html).toContain("Zoek producten, merken of recepten</label>");
     expect(html).not.toContain("Goed geregeld.");
     expect(html).not.toContain("Wat eten we deze week?");
     expect(html).toContain("Je week");

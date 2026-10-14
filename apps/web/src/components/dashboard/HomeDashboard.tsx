@@ -74,7 +74,7 @@ export function HomeDashboard() {
       }}>
         <label className="visually-hidden" htmlFor="home-discovery-query">Zoek producten, merken of recepten</label>
         <Icon name="search" size={22} />
-        <input id="home-discovery-query" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten, merken of recepten..." />
+        <input id="home-discovery-query" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Zoek producten..." />
         <button type="submit" aria-label="Zoek producten">Zoek</button>
       </form>
       <Link className="home-discovery-link" href="/ontdek"><span><strong>Ontdek &amp; bespaar</strong><small>Bekijk producten, aanbiedingen en categorieën</small></span><Chevron /></Link>
