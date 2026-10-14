@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { auditPriceRows } from "../scripts/audit-offer-prices.mjs";
+import { auditPriceRows, offerAuditPassed } from "../scripts/audit-offer-prices.mjs";
 
 test("prijs-audit onderscheidt aanbiedingen en verdachte vergelijkingprijzen", () => {
   const result = auditPriceRows([
@@ -18,4 +18,17 @@ test("prijs-audit onderscheidt aanbiedingen en verdachte vergelijkingprijzen", (
     offersWithoutValidOldPrice: 1,
     invalidPrices: 1,
   });
+});
+
+test("offer-audit slaagt zonder vaste Red Bull-prijs zodra 5 live aanbiedingen en alle reguliere goed zijn", () => {
+  const passing = {
+    redBull: { observed: { isOffer: false, price: 1.72, oldPrice: null } },
+    samples: { offersCorrect: { total: 5, correct: 5 }, regularCorrect: { total: 5, correct: 5 } },
+    forbiddenRequests: [],
+  };
+  assert.equal(offerAuditPassed(passing), true);
+  assert.equal(offerAuditPassed({ ...passing, samples: { ...passing.samples, offersCorrect: { total: 4, correct: 4 } } }), false);
+  assert.equal(offerAuditPassed({ ...passing, samples: { ...passing.samples, regularCorrect: { total: 5, correct: 4 } } }), false);
+  assert.equal(offerAuditPassed({ ...passing, samples: { ...passing.samples, regularCorrect: { total: 0, correct: 0 } } }), false);
+  assert.equal(offerAuditPassed({ ...passing, forbiddenRequests: [{ sku: "x" }] }), false);
 });
