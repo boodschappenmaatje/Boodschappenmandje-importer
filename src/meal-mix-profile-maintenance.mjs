@@ -141,5 +141,13 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch((error) => { console.error(`Maaltijdmixonderhoud mislukt: ${maintenanceDiagnostic(error)}`); process.exitCode = 1; });
+  main().catch((error) => {
+    const message = `Maaltijdmixonderhoud mislukt: ${maintenanceDiagnostic(error)}`;
+    console.error(message);
+    // Readable as a run annotation even when the full job log is not.
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::error title=Maaltijdmixonderhoud::${message.replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A")}`);
+    }
+    process.exitCode = 1;
+  });
 }
