@@ -4,7 +4,7 @@
 - Binnen de kaart blijft de bestaande supermarktselector met logo en sheet links. Rechts is een groot zoekveld zonder losse blauwe knop; de volledige zoekstrook focust het invoerveld en Enter/search behoudt de bestaande routering naar `/ontdek` of `/ontdek?q=...`.
 - `Ontdek & bespaar` staat direct onder de zoekrij als een brede, tweede actiekaart met rond prijslabel-icoon, titel, uitleg en chevron. Bestaande budget, maaltijdbudget, week, lijstactie en bottom navigation blijven behouden.
 - Provider-, lijst-, budget-, week- en zoeklogica zijn niet gewijzigd; alleen Home-presentatie en gerichte dashboard-test zijn aangepast. Gerichte dashboard-/selector-tests **5/5**; web `npm run check`: lint, typecheck, **910/910 tests** en production build; root `npm test`: **515/515**; root `npm run check` en `git diff --check` groen.
-- Chromium op **390×844** en **430×844** bevestigt geen horizontale overflow, winkelkeuze opent de bestaande sheet, hele zoekstrook focust, zoeken met `pasta` behoudt `/ontdek?q=pasta`, Ontdek-kaart opent `/ontdek` en de bestaande budget/week/list/navigation blijft aanwezig. Preview en fysieke iPhone-heracceptatie van deze Home-versie volgen na push/CI.
+- Chromium op **390×844** en **430×844** bevestigt geen horizontale overflow, winkelkeuze opent de bestaande sheet, hele zoekstrook focust, zoeken met `pasta` behoudt `/ontdek?q=pasta`, Ontdek-kaart opent `/ontdek` en de bestaande budget/week/list/navigation blijft aanwezig. CI-run **#574** en Vercel zijn groen; Preview alias geeft HTTP 200. Fysieke iPhone-heracceptatie van deze Home-versie staat open.
 
 # Checkpoint — Home-bovenkant volgens goedgekeurde visual — 14 oktober 2026
 
