@@ -42,7 +42,9 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+    const started = Date.now();
     const result = await runMaatjeAssistant(input, geminiCaller(apiKey, model), new SupabaseCatalogRepository(client));
+    console.info("maatje-praten", `klaar in ${Date.now() - started} ms, ${result.items.length} producten`);
     return Response.json(result);
   } catch (error) {
     console.error("maatje-praten", error instanceof Error ? error.message : "unknown");

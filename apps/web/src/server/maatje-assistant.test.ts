@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { Product } from "@/types/catalog";
-import { buildGeminiBody, geminiCaller, parseAssistantRequest, parseGeminiPlan, pickFlashModel, runMaatjeAssistant } from "./maatje-assistant";
+import { buildGeminiBody, geminiCaller, parseAssistantRequest, parseGeminiPlan, pickFlashModel, runMaatjeAssistant, withQuickThinking } from "./maatje-assistant";
 
 const NOW = new Date("2026-10-15T12:00:00Z");
 
@@ -147,6 +147,12 @@ describe("Gemini model", () => {
   it("picks the newest plain flash model", () => {
     expect(pickFlashModel(models)).toBe("gemini-3.8-flash");
     expect(pickFlashModel({})).toBeNull();
+  });
+
+  it("asks for short thinking so Maatje answers quickly", () => {
+    const body = { generationConfig: { temperature: 0.3 } };
+    expect(withQuickThinking("gemini-3.8-flash", body)).toEqual({ generationConfig: { temperature: 0.3, thinkingConfig: { thinkingLevel: "low" } } });
+    expect(withQuickThinking("gemini-2.5-flash", body)).toEqual({ generationConfig: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } } });
   });
 
   it("switches to an existing model when the configured one is gone", async () => {

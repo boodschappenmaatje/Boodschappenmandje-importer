@@ -269,14 +269,35 @@ export function pickFlashModel(models: unknown): string | null {
   return names[0] ?? null;
 }
 
+/**
+ * Maatje hoeft niet lang na te denken: kort denken maakt het antwoord vele
+ * seconden sneller. Gemini 3+ kent een denkniveau, oudere modellen een budget.
+ */
+export function withQuickThinking(model: string, body: unknown): unknown {
+  if (!isRecord(body) || !isRecord(body.generationConfig)) return body;
+  const major = Number(model.match(/^gemini-(\d+)/)?.[1] ?? 0);
+  const thinkingConfig = major >= 3 ? { thinkingLevel: "low" } : { thinkingBudget: 0 };
+  return { ...body, generationConfig: { ...body.generationConfig, thinkingConfig } };
+}
+
 export function geminiCaller(apiKey: string, model: string, fetchImpl: typeof fetch = fetch): GeminiCall {
   const headers = { "content-type": "application/json", "x-goog-api-key": apiKey };
-  const generate = (name: string, body: unknown) => fetchImpl(`${GEMINI_API}/models/${encodeURIComponent(name)}:generateContent`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(25_000),
-  });
+  const generate = async (name: string, body: unknown) => {
+    const response = await fetchImpl(`${GEMINI_API}/models/${encodeURIComponent(name)}:generateContent`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(withQuickThinking(name, body)),
+      signal: AbortSignal.timeout(45_000),
+    });
+    // Kent dit model de denk-instelling niet, probeer dan zonder.
+    if (response.status !== 400) return response;
+    return fetchImpl(`${GEMINI_API}/models/${encodeURIComponent(name)}:generateContent`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(45_000),
+    });
+  };
   return async body => {
     let response = await generate(workingModel ?? model, body);
     if (response.status === 404) {
