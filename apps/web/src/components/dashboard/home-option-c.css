@@ -18,8 +18,10 @@ body:has(.home-c) { background: var(--home-c-background); }
 .home-c-character { position: relative; align-self: stretch; min-width: 0; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .home-c-character:focus { outline: none; }
 .home-c-character:focus-visible { outline: 3px solid var(--brand-glow); outline-offset: 2px; border-radius: 24px; }
-.home-c-character:active .home-c-mascot { transform: scale(.94) rotate(-3deg); }
-.home-c-character .home-c-mascot { transition: transform 160ms ease; }
+.home-c-character { transition: transform 160ms ease; }
+/* De indruk zit op de knop, niet op het plaatje: Safari tekent anders een
+   dun wit kader om een plaatje met schaduwfilter dat beweegt. */
+.home-c-character:active { transform: scale(.96); }
 .home-c-mascot[data-live="true"] { visibility: hidden; }
 .home-c-mascot { position: absolute; z-index: 2; width: 105%; max-width: 205px; height: auto; right: -4px; top: -12px; filter: drop-shadow(0 6px 5px var(--home-c-shadow)); pointer-events: none; }
 .home-c-budget { position: relative; display: grid; gap: 8px; padding: 13px 15px 11px; border-radius: 20px; background: white; color: var(--home-c-ink); box-shadow: 0 7px 20px var(--home-c-shadow); }

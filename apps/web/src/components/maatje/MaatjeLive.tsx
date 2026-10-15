@@ -70,13 +70,18 @@ export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps)
       if (event.key === "Escape") close();
     };
     const onResize = () => setTarget(targetRect());
+    // Safari schuift anders de adresbalk en de pagina mee als je Maatje ronddraait.
+    const stage = stageRef.current?.parentElement;
+    const onTouchMove = (event: TouchEvent) => event.preventDefault();
     document.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
+    stage?.addEventListener("touchmove", onTouchMove, { passive: false });
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
+      stage?.removeEventListener("touchmove", onTouchMove);
       document.body.style.overflow = overflow;
     };
   }, [close]);

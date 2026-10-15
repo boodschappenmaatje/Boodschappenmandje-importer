@@ -22,6 +22,7 @@
   pointer-events: none;
 }
 .maatje-live-bubble[data-visible="true"] { opacity: 1; transform: translate(-50%, 0); }
+.maatje-live[data-leaving="true"] .maatje-live-bubble { transition-duration: 100ms; }
 .maatje-live-bubble::after {
   content: "";
   position: absolute;

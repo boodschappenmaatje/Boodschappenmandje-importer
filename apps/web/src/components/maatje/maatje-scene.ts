@@ -293,6 +293,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   const look = { x: 0, y: 0 };
   let drag: { x: number; startX: number; startY: number; moved: boolean } | null = null;
   let dragYaw = 0;
+  const MAX_TURN = 0.85;
   let dragVelocity = 0;
 
   function setPointer(event: PointerEvent) {
@@ -318,7 +319,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     drag.x = event.clientX;
     if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) drag.moved = true;
     if (drag.moved && phase === "live") {
-      dragYaw += dx * 0.013;
+      dragYaw = THREE.MathUtils.clamp(dragYaw + dx * 0.013, -2 * MAX_TURN, 2 * MAX_TURN);
       dragVelocity = dx * 0.013;
     }
   };
@@ -392,7 +393,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         scale = THREE.MathUtils.lerp(from.scale, to.scale, travel);
         lift = Math.sin(travel * Math.PI) * 0.12 * to.scale;
         // Onderweg draait hij een halve slag heen en terug: zo zie je zijn diepte.
-        yaw = Math.sin(travel * Math.PI) * 0.75;
+        yaw = Math.sin(travel * Math.PI) * 0.4;
         pitch = -wake.stretch * 0.12;
       }
       live = p;
@@ -457,16 +458,18 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
     if (!drag) {
       dragYaw += dragVelocity;
-      dragVelocity *= 0.9;
-      dragYaw *= 0.94;
+      dragVelocity *= 0.86;
+      dragYaw *= 0.92;
     }
+    // Zachte rem: van opzij is Maatje een dun vel, dus hij draait hooguit ~50°.
+    const turned = MAX_TURN * Math.tanh(dragYaw / MAX_TURN);
     lookSmooth.x = THREE.MathUtils.lerp(lookSmooth.x, phase === "live" ? look.x : 0, 0.1);
     lookSmooth.y = THREE.MathUtils.lerp(lookSmooth.y, phase === "live" ? look.y : 0, 0.1);
 
     root.position.set(x, y + (lift + bob) * scale, 0);
     root.scale.setScalar(scale);
     pitch += -lookSmooth.y * 0.12 * live;
-    root.rotation.set(pitch, yaw + sway + dragYaw + lookSmooth.x * 0.3 * live, roll);
+    root.rotation.set(pitch, yaw + sway + turned + lookSmooth.x * 0.3 * live, roll);
     figure.scale.set(1 / Math.sqrt(squash), squash, 1);
     const hover = (lift + bob) * scale;
     shadow.position.set(x, y - 0.98 * scale, -0.5 * scale);

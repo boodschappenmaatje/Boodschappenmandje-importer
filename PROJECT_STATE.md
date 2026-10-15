@@ -2,7 +2,11 @@
 
 - Op verzoek van Dennis is roadmapstap 8 (mascotte) naar voren gehaald als **Interactieve 3D-Maatje**, in vier stappen die elk eerst met Dennis worden afgestemd (zie `ROADMAP.md`). Featurebranch `feature/maatje-3d-assistent`, basis `main` `d5003a7`.
 - Stap 1 (herzien na feedback van Dennis: geen apart scherm en precies hetzelfde uiterlijk): tikken op de Home-mascotte laat Maatje op Home zelf tot leven komen. Hij begint exact op de plek van het plaatje, stapt naar voren, wordt groter en draait even rond; tik ernaast of op het kruisje en hij vliegt terug. Het 3D-model is opgebouwd uit het officiële plaatje zelf (`apps/web/scripts/maatje-3d/build.py` → `public/branding/maatje-3d/` en `maatje-model.json`): lijf, handjes en streepjes zijn dikke, glanzende vormen met het plaatje als textuur; ogen, mond en wenkbrauwen zijn losse delen voor knipperen, meekijken en praten. Ronde 3 (feedback Dennis): geen waas of laag meer over de app, alleen Maatje beweegt (tik naast hem om hem terug te sturen); scherpere texturen uit een 4x vergrote bron (`apps/web/assets/branding/maatje-home-c-hd.webp`, OpenCV EDSR x4) en effen glanzende randen. Three.js (`three@0.186.1`) laadt pas bij tikken. Reduced motion en toestellen zonder WebGL worden afgevangen.
-- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van stap 1 staat open.
+- Ronde 4 is gebaseerd op Dennis' iPhone-schermopname en de keuze "Wakker worden" (gapen, uitrekken, naar voren, zwaaien). Daarbij zijn drie dingen aangepast:
+  - Het dunne witte kader na het tikken is weg: de indruk zit nu op de knop in plaats van op het plaatje met schaduwfilter.
+  - Ronddraaien heeft een zachte rem tot ongeveer 50°, omdat Maatje van opzij een dun vel is, en hij draait minder ver bij het binnenkomen.
+  - De pagina en de Safari-adresbalk schuiven niet meer mee tijdens het slepen, en de tekstballon verdwijnt sneller bij het teruggaan.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 4 staat open.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
