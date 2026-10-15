@@ -55,6 +55,8 @@ export interface MaatjeSceneOptions {
   onHoldStart?: () => void;
   /** Je laat Maatje los (cancelled: de vinger ging eraf zonder los te laten). */
   onHoldEnd?: (cancelled: boolean) => void;
+  /** Plek van het winkelmandje naast Maatje (stap 3). */
+  cart?: () => DOMRect;
 }
 
 export interface MaatjeSceneController {
@@ -68,6 +70,14 @@ export interface MaatjeSceneController {
   setMood(mood: "idle" | "listening" | "thinking"): void;
   /** Laat Maatje terugvliegen naar zijn plek op Home, waar hij weer indommelt. */
   close(): Promise<void>;
+  /** Knip met de vingers: een product verschijnt in zijn hand. */
+  conjure(): void;
+  /** Een product valt in het mandje: het mandje veert even mee. */
+  drop(): void;
+  /** Hoeveel producten er (zichtbaar) in het mandje liggen. */
+  setCartFill(count: number): void;
+  /** Waar zijn tover-hand nu op het scherm is (voor het product dat verschijnt). */
+  handPoint(): { x: number; y: number } | null;
   dispose(): void;
 }
 
@@ -352,6 +362,48 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   shadow.renderOrder = -1;
   scene.add(shadow);
 
+  // ----- Winkelmandje naast Maatje (stap 3) -----
+  // Een speelgoedmandje in huisstijlblauw, iets naar je toe gekanteld zodat je
+  // erin kijkt. Er liggen gekleurde pakjes in die meegroeien met je lijst.
+  const cart = new THREE.Group();
+  const cartBody = new THREE.Group();
+  cart.add(cartBody);
+  const basketMaterial = new THREE.MeshPhysicalMaterial({ color: GLOW_CORE, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.2, side: THREE.DoubleSide });
+  const basketProfile = [new THREE.Vector2(0, -0.42), new THREE.Vector2(0.58, -0.42), new THREE.Vector2(0.66, -0.36), new THREE.Vector2(0.84, 0.4)];
+  const basketShell = new THREE.LatheGeometry(basketProfile, 40);
+  const basketRimGeometry = new THREE.TorusGeometry(0.84, 0.065, 12, 48);
+  const handleGeometry = new THREE.TorusGeometry(0.72, 0.05, 10, 32, Math.PI);
+  cartBody.add(new THREE.Mesh(basketShell, basketMaterial));
+  const basketRim = new THREE.Mesh(basketRimGeometry, whiteMaterial);
+  basketRim.position.y = 0.4;
+  basketRim.rotation.x = Math.PI / 2;
+  cartBody.add(basketRim);
+  const basketHandle = new THREE.Mesh(handleGeometry, rimMaterial);
+  basketHandle.position.y = 0.4;
+  cartBody.add(basketHandle);
+  // Gevlochten bandjes rondom.
+  for (const y of [-0.12, 0.14]) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.66 + (y + 0.42) * 0.2, 0.03, 8, 40), whiteMaterial);
+    band.position.y = y;
+    band.rotation.x = Math.PI / 2;
+    cartBody.add(band);
+  }
+  const PACK_COLORS = [0xffb347, 0x7ed957, 0xff6b81, 0xffe066, 0x9b8cff, 0x5ce1e6, 0xff9f43, 0xa3e635];
+  const packMaterials = PACK_COLORS.map(color => new THREE.MeshPhysicalMaterial({ color, roughness: 0.4, clearcoat: 0.6 }));
+  const packGeometry = new THREE.BoxGeometry(0.4, 0.5, 0.26);
+  const packs = PACK_COLORS.map((_, i) => {
+    const pack = new THREE.Mesh(packGeometry, packMaterials[i]);
+    const angle = i * 2.4;
+    const ring = i < 4 ? 0.36 : 0.14;
+    pack.position.set(Math.cos(angle) * ring, 0.12 + Math.floor(i / 4) * 0.24, Math.sin(angle) * ring);
+    pack.rotation.set((i % 3) * 0.2 - 0.2, angle, (i % 2) * 0.3 - 0.15);
+    pack.scale.setScalar(0.001);
+    cartBody.add(pack);
+    return pack;
+  });
+  cart.visible = false;
+  scene.add(cart);
+
   // ----- Plaatsing in schermcoördinaten -----
   let viewport = { width: 1, height: 1 };
   // ----- Blauwe gloed als Maatje wakker is -----
@@ -407,13 +459,16 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       return;
     }
     const [mask, blurA, blurB] = glowTargets;
+    const cartShown = cart.visible;
     shadow.visible = false;
+    cart.visible = false;
     scene.overrideMaterial = maskMaterial;
     renderer.setClearColor(0x000000, 1);
     renderer.setRenderTarget(mask);
     renderer.render(scene, camera);
     scene.overrideMaterial = null;
     shadow.visible = true;
+    cart.visible = cartShown;
     renderer.setClearColor(0x000000, 0);
     let source = mask.texture;
     for (const spread of [1.8, 3.8]) {
@@ -548,6 +603,13 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   let glowAmount = 0;
   let wasVisible = true;
   const lookSmooth = { x: 0, y: 0 };
+  let cartAmount = 0;
+  let cartFill = 0;
+  let dropStart = -10;
+  let snapStart = -10;
+  const packSize = packs.map(() => 0);
+  // De hand die het dichtst bij het mandje (rechts) zit, tovert.
+  const magicHand = handHomeX[0] > handHomeX[1] ? 0 : 1;
 
   function tick() {
     if (disposed) return;
@@ -681,6 +743,14 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     const handTwist = [Math.sin(now * 3.1) * 0.06 * motion * live, -Math.sin(now * 2.7) * 0.06 * motion * live];
     handLift = handLift.map((v, i) => v - 0.035 * sleep + breath * 0.008 * sleep + stretch * 0.2 + (i === 1 ? wave * 0.2 : 0));
     let waveAngle = wave * Math.sin(now * 13) * 0.42;
+    // Toveren: tovenaarshand gaat omhoog, knipt (kort wiebelen) en zakt terug.
+    const snapT = (now - snapStart) / (options.reducedMotion ? 0.3 : 0.55);
+    const snap = snapT >= 0 && snapT < 1 ? Math.sin(snapT * Math.PI) : 0;
+    if (snap > 0) {
+      handLift[magicHand] += snap * 0.22;
+      happy = Math.max(happy, snap);
+    }
+    const snapTwist = snap > 0 ? Math.sin(snapT * Math.PI * 5) * 0.25 * snap * motion : 0;
     happy = THREE.MathUtils.lerp(happy, talking ? 0.7 : 0.25 * (1 - sleep), 0.06);
     let giggle = false;
 
@@ -734,10 +804,27 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       hand.position.x = handHomeX[i] - side * 0.3 * tuck;
       hand.position.y = handHome[i] + handLift[i] - 0.22 * tuck;
       hand.position.z = handHomeZ[i] - 0.3 * tuck;
-      hand.rotation.z = handTwist[i] + (i === 1 ? -waveAngle : 0) + side * 0.6 * tuck;
+      hand.rotation.z = handTwist[i] + (i === 1 ? -waveAngle : 0) + side * 0.6 * tuck + (i === magicHand ? snapTwist : 0);
       hand.scale.setScalar(1 - 0.45 * tuck);
     });
-    sparks.forEach((spark, i) => spark.scale.setScalar(Math.max(0.001, sparkAmount * (1 + Math.sin(now * 3.4 + i * 1.3) * 0.12 * live))));
+    sparks.forEach((spark, i) => spark.scale.setScalar(Math.max(0.001, sparkAmount * (1 + Math.sin(now * 3.4 + i * 1.3) * 0.12 * live) * (1 + snap * 0.5))));
+
+    // Mandje: springt erbij als hij wakker is, veert mee als er iets in valt.
+    cartAmount = THREE.MathUtils.lerp(cartAmount, phase === "live" && options.cart ? 1 : 0, phase === "live" ? 0.12 : 0.3);
+    cart.visible = cartAmount > 0.01;
+    if (cart.visible && options.cart) {
+      const spot = place(options.cart());
+      const pop = options.reducedMotion ? cartAmount : easeOutBack(cartAmount);
+      const dropT = (now - dropStart) / 0.6;
+      const bounce = dropT >= 0 && dropT < 1 ? Math.sin(dropT * Math.PI * 3) * (1 - dropT) * 0.12 * motion : 0;
+      cart.position.set(spot.x, spot.y + Math.sin(now * 1.8 + 1) * 0.015 * spot.scale * motion, 0.2);
+      cart.scale.set(spot.scale * pop * (1 + bounce * 0.6), spot.scale * pop * (1 - bounce), spot.scale * pop);
+      cartBody.rotation.set(0.55, -0.35 + Math.sin(now * 0.9) * 0.05 * motion, 0);
+      packs.forEach((pack, i) => {
+        packSize[i] = THREE.MathUtils.lerp(packSize[i], i < cartFill ? 1 : 0, 0.18);
+        pack.scale.setScalar(Math.max(0.001, packSize[i]));
+      });
+    }
 
     // Gezicht: knipperen, meekijken, praten en blij kijken.
     if (blinkStart < 0 && now > nextBlink) blinkStart = now;
@@ -802,6 +889,24 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     setMood(value) {
       mood = value;
     },
+    conjure() {
+      if (phase === "live") snapStart = performance.now() / 1000;
+    },
+    drop() {
+      dropStart = performance.now() / 1000;
+    },
+    setCartFill(count) {
+      cartFill = Math.min(packs.length, Math.max(0, count));
+    },
+    handPoint() {
+      if (phase !== "live") return null;
+      const point = new THREE.Vector3();
+      hands[magicHand].getWorldPosition(point);
+      point.y += 0.12 * root.scale.y;
+      point.project(camera);
+      const box = container.getBoundingClientRect();
+      return { x: box.left + (point.x + 1) / 2 * viewport.width, y: box.top + (1 - point.y) / 2 * viewport.height };
+    },
     close() {
       if (phase === "sleeping") return Promise.resolve();
       if (phase === "leaving") return new Promise<void>(resolve => {
@@ -830,6 +935,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
       materials.forEach(material => material.dispose());
+      [basketMaterial, ...packMaterials].forEach(material => material.dispose());
       glowTargets.forEach(target => target.dispose());
       [maskMaterial, blurMaterial, glowMaterial].forEach(material => material.dispose());
       quadGeometry.dispose();

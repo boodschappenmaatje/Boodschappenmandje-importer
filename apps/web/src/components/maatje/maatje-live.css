@@ -161,3 +161,47 @@
 .maatje-talk-item { transition: opacity 200ms ease, filter 200ms ease; }
 .maatje-talk[data-mood="thinking"] .maatje-talk-item { opacity: .45; filter: grayscale(1); pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { .maatje-talk-items, .maatje-talk-hint, .maatje-live-dots i { animation: none; } }
+
+/* ----- Product in het mandje (stap 3) ----- */
+.maatje-fly { position: fixed; left: 0; top: 0; z-index: 3; width: 64px; height: 64px; pointer-events: none; opacity: 0; will-change: transform, opacity; }
+.maatje-fly-card { display: grid; place-items: center; width: 100%; height: 100%; overflow: hidden; border-radius: 16px; background: white; box-shadow: 0 8px 18px rgba(3, 40, 110, .3); }
+.maatje-fly-card img { width: 86%; height: 86%; object-fit: contain; }
+.maatje-fly-initial { color: var(--brand-ink); font-size: 1.6rem; font-weight: 900; }
+/* Glinsters springen uit zijn hand als het product verschijnt. */
+.maatje-fly-sparks i { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px; background: #FFE066; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); opacity: 0; animation: maatje-fly-spark 520ms ease-out 140ms forwards; }
+.maatje-fly-sparks i:nth-child(1) { --dx: -40px; --dy: -30px; }
+.maatje-fly-sparks i:nth-child(2) { --dx: 38px; --dy: -34px; background: white; }
+.maatje-fly-sparks i:nth-child(3) { --dx: -36px; --dy: 30px; background: white; }
+.maatje-fly-sparks i:nth-child(4) { --dx: 42px; --dy: 26px; }
+.maatje-fly-sparks i:nth-child(5) { --dx: 0px; --dy: -46px; background: #62BFFC; }
+@keyframes maatje-fly-spark {
+  0% { opacity: 0; transform: translate(0, 0) scale(.3); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.2) rotate(90deg); }
+}
+/* Bij het mandje: hoeveel er op je lijst staat en wat het samen kost. */
+.maatje-cart-badge {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: white;
+  color: var(--brand-ink);
+  font-family: "Maatje Home", ui-rounded, system-ui, sans-serif;
+  font-size: .85rem;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(3, 40, 110, .25);
+  transform: translate(-50%, -50%) scale(.6);
+  opacity: 0;
+  transition: opacity 240ms ease, transform 300ms cubic-bezier(.3, 1.5, .5, 1);
+  pointer-events: none;
+}
+.maatje-cart-badge[data-visible="true"] { opacity: 1; transform: translate(-50%, -50%); }
+.maatje-cart-badge strong { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px; background: var(--brand-blue); color: white; font-size: .8rem; animation: maatje-badge-pop 380ms cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes maatje-badge-pop { from { transform: scale(1.5); } }
+@media (prefers-reduced-motion: reduce) { .maatje-fly-sparks i, .maatje-cart-badge strong { animation: none; } }
