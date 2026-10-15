@@ -6,7 +6,7 @@ import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const DEFAULT_MODEL = "gemini-3.8-flash";
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 20;
 const recent = new Map<string, number[]>();

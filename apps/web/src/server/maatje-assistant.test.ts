@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CatalogRepository } from "@/services/catalog/catalog-repository";
 import type { Product } from "@/types/catalog";
-import { buildGeminiBody, parseAssistantRequest, parseGeminiPlan, runMaatjeAssistant } from "./maatje-assistant";
+import { buildGeminiBody, geminiCaller, parseAssistantRequest, parseGeminiPlan, pickFlashModel, runMaatjeAssistant } from "./maatje-assistant";
 
 const NOW = new Date("2026-10-15T12:00:00Z");
 
@@ -132,5 +132,31 @@ describe("runMaatjeAssistant", () => {
 
   it("fails when Gemini answers in the wrong format", async () => {
     await expect(runMaatjeAssistant(parseAssistantRequest(baseRequest)!, vi.fn(async () => ({})), catalogWith({}), NOW)).rejects.toThrow();
+  });
+});
+
+describe("Gemini model", () => {
+  const models = { models: [
+    { name: "models/gemini-3.5-flash", supportedGenerationMethods: ["generateContent"] },
+    { name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"] },
+    { name: "models/gemini-3.8-flash-live", supportedGenerationMethods: ["bidiGenerateContent"] },
+    { name: "models/gemini-4.0-flash-preview-tts", supportedGenerationMethods: ["generateContent"] },
+    { name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"] },
+  ] };
+
+  it("picks the newest plain flash model", () => {
+    expect(pickFlashModel(models)).toBe("gemini-3.8-flash");
+    expect(pickFlashModel({})).toBeNull();
+  });
+
+  it("switches to an existing model when the configured one is gone", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("oud-model")) return new Response("", { status: 404 });
+      if (url.endsWith("/models?pageSize=200")) return Response.json(models);
+      return Response.json({ ok: url.includes("gemini-3.8-flash:generateContent") });
+    });
+    const call = geminiCaller("sleutel", "oud-model", fetchImpl as unknown as typeof fetch);
+    await expect(call({})).resolves.toEqual({ ok: true });
   });
 });
