@@ -177,6 +177,25 @@ function curlGeometry(geometry: THREE.BufferGeometry, offsetX = 0) {
   smoothNormals(geometry, CURL, offsetX);
 }
 
+/**
+ * Rondt een omtrek af (Chaikin): elke hoek wordt twee keer afgesneden, zodat
+ * de rand van mond, ogen en wenkbrauwen een gladde boog is in plaats van
+ * zichtbare rechte stukjes.
+ */
+function smoothContour(points: Point[], rounds = 3): Point[] {
+  let result = points;
+  for (let r = 0; r < rounds; r++) {
+    result = result.flatMap((point, i) => {
+      const next = result[(i + 1) % result.length];
+      return [
+        [point[0] * 0.75 + next[0] * 0.25, point[1] * 0.75 + next[1] * 0.25] as Point,
+        [point[0] * 0.25 + next[0] * 0.75, point[1] * 0.25 + next[1] * 0.75] as Point,
+      ];
+    });
+  }
+  return result;
+}
+
 function centerOf(points: Point[]): Point {
   const xs = points.map(p => p[0]);
   const ys = points.map(p => p[1]);
@@ -249,7 +268,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     color, roughness: 0.62, metalness: 0, envMapIntensity: 0.35, emissive: GLOW_CORE, emissiveIntensity: 0,
   });
   const materials = [
-    vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04 }),
+    vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04, alphaToCoverage: true }),
     matte(0x123a8c), solid(0xf4f8fd), matte(0x0a1f52),
   ];
   const [frontMaterial, backMaterial, originalMaterial, partsMaterial, rimMaterial, whiteMaterial, partDarkMaterial] = materials;
@@ -270,7 +289,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     const data = MODEL.parts[name];
     const [cx, cy] = centerOf(data.contour);
     const origin: Point = [cx, pivot === "top" ? data.max[1] : cy];
-    const geometry = splitFaces(puffy(data.contour, 0.001, depth, origin, 6, depth * 0.5));
+    const geometry = splitFaces(puffy(smoothContour(data.contour), 0.001, depth, origin, 6, depth * 0.5));
     const mesh = new THREE.Mesh(geometry, [partsMaterial, partsMaterial, partDarkMaterial]);
     mesh.position.set(origin[0], origin[1], frontZ(cx) + depth * 0.4);
     mesh.rotation.y = Math.atan(2 * CURL * cx);

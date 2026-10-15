@@ -121,11 +121,19 @@ meta = {}
 for name, (_, _, m) in parts.items():
     # Strak langs de donkere rand knippen: geen wit papier mee, anders krijgen
     # ogen en mond een witte rand zodra Maatje draait.
-    pm = cv2.dilate(fill(m), disk(0.6))
+    # De vorm wordt eerst gladgestreken: de donkerblauw-drempel geeft anders
+    # een kartelige rand (vooral langs de bovenkant van de mond).
+    raw = fill(m)
+    smooth = (cv2.GaussianBlur(raw.astype(np.float32), (0, 0), 2.5 * K) > 0.5).astype(np.uint8)
+    pm = cv2.dilate(smooth, disk(0.6))
     alpha = cv2.GaussianBlur(pm.astype(np.float32), (0, 0), 0.6 * K)
-    parts_rgba[..., :3] = np.where(pm[..., None] > 0, im[..., :3], parts_rgba[..., :3])
+    # Randpixels die er door het gladstrijken bij kwamen krijgen de donkere
+    # kleur van de rand, geen wit papier.
+    edge_color = np.median(im[..., :3][(raw > 0) & (cv2.erode(raw, disk(2)) == 0)], axis=0).astype(np.uint8)
+    rgb = np.where((raw > 0)[..., None], im[..., :3], edge_color)
+    parts_rgba[..., :3] = np.where(pm[..., None] > 0, rgb, parts_rgba[..., :3])
     parts_rgba[..., 3] = np.maximum(parts_rgba[..., 3], (alpha * 255).astype(np.uint8))
-    erase |= cv2.dilate(pm, disk(4))
+    erase |= cv2.dilate(np.maximum(pm, raw), disk(4))
     ys, xs = np.where(pm)
     to = lambda x, y: [round((x + .5) / W * 2 - 1, 4), round(1 - (y + .5) / H * 2, 4)]
     x0, y0 = to(xs.min(), ys.max())

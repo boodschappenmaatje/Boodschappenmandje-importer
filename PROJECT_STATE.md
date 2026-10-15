@@ -18,7 +18,8 @@
 - Ronde 9: Dennis bevestigde dat het witte kader weg is.
   - Slapend liggen de handjes nu weggestopt achter zijn lijf; pas bij het wakker worden komen de duimen omhoog.
   - Het wakker worden duurt 3,4 seconden in plaats van 1,9 en is duidelijker: ogen open, nog even dichtvallen en knipperen, handjes tevoorschijn, uitrekken met een geeuw, slaap uit zijn hoofd schudden, naar voren komen, glinsters en zwaaien. De tekstballon volgt na 2,8 seconden.
-- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 9 staat open.
+- Ronde 10: de rand van mond, ogen en wenkbrauwen is glad gemaakt. De vormen worden in `build.py` gladgestreken en de omtrek in de scène wordt afgerond (Chaikin); de texturen zijn opnieuw gebouwd. Dennis noemde stap 1 hiermee klaar: "daarna zijn we klaar met deze stap". Stap 2 start pas na zijn akkoord.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. PR #108 is nog een draft en is niet gemerged.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
