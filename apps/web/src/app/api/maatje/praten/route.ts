@@ -1,4 +1,4 @@
-import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabasePublicServerClient } from "@/lib/supabase/server";
 import { geminiCaller, parseAssistantRequest, runMaatjeAssistant } from "@/server/maatje-assistant";
 import { isSameOriginPlannerRequest } from "@/server/planner-cache-auth";
 import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository";
@@ -25,8 +25,11 @@ function rateLimited(request: Request): boolean {
 export async function POST(request: Request): Promise<Response> {
   if (!isSameOriginPlannerRequest(request)) return Response.json({ error: "forbidden" }, { status: 403 });
   const apiKey = process.env.GEMINI_API_KEY?.trim();
-  const client = getSupabaseServerClient();
-  if (!apiKey || !client) return Response.json({ error: "not-configured" }, { status: 503 });
+  const client = getSupabasePublicServerClient();
+  if (!apiKey || !client) {
+    console.error("maatje-praten", !apiKey ? "gemini-key-missing" : "supabase-missing");
+    return Response.json({ error: "not-configured" }, { status: 503 });
+  }
   if (rateLimited(request)) return Response.json({ error: "too-many-requests" }, { status: 429 });
 
   let input: ReturnType<typeof parseAssistantRequest>;
