@@ -129,7 +129,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
     const timer = window.setTimeout(() => {
       setSpeech({ line: GREETING, shown: 0 });
       setGreeted(true);
-    }, reducedMotion ? 200 : 1700);
+    }, reducedMotion ? 200 : 2800);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
     };

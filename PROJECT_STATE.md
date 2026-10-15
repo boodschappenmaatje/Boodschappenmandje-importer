@@ -15,7 +15,10 @@
   - De donkere belijning is nu mat. Glanzende randen gaven dunne witte lijnen langs zijn omtrek.
   - Zodra je tikt, verschijnt een pulserende blauwe gloed in huisstijlkleuren (#1D87F7 en #62BFFC) rond zijn omtrek. De gloed blijft zolang hij wakker is en dooft als hij weer gaat slapen.
 - Ronde 8: het witte kader bij het aantikken is gevonden. Dat was de algemene knopstijl voor ingedrukte knoppen (`.page-content button:active`, een lichte binnenrand van 2px) en de hover-ring daarvan. Beide zijn uitgezet voor de Maatje-knop. De blauwe gloed is iets breder en duidelijker gemaakt.
-- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 8 staat open.
+- Ronde 9: Dennis bevestigde dat het witte kader weg is.
+  - Slapend liggen de handjes nu weggestopt achter zijn lijf; pas bij het wakker worden komen de duimen omhoog.
+  - Het wakker worden duurt 3,4 seconden in plaats van 1,9 en is duidelijker: ogen open, nog even dichtvallen en knipperen, handjes tevoorschijn, uitrekken met een geeuw, slaap uit zijn hoofd schudden, naar voren komen, glinsters en zwaaien. De tekstballon volgt na 2,8 seconden.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 9 staat open.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
