@@ -101,7 +101,7 @@
   text-align: left;
   font: inherit;
 }
-.maatje-talk-choice:disabled:not([data-picked="true"]) { opacity: .45; }
+.maatje-talk-choice:active { transform: scale(.97); }
 .maatje-talk-choice[data-picked="true"] { border-color: var(--brand-blue); background: white; }
 .maatje-talk-thumb { display: grid; place-items: center; width: 64px; height: 64px; margin-bottom: 4px; align-self: center; border-radius: 12px; background: white; color: #9AB0CF; }
 .maatje-talk-thumb img { width: 64px; height: 64px; object-fit: contain; }

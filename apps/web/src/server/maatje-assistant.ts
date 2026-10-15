@@ -211,11 +211,12 @@ export function parseGeminiPlan(response: unknown): GeminiPlan | null {
 }
 
 async function findChoices(catalog: CatalogRepository, terms: string[], now: Date): Promise<AssistantChoice[]> {
+  // Alle zoektermen tegelijk; daarna in volgorde (precies → breed) samenvoegen.
+  const results = await Promise.all(terms.map(term => catalog.query({ term, page: 1, pageSize: 12 }).catch(() => null)));
   const seen = new Set<string>();
   const choices: AssistantChoice[] = [];
-  for (const term of terms) {
-    const result = await catalog.query({ term, page: 1, pageSize: 12 });
-    for (const product of result.products) {
+  for (const result of results) {
+    for (const product of result?.products ?? []) {
       if (product.isAvailable === false || seen.has(product.id)) continue;
       seen.add(product.id);
       const price = resolveCurrentPrice(product.currentPrice, now);
@@ -257,8 +258,9 @@ const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
 let workingModel: string | null = null;
 
 /**
- * Gewone "flash"-modellen, nieuwste eerst; de lichtere "flash-lite" als laatste
- * redmiddel. Geen live-, spraak-, beeld- of previewmodellen.
+ * Snelle "flash"-modellen, nieuwste eerst. De lichte "flash-lite" gaat voor:
+ * Maatje moet binnen een paar seconden antwoorden. Geen live-, spraak-, beeld-
+ * of previewmodellen.
  */
 export function flashModels(models: unknown): string[] {
   const list = (models as { models?: { name?: unknown; supportedGenerationMethods?: unknown }[] })?.models;
@@ -266,9 +268,9 @@ export function flashModels(models: unknown): string[] {
   const names = list
     .filter(model => Array.isArray(model.supportedGenerationMethods) && model.supportedGenerationMethods.includes("generateContent"))
     .map(model => (typeof model.name === "string" ? model.name.replace(/^models\//, "") : ""))
-    .filter(name => /^gemini-[\d.]+-flash(-lite)?$/.test(name) || name === "gemini-flash-latest");
+    .filter(name => /^gemini-[\d.]+-flash(-lite)?$/.test(name));
   const version = (name: string) => Number(name.match(/^gemini-([\d.]+)/)?.[1]?.split(".").slice(0, 2).join(".") ?? 0);
-  const rank = (name: string) => (name.endsWith("-lite") ? 1 : 0);
+  const rank = (name: string) => (name.endsWith("-lite") ? 0 : 1);
   return names.sort((a, b) => rank(a) - rank(b) || version(b) - version(a));
 }
 
@@ -283,50 +285,64 @@ export function pickFlashModel(models: unknown): string | null {
 export function withQuickThinking(model: string, body: unknown): unknown {
   if (!isRecord(body) || !isRecord(body.generationConfig)) return body;
   const major = Number(model.match(/^gemini-(\d+)/)?.[1] ?? 0);
-  const thinkingConfig = major >= 3 ? { thinkingLevel: "low" } : { thinkingBudget: 0 };
+  const thinkingConfig = major >= 3 ? { thinkingLevel: "minimal" } : { thinkingBudget: 0 };
   return { ...body, generationConfig: { ...body.generationConfig, thinkingConfig } };
 }
 
-export function geminiCaller(apiKey: string, model: string, fetchImpl: typeof fetch = fetch): GeminiCall {
+/** Hoe lang één poging mag duren voordat we een ander model proberen. */
+const ATTEMPT_MS = 7_000;
+
+/**
+ * Roept Gemini aan. Zonder vast ingesteld model kiest hij het snelste
+ * beschikbare (flash-lite). Is een model weg, te druk of te traag, dan probeert
+ * hij het volgende en onthoudt welk model werkt.
+ */
+export function geminiCaller(apiKey: string, model: string | null, fetchImpl: typeof fetch = fetch): GeminiCall {
   const headers = { "content-type": "application/json", "x-goog-api-key": apiKey };
-  const generate = async (name: string, body: unknown) => {
-    const response = await fetchImpl(`${GEMINI_API}/models/${encodeURIComponent(name)}:generateContent`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(withQuickThinking(name, body)),
-      signal: AbortSignal.timeout(45_000),
-    });
-    // Kent dit model de denk-instelling niet, probeer dan zonder.
-    if (response.status !== 400) return response;
-    return fetchImpl(`${GEMINI_API}/models/${encodeURIComponent(name)}:generateContent`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
-    });
+  const post = (name: string, body: unknown) => fetchImpl(`${GEMINI_API}/models/${encodeURIComponent(name)}:generateContent`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(ATTEMPT_MS),
+  });
+  const generate = async (name: string, body: unknown): Promise<Response | null> => {
+    try {
+      const response = await post(name, withQuickThinking(name, body));
+      // Kent dit model de denk-instelling niet, probeer dan zonder.
+      return response.status === 400 ? await post(name, body) : response;
+    } catch (error) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return null;
+      throw error;
+    }
   };
-  /** Modellen die Google even niet kan of wil bedienen: dan een ander proberen. */
-  const tryNext = (status: number) => status === 404 || status === 429 || status >= 500;
+  const candidates = async (): Promise<string[]> => {
+    const list = await fetchImpl(`${GEMINI_API}/models?pageSize=200`, { headers, signal: AbortSignal.timeout(5_000) }).catch(() => null);
+    return list?.ok ? flashModels(await list.json()) : [];
+  };
+  /** Weg, te druk, quotum op of te traag: dan een ander model. */
+  const tryNext = (response: Response | null) => !response || response.status === 404 || response.status === 429 || response.status >= 500;
   return async body => {
-    const first = workingModel ?? model;
-    let response = await generate(first, body);
-    if (!response.ok && tryNext(response.status)) {
-      const list = await fetchImpl(`${GEMINI_API}/models?pageSize=200`, { headers, signal: AbortSignal.timeout(10_000) });
-      const others = (list.ok ? flashModels(await list.json()) : []).filter(name => name !== first).slice(0, 3);
-      for (const other of others) {
-        console.warn("maatje-praten", `model ${first} gaf ${response.status}, probeer ${other}`);
-        response = await generate(other, body);
-        if (response.ok) {
-          workingModel = other;
-          break;
-        }
-        if (!tryNext(response.status)) break;
+    const queue = workingModel ? [workingModel] : model ? [model] : [];
+    if (!queue.length) queue.push(...(await candidates()).slice(0, 3));
+    let response: Response | null = null;
+    let fetchedList = !workingModel && !model;
+    for (let index = 0; index < queue.length && index < 4; index += 1) {
+      const name = queue[index];
+      response = await generate(name, body);
+      if (response?.ok) {
+        workingModel = name;
+        return response.json();
+      }
+      if (!tryNext(response)) break;
+      console.warn("maatje-praten", `model ${name} gaf ${response ? response.status : "geen antwoord op tijd"}`);
+      if (workingModel === name) workingModel = null;
+      if (!fetchedList) {
+        fetchedList = true;
+        queue.push(...(await candidates()).filter(other => !queue.includes(other)));
       }
     }
-    if (!response.ok) {
-      const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
-      throw new Error(`gemini-http-${response.status} ${detail}`.trim());
-    }
-    return response.json();
+    if (!response) throw new Error("gemini-timeout");
+    const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+    throw new Error(`gemini-http-${response.status} ${detail}`.trim());
   };
 }

@@ -24,20 +24,21 @@ export function MaatjeTalkPanel({ talk, top }: MaatjeTalkPanelProps) {
         <h3>{item.quantity > 1 ? `${item.quantity}× ` : ""}{item.label}</h3>
         {item.choices.length ? <ul className="maatje-talk-choices">
           {item.choices.map(choice => {
-            const picked = talk.chosen[itemIndex] === choice.product.id;
+            const count = talk.chosen[itemIndex]?.[choice.product.id] ?? 0;
+            const picked = count > 0;
             return <li key={choice.product.id}>
               <button
                 type="button"
                 className="maatje-talk-choice"
                 data-picked={picked}
-                disabled={Boolean(talk.chosen[itemIndex])}
+                aria-label={`${choice.product.name}${picked ? `, ${count} op je lijst` : ""}. Tik om toe te voegen.`}
                 onClick={() => void talk.choose(itemIndex, choice.product, choice.priceCents)}
               >
                 <ProductThumbnail className="maatje-talk-thumb" imageUrl={choice.product.imageUrl} name={choice.product.name} />
                 <strong>{choice.product.name}</strong>
                 {choice.product.packageText ? <small>{choice.product.packageText}</small> : null}
                 <span className="maatje-talk-price">{choice.priceCents === null ? "Prijs onbekend" : formatCents(choice.priceCents)}</span>
-                {picked ? <span className="maatje-talk-check">Op je lijst ✓</span> : null}
+                {picked ? <span className="maatje-talk-check">{count}× op je lijst</span> : null}
               </button>
             </li>;
           })}

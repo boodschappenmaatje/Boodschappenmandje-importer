@@ -35,15 +35,16 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
   const [mood, setMood] = useState<TalkMood>("idle");
   const [heard, setHeard] = useState<string | null>(null);
   const [items, setItems] = useState<AssistantItem[]>([]);
-  const [chosen, setChosen] = useState<Record<number, string>>({});
+  /** Per productregel: hoe vaak elk product al op de lijst is gezet. */
+  const [chosen, setChosen] = useState<Record<number, Record<string, number>>>({});
   const [typing, setTyping] = useState(false);
   const historyRef = useRef<AssistantTurn[]>([]);
   const recordingRef = useRef<Promise<VoiceRecording> | null>(null);
   const holdTimerRef = useRef<number | undefined>(undefined);
   const requestRef = useRef<AbortController | null>(null);
-  const latest = useRef({ shoppingList, week, budget, items, say, mood });
+  const latest = useRef({ shoppingList, week, budget, items, say, mood, chosen });
   useLayoutEffect(() => {
-    latest.current = { shoppingList, week, budget, items, say, mood };
+    latest.current = { shoppingList, week, budget, items, say, mood, chosen };
   });
 
   const stopEverything = useCallback(() => {
@@ -159,26 +160,38 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
     if (trimmed) void send({ text: trimmed });
   }, [send]);
 
+  /**
+   * Elke tik zet het product (nog eens) op je lijst. De eerste tik neemt het
+   * aantal dat je noemde ("twee broden"), daarna telt elke tik er één bij.
+   * Je kunt per regel ook meerdere verschillende producten kiezen.
+   */
   const choose = useCallback(async (itemIndex: number, product: Product, priceCents: number | null) => {
-    const { shoppingList: list, budget: money, items: shown } = latest.current;
+    const { shoppingList: list, budget: money, items: shown, chosen: picked } = latest.current;
     const item = shown[itemIndex];
     if (!item || list.status !== "ready") return;
-    setChosen(current => ({ ...current, [itemIndex]: product.id }));
+    const before = picked[itemIndex]?.[product.id] ?? 0;
+    const adding = before === 0 ? item.quantity : 1;
+    const count = (delta: number) => setChosen(current => {
+      const row = { ...current[itemIndex] };
+      const next = (row[product.id] ?? 0) + delta;
+      if (next > 0) row[product.id] = next;
+      else delete row[product.id];
+      return { ...current, [itemIndex]: row };
+    });
+    count(adding);
     try {
-      for (let count = 0; count < item.quantity; count += 1) await list.addProduct(product);
+      for (let index = 0; index < adding; index += 1) await list.addProduct(product);
     } catch {
-      setChosen(current => {
-        const next = { ...current };
-        delete next[itemIndex];
-        return next;
-      });
+      count(-adding);
       latest.current.say("Dat lukte niet. Probeer het nog eens?");
       return;
     }
-    const plannedAfter = money.plannedCents + (priceCents ?? 0) * item.quantity;
+    const total = before + adding;
+    // De lijst in latest is nog van vóór deze tik: tel het nieuwe er zelf bij.
+    const plannedAfter = money.plannedCents + (priceCents ?? 0) * adding;
     latest.current.say(priceCents === null
-      ? `${item.quantity > 1 ? `${item.quantity}× ` : ""}${product.name} staat op je lijst!`
-      : addedMessage(product.name, item.quantity, money.budgetCents, plannedAfter));
+      ? `${total > 1 ? `${total}× ` : ""}${product.name} staat op je lijst!`
+      : addedMessage(product.name, total, money.budgetCents, plannedAfter));
   }, []);
 
   return { mood, heard, items, chosen, typing, setTyping, holdStart, holdEnd, sendText, choose, reset };

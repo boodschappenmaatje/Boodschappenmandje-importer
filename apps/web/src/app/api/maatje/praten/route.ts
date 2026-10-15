@@ -6,7 +6,6 @@ import { SupabaseCatalogRepository } from "@/services/catalog/catalog-repository
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const DEFAULT_MODEL = "gemini-3.8-flash";
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 20;
 const recent = new Map<string, number[]>();
@@ -41,7 +40,8 @@ export async function POST(request: Request): Promise<Response> {
   if (!input) return Response.json({ error: "invalid-request" }, { status: 400 });
 
   try {
-    const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
+    // Zonder GEMINI_MODEL kiest Maatje zelf het snelste beschikbare model.
+    const model = process.env.GEMINI_MODEL?.trim() || null;
     const started = Date.now();
     const callGemini = geminiCaller(apiKey, model);
     let geminiMs = 0;
