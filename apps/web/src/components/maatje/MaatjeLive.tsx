@@ -118,7 +118,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
           say(TAP_LINES[next]);
         },
         onTapOutside: () => close(),
-        onPress: hapticTick,
+        onRelease: hapticTick,
         onHoldStart: () => talkRef.current.holdStart(),
         onHoldEnd: cancelled => void talkRef.current.holdEnd(cancelled),
       }))

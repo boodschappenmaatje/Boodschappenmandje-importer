@@ -47,8 +47,11 @@ export interface MaatjeSceneOptions {
   onTap?: () => void;
   onTapOutside?: () => void;
   /** Je houdt Maatje vast: hij luistert. */
-  /** Direct bij het aanraken van Maatje (nog binnen de aanraking zelf). */
-  onPress?: () => void;
+  /**
+   * Bij het loslaten van Maatje (na tikken of vasthouden), nog binnen de
+   * aanraking zelf: alleen dan staat iPhone een trilling toe.
+   */
+  onRelease?: () => void;
   onHoldStart?: () => void;
   /** Je laat Maatje los (cancelled: de vinger ging eraf zonder los te laten). */
   onHoldEnd?: (cancelled: boolean) => void;
@@ -479,8 +482,6 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     if (press) window.clearTimeout(press.timer);
     const current = { startX: event.clientX, startY: event.clientY, moved: false, holding: false, timer: 0 };
     if (phase === "live" && hits()) {
-      // Meteen, binnen de aanraking: alleen dan staat iPhone een trilling toe.
-      options.onPress?.();
       current.timer = window.setTimeout(() => {
         if (press !== current || current.moved) return;
         current.holding = true;
@@ -501,11 +502,13 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     if (!current) return;
     window.clearTimeout(current.timer);
     if (current.holding) {
+      if (event.type !== "pointercancel") options.onRelease?.();
       options.onHoldEnd?.(event.type === "pointercancel");
       return;
     }
     if (current.moved || phase !== "live" || event.type === "pointercancel") return;
     if (hits()) {
+      options.onRelease?.();
       controller.react();
       options.onTap?.();
     } else options.onTapOutside?.();

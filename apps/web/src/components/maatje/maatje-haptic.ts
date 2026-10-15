@@ -3,7 +3,8 @@ let iosSwitch: HTMLLabelElement | null = null;
 /**
  * Eén licht tikje in je hand. Android kent `navigator.vibrate`; iPhone-Safari
  * niet, maar geeft wél een tikje als een schakelaar (`<input switch>`) omgaat.
- * Werkt het allebei niet, dan gebeurt er gewoon niets.
+ * Safari doet dat alleen bij het loslaten van je vinger (pointerup/touchend),
+ * niet bij het neerzetten. Werkt het allebei niet, dan gebeurt er niets.
  */
 export function hapticTick(): void {
   if (typeof window === "undefined") return;
