@@ -29,79 +29,61 @@ function supportsWebGl(): boolean {
 }
 
 interface MaatjeLiveProps {
-  /** Het Home-plaatje; Maatje komt daar vandaan en gaat daar weer naartoe. */
+  /** Het Home-plaatje; daar slaapt Maatje en daar gaat hij weer naartoe. */
   anchor: RefObject<HTMLElement | null>;
-  /** Verbergt het platte plaatje zodra de 3D-Maatje er precies overheen ligt. */
-  onAnchorHidden: (hidden: boolean) => void;
-  onClose: () => void;
+  /** Wordt Maatje nu wakker gemaakt (tik op Home)? */
+  awake: boolean;
+  /** De 3D-Maatje ligt precies over het plaatje; het platte plaatje mag weg. */
+  onReady: () => void;
+  /** Maatje is terug op zijn plek en slaapt weer. */
+  onAsleep: () => void;
 }
 
 /**
- * Maatje komt op Home zelf tot leven: hij stapt naar voren en wordt groter.
- * Er komt geen laag of waas over de app; alleen Maatje beweegt. Tik naast
- * hem en hij gaat terug naar zijn plek.
+ * Maatje ligt al in 3D op Home te slapen. Tik je op hem, dan wordt hij op
+ * dezelfde plek wakker, stapt naar voren en wordt groter. Er komt geen laag
+ * of waas over de app. Tik naast hem en hij gaat terug en dommelt weer in.
  */
-export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps) {
+export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MaatjeSceneController | null>(null);
   const closingRef = useRef(false);
-  const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [greeted, setGreeted] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [speech, setSpeech] = useState({ line: GREETING, shown: 0 });
   const [target, setTarget] = useState(targetRect);
   const { line } = speech;
-
-  const finish = useCallback(() => {
-    onAnchorHidden(false);
-    onClose();
-  }, [onAnchorHidden, onClose]);
+  const bubbleVisible = awake && greeted && !leaving;
 
   const close = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
     setLeaving(true);
+    const finish = () => {
+      closingRef.current = false;
+      setLeaving(false);
+      setGreeted(false);
+      onAsleep();
+    };
     const controller = controllerRef.current;
     if (controller) void controller.close().then(finish);
     else finish();
-  }, [finish]);
+  }, [onAsleep]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-    const onResize = () => setTarget(targetRect());
-    // Safari schuift anders de adresbalk en de pagina mee als je Maatje ronddraait.
-    const stage = stageRef.current?.parentElement;
-    const onTouchMove = (event: TouchEvent) => event.preventDefault();
-    document.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onResize);
-    stage?.addEventListener("touchmove", onTouchMove, { passive: false });
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", onResize);
-      stage?.removeEventListener("touchmove", onTouchMove);
-      document.body.style.overflow = overflow;
-    };
-  }, [close]);
-
+  // De scène wordt één keer opgebouwd, rustig nadat Home getekend is.
   useEffect(() => {
     const element = stageRef.current;
-    if (!element) return;
-    if (!supportsWebGl()) {
-      onClose();
-      return;
-    }
+    if (!element || !supportsWebGl()) return;
     let cancelled = false;
     let lastLine = -1;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    import("./maatje-scene")
+    const start = () => import("./maatje-scene")
       .then(({ createMaatjeScene }) => createMaatjeScene(element, {
         reducedMotion,
         anchor: () => anchor.current?.getBoundingClientRect() ?? targetRect(),
         target: targetRect,
-        onReady: () => onAnchorHidden(true),
+        onReady: () => !cancelled && onReady(),
         onTap: () => {
           let next = Math.floor(Math.random() * TAP_LINES.length);
           if (next === lastLine) next = (next + 1) % TAP_LINES.length;
@@ -116,23 +98,54 @@ export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps)
           return;
         }
         controllerRef.current = controller;
-        window.setTimeout(() => !cancelled && setReady(true), reducedMotion ? 200 : 1900);
+        setLoaded(true);
       })
-      .catch(() => {
-        if (!cancelled) finish();
-      });
+      .catch(() => undefined);
+    const idle = window.requestIdleCallback?.(start, { timeout: 1200 });
+    const timer = idle === undefined ? window.setTimeout(start, 300) : undefined;
     return () => {
       cancelled = true;
+      if (idle !== undefined) window.cancelIdleCallback(idle);
+      if (timer !== undefined) window.clearTimeout(timer);
       controllerRef.current?.dispose();
       controllerRef.current = null;
     };
-    // De scène wordt één keer opgebouwd bij het openen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Wakker worden: hij komt naar voren, daarna verschijnt zijn groet.
+  useEffect(() => {
+    if (!awake || !loaded) return;
+    controllerRef.current?.wake();
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timer = window.setTimeout(() => {
+      setSpeech({ line: GREETING, shown: 0 });
+      setGreeted(true);
+    }, reducedMotion ? 200 : 1700);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    const onResize = () => setTarget(targetRect());
+    // Safari schuift anders de adresbalk en de pagina mee als je Maatje ronddraait.
+    const stage = stageRef.current?.parentElement;
+    const onTouchMove = (event: TouchEvent) => event.preventDefault();
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    stage?.addEventListener("touchmove", onTouchMove, { passive: false });
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+      stage?.removeEventListener("touchmove", onTouchMove);
+      document.body.style.overflow = overflow;
+    };
+  }, [awake, loaded, close]);
+
   // Tekst verschijnt letter voor letter terwijl Maatje "praat".
   useEffect(() => {
-    if (!ready || leaving) return;
+    if (!bubbleVisible) return;
     let index = 0;
     controllerRef.current?.setTalking(true);
     const timer = window.setInterval(() => {
@@ -147,16 +160,16 @@ export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps)
       window.clearInterval(timer);
       controllerRef.current?.setTalking(false);
     };
-  }, [line, ready, leaving]);
+  }, [line, bubbleVisible]);
 
-  const bubbleBottom = window.innerHeight - (target.top + target.width * 0.06);
-  return <div className="maatje-live" role="dialog" aria-modal="true" aria-label="Maatje" data-leaving={leaving}>
+  const bubbleBottom = typeof window === "undefined" ? 0 : window.innerHeight - (target.top + target.width * 0.06);
+  return <div className="maatje-live" role={awake ? "dialog" : undefined} aria-modal={awake || undefined} aria-label={awake ? "Maatje" : undefined} aria-hidden={!awake || undefined} data-awake={awake} data-leaving={leaving}>
     <div ref={stageRef} className="maatje-live-stage" />
-    <p className="maatje-live-bubble" aria-live="polite" data-visible={ready && !leaving} style={{ bottom: bubbleBottom }}>
-      <span aria-hidden="true">{line.slice(0, speech.shown) || " "}</span>
-      <span className="maatje-live-sr-only">{line}</span>
+    <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} style={{ bottom: bubbleBottom }}>
+      <span aria-hidden="true">{line.slice(0, speech.shown) || " "}</span>
+      <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
     {/* Alleen voor toetsenbord en VoiceOver; op het scherm tik je naast Maatje. */}
-    <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button>
+    {awake ? <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button> : null}
   </div>;
 }

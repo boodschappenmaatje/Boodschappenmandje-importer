@@ -43,8 +43,8 @@ function BudgetRow({ label, planned, limit, complete, icon }: {
 }
 export function HomeDashboard() {
   const router = useRouter();
-  const [maatjeOpen, setMaatjeOpen] = useState(false);
-  const [maatjeLive, setMaatjeLive] = useState(false);
+  const [maatjeAwake, setMaatjeAwake] = useState(false);
+  const [maatje3d, setMaatje3d] = useState(false);
   const mascotRef = useRef<HTMLImageElement>(null);
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
@@ -65,11 +65,12 @@ export function HomeDashboard() {
   return <div className="home-c" aria-busy={loading}>
     <section className="home-c-hero" aria-labelledby="home-c-title">
       <h1 id="home-c-title"><span className="home-c-hello">Slim kopen.</span><span className="home-c-hello">Lekker eten.</span></h1>
-      <button type="button" className="home-c-character" aria-label="Laat Maatje tot leven komen" aria-haspopup="dialog" onClick={() => setMaatjeOpen(true)}>
-        <Image ref={mascotRef} className="home-c-mascot" data-live={maatjeLive} src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
+      <button type="button" className="home-c-character" aria-label="Maak Maatje wakker" aria-haspopup="dialog" data-sleeping={maatje3d && !maatjeAwake} onClick={() => maatje3d && setMaatjeAwake(true)}>
+        <Image ref={mascotRef} className="home-c-mascot" data-live={maatje3d} src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
+        <span className="home-c-snore" aria-hidden="true"><span>z</span><span>Z</span><span>z</span></span>
       </button>
     </section>
-    {maatjeOpen ? <MaatjeLive anchor={mascotRef} onAnchorHidden={setMaatjeLive} onClose={() => setMaatjeOpen(false)} /> : null}
+    <MaatjeLive anchor={mascotRef} awake={maatjeAwake} onReady={() => setMaatje3d(true)} onAsleep={() => setMaatjeAwake(false)} />
     {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
       <span className="home-c-budget-chevron"><Chevron /></span>

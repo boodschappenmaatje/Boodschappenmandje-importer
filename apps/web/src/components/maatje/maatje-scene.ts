@@ -45,9 +45,11 @@ export interface MaatjeSceneOptions {
 }
 
 export interface MaatjeSceneController {
+  /** Maatje wordt wakker en komt naar voren. */
+  wake(): void;
   react(kind?: MaatjeReaction): void;
   setTalking(talking: boolean): void;
-  /** Laat Maatje terugvliegen naar zijn plek op Home. */
+  /** Laat Maatje terugvliegen naar zijn plek op Home, waar hij weer indommelt. */
   close(): Promise<void>;
   dispose(): void;
 }
@@ -140,6 +142,12 @@ function centerOf(points: Point[]): Point {
 }
 
 const easeInOut = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const smoothstep = (t: number) => t * t * (3 - 2 * t);
+const easeOutBack = (t: number) => t <= 0 ? 0 : 1 + 2.7 * Math.pow(t - 1, 3) + 1.7 * Math.pow(t - 1, 2);
+/** Waar t tussen a en b zit, als 0..1. */
+const range = (t: number, a: number, b: number) => THREE.MathUtils.clamp((t - a) / (b - a), 0, 1);
+/** Zacht heen en terug: 0 → 1 → 0. */
+const bell = (t: number) => Math.sin(t * Math.PI) ** 2;
 
 function loadTexture(loader: THREE.TextureLoader, url: string): Promise<THREE.Texture> {
   return new Promise((resolve, reject) => loader.load(url, texture => {
@@ -339,15 +347,20 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   canvas.addEventListener("pointercancel", onUp);
 
   // ----- Animatie -----
+  // Maatje slaapt op Home (ogen dicht, rustig ademen). Bij tikken wordt hij
+  // wakker, rekt zich uit en komt naar voren; daarna leeft hij. Bij teruggaan
+  // vliegt hij terug naar zijn plek en dommelt weer in.
   const motion = options.reducedMotion ? 0.2 : 1;
-  const enterDuration = options.reducedMotion ? 0.25 : 2.1;
-  let phase: "entering" | "live" | "leaving" = "entering";
+  const wakeDuration = options.reducedMotion ? 0.25 : 1.9;
+  const leaveDuration = options.reducedMotion ? 0.2 : 0.75;
+  const DOZE = 1.4;
+  let phase: "sleeping" | "waking" | "live" | "leaving" = "sleeping";
   let phaseStart = performance.now() / 1000;
   let leaveFrom = { x: 0, y: 0, scale: 1, yaw: 0 };
   let resolveClose: (() => void) | null = null;
   let reaction: { kind: MaatjeReaction; start: number } | null = null;
   let talking = false;
-  let mouthOpen = 0;
+  let mouthOpen = 1;
   let blink = 0;
   let nextBlink = performance.now() / 1000 + 2.2;
   let blinkStart = -1;
@@ -355,6 +368,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   let frame = 0;
   let disposed = false;
   let readySent = false;
+  let lastRender = 0;
+  let wasVisible = true;
   const lookSmooth = { x: 0, y: 0 };
 
   function tick() {
@@ -362,77 +377,113 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     frame = requestAnimationFrame(tick);
     const now = performance.now() / 1000;
     const t = now - phaseStart;
-    const from = place(options.anchor());
+    const anchorRect = options.anchor();
+    const from = place(anchorRect);
     const to = place(options.target());
-    let x: number, y: number, scale: number;
+
+    // Slapend is er weinig beweging: 30 beelden per seconde is genoeg, en
+    // buiten beeld tekenen we niets.
+    if (phase === "sleeping" && readySent) {
+      const visible = anchorRect.bottom > -40 && anchorRect.top < viewport.height + 40;
+      if (!visible && !wasVisible) return;
+      wasVisible = visible;
+      if (now - lastRender < 1 / 30) return;
+    }
+    lastRender = now;
+
+    let x = from.x;
+    let y = from.y;
+    let scale = from.scale;
     let yaw = 0;
     let pitch = 0;
     let lift = 0;
-    let live = 1;
+    let live = 0;
+    // sleep: 1 = diep in slaap, 0 = klaarwakker.
+    let sleep = 1;
+    let stretch = 0;
+    let wave = 0;
+    let sparkAmount = 0;
+    let wakeBlink = 0;
 
-    // Wakker worden: ogen dicht, geeuwen en uitrekken op zijn plek; dan naar
-    // voren komen en groter worden; daarna hallo zwaaien.
-    const wake = { eyes: 1, yawn: 0, stretch: 0, wave: 0 };
-    if (phase === "entering") {
-      const p = Math.min(1, t / enterDuration);
+    if (phase === "sleeping") {
+      sleep = smoothstep(Math.min(1, t / DOZE));
+      sparkAmount = 1 - sleep;
+    } else if (phase === "waking") {
+      const p = Math.min(1, t / wakeDuration);
       if (options.reducedMotion) {
-        x = THREE.MathUtils.lerp(from.x, to.x, p);
-        y = THREE.MathUtils.lerp(from.y, to.y, p);
-        scale = THREE.MathUtils.lerp(from.scale, to.scale, p);
+        const e = easeInOut(p);
+        x = THREE.MathUtils.lerp(from.x, to.x, e);
+        y = THREE.MathUtils.lerp(from.y, to.y, e);
+        scale = THREE.MathUtils.lerp(from.scale, to.scale, e);
+        sleep = 1 - e;
+        sparkAmount = e;
+        live = e;
       } else {
-        const waking = THREE.MathUtils.clamp(p / 0.4, 0, 1);
-        const travel = easeInOut(THREE.MathUtils.clamp((p - 0.32) / 0.4, 0, 1));
-        const hello = THREE.MathUtils.clamp((p - 0.7) / 0.3, 0, 1);
-        // Ogen: dicht, twee slaperige knipperingen, dan wijd open.
-        wake.eyes = waking < 0.15 ? 0.08 : waking < 0.75 ? 0.25 + 0.2 * Math.sin(waking * 14) : THREE.MathUtils.lerp(0.45, 1, (waking - 0.75) / 0.25);
-        wake.yawn = Math.sin(THREE.MathUtils.clamp((waking - 0.1) / 0.7, 0, 1) * Math.PI);
-        wake.stretch = wake.yawn;
-        wake.wave = Math.sin(hello * Math.PI);
+        // Ogen gaan langzaam open, met één slaperige knipper.
+        sleep = 1 - smoothstep(range(p, 0, 0.42));
+        wakeBlink = bell(range(p, 0.4, 0.52));
+        // Uitrekken met een kleine geeuw, armpjes omhoog.
+        stretch = bell(range(p, 0.06, 0.5));
+        // Dan naar voren komen en groter worden, met een klein boogje.
+        const travel = easeInOut(range(p, 0.3, 0.78));
         x = THREE.MathUtils.lerp(from.x, to.x, travel);
         y = THREE.MathUtils.lerp(from.y, to.y, travel);
         scale = THREE.MathUtils.lerp(from.scale, to.scale, travel);
-        lift = Math.sin(travel * Math.PI) * 0.12 * to.scale;
-        // Onderweg draait hij een halve slag heen en terug: zo zie je zijn diepte.
-        yaw = Math.sin(travel * Math.PI) * 0.4;
-        pitch = -wake.stretch * 0.12;
+        lift = Math.sin(travel * Math.PI) * 0.1 * to.scale;
+        yaw = Math.sin(travel * Math.PI) * 0.22;
+        // Glinsters springen tevoorschijn en hij zwaait hallo.
+        sparkAmount = easeOutBack(range(p, 0.55, 0.8));
+        wave = Math.sin(range(p, 0.74, 1) * Math.PI);
+        live = smoothstep(range(p, 0.35, 1));
       }
-      live = p;
       if (p >= 1) {
         phase = "live";
         phaseStart = now;
       }
     } else if (phase === "leaving") {
-      const p = Math.min(1, t / (options.reducedMotion ? 0.2 : 0.55));
+      const p = Math.min(1, t / leaveDuration);
       const e = easeInOut(p);
       x = THREE.MathUtils.lerp(leaveFrom.x, from.x, e);
       y = THREE.MathUtils.lerp(leaveFrom.y, from.y, e);
       scale = THREE.MathUtils.lerp(leaveFrom.scale, from.scale, e);
       yaw = THREE.MathUtils.lerp(leaveFrom.yaw, 0, e);
+      lift = Math.sin(e * Math.PI) * 0.06 * leaveFrom.scale;
       live = 1 - e;
-      if (p >= 1 && resolveClose) {
-        renderer.render(scene, camera);
-        const done = resolveClose;
-        resolveClose = null;
-        done();
-        return;
+      sleep = 0;
+      sparkAmount = 1;
+      if (p >= 1) {
+        // Terug op zijn plek: hij dommelt weer in.
+        phase = "sleeping";
+        phaseStart = now;
+        sleep = 0;
+        if (resolveClose) {
+          const done = resolveClose;
+          resolveClose = null;
+          done();
+        }
       }
     } else {
       x = to.x;
       y = to.y;
       scale = to.scale;
+      live = 1;
+      sleep = 0;
+      sparkAmount = 1;
     }
 
     // Leven: zweven, wiegen (laat de diepte zien) en ademen.
-    const liveTime = now;
-    const bob = Math.sin(liveTime * 2) * 0.03 * motion * live;
-    const sway = Math.sin(liveTime * 0.9) * 0.28 * motion * live;
-    let squash = (1 + Math.sin(liveTime * 4) * 0.01 * motion * live) * (1 + wake.stretch * 0.09);
-    let roll = Math.sin(liveTime * 1.3) * 0.03 * motion * live;
-    let handLift = [Math.sin(liveTime * 2 + 0.7), Math.sin(liveTime * 2 + 1.6)].map(v => v * 0.025 * motion * live);
-    const handTwist = [Math.sin(liveTime * 3.1) * 0.06 * motion * live, -Math.sin(liveTime * 2.7) * 0.06 * motion * live];
-    let wave = wake.wave * Math.sin(now * 14) * 0.45;
-    handLift = handLift.map((v, i) => v + wake.stretch * 0.22 + (i === 1 ? wake.wave * 0.2 : 0));
-    happy = THREE.MathUtils.lerp(happy, talking ? 0.7 : 0.25, 0.06);
+    const bob = Math.sin(now * 2) * 0.03 * motion * live;
+    const sway = Math.sin(now * 0.9) * 0.2 * motion * live;
+    // Slapen: diep en langzaam ademen, hoofdje licht voorover en opzij.
+    const breath = Math.sin(now * 1.7);
+    let squash = (1 + Math.sin(now * 4) * 0.01 * motion * live) * (1 + breath * 0.018 * motion * sleep) * (1 + stretch * 0.07);
+    let roll = Math.sin(now * 1.3) * 0.03 * motion * live + 0.05 * sleep + Math.sin(now * 0.85) * 0.012 * motion * sleep;
+    pitch += 0.07 * sleep - stretch * 0.1;
+    let handLift = [Math.sin(now * 2 + 0.7), Math.sin(now * 2 + 1.6)].map(v => v * 0.025 * motion * live);
+    const handTwist = [Math.sin(now * 3.1) * 0.06 * motion * live, -Math.sin(now * 2.7) * 0.06 * motion * live];
+    handLift = handLift.map((v, i) => v - 0.035 * sleep + breath * 0.008 * sleep + stretch * 0.2 + (i === 1 ? wave * 0.2 : 0));
+    let waveAngle = wave * Math.sin(now * 13) * 0.42;
+    happy = THREE.MathUtils.lerp(happy, talking ? 0.7 : 0.25 * (1 - sleep), 0.06);
     let giggle = false;
 
     if (reaction) {
@@ -445,7 +496,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         handLift = handLift.map(v => v + Math.sin(r * Math.PI) * 0.12);
         happy = 1;
       } else if (reaction.kind === "wave") {
-        wave = Math.sin(r * Math.PI * 6) * 0.45 * Math.sin(r * Math.PI);
+        waveAngle = Math.sin(r * Math.PI * 6) * 0.45 * Math.sin(r * Math.PI);
         handLift[1] += Math.sin(r * Math.PI) * 0.18;
         happy = 1;
       } else {
@@ -478,9 +529,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
     hands.forEach((hand, i) => {
       hand.position.y = handHome[i] + handLift[i];
-      hand.rotation.z = handTwist[i] + (i === 1 ? -wave : 0);
+      hand.rotation.z = handTwist[i] + (i === 1 ? -waveAngle : 0);
     });
-    sparks.forEach((spark, i) => spark.scale.setScalar(1 + Math.sin(liveTime * 3.4 + i * 1.3) * 0.12 * live));
+    sparks.forEach((spark, i) => spark.scale.setScalar(Math.max(0.001, sparkAmount * (1 + Math.sin(now * 3.4 + i * 1.3) * 0.12 * live))));
 
     // Gezicht: knipperen, meekijken, praten en blij kijken.
     if (blinkStart < 0 && now > nextBlink) blinkStart = now;
@@ -492,18 +543,20 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         nextBlink = now + 2 + Math.random() * 3;
       }
     }
-    const eyeOpen = giggle ? 0.18 : Math.max(0.08, (1 - blink * live) * wake.eyes);
+    const awake = 1 - sleep;
+    const eyeOpen = giggle ? 0.18 : Math.max(0.07, awake * (1 - blink * live) * (1 - wakeBlink * 0.85));
     eyes.forEach((eye, i) => {
       eye.scale.set(1, eyeOpen, 1);
       eye.position.x = eyeHome[i].x + lookSmooth.x * 0.018;
-      eye.position.y = eyeHome[i].y + lookSmooth.y * 0.014;
+      eye.position.y = eyeHome[i].y + lookSmooth.y * 0.014 - sleep * 0.01;
     });
     brows.forEach((brow, i) => {
-      brow.position.y = browHome[i].y + happy * 0.025 * live;
+      brow.position.y = browHome[i].y + happy * 0.025 * live - sleep * 0.012;
     });
-    const targetMouth = wake.yawn > 0.01 ? 1 + wake.yawn * 0.75 : talking ? 0.75 + Math.sin(now * 16) * 0.25 + Math.sin(now * 5.1) * 0.15 : 1 + happy * 0.06;
-    mouthOpen = THREE.MathUtils.lerp(mouthOpen || 1, targetMouth, 0.35);
-    mouth.scale.set(1, mouthOpen, 1);
+    const awakeMouth = talking ? 0.75 + Math.sin(now * 16) * 0.25 + Math.sin(now * 5.1) * 0.15 : 1 + happy * 0.06;
+    const targetMouth = THREE.MathUtils.lerp(awakeMouth, 0.3 + breath * 0.04, sleep) + stretch * 0.3;
+    mouthOpen = THREE.MathUtils.lerp(mouthOpen, targetMouth, 0.3);
+    mouth.scale.set(1 - sleep * 0.3, mouthOpen, 1);
 
     renderer.render(scene, camera);
     if (!readySent) {
@@ -520,6 +573,11 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   document.addEventListener("visibilitychange", onVisibility);
 
   const controller: MaatjeSceneController = {
+    wake() {
+      if (phase !== "sleeping") return;
+      phase = "waking";
+      phaseStart = performance.now() / 1000;
+    },
     react(kind) {
       if (phase !== "live") return;
       const kinds: MaatjeReaction[] = ["jump", "wave", "giggle"];
@@ -529,6 +587,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       talking = value;
     },
     close() {
+      if (phase === "sleeping") return Promise.resolve();
       if (phase === "leaving") return new Promise<void>(resolve => {
         const previous = resolveClose;
         resolveClose = () => { previous?.(); resolve(); };
