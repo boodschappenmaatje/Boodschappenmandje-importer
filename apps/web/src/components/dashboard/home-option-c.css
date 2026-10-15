@@ -19,6 +19,7 @@ body:has(.home-c) { background: var(--home-c-background); }
 .home-c-character:focus-visible { outline: 3px solid white; outline-offset: 4px; border-radius: 24px; }
 .home-c-character:active .home-c-mascot { transform: scale(.94) rotate(-3deg); }
 .home-c-character .home-c-mascot { transition: transform 160ms ease; }
+.home-c-mascot[data-live="true"] { visibility: hidden; }
 .home-c-mascot { position: absolute; z-index: 2; width: 105%; max-width: 205px; height: auto; right: -4px; top: -12px; filter: drop-shadow(0 6px 5px var(--home-c-shadow)); pointer-events: none; }
 .home-c-budget { position: relative; display: grid; gap: 8px; padding: 13px 15px 11px; border-radius: 20px; background: white; color: var(--home-c-ink); box-shadow: 0 7px 20px var(--home-c-shadow); }
 .home-c-budget-chevron { position: absolute; right: 9px; top: 20px; color: var(--home-c-blue-ink); }

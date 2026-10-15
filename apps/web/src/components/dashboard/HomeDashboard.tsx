@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { HomeWeekSlider } from "./HomeWeekSlider";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
@@ -14,7 +14,7 @@ import { formatCents } from "@/services/budget/budget-engine";
 import { calculateWeekBudgetSummary } from "@/services/week-preparation/week-generation";
 import "./home-option-c.css";
 
-const MaatjeStage = dynamic(() => import("@/components/maatje/MaatjeStage").then(module => module.MaatjeStage), { ssr: false });
+const MaatjeLive = dynamic(() => import("@/components/maatje/MaatjeLive").then(module => module.MaatjeLive), { ssr: false });
 
 function Chevron() {
   return <svg width="20" height="24" viewBox="0 0 20 24" fill="none" aria-hidden="true"><path d="m7 5 7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -44,6 +44,8 @@ function BudgetRow({ label, planned, limit, complete, icon }: {
 export function HomeDashboard() {
   const router = useRouter();
   const [maatjeOpen, setMaatjeOpen] = useState(false);
+  const [maatjeLive, setMaatjeLive] = useState(false);
+  const mascotRef = useRef<HTMLImageElement>(null);
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
@@ -63,11 +65,11 @@ export function HomeDashboard() {
   return <div className="home-c" aria-busy={loading}>
     <section className="home-c-hero" aria-labelledby="home-c-title">
       <h1 id="home-c-title"><span className="home-c-hello">Slim kopen.</span><span className="home-c-hello">Lekker eten.</span></h1>
-      <button type="button" className="home-c-character" aria-label="Open Maatje in 3D" aria-haspopup="dialog" onClick={() => setMaatjeOpen(true)}>
-        <Image className="home-c-mascot" src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
+      <button type="button" className="home-c-character" aria-label="Laat Maatje tot leven komen" aria-haspopup="dialog" onClick={() => setMaatjeOpen(true)}>
+        <Image ref={mascotRef} className="home-c-mascot" data-live={maatjeLive} src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
       </button>
     </section>
-    {maatjeOpen ? <MaatjeStage onClose={() => setMaatjeOpen(false)} /> : null}
+    {maatjeOpen ? <MaatjeLive anchor={mascotRef} onAnchorHidden={setMaatjeLive} onClose={() => setMaatjeOpen(false)} /> : null}
     {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
       <span className="home-c-budget-chevron"><Chevron /></span>

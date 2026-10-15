@@ -1,7 +1,7 @@
 # Checkpoint — Interactieve 3D-Maatje stap 1 — 15 oktober 2026
 
 - Op verzoek van Dennis is roadmapstap 8 (mascotte) naar voren gehaald als **Interactieve 3D-Maatje**, in vier stappen die elk eerst met Dennis worden afgestemd (zie `ROADMAP.md`). Featurebranch `feature/maatje-3d-assistent`, basis `main` `d5003a7`.
-- Stap 1: tikken op de Home-mascotte opent een schermvullende 3D-Maatje (`apps/web/src/components/maatje/`). Three.js (`three@0.186.1`) wordt pas geladen bij het openen, dus de Home-bundle blijft gelijk. Maatje is procedureel opgebouwd (geen los 3D-bestand): ploft in beeld met draai, zweeft, knippert, ogen volgen je vinger, draaien met vegen, en tikken geeft een sprong, zwaai of giechel met tekstballon. Reduced motion en toestellen zonder WebGL worden afgevangen.
+- Stap 1 (herzien na feedback van Dennis: geen apart scherm en precies hetzelfde uiterlijk): tikken op de Home-mascotte laat Maatje op Home zelf tot leven komen. Hij begint exact op de plek van het plaatje, stapt naar voren, wordt groter en draait even rond; tik ernaast of op het kruisje en hij vliegt terug. Het 3D-model is opgebouwd uit het officiële plaatje zelf (`apps/web/scripts/maatje-3d/build.py` → `public/branding/maatje-3d/` en `maatje-model.json`): lijf, handjes en streepjes zijn dikke, glanzende vormen met het plaatje als textuur; ogen, mond en wenkbrauwen zijn losse delen voor knipperen, meekijken en praten. Three.js (`three@0.186.1`) laadt pas bij tikken. Reduced motion en toestellen zonder WebGL worden afgevangen.
 - Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van stap 1 staat open.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026

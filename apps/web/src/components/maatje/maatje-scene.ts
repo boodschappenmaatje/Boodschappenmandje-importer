@@ -1,482 +1,499 @@
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import model from "./maatje-model.json";
 
 /*
- * Maatje in 3D, procedureel opgebouwd zodat er geen los 3D-bestand nodig is.
- * Het lijf is een golvend bonnetje met donkerblauwe rand, het gezicht een
- * canvas-textuur (knipperen, ogen volgen je vinger, mond praat mee) en de
- * handjes zweven los naast het lijf, net als op de officiële mascotte.
+ * Maatje in 3D, opgebouwd uit het officiële Home-plaatje. De vormen
+ * (lijf, handjes, streepjes, ogen, mond, wenkbrauwen) zijn uit dat plaatje
+ * gehaald (scripts/maatje-3d/build.py) en dik gemaakt; het plaatje zelf is
+ * de textuur. Van voren ziet hij er daardoor precies zo uit als op Home,
+ * maar hij heeft echte diepte, glans en losse bewegende delen.
+ *
+ * Modelcoördinaten: het beeldvierkant van het Home-plaatje loopt van -1
+ * tot 1 (y omhoog). Zo kan de scène hem exact over het plaatje leggen.
  */
 
-const NAVY = 0x0b2a6b;
-const PAPER = 0xffffff;
-const FACE_SIZE = 512;
-const BODY_W = 1.5;
-const BODY_H = 2.05;
-const DEPTH = 0.1;
+type Point = [number, number];
+type PartName = "eyeL" | "eyeR" | "mouth" | "browL" | "browR";
+interface PartData { min: Point; max: Point; contour: Point[] }
+const MODEL = model as unknown as {
+  rim: number;
+  body: Point[];
+  hands: Point[][];
+  sparks: Point[][];
+  parts: Record<PartName, PartData>;
+};
 
-export interface MaatjeSceneController {
-  /** Speelt een willekeurige vrolijke reactie (sprong, zwaai of giechel). */
-  react(kind?: MaatjeReaction): void;
-  /** Laat de mond meebewegen zolang Maatje praat. */
-  setTalking(talking: boolean): void;
-  dispose(): void;
-}
+const BODY_DEPTH = 0.1;
+const BODY_BEVEL = 0.075;
+const BODY_FRONT = BODY_DEPTH / 2 + BODY_BEVEL;
+const CURL = 0.07;
+const FOV = 20;
+const CAMERA_Z = 14;
 
 export type MaatjeReaction = "jump" | "wave" | "giggle";
 
-interface SceneOptions {
+export interface MaatjeSceneOptions {
   reducedMotion: boolean;
+  /** Plek van het Home-plaatje; daar begint en eindigt Maatje. */
+  anchor: () => DOMRect;
+  /** Plek waar Maatje naartoe komt als hij tot leven komt. */
+  target: () => DOMRect;
+  onReady?: () => void;
   onTap?: () => void;
+  onTapOutside?: () => void;
 }
 
-function toonGradient(): THREE.DataTexture {
-  const data = new Uint8Array([90, 90, 90, 255, 185, 185, 185, 255, 255, 255, 255, 255]);
-  const texture = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
-  texture.minFilter = THREE.NearestFilter;
-  texture.magFilter = THREE.NearestFilter;
-  texture.needsUpdate = true;
-  return texture;
+export interface MaatjeSceneController {
+  react(kind?: MaatjeReaction): void;
+  setTalking(talking: boolean): void;
+  /** Laat Maatje terugvliegen naar zijn plek op Home. */
+  close(): Promise<void>;
+  dispose(): void;
 }
 
-/** Golvende bovenrand en onderrand, licht bolle zijkanten: het bonnetje. */
-function receiptShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  const w = BODY_W / 2;
-  const h = BODY_H / 2;
-  const waves = 5;
-  const amp = 0.055;
-  const steps = 60;
-  shape.moveTo(-w, -h);
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const x = -w + t * BODY_W;
-    shape.lineTo(x, -h + Math.sin(t * Math.PI * 2 * waves) * amp);
-  }
-  for (let i = 1; i <= 20; i++) {
-    const t = i / 20;
-    shape.lineTo(w + Math.sin(t * Math.PI) * 0.035, -h + t * BODY_H);
-  }
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    const x = w - t * BODY_W;
-    shape.lineTo(x, h + Math.sin(t * Math.PI * 2 * waves) * amp);
-  }
-  for (let i = 1; i < 20; i++) {
-    const t = i / 20;
-    shape.lineTo(-w - Math.sin(t * Math.PI) * 0.035, h - t * BODY_H);
-  }
-  shape.closePath();
-  return shape;
+const projectUv = {
+  generateTopUV(_g: THREE.ExtrudeGeometry, v: number[], a: number, b: number, c: number) {
+    return [a, b, c].map(i => new THREE.Vector2((v[i * 3] + 1) / 2, (v[i * 3 + 1] + 1) / 2));
+  },
+  generateSideWallUV(_g: THREE.ExtrudeGeometry, v: number[], a: number, b: number, c: number, d: number) {
+    return [a, b, c, d].map(i => new THREE.Vector2((v[i * 3] + 1) / 2, (v[i * 3 + 1] + 1) / 2));
+  },
+};
+
+function shapeOf(points: Point[], origin: Point = [0, 0]): THREE.Shape {
+  return new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x - origin[0], y - origin[1])));
 }
 
-/** Buigt het bonnetje een beetje, zodat het als echt papier oogt. */
-function bendPaper(geometry: THREE.BufferGeometry) {
+/** Dik, afgerond gemaakt silhouet met de textuur recht van voren geprojecteerd. */
+function puffy(points: Point[], depth: number, bevel: number, origin: Point = [0, 0], segments = 5): THREE.BufferGeometry {
+  const uv = {
+    generateTopUV: (g: THREE.ExtrudeGeometry, v: number[], a: number, b: number, c: number) =>
+      projectUv.generateTopUV(g, v.map((n, i) => i % 3 === 0 ? n + origin[0] : i % 3 === 1 ? n + origin[1] : n), a, b, c),
+    generateSideWallUV: (g: THREE.ExtrudeGeometry, v: number[], a: number, b: number, c: number, d: number) =>
+      projectUv.generateSideWallUV(g, v.map((n, i) => i % 3 === 0 ? n + origin[0] : i % 3 === 1 ? n + origin[1] : n), a, b, c, d),
+  };
+  const geometry = new THREE.ExtrudeGeometry(shapeOf(points, origin), {
+    depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.7, bevelOffset: -bevel * 0.7,
+    bevelSegments: segments, curveSegments: 1, UVGenerator: uv,
+  });
+  geometry.translate(0, 0, -depth / 2);
+  return geometry;
+}
+
+/** Verdeelt driehoeken in voorkant (groep 0) en achterkant (groep 1). */
+function splitFrontBack(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const source = geometry.index ? geometry.toNonIndexed() : geometry;
+  const position = source.attributes.position;
+  const front: number[] = [];
+  const back: number[] = [];
+  for (let i = 0; i < position.count; i += 3) {
+    const z = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3;
+    (z >= 0 ? front : back).push(i);
+  }
+  const order = [...front, ...back];
+  const result = new THREE.BufferGeometry();
+  for (const name of Object.keys(source.attributes)) {
+    const attribute = source.attributes[name] as THREE.BufferAttribute;
+    const array = new Float32Array(order.length * 3 * attribute.itemSize);
+    order.forEach((start, t) => {
+      for (let k = 0; k < 3; k++) {
+        for (let c = 0; c < attribute.itemSize; c++) {
+          array[(t * 3 + k) * attribute.itemSize + c] = attribute.array[(start + k) * attribute.itemSize + c];
+        }
+      }
+    });
+    result.setAttribute(name, new THREE.BufferAttribute(array, attribute.itemSize));
+  }
+  result.addGroup(0, front.length * 3, 0);
+  result.addGroup(front.length * 3, back.length * 3, 1);
+  return result;
+}
+
+/** Het papier krult licht naar achteren; ook gezichtsdelen volgen die bolling. */
+const curl = (x: number) => -CURL * x * x;
+
+function curlGeometry(geometry: THREE.BufferGeometry, offsetX = 0) {
   const position = geometry.attributes.position;
-  for (let i = 0; i < position.count; i++) {
-    const x = position.getX(i);
-    const y = position.getY(i);
-    const z = position.getZ(i);
-    const curl = -0.16 * x * x + 0.05 * Math.sin(y * 1.6);
-    position.setXYZ(i, x + 0.04 * Math.sin(y * 1.4), y, z + curl);
-  }
+  for (let i = 0; i < position.count; i++) position.setZ(i, position.getZ(i) + curl(position.getX(i) + offsetX));
   position.needsUpdate = true;
   geometry.computeVertexNormals();
 }
 
-interface FaceState {
-  blink: number;
-  lookX: number;
-  lookY: number;
-  mouthOpen: number;
-  happy: number;
+function centerOf(points: Point[]): Point {
+  const xs = points.map(p => p[0]);
+  const ys = points.map(p => p[1]);
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
 }
 
-function drawFace(ctx: CanvasRenderingContext2D, face: FaceState) {
-  const s = FACE_SIZE;
-  ctx.clearRect(0, 0, s, s);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+const easeInOut = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeOutBack = (t: number) => 1 + 2.4 * Math.pow(t - 1, 3) + 1.4 * Math.pow(t - 1, 2);
 
-  // Kassabonregels.
-  ctx.strokeStyle = "#9cc8fa";
-  ctx.lineWidth = 15;
-  for (const [x1, x2, y] of [[150, 380, 372], [150, 300, 412], [326, 370, 412], [150, 270, 452]]) {
-    ctx.beginPath();
-    ctx.moveTo(x1, y);
-    ctx.lineTo(x2, y);
-    ctx.stroke();
-  }
-
-  // Wangen.
-  ctx.fillStyle = "rgba(140, 190, 250, 0.75)";
-  for (const x of [148, 364]) {
-    ctx.beginPath();
-    ctx.ellipse(x, 252, 26, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Wenkbrauwen gaan omhoog als Maatje blij is.
-  ctx.strokeStyle = "#0b2a6b";
-  ctx.lineWidth = 12;
-  const browLift = face.happy * 10;
-  for (const x of [196, 316]) {
-    ctx.beginPath();
-    ctx.moveTo(x - 30, 128 - browLift);
-    ctx.quadraticCurveTo(x, 104 - browLift, x + 30, 124 - browLift);
-    ctx.stroke();
-  }
-
-  // Ogen met glimlichtjes; ze volgen je vinger.
-  const eyeOpen = Math.max(0.08, 1 - face.blink);
-  for (const x of [200, 312]) {
-    ctx.save();
-    ctx.translate(x + face.lookX * 9, 196 + face.lookY * 7);
-    ctx.scale(1, eyeOpen);
-    ctx.fillStyle = "#0b2a6b";
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 34, 46, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (eyeOpen > 0.4) {
-      ctx.fillStyle = "white";
-      ctx.beginPath();
-      ctx.ellipse(10, -16, 12, 14, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(-10, 14, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  // Mond: een open lach die meebeweegt tijdens het praten.
-  const open = 20 + face.mouthOpen * 34 + face.happy * 8;
-  ctx.fillStyle = "#0b2a6b";
-  ctx.beginPath();
-  ctx.moveTo(206, 262);
-  ctx.quadraticCurveTo(256, 276, 306, 262);
-  ctx.quadraticCurveTo(300, 262 + open * 1.6, 256, 262 + open * 1.55);
-  ctx.quadraticCurveTo(212, 262 + open * 1.6, 206, 262);
-  ctx.fill();
-  ctx.fillStyle = "#ed6780";
-  ctx.beginPath();
-  ctx.ellipse(262, 262 + open * 1.2, 26, Math.max(6, open * 0.42), 0, 0, Math.PI * 2);
-  ctx.fill();
+function loadTexture(loader: THREE.TextureLoader, url: string): Promise<THREE.Texture> {
+  return new Promise((resolve, reject) => loader.load(url, texture => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    resolve(texture);
+  }, undefined, reject));
 }
 
-function outlined(geometry: THREE.BufferGeometry, material: THREE.Material, outline: THREE.Material, grow = 1.09) {
-  const group = new THREE.Group();
-  group.add(new THREE.Mesh(geometry, material));
-  const hull = new THREE.Mesh(geometry, outline);
-  hull.scale.setScalar(grow);
-  group.add(hull);
-  return group;
-}
+export async function createMaatjeScene(container: HTMLElement, options: MaatjeSceneOptions): Promise<MaatjeSceneController> {
+  const loader = new THREE.TextureLoader();
+  const [original, frontMap, backMap, partsMap] = await Promise.all([
+    loadTexture(loader, "/branding/maatje-home-c.webp"),
+    loadTexture(loader, "/branding/maatje-3d/front.webp"),
+    loadTexture(loader, "/branding/maatje-3d/back.webp"),
+    loadTexture(loader, "/branding/maatje-3d/parts.webp"),
+  ]);
 
-/** Een wit cartoonhandje met opgestoken duim. */
-function buildHand(material: THREE.Material, outline: THREE.Material, mirror: boolean): THREE.Group {
-  const hand = new THREE.Group();
-  const palm = outlined(new THREE.SphereGeometry(0.2, 24, 18), material, outline, 1.1);
-  palm.scale.set(1.05, 0.95, 0.85);
-  hand.add(palm);
-  const finger = new THREE.CapsuleGeometry(0.065, 0.13, 6, 12);
-  for (let i = 0; i < 3; i++) {
-    const f = outlined(finger, material, outline, 1.14);
-    f.rotation.z = Math.PI / 2;
-    f.position.set(mirror ? 0.06 : -0.06, -0.04 - i * 0.085, 0.13);
-    hand.add(f);
-  }
-  const thumb = outlined(new THREE.CapsuleGeometry(0.075, 0.17, 6, 12), material, outline, 1.13);
-  thumb.position.set(mirror ? -0.04 : 0.04, 0.2, 0.03);
-  thumb.rotation.z = mirror ? 0.25 : -0.25;
-  hand.add(thumb);
-  return hand;
-}
-
-function shadowTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 128;
-  const ctx = canvas.getContext("2d")!;
-  const gradient = ctx.createRadialGradient(64, 64, 4, 64, 64, 62);
-  gradient.addColorStop(0, "rgba(3, 40, 110, 0.38)");
-  gradient.addColorStop(1, "rgba(3, 40, 110, 0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(canvas);
-}
-
-const easeOutBack = (t: number) => {
-  const c = 1.9;
-  return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2);
-};
-
-export function createMaatjeScene(container: HTMLElement, options: SceneOptions): MaatjeSceneController {
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "low-power" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.domElement.className = "maatje-stage-canvas";
-  container.appendChild(renderer.domElement);
+  renderer.toneMapping = THREE.NoToneMapping;
+  const canvas = renderer.domElement;
+  canvas.className = "maatje-live-canvas";
+  container.appendChild(canvas);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
-  // Camera iets lager richten: Maatje staat dan hoger, met ruimte voor een chatbalk eronder.
-  camera.position.set(0, -0.45, 6.4);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  scene.environment = environment;
+  scene.environmentIntensity = 0.25;
+  const camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 100);
+  camera.position.set(0, 0, CAMERA_Z);
+  // Strijklicht van linksboven: de voorkant blijft vrijwel gelijk aan het
+  // plaatje, de bolle randen krijgen licht en schaduw.
+  const key = new THREE.DirectionalLight(0xffffff, 0.8);
+  key.position.set(-5, 6, 1.5);
+  scene.add(key, new THREE.AmbientLight(0xffffff, 0.05));
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8fbff5, 1.6));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-  sun.position.set(2.5, 3.5, 4);
-  scene.add(sun);
-
-  const gradient = toonGradient();
-  const paper = new THREE.MeshToonMaterial({ color: PAPER, gradientMap: gradient });
-  const glove = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: gradient });
-  const outline = new THREE.MeshBasicMaterial({ color: NAVY, side: THREE.BackSide });
+  // Glanzend vinyl-speelgoed: de textuur licht zelf op (zodat de kleuren
+  // gelijk blijven aan het plaatje); licht en omgeving geven glans en diepte.
+  const vinyl = (map: THREE.Texture, extra: THREE.MeshPhysicalMaterialParameters = {}) => new THREE.MeshPhysicalMaterial({
+    map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.56, roughness: 0.5, metalness: 0,
+    clearcoat: 0.55, clearcoatRoughness: 0.25, ...extra,
+  });
+  const materials = [vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04 })];
+  const [frontMaterial, backMaterial, originalMaterial, partsMaterial] = materials;
 
   const root = new THREE.Group();
+  const figure = new THREE.Group();
+  root.add(figure);
   scene.add(root);
-  const body = new THREE.Group();
-  root.add(body);
 
-  const bodyGeometry = new THREE.ExtrudeGeometry(receiptShape(), {
-    depth: DEPTH, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.035, bevelSegments: 3, curveSegments: 4,
-  });
-  bodyGeometry.translate(0, 0, -DEPTH / 2);
-  bendPaper(bodyGeometry);
-  body.add(new THREE.Mesh(bodyGeometry, paper));
-  const hull = new THREE.Mesh(bodyGeometry, outline);
-  hull.scale.set(1.045, 1.035, 1.6);
-  body.add(hull);
+  const bodyGeometry = splitFrontBack(puffy(MODEL.body, BODY_DEPTH, BODY_BEVEL, [0, 0], 6));
+  curlGeometry(bodyGeometry);
+  const body = new THREE.Mesh(bodyGeometry, [frontMaterial, backMaterial]);
+  figure.add(body);
 
-  const faceCanvas = document.createElement("canvas");
-  faceCanvas.width = faceCanvas.height = FACE_SIZE;
-  const faceContext = faceCanvas.getContext("2d")!;
-  const faceTexture = new THREE.CanvasTexture(faceCanvas);
-  faceTexture.colorSpace = THREE.SRGBColorSpace;
-  faceTexture.anisotropy = 4;
-  const faceGeometry = new THREE.PlaneGeometry(BODY_W * 0.98, BODY_W * 0.98, 24, 24);
-  faceGeometry.translate(0, 0.12, DEPTH / 2 + 0.04);
-  bendPaper(faceGeometry);
-  const faceMesh = new THREE.Mesh(faceGeometry, new THREE.MeshBasicMaterial({ map: faceTexture, transparent: true }));
-  body.add(faceMesh);
+  const frontZ = (x: number) => BODY_FRONT + curl(x);
 
-  const leftHand = buildHand(glove, outline, false);
-  const rightHand = buildHand(glove, outline, true);
-  leftHand.position.set(-0.98, -0.3, 0.38);
-  rightHand.position.set(0.98, -0.3, 0.38);
-  leftHand.scale.setScalar(1.15);
-  rightHand.scale.setScalar(1.15);
-  root.add(leftHand, rightHand);
-
-  // Kleine "blije streepjes" naast de handjes, zoals op het logo.
-  const sparkGeometry = new THREE.CapsuleGeometry(0.03, 0.14, 4, 8);
-  const sparkMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const sparks: THREE.Mesh[] = [];
-  for (const [x, y, r] of [[-1.22, 0.32, 0.5], [-1.36, 0.02, 1.3], [1.22, 0.32, -0.5], [1.36, 0.02, -1.3]] as const) {
-    const spark = new THREE.Mesh(sparkGeometry, sparkMaterial);
-    spark.position.set(x, y, 0.1);
-    spark.rotation.z = r;
-    sparks.push(spark);
-    root.add(spark);
+  function part(name: PartName, depth: number, pivot: "center" | "top" = "center") {
+    const data = MODEL.parts[name];
+    const [cx, cy] = centerOf(data.contour);
+    const origin: Point = [cx, pivot === "top" ? data.max[1] : cy];
+    const geometry = puffy(data.contour, 0.001, depth, origin, 4);
+    const mesh = new THREE.Mesh(geometry, partsMaterial);
+    mesh.position.set(origin[0], origin[1], frontZ(cx) + depth * 0.4);
+    mesh.rotation.y = Math.atan(2 * CURL * cx);
+    figure.add(mesh);
+    return mesh;
   }
+  const eyes = [part("eyeL", 0.035), part("eyeR", 0.035)];
+  const mouth = part("mouth", 0.012, "top");
+  const brows = [part("browL", 0.022), part("browR", 0.022)];
+  const eyeHome = eyes.map(eye => eye.position.clone());
+  const browHome = brows.map(brow => brow.position.clone());
 
-  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.7), new THREE.MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }));
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = -1.45;
-  scene.add(shadow);
+  // Handjes draaien rond hun pols (onderkant) voor zwaaien en duim-wiebelen.
+  const hands = MODEL.hands.map(points => {
+    const [cx] = centerOf(points);
+    const bottom = Math.min(...points.map(p => p[1]));
+    const pivot: Point = [cx, bottom + 0.08];
+    const mesh = new THREE.Mesh(puffy(points, 0.16, 0.1, pivot, 6), originalMaterial);
+    const group = new THREE.Group();
+    group.position.set(pivot[0], pivot[1], BODY_FRONT + 0.06);
+    group.add(mesh);
+    figure.add(group);
+    return group;
+  });
+  const handHome = hands.map(hand => hand.position.y);
 
-  const face: FaceState = { blink: 0, lookX: 0, lookY: 0, mouthOpen: 0, happy: 0 };
-  const look = { x: 0, y: 0 };
-  let talking = false;
-  let nextBlink = 1.8;
-  let blinkStart = -1;
-  let reaction: { kind: MaatjeReaction; start: number } | null = null;
-  const enterStart = performance.now() / 1000;
-  const enterDuration = options.reducedMotion ? 0.25 : 1.1;
-  let dragYaw = 0;
-  let dragVelocity = 0;
-  let dragging: { x: number; startX: number; startY: number; moved: boolean } | null = null;
-  let disposed = false;
-  let frame = 0;
+  const sparks = MODEL.sparks.map(points => {
+    const center = centerOf(points);
+    const mesh = new THREE.Mesh(puffy(points, 0.02, 0.025, center, 3), originalMaterial);
+    mesh.position.set(center[0], center[1], 0.05);
+    figure.add(mesh);
+    return mesh;
+  });
 
-  const raycaster = new THREE.Raycaster();
-  const pointer = new THREE.Vector2();
-
+  // ----- Plaatsing in schermcoördinaten -----
+  let viewport = { width: 1, height: 1 };
   function resize() {
-    const { clientWidth: width, clientHeight: height } = container;
-    if (!width || !height) return;
-    renderer.setSize(width, height, false);
-    camera.aspect = width / height;
-    // Afstand zo kiezen dat Maatje mét handjes altijd in beeld past.
-    const halfFov = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    camera.position.z = Math.max(1.75 / halfFov, 1.5 / (halfFov * camera.aspect));
+    viewport = { width: container.clientWidth || window.innerWidth, height: container.clientHeight || window.innerHeight };
+    renderer.setSize(viewport.width, viewport.height, false);
+    camera.aspect = viewport.width / viewport.height;
     camera.updateProjectionMatrix();
   }
+  resize();
   const resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
-  resize();
 
-  function updatePointer(event: PointerEvent) {
-    const rect = renderer.domElement.getBoundingClientRect();
-    pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
-    look.x = THREE.MathUtils.clamp(pointer.x * 1.6, -1, 1);
-    look.y = THREE.MathUtils.clamp(-pointer.y * 1.6, -1, 1);
+  function place(rect: DOMRect) {
+    const worldPerPixel = (2 * CAMERA_Z * Math.tan(THREE.MathUtils.degToRad(FOV / 2))) / viewport.height;
+    const box = container.getBoundingClientRect();
+    return {
+      x: (rect.left + rect.width / 2 - box.left - viewport.width / 2) * worldPerPixel,
+      y: -(rect.top + rect.height / 2 - box.top - viewport.height / 2) * worldPerPixel,
+      scale: (rect.width * worldPerPixel) / 2,
+    };
   }
-  function hitsMaatje(): boolean {
+
+  // ----- Interactie -----
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const look = { x: 0, y: 0 };
+  let drag: { x: number; startX: number; startY: number; moved: boolean } | null = null;
+  let dragYaw = 0;
+  let dragVelocity = 0;
+
+  function setPointer(event: PointerEvent) {
+    const box = canvas.getBoundingClientRect();
+    pointer.set(((event.clientX - box.left) / box.width) * 2 - 1, -((event.clientY - box.top) / box.height) * 2 + 1);
+    const center = new THREE.Vector3().setFromMatrixPosition(root.matrixWorld).project(camera);
+    look.x = THREE.MathUtils.clamp((pointer.x - center.x) * 2.5, -1, 1);
+    look.y = THREE.MathUtils.clamp((pointer.y - center.y) * 2.5, -1, 1);
+  }
+  const hits = () => {
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObject(root, true).length > 0;
-  }
-  const onPointerDown = (event: PointerEvent) => {
-    updatePointer(event);
-    dragging = { x: event.clientX, startX: event.clientX, startY: event.clientY, moved: false };
-    renderer.domElement.setPointerCapture?.(event.pointerId);
+    return raycaster.intersectObject(figure, true).length > 0;
   };
-  const onPointerMove = (event: PointerEvent) => {
-    updatePointer(event);
-    if (!dragging) return;
-    const dx = event.clientX - dragging.x;
-    dragging.x = event.clientX;
-    if (Math.abs(event.clientX - dragging.startX) + Math.abs(event.clientY - dragging.startY) > 8) dragging.moved = true;
-    if (dragging.moved) {
-      dragYaw += dx * 0.012;
-      dragVelocity = dx * 0.012;
+  const onDown = (event: PointerEvent) => {
+    setPointer(event);
+    drag = { x: event.clientX, startX: event.clientX, startY: event.clientY, moved: false };
+    canvas.setPointerCapture?.(event.pointerId);
+  };
+  const onMove = (event: PointerEvent) => {
+    setPointer(event);
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    drag.x = event.clientX;
+    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) drag.moved = true;
+    if (drag.moved && phase === "live") {
+      dragYaw += dx * 0.013;
+      dragVelocity = dx * 0.013;
     }
   };
-  const onPointerUp = (event: PointerEvent) => {
-    updatePointer(event);
-    const wasTap = dragging && !dragging.moved;
-    dragging = null;
-    if (wasTap && hitsMaatje()) {
+  const onUp = (event: PointerEvent) => {
+    setPointer(event);
+    const tap = drag && !drag.moved;
+    drag = null;
+    if (!tap || phase !== "live") return;
+    if (hits()) {
       controller.react();
       options.onTap?.();
-    }
+    } else options.onTapOutside?.();
   };
-  const canvas = renderer.domElement;
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerUp);
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointermove", onMove);
+  canvas.addEventListener("pointerup", onUp);
+  canvas.addEventListener("pointercancel", onUp);
+
+  // ----- Animatie -----
+  const motion = options.reducedMotion ? 0.2 : 1;
+  const enterDuration = options.reducedMotion ? 0.25 : 0.95;
+  let phase: "entering" | "live" | "leaving" = "entering";
+  let phaseStart = performance.now() / 1000;
+  let leaveFrom = { x: 0, y: 0, scale: 1, yaw: 0 };
+  let resolveClose: (() => void) | null = null;
+  let reaction: { kind: MaatjeReaction; start: number } | null = null;
+  let talking = false;
+  let mouthOpen = 0;
+  let blink = 0;
+  let nextBlink = performance.now() / 1000 + 2.2;
+  let blinkStart = -1;
+  let happy = 0;
+  let frame = 0;
+  let disposed = false;
+  let readySent = false;
+  const lookSmooth = { x: 0, y: 0 };
 
   function tick() {
     if (disposed) return;
     frame = requestAnimationFrame(tick);
     const now = performance.now() / 1000;
-    const t = now - enterStart;
-    const motion = options.reducedMotion ? 0.25 : 1;
+    const t = now - phaseStart;
+    const from = place(options.anchor());
+    const to = place(options.target());
+    let x: number, y: number, scale: number;
+    let yaw = 0;
+    let pitch = 0;
+    let lift = 0;
+    let live = 1;
 
-    // Binnenkomst: Maatje ploft tevoorschijn en draait naar je toe.
-    const enter = Math.min(1, t / enterDuration);
-    const pop = options.reducedMotion ? enter : easeOutBack(enter);
-    root.scale.setScalar(Math.max(0.001, pop));
-    let yaw = options.reducedMotion ? 0 : (1 - enter) * -Math.PI * 1.5;
+    if (phase === "entering") {
+      const p = Math.min(1, t / enterDuration);
+      const e = options.reducedMotion ? p : easeOutBack(p);
+      x = THREE.MathUtils.lerp(from.x, to.x, easeInOut(p));
+      y = THREE.MathUtils.lerp(from.y, to.y, easeInOut(p));
+      scale = THREE.MathUtils.lerp(from.scale, to.scale, e);
+      // Onderweg draait hij een keer rond: zo zie je meteen dat hij 3D is.
+      yaw = options.reducedMotion ? 0 : Math.sin(p * Math.PI) * 0.9;
+      lift = Math.sin(p * Math.PI) * 0.15 * to.scale * motion;
+      live = p;
+      if (p >= 1) {
+        phase = "live";
+        phaseStart = now;
+      }
+    } else if (phase === "leaving") {
+      const p = Math.min(1, t / (options.reducedMotion ? 0.2 : 0.55));
+      const e = easeInOut(p);
+      x = THREE.MathUtils.lerp(leaveFrom.x, from.x, e);
+      y = THREE.MathUtils.lerp(leaveFrom.y, from.y, e);
+      scale = THREE.MathUtils.lerp(leaveFrom.scale, from.scale, e);
+      yaw = THREE.MathUtils.lerp(leaveFrom.yaw, 0, e);
+      live = 1 - e;
+      if (p >= 1 && resolveClose) {
+        renderer.render(scene, camera);
+        const done = resolveClose;
+        resolveClose = null;
+        done();
+        return;
+      }
+    } else {
+      x = to.x;
+      y = to.y;
+      scale = to.scale;
+    }
 
-    // Zweven en ademen.
-    let y = Math.sin(t * 2.1) * 0.06 * motion;
-    let squash = 1 + Math.sin(t * 4.2) * 0.012 * motion;
-    let roll = Math.sin(t * 1.3) * 0.04 * motion;
-    let leftLift = Math.sin(t * 2.1 + 0.6) * 0.05 * motion;
-    let rightLift = Math.sin(t * 2.1 + 1.4) * 0.05 * motion;
-    let rightWave = 0;
-    face.happy = THREE.MathUtils.lerp(face.happy, talking ? 0.6 : 0.3, 0.05);
+    // Leven: zweven, wiegen (laat de diepte zien) en ademen.
+    const liveTime = now;
+    const bob = Math.sin(liveTime * 2) * 0.03 * motion * live;
+    const sway = Math.sin(liveTime * 0.9) * 0.28 * motion * live;
+    let squash = 1 + Math.sin(liveTime * 4) * 0.01 * motion * live;
+    let roll = Math.sin(liveTime * 1.3) * 0.03 * motion * live;
+    let handLift = [Math.sin(liveTime * 2 + 0.7), Math.sin(liveTime * 2 + 1.6)].map(v => v * 0.025 * motion * live);
+    const handTwist = [Math.sin(liveTime * 3.1) * 0.06 * motion * live, -Math.sin(liveTime * 2.7) * 0.06 * motion * live];
+    let wave = 0;
+    happy = THREE.MathUtils.lerp(happy, talking ? 0.7 : 0.25, 0.06);
+    let giggle = false;
 
     if (reaction) {
-      const r = (now - reaction.start) / (options.reducedMotion ? 0.6 : 1.1);
+      const r = (now - reaction.start) / (options.reducedMotion ? 0.5 : 1.05);
       if (r >= 1) reaction = null;
       else if (reaction.kind === "jump") {
-        y += Math.sin(r * Math.PI) * 0.75 * motion;
-        yaw += options.reducedMotion ? 0 : r * Math.PI * 2;
-        squash *= r < 0.12 ? 1 - r * 1.2 : 1;
-        leftLift += Math.sin(r * Math.PI) * 0.35;
-        rightLift += Math.sin(r * Math.PI) * 0.35;
-        face.happy = 1;
+        lift += Math.sin(r * Math.PI) * 0.45 * motion;
+        yaw += options.reducedMotion ? 0 : easeInOut(r) * Math.PI * 2;
+        squash *= r < 0.14 ? 1 - Math.sin((r / 0.14) * Math.PI) * 0.08 : 1;
+        handLift = handLift.map(v => v + Math.sin(r * Math.PI) * 0.12);
+        happy = 1;
       } else if (reaction.kind === "wave") {
-        rightLift += Math.sin(r * Math.PI) * 0.7;
-        rightWave = Math.sin(r * Math.PI * 6) * 0.5 * Math.sin(r * Math.PI);
-        face.happy = 1;
+        wave = Math.sin(r * Math.PI * 6) * 0.45 * Math.sin(r * Math.PI);
+        handLift[1] += Math.sin(r * Math.PI) * 0.18;
+        happy = 1;
       } else {
-        squash *= 1 + Math.sin(r * Math.PI * 8) * 0.05 * (1 - r);
-        roll += Math.sin(r * Math.PI * 6) * 0.08 * (1 - r);
-        face.happy = 1;
-        face.blink = 0.85;
+        squash *= 1 + Math.sin(r * Math.PI * 9) * 0.04 * (1 - r);
+        roll += Math.sin(r * Math.PI * 7) * 0.07 * (1 - r);
+        happy = 1;
+        giggle = true;
       }
     }
 
-    // Loslaten na draaien: zacht terugveren naar voren.
-    if (!dragging) {
+    if (!drag) {
       dragYaw += dragVelocity;
       dragVelocity *= 0.9;
-      dragYaw *= 0.93;
+      dragYaw *= 0.94;
     }
+    lookSmooth.x = THREE.MathUtils.lerp(lookSmooth.x, phase === "live" ? look.x : 0, 0.1);
+    lookSmooth.y = THREE.MathUtils.lerp(lookSmooth.y, phase === "live" ? look.y : 0, 0.1);
 
-    root.position.y = y;
-    root.rotation.set(-look.y * 0.08, yaw + dragYaw + look.x * 0.25, roll - 0.05);
-    body.scale.set(1 / Math.sqrt(squash), squash, 1);
-    leftHand.position.y = -0.3 + leftLift;
-    rightHand.position.y = -0.3 + rightLift;
-    rightHand.rotation.z = rightWave;
-    sparks.forEach((spark, i) => {
-      const pulse = 0.75 + Math.sin(t * 3 + i) * 0.25;
-      spark.scale.setScalar(pulse);
+    root.position.set(x, y + (lift + bob) * scale, 0);
+    root.scale.setScalar(scale);
+    pitch = -lookSmooth.y * 0.12 * live;
+    root.rotation.set(pitch, yaw + sway + dragYaw + lookSmooth.x * 0.3 * live, roll);
+    figure.scale.set(1 / Math.sqrt(squash), squash, 1);
+
+    hands.forEach((hand, i) => {
+      hand.position.y = handHome[i] + handLift[i];
+      hand.rotation.z = handTwist[i] + (i === 1 ? -wave : 0);
     });
-    shadow.scale.setScalar(1 - y * 0.35);
+    sparks.forEach((spark, i) => spark.scale.setScalar(1 + Math.sin(liveTime * 3.4 + i * 1.3) * 0.12 * live));
 
-    // Knipperen op willekeurige momenten.
-    if (blinkStart < 0 && t > nextBlink) blinkStart = t;
+    // Gezicht: knipperen, meekijken, praten en blij kijken.
+    if (blinkStart < 0 && now > nextBlink) blinkStart = now;
     if (blinkStart >= 0) {
-      const b = (t - blinkStart) / 0.16;
-      if (!(reaction?.kind === "giggle")) face.blink = b < 1 ? Math.sin(b * Math.PI) : 0;
+      const b = (now - blinkStart) / 0.15;
+      blink = b < 1 ? Math.sin(b * Math.PI) : 0;
       if (b >= 1) {
         blinkStart = -1;
-        nextBlink = t + 2.2 + Math.random() * 2.8;
+        nextBlink = now + 2 + Math.random() * 3;
       }
-    } else if (!(reaction?.kind === "giggle")) face.blink = 0;
-
-    face.lookX = THREE.MathUtils.lerp(face.lookX, look.x, 0.12);
-    face.lookY = THREE.MathUtils.lerp(face.lookY, look.y, 0.12);
-    const targetMouth = talking ? (Math.sin(now * 17) * 0.5 + 0.5) * (0.6 + Math.sin(now * 5.3) * 0.4) : 0;
-    face.mouthOpen = THREE.MathUtils.lerp(face.mouthOpen, targetMouth, 0.35);
-    drawFace(faceContext, face);
-    faceTexture.needsUpdate = true;
+    }
+    const eyeOpen = giggle ? 0.18 : Math.max(0.1, 1 - blink * live);
+    eyes.forEach((eye, i) => {
+      eye.scale.set(1, eyeOpen, 1);
+      eye.position.x = eyeHome[i].x + lookSmooth.x * 0.018;
+      eye.position.y = eyeHome[i].y + lookSmooth.y * 0.014;
+    });
+    brows.forEach((brow, i) => {
+      brow.position.y = browHome[i].y + happy * 0.025 * live;
+    });
+    const targetMouth = talking ? 0.75 + Math.sin(now * 16) * 0.25 + Math.sin(now * 5.1) * 0.15 : 1 + happy * 0.06;
+    mouthOpen = THREE.MathUtils.lerp(mouthOpen || 1, targetMouth, 0.35);
+    mouth.scale.set(1, mouthOpen, 1);
 
     renderer.render(scene, camera);
+    if (!readySent) {
+      readySent = true;
+      options.onReady?.();
+    }
   }
   tick();
 
   const onVisibility = () => {
-    if (document.hidden) cancelAnimationFrame(frame);
-    else if (!disposed) {
-      cancelAnimationFrame(frame);
-      tick();
-    }
+    cancelAnimationFrame(frame);
+    if (!document.hidden && !disposed) tick();
   };
   document.addEventListener("visibilitychange", onVisibility);
 
   const controller: MaatjeSceneController = {
     react(kind) {
+      if (phase !== "live") return;
       const kinds: MaatjeReaction[] = ["jump", "wave", "giggle"];
       reaction = { kind: kind ?? kinds[Math.floor(Math.random() * kinds.length)], start: performance.now() / 1000 };
     },
     setTalking(value) {
       talking = value;
     },
+    close() {
+      if (phase === "leaving") return new Promise<void>(resolve => {
+        const previous = resolveClose;
+        resolveClose = () => { previous?.(); resolve(); };
+      });
+      leaveFrom = { x: root.position.x, y: root.position.y, scale: root.scale.x, yaw: THREE.MathUtils.euclideanModulo(root.rotation.y + Math.PI, Math.PI * 2) - Math.PI };
+      phase = "leaving";
+      phaseStart = performance.now() / 1000;
+      reaction = null;
+      talking = false;
+      dragVelocity = 0;
+      dragYaw = 0;
+      return new Promise<void>(resolve => { resolveClose = resolve; });
+    },
     dispose() {
       disposed = true;
       cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
       scene.traverse(object => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.dispose();
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          materials.forEach(material => {
-            (material as THREE.MeshBasicMaterial).map?.dispose();
-            material.dispose();
-          });
-        }
+        if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
-      gradient.dispose();
+      materials.forEach(material => material.dispose());
+      [original, frontMap, backMap, partsMap, environment].forEach(texture => texture.dispose());
+      pmrem.dispose();
       renderer.dispose();
       canvas.remove();
     },
