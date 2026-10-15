@@ -1,3 +1,9 @@
+# Checkpoint — Interactieve 3D-Maatje stap 1 — 15 oktober 2026
+
+- Op verzoek van Dennis is roadmapstap 8 (mascotte) naar voren gehaald als **Interactieve 3D-Maatje**, in vier stappen die elk eerst met Dennis worden afgestemd (zie `ROADMAP.md`). Featurebranch `feature/maatje-3d-assistent`, basis `main` `d5003a7`.
+- Stap 1: tikken op de Home-mascotte opent een schermvullende 3D-Maatje (`apps/web/src/components/maatje/`). Three.js (`three@0.186.1`) wordt pas geladen bij het openen, dus de Home-bundle blijft gelijk. Maatje is procedureel opgebouwd (geen los 3D-bestand): ploft in beeld met draai, zweeft, knippert, ogen volgen je vinger, draaien met vegen, en tikken geeft een sprong, zwaai of giechel met tekstballon. Reduced motion en toestellen zonder WebGL worden afgevangen.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van stap 1 staat open.
+
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
 - Na expliciete toestemming is PR #93 gemerged op `main` (`1308ba5364921597939d5f20e31d372c84feed51`). Shanghai dry-run run **38449274591** slaagde; de runner accepteerde exact 20 recepten, 2 matchkeys en 200 subscribers. De voorafgaande dispatch **38443749835** startte geen job door GitHub billing en deed geen Production-request.
