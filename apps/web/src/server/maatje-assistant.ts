@@ -236,10 +236,10 @@ export async function runMaatjeAssistant(
 ): Promise<AssistantResponse> {
   const plan = parseGeminiPlan(await callGemini(buildGeminiBody(request)));
   if (!plan) throw new Error("gemini-invalid-response");
-  const items: AssistantItem[] = [];
-  for (const item of plan.items) {
-    items.push({ label: item.label, quantity: item.quantity, choices: await findChoices(catalog, item.terms, now) });
-  }
+  // Alle producten tegelijk opzoeken in plaats van na elkaar.
+  const items: AssistantItem[] = await Promise.all(plan.items.map(async item => (
+    { label: item.label, quantity: item.quantity, choices: await findChoices(catalog, item.terms, now) }
+  )));
   let reply = plan.reply || "Wat kan ik voor je doen?";
   if (items.length) {
     const missing = items.filter(item => !item.choices.length).map(item => item.label);

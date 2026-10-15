@@ -43,8 +43,19 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_MODEL;
     const started = Date.now();
-    const result = await runMaatjeAssistant(input, geminiCaller(apiKey, model), new SupabaseCatalogRepository(client));
-    console.info("maatje-praten", `klaar in ${Date.now() - started} ms, ${result.items.length} producten`);
+    const callGemini = geminiCaller(apiKey, model);
+    let geminiMs = 0;
+    const timedGemini = async (body: unknown) => {
+      const begin = Date.now();
+      try {
+        return await callGemini(body);
+      } finally {
+        geminiMs = Date.now() - begin;
+      }
+    };
+    const result = await runMaatjeAssistant(input, timedGemini, new SupabaseCatalogRepository(client));
+    const totalMs = Date.now() - started;
+    console.info("maatje-praten", `klaar in ${totalMs} ms (Gemini ${geminiMs} ms, catalogus ${totalMs - geminiMs} ms), ${result.items.length} producten`);
     return Response.json(result);
   } catch (error) {
     console.error("maatje-praten", error instanceof Error ? error.message : "unknown");
