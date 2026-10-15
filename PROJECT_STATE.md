@@ -1,3 +1,26 @@
+# Checkpoint — Interactieve 3D-Maatje stap 1 — 15 oktober 2026
+
+- Op verzoek van Dennis is roadmapstap 8 (mascotte) naar voren gehaald als **Interactieve 3D-Maatje**, in vier stappen die elk eerst met Dennis worden afgestemd (zie `ROADMAP.md`). Featurebranch `feature/maatje-3d-assistent`, basis `main` `d5003a7`.
+- Stap 1 (herzien na feedback van Dennis: geen apart scherm en precies hetzelfde uiterlijk): tikken op de Home-mascotte laat Maatje op Home zelf tot leven komen. Hij begint exact op de plek van het plaatje, stapt naar voren, wordt groter en draait even rond; tik ernaast of op het kruisje en hij vliegt terug. Het 3D-model is opgebouwd uit het officiële plaatje zelf (`apps/web/scripts/maatje-3d/build.py` → `public/branding/maatje-3d/` en `maatje-model.json`): lijf, handjes en streepjes zijn dikke, glanzende vormen met het plaatje als textuur; ogen, mond en wenkbrauwen zijn losse delen voor knipperen, meekijken en praten. Ronde 3 (feedback Dennis): geen waas of laag meer over de app, alleen Maatje beweegt (tik naast hem om hem terug te sturen); scherpere texturen uit een 4x vergrote bron (`apps/web/assets/branding/maatje-home-c-hd.webp`, OpenCV EDSR x4) en effen glanzende randen. Three.js (`three@0.186.1`) laadt pas bij tikken. Reduced motion en toestellen zonder WebGL worden afgevangen.
+- Ronde 4 is gebaseerd op Dennis' iPhone-schermopname en de keuze "Wakker worden" (gapen, uitrekken, naar voren, zwaaien). Daarbij zijn drie dingen aangepast:
+  - Het dunne witte kader na het tikken is weg: de indruk zit nu op de knop in plaats van op het plaatje met schaduwfilter.
+  - Ronddraaien heeft een zachte rem tot ongeveer 50°, omdat Maatje van opzij een dun vel is, en hij draait minder ver bij het binnenkomen.
+  - De pagina en de Safari-adresbalk schuiven niet meer mee tijdens het slepen, en de tekstballon verdwijnt sneller bij het teruggaan.
+- Ronde 5 (idee van Dennis): Maatje slaapt al in 3D op Home. Kort na het openen laadt de scène, de 3D-Maatje legt zich precies over het plaatje en dommelt in: ogen dicht, rustig ademen en een zZz boven zijn hoofd. Tikken wisselt dus geen plaatje meer om, wat de oorzaak van het witte vlak was; het platte plaatje blijft alleen als reserve zonder WebGL. Het wakker worden is vloeiender gemaakt: ogen gaan langzaam open met één slaperige knipper, hij rekt zich uit met een kleine geeuw, komt naar voren, de glinsters springen tevoorschijn en hij zwaait. Bij teruggaan vliegt hij terug en dommelt weer in. Slapend tekent hij 30 beelden per seconde en buiten beeld niets.
+- Ronde 6 is gebaseerd op een nieuwe opname van Dennis:
+  - De witte lijnen over Maatje waren glansnaden. Elke driehoek van het model had een eigen vlakke normaal. Het model heeft nu gladde normalen en voor- en achterkant volgen exact de bolling.
+  - Slapend scrollt Maatje mee met de pagina, in plaats van erachteraan te lopen. Het canvas hangt bovenaan de pagina en staat pas vast in beeld als hij wakker is.
+- Ronde 7, na feedback van Dennis:
+  - Het dag-en-nachtidee is op zijn verzoek geschrapt. Maatje slaapt altijd op Home en wordt wakker als je op hem tikt.
+  - De donkere belijning is nu mat. Glanzende randen gaven dunne witte lijnen langs zijn omtrek.
+  - Zodra je tikt, verschijnt een pulserende blauwe gloed in huisstijlkleuren (#1D87F7 en #62BFFC) rond zijn omtrek. De gloed blijft zolang hij wakker is en dooft als hij weer gaat slapen.
+- Ronde 8: het witte kader bij het aantikken is gevonden. Dat was de algemene knopstijl voor ingedrukte knoppen (`.page-content button:active`, een lichte binnenrand van 2px) en de hover-ring daarvan. Beide zijn uitgezet voor de Maatje-knop. De blauwe gloed is iets breder en duidelijker gemaakt.
+- Ronde 9: Dennis bevestigde dat het witte kader weg is.
+  - Slapend liggen de handjes nu weggestopt achter zijn lijf; pas bij het wakker worden komen de duimen omhoog.
+  - Het wakker worden duurt 3,4 seconden in plaats van 1,9 en is duidelijker: ogen open, nog even dichtvallen en knipperen, handjes tevoorschijn, uitrekken met een geeuw, slaap uit zijn hoofd schudden, naar voren komen, glinsters en zwaaien. De tekstballon volgt na 2,8 seconden.
+- Ronde 10: de rand van mond, ogen en wenkbrauwen is glad gemaakt. De vormen worden in `build.py` gladgestreken en de omtrek in de scène wordt afgerond (Chaikin); de texturen zijn opnieuw gebouwd. Dennis noemde stap 1 hiermee klaar: "daarna zijn we klaar met deze stap". Stap 2 start pas na zijn akkoord.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. PR #108 is nog een draft en is niet gemerged.
+
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
 - Na expliciete toestemming is PR #93 gemerged op `main` (`1308ba5364921597939d5f20e31d372c84feed51`). Shanghai dry-run run **38449274591** slaagde; de runner accepteerde exact 20 recepten, 2 matchkeys en 200 subscribers. De voorafgaande dispatch **38443749835** startte geen job door GitHub billing en deed geen Production-request.

@@ -15,7 +15,30 @@ body:has(.home-c) { background: var(--home-c-background); }
 .home-c-hero h1 { z-index: 1; margin: 0; line-height: 1.2; font-size: clamp(1.19rem, 5.4cqi, 1.45rem); font-weight: 750; letter-spacing: -.035em; }
 .home-c-hero h1 > span { display: block; }
 .home-c-hero .home-c-hello { font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; font-size: clamp(1.38rem, 6cqi, 1.9rem); line-height: 1.06; letter-spacing: -.035em; white-space: nowrap; margin-bottom: 2px; }
-.home-c-character { position: relative; align-self: stretch; min-width: 0; }
+.home-c-character { position: relative; align-self: stretch; min-width: 0; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.home-c-character:focus { outline: none; }
+/* De algemene knopranden bij aanraken (een lichte binnenrand en een hover-ring)
+   gaven een wit kader om Maatje; die horen niet bij hem. */
+.page-content .home-c-character, .page-content .home-c-character:not(:disabled):hover, .page-content .home-c-character:not(:disabled):active { box-shadow: none; transition: none; }
+.home-c-character:focus-visible { outline: 3px solid var(--brand-glow); outline-offset: 2px; border-radius: 24px; }
+.home-c-mascot[data-live="true"] { visibility: hidden; }
+/* Maatje slaapt op Home: zZz zweeft omhoog boven zijn hoofd. */
+.home-c-snore { position: absolute; z-index: 3; right: -6%; top: -26%; width: 42%; height: 48%; pointer-events: none; opacity: 0; transition: opacity 200ms ease; }
+.home-c-character[data-sleeping="true"] .home-c-snore { opacity: 1; transition: opacity 600ms ease 1.2s; }
+.home-c-snore span { position: absolute; left: 10%; bottom: 0; color: white; font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; text-shadow: 0 2px 6px rgba(3, 40, 110, .35); opacity: 0; animation: home-c-snore 3.6s ease-in-out infinite; }
+.home-c-snore span:nth-child(1) { font-size: 1.05rem; }
+.home-c-snore span:nth-child(2) { font-size: 1.5rem; animation-delay: 1.2s; }
+.home-c-snore span:nth-child(3) { font-size: 1.2rem; animation-delay: 2.4s; }
+@keyframes home-c-snore {
+  0% { opacity: 0; transform: translate(0, 0) rotate(-12deg) scale(.6); }
+  20% { opacity: 1; }
+  70% { opacity: .9; }
+  100% { opacity: 0; transform: translate(26px, -48px) rotate(10deg) scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-c-snore span { animation: none; opacity: 1; position: static; }
+  .home-c-snore { display: flex; gap: 2px; align-items: flex-end; }
+}
 .home-c-mascot { position: absolute; z-index: 2; width: 105%; max-width: 205px; height: auto; right: -4px; top: -12px; filter: drop-shadow(0 6px 5px var(--home-c-shadow)); pointer-events: none; }
 .home-c-budget { position: relative; display: grid; gap: 8px; padding: 13px 15px 11px; border-radius: 20px; background: white; color: var(--home-c-ink); box-shadow: 0 7px 20px var(--home-c-shadow); }
 .home-c-budget-chevron { position: absolute; right: 9px; top: 20px; color: var(--home-c-blue-ink); }

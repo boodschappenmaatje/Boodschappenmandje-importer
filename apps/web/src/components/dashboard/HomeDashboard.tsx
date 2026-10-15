@@ -1,7 +1,9 @@
 "use client";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { HomeWeekSlider } from "./HomeWeekSlider";
 import { NewWeekControl } from "@/components/week-preparation/NewWeekControl";
@@ -11,6 +13,8 @@ import { useWeekPreparation } from "@/features/week-preparation/WeekPreparationP
 import { formatCents } from "@/services/budget/budget-engine";
 import { calculateWeekBudgetSummary } from "@/services/week-preparation/week-generation";
 import "./home-option-c.css";
+
+const MaatjeLive = dynamic(() => import("@/components/maatje/MaatjeLive").then(module => module.MaatjeLive), { ssr: false });
 
 function Chevron() {
   return <svg width="20" height="24" viewBox="0 0 20 24" fill="none" aria-hidden="true"><path d="m7 5 7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
@@ -39,6 +43,9 @@ function BudgetRow({ label, planned, limit, complete, icon }: {
 }
 export function HomeDashboard() {
   const router = useRouter();
+  const [maatjeAwake, setMaatjeAwake] = useState(false);
+  const [maatje3d, setMaatje3d] = useState(false);
+  const mascotRef = useRef<HTMLImageElement>(null);
   const budget = useBudget();
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
@@ -58,10 +65,12 @@ export function HomeDashboard() {
   return <div className="home-c" aria-busy={loading}>
     <section className="home-c-hero" aria-labelledby="home-c-title">
       <h1 id="home-c-title"><span className="home-c-hello">Slim kopen.</span><span className="home-c-hello">Lekker eten.</span></h1>
-      <div className="home-c-character" aria-hidden="true">
-        <Image className="home-c-mascot" src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
-      </div>
+      <button type="button" className="home-c-character" aria-label="Maak Maatje wakker" aria-haspopup="dialog" data-sleeping={maatje3d && !maatjeAwake} onClick={() => maatje3d && setMaatjeAwake(true)}>
+        <Image ref={mascotRef} className="home-c-mascot" data-live={maatje3d} src="/branding/maatje-home-c.webp" alt="" width={1280} height={1280} sizes="200px" priority />
+        <span className="home-c-snore" aria-hidden="true"><span>z</span><span>Z</span><span>z</span></span>
+      </button>
     </section>
+    <MaatjeLive anchor={mascotRef} awake={maatjeAwake} onReady={() => setMaatje3d(true)} onAsleep={() => setMaatjeAwake(false)} />
     {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
       <span className="home-c-budget-chevron"><Chevron /></span>
