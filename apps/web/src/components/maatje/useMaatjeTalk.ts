@@ -30,7 +30,7 @@ const MAX_RECORDING_MS = 30_000;
  * Praten met Maatje: vasthouden is opnemen, loslaten is versturen. Zonder
  * microfoon kun je typen. Producten komen pas op je lijst als je ze aantikt.
  */
-export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void) {
+export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string, instant?: boolean) => void) {
   const shoppingList = useActiveShoppingList();
   const week = useWeekPreparation();
   const [mood, setMood] = useState<TalkMood>("idle");
@@ -75,7 +75,7 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
     requestRef.current = controller;
     setMood("thinking");
     if (message.text) setHeard(message.text);
-    latest.current.say("Even denken…");
+    latest.current.say("Even denken…", true);
     const context = buildAssistantContext({
       list: list.list,
       preparation: weekState.preparation,
@@ -138,7 +138,7 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
     }
     requestRef.current?.abort();
     setMood("listening");
-    latest.current.say("Ik luister…");
+    latest.current.say("Ik luister…", true);
     const recording = startVoiceRecording();
     recordingRef.current = recording;
     recording.catch((error: unknown) => {

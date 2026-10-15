@@ -28,6 +28,9 @@
 }
 .maatje-live-bubble[data-visible="true"] { opacity: 1; transform: translate(-50%, -100%); }
 .maatje-live[data-leaving="true"] .maatje-live-bubble { transition-duration: 100ms; }
+.maatje-live-line { display: grid; }
+.maatje-live-line > span { grid-area: 1 / 1; }
+.maatje-live-line-full { visibility: hidden; }
 .maatje-live-bubble::after {
   content: "";
   position: absolute;

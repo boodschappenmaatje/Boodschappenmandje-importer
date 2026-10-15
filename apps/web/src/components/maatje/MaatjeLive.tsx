@@ -62,10 +62,13 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
   const [speech, setSpeech] = useState({ line: GREETING, shown: 0, key: 0 });
   const [target, setTarget] = useState(targetRect);
   const { line, key: speechKey } = speech;
+  const instantLine = speech.shown >= line.length;
   const bubbleVisible = awake && greeted && !leaving;
-  const say = useCallback((next: string) => {
+  // Korte statusregels ("Ik luister…") staan er meteen. Zo is het wolkje nooit
+  // even leeg terwijl de telefoon de microfoon opstart.
+  const say = useCallback((next: string, instant = false) => {
     setGreeted(true);
-    setSpeech(current => ({ line: next, shown: 0, key: current.key + 1 }));
+    setSpeech(current => ({ line: next, shown: instant ? next.length : 0, key: current.key + 1 }));
   }, []);
   const talk = useMaatjeTalk(budget, say);
   const talkRef = useRef(talk);
@@ -210,7 +213,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
 
   // Tekst verschijnt letter voor letter terwijl Maatje "praat".
   useEffect(() => {
-    if (!bubbleVisible) return;
+    if (!bubbleVisible || instantLine) return;
     let index = 0;
     controllerRef.current?.setTalking(true);
     const timer = window.setInterval(() => {
@@ -225,6 +228,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
       window.clearInterval(timer);
       controllerRef.current?.setTalking(false);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- alleen bij een nieuwe regel
   }, [line, speechKey, bubbleVisible]);
 
   const bubbleTop = target.top + target.width * 0.06;
@@ -232,7 +236,12 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
     <div ref={stageRef} className="maatje-live-stage" />
     <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} data-mood={talk.mood} style={{ top: bubbleTop }}>
       {talk.heard ? <span className="maatje-live-heard">Jij: “{talk.heard}”</span> : null}
-      <span aria-hidden="true">{line.slice(0, speech.shown) || " "}</span>
+      {/* De hele zin staat er onzichtbaar onder, zodat het wolkje meteen de
+          goede maat heeft en niet krimpt of groeit tijdens het typen. */}
+      <span className="maatje-live-line" aria-hidden="true">
+        <span className="maatje-live-line-full">{line || " "}</span>
+        <span>{line.slice(0, speech.shown)}</span>
+      </span>
       <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
     {awake && greeted && !leaving ? <MaatjeTalkPanel talk={talk} top={target.top + target.height + 8} /> : null}
