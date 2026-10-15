@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import type { MaatjeSceneController } from "./maatje-scene";
 import "./maatje-live.css";
 
-const GREETING = "Hoi! Tik op me of draai me rond!";
+const GREETING = "Hoi! Ik ben wakker! Tik op me of draai me rond.";
 const TAP_LINES = [
   "Hihi, dat kietelt!",
   "Samen slim boodschappen doen?",
@@ -111,7 +111,7 @@ export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps)
           return;
         }
         controllerRef.current = controller;
-        window.setTimeout(() => !cancelled && setReady(true), reducedMotion ? 200 : 850);
+        window.setTimeout(() => !cancelled && setReady(true), reducedMotion ? 200 : 1900);
       })
       .catch(() => {
         if (!cancelled) finish();
