@@ -1,3 +1,16 @@
+# Checkpoint — Interactieve 3D-Maatje stap 2 (praten) — 15 oktober 2026
+
+- Branch `feature/maatje-praten`, draft PR #111. Getest op Dennis' iPhone via Preview; nog niet gemerged, niet op Production.
+- Houd de wakkere Maatje vast om te praten, laat los om te versturen; typen kan ook. Ronddraaien is eruit. Maatje laat zien wat hij verstond.
+- Route `/api/maatje/praten` (server-side, sleutel `GEMINI_API_KEY` alleen in Vercel Preview). Gemini begrijpt de vraag en bedenkt alleen zoektermen; producten en prijzen komen uit de echte Hoogvliet-catalogus (2-5 keuzes per regel). Niets komt op de lijst zonder tik van de gebruiker.
+- Kan: meerdere producten met aantallen, doorpraten ("nee, de halfvolle"), vragen over lijst/budget/week, recepthulp ("ik maak lasagne", max 10 ingrediënten, zonder zout/peper/olie), budgetmelding na kiezen, meerdere producten per regel, elke tik +1 (eerste tik = genoemd aantal), min-knopje, eerder gekozen producten vooraan (localStorage per toestel).
+- Lessen uit de echte test:
+  - De route leest de catalogus met de publishable sleutel; `SUPABASE_SECRET_KEY` bestaat niet op Preview.
+  - `gemini-2.5-flash` bestaat niet meer. Zonder `GEMINI_MODEL` kiest de route zelf het snelste flash-lite-model met minimaal nadenken, en wisselt bij 404/429/5xx of na 7 s. Gemini antwoordt nu in 1,5-2,4 s.
+  - De `anon`-rol heeft `statement_timeout=3s`: maximaal drie catalogus-zoekopdrachten tegelijk, anders vindt Maatje niets.
+- Trillen bij vasthouden: drie pogingen (iOS-schakelaartruc) werkten niet op Dennis' iPhone. Op zijn keuze uitgesteld tot de App Store-app; de code geeft op Android een tikje bij loslaten.
+- Gesproken antwoorden volgen in stap 4. Gemini gratis laag alleen voor eigen gebruik; vóór publieke lancering betaalde laag.
+
 # Checkpoint — Interactieve 3D-Maatje stap 1 — 15 oktober 2026
 
 - Op verzoek van Dennis is roadmapstap 8 (mascotte) naar voren gehaald als **Interactieve 3D-Maatje**, in vier stappen die elk eerst met Dennis worden afgestemd (zie `ROADMAP.md`). Featurebranch `feature/maatje-3d-assistent`, basis `main` `d5003a7`.
