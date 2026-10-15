@@ -520,11 +520,11 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
   // ----- Animatie -----
   // Maatje slaapt op Home (ogen dicht, rustig ademen). Bij tikken wordt hij
-  // wakker, rekt zich uit en komt naar voren; daarna leeft hij. Bij teruggaan
-  // vliegt hij terug naar zijn plek en dommelt weer in.
+  // meteen wakker, rekt zich uit en springt in een boogje naar voren; daarna
+  // leeft hij. Bij teruggaan gaapt hij, vliegt terug en dommelt weer in.
   const motion = options.reducedMotion ? 0.2 : 1;
-  const wakeDuration = options.reducedMotion ? 0.25 : 3.4;
-  const leaveDuration = options.reducedMotion ? 0.2 : 0.75;
+  const wakeDuration = options.reducedMotion ? 0.25 : 1.6;
+  const leaveDuration = options.reducedMotion ? 0.2 : 1;
   const DOZE = 1.4;
   let phase: "sleeping" | "waking" | "live" | "leaving" = "sleeping";
   // Bij het openen ligt hij meteen al te slapen, net als het plaatje op Home.
@@ -587,7 +587,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     let wakeBlink = 0;
     // tuck: 1 = handjes weggestopt achter zijn lijf (slapen), 0 = duimen omhoog.
     let tuck = 0;
-    let shake = 0;
+    let landSquash = 1;
 
     if (phase === "sleeping") {
       sleep = smoothstep(Math.min(1, t / DOZE));
@@ -605,25 +605,31 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         tuck = 1 - e;
         live = e;
       } else {
-        // Ogen gaan langzaam open, vallen nog even dicht en knipperen nog eens.
-        sleep = 1 - smoothstep(range(p, 0, 0.3));
-        wakeBlink = bell(range(p, 0.1, 0.24)) * 0.95 + bell(range(p, 0.32, 0.37));
-        // Handjes komen tevoorschijn en hij rekt zich flink uit met een geeuw.
-        tuck = 1 - easeOutBack(range(p, 0.16, 0.32));
-        stretch = bell(range(p, 0.18, 0.5));
-        // Even het slaap uit zijn hoofd schudden.
-        shake = Math.sin(range(p, 0.5, 0.62) * Math.PI * 4) * bell(range(p, 0.5, 0.62));
-        // Dan naar voren komen en groter worden, met een klein boogje.
-        const travel = easeInOut(range(p, 0.48, 0.82));
+        // Alles loopt in één beweging door elkaar heen, zodat hij meteen
+        // reageert op je tik en nergens stilstaat.
+        // Ogen floepen open en hij knippert één keer de slaap weg.
+        sleep = 1 - smoothstep(range(p, 0, 0.16));
+        wakeBlink = bell(range(p, 0.2, 0.3));
+        // Handjes groeien rustig uit zijn lijf terwijl hij zich uitrekt en gaapt.
+        tuck = 1 - easeOutBack(range(p, 0.04, 0.3));
+        stretch = bell(range(p, 0.04, 0.36));
+        // Even door de knieën (aanloop), dan een vrolijk boogsprongetje naar voren.
+        const crouch = bell(range(p, 0.3, 0.42));
+        const travel = easeInOut(range(p, 0.36, 0.8));
         x = THREE.MathUtils.lerp(from.x, to.x, travel);
         y = THREE.MathUtils.lerp(from.y, to.y, travel);
         scale = THREE.MathUtils.lerp(from.scale, to.scale, travel);
-        lift = Math.sin(travel * Math.PI) * 0.1 * to.scale;
-        yaw = Math.sin(travel * Math.PI) * 0.22;
-        // Glinsters springen tevoorschijn en hij zwaait hallo.
-        sparkAmount = easeOutBack(range(p, 0.64, 0.82));
-        wave = Math.sin(range(p, 0.8, 1) * Math.PI);
-        live = smoothstep(range(p, 0.5, 1));
+        const flying = range(p, 0.36, 0.8) > 0 && range(p, 0.36, 0.8) < 1;
+        lift = Math.sin(travel * Math.PI) * 0.32 * to.scale;
+        yaw = Math.sin(travel * Math.PI) * 0.25;
+        // Landen met een veertje: eerst inzakken, dan nadeinen.
+        const land = range(p, 0.8, 1);
+        landSquash = (1 - crouch * 0.12) * (flying ? 1 + Math.sin(travel * Math.PI) * 0.06 : 1)
+          * (land > 0 ? 1 - Math.sin(land * Math.PI * 3) * 0.1 * (1 - land) : 1);
+        // Glinsters springen tevoorschijn bij de landing en hij zwaait hallo.
+        sparkAmount = easeOutBack(range(p, 0.74, 0.9));
+        wave = Math.sin(range(p, 0.82, 1) * Math.PI);
+        live = smoothstep(range(p, 0.3, 0.9));
       }
       if (p >= 1) {
         phase = "live";
@@ -636,7 +642,10 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       y = THREE.MathUtils.lerp(leaveFrom.y, from.y, e);
       scale = THREE.MathUtils.lerp(leaveFrom.scale, from.scale, e);
       yaw = THREE.MathUtils.lerp(leaveFrom.yaw, 0, e);
-      lift = Math.sin(e * Math.PI) * 0.06 * leaveFrom.scale;
+      // Andersom dan wakker worden: eerst een flinke geeuw, dan een boogje
+      // terug naar zijn plek, waar hij daarna weer indommelt.
+      stretch = bell(range(p, 0, 0.35)) * 0.8;
+      lift = Math.sin(e * Math.PI) * 0.16 * leaveFrom.scale;
       live = 1 - e;
       sleep = 0;
       sparkAmount = 1;
@@ -665,8 +674,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     const sway = Math.sin(now * 0.9) * 0.2 * motion * live;
     // Slapen: diep en langzaam ademen, hoofdje licht voorover en opzij.
     const breath = Math.sin(now * 1.7);
-    let squash = (1 + Math.sin(now * 4) * 0.01 * motion * live) * (1 + breath * 0.018 * motion * sleep) * (1 + stretch * 0.07);
-    let roll = shake * 0.08 + Math.sin(now * 1.3) * 0.03 * motion * live + 0.05 * sleep + Math.sin(now * 0.85) * 0.012 * motion * sleep;
+    let squash = (1 + Math.sin(now * 4) * 0.01 * motion * live) * (1 + breath * 0.018 * motion * sleep) * (1 + stretch * 0.07) * landSquash;
+    let roll = Math.sin(now * 1.3) * 0.03 * motion * live + 0.05 * sleep + Math.sin(now * 0.85) * 0.012 * motion * sleep;
     pitch += 0.07 * sleep - stretch * 0.1;
     let handLift = [Math.sin(now * 2 + 0.7), Math.sin(now * 2 + 1.6)].map(v => v * 0.025 * motion * live);
     const handTwist = [Math.sin(now * 3.1) * 0.06 * motion * live, -Math.sin(now * 2.7) * 0.06 * motion * live];
@@ -726,7 +735,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       hand.position.y = handHome[i] + handLift[i] - 0.22 * tuck;
       hand.position.z = handHomeZ[i] - 0.3 * tuck;
       hand.rotation.z = handTwist[i] + (i === 1 ? -waveAngle : 0) + side * 0.6 * tuck;
-      hand.scale.setScalar(1 - 0.2 * tuck);
+      hand.scale.setScalar(1 - 0.45 * tuck);
     });
     sparks.forEach((spark, i) => spark.scale.setScalar(Math.max(0.001, sparkAmount * (1 + Math.sin(now * 3.4 + i * 1.3) * 0.12 * live))));
 

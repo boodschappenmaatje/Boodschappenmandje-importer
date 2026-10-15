@@ -25,6 +25,8 @@ body:has(.home-c) { background: var(--home-c-background); }
 /* Maatje slaapt op Home: zZz zweeft omhoog boven zijn hoofd. */
 .home-c-snore { position: absolute; z-index: 3; right: -6%; top: -26%; width: 42%; height: 48%; pointer-events: none; opacity: 0; transition: opacity 200ms ease; }
 .home-c-character[data-sleeping="true"] .home-c-snore { opacity: 1; transition: opacity 600ms ease 1.2s; }
+/* Wakker getikt: de zZz poffen weg. */
+.home-c-character:not([data-sleeping="true"]) .home-c-snore { transform: scale(1.5); transition: opacity 180ms ease, transform 180ms ease-out; }
 .home-c-snore span { position: absolute; left: 10%; bottom: 0; color: white; font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; text-shadow: 0 2px 6px rgba(3, 40, 110, .35); opacity: 0; animation: home-c-snore 3.6s ease-in-out infinite; }
 .home-c-snore span:nth-child(1) { font-size: 1.05rem; }
 .home-c-snore span:nth-child(2) { font-size: 1.5rem; animation-delay: 1.2s; }

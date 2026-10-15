@@ -182,7 +182,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(() => {
       say(GREETING);
-    }, reducedMotion ? 200 : 2800);
+    }, reducedMotion ? 200 : 1500);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
     };
