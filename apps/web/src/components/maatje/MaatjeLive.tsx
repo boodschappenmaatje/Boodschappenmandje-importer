@@ -102,10 +102,32 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
         setLoaded(true);
       })
       .catch(() => undefined);
-    const idle = window.requestIdleCallback?.(start, { timeout: 1200 });
-    const timer = idle === undefined ? window.setTimeout(start, 300) : undefined;
+    let idle: number | undefined;
+    let timer: number | undefined;
+    const schedule = () => {
+      if (cancelled || idle !== undefined || timer !== undefined) return;
+      idle = window.requestIdleCallback?.(start, { timeout: 1200 });
+      if (idle === undefined) timer = window.setTimeout(start, 300);
+    };
+    // Het opbouwen van de scène houdt de telefoon even bezig. Tijdens de
+    // opstartintro zou die daardoor haperen, dus we wachten tot die klaar is.
+    const root = document.documentElement;
+    const introDone = () => root.dataset.maatjeIntro === "done";
+    const observer = new MutationObserver(() => {
+      if (!introDone()) return;
+      observer.disconnect();
+      schedule();
+    });
+    let fallback: number | undefined;
+    if (introDone()) schedule();
+    else {
+      observer.observe(root, { attributes: true, attributeFilter: ["data-maatje-intro"] });
+      fallback = window.setTimeout(schedule, 8000);
+    }
     return () => {
       cancelled = true;
+      observer.disconnect();
+      if (fallback !== undefined) window.clearTimeout(fallback);
       if (idle !== undefined) window.cancelIdleCallback(idle);
       if (timer !== undefined) window.clearTimeout(timer);
       controllerRef.current?.dispose();
