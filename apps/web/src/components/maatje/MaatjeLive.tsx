@@ -1,6 +1,11 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
+import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
+import { formatCents } from "@/services/budget/budget-engine";
+import type { Product } from "@/types/catalog";
+import { MaatjeFlyingProduct, cartRect } from "./MaatjeFlyingProduct";
 import { MaatjeTalkPanel } from "./MaatjeTalkPanel";
 import type { MaatjeSceneController } from "./maatje-scene";
 import { hapticTick } from "./maatje-haptic";
@@ -16,12 +21,20 @@ const TAP_LINES = [
   "Ik hou je budget goed in de gaten!",
 ];
 
-/** Waar Maatje naartoe komt: boven in beeld, met onder hem ruimte voor keuzes. */
+/**
+ * Waar Maatje naartoe komt: boven in beeld, met onder hem ruimte voor keuzes.
+ * Op een smal scherm staat hij iets links van het midden, zodat zijn
+ * tovenaarshand niet door het mandje rechts van hem gaat.
+ */
 function targetRect(): DOMRect {
   const width = Math.min(window.innerWidth * 0.62, window.innerHeight * 0.34, 320);
+  const centerX = window.innerWidth < 520 ? window.innerWidth * 0.45 : window.innerWidth / 2;
   const centerY = window.innerHeight * 0.36;
-  return new DOMRect(window.innerWidth / 2 - width / 2, centerY - width / 2, width, width);
+  return new DOMRect(centerX - width / 2, centerY - width / 2, width, width);
 }
+
+/** Na het teruggaan dommelt Maatje eerst even in, pas daarna gaan we naar de lijst. */
+const DOZE_BEFORE_LIST_MS = 900;
 
 function supportsWebGl(): boolean {
   try {
@@ -71,6 +84,16 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
     setSpeech(current => ({ line: next, shown: instant ? next.length : 0, key: current.key + 1 }));
   }, []);
   const talk = useMaatjeTalk(budget, say);
+  const shoppingList = useActiveShoppingList();
+  const listCount = shoppingList.list?.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
+  // Producten die Maatje nu tevoorschijn tovert en in zijn mandje legt.
+  // Zolang een product nog onderweg is, telt het mandje het nog niet mee.
+  const [flying, setFlying] = useState<{ key: number; product: Product; amount: number; cents: number }[]>([]);
+  const flyKey = useRef(0);
+  const pendingCount = flying.reduce((sum, item) => sum + item.amount, 0);
+  const pendingCents = flying.reduce((sum, item) => sum + item.cents, 0);
+  const cartCount = Math.max(0, listCount - pendingCount);
+  const cartCents = Math.max(0, budget.plannedCents - pendingCents);
   const talkRef = useRef(talk);
   useLayoutEffect(() => {
     talkRef.current = talk;
@@ -81,7 +104,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
     onAsleepRef.current = onAsleep;
   });
 
-  const close = useCallback(() => {
+  const close = useCallback((afterAsleep?: () => void) => {
     if (closingRef.current) return;
     closingRef.current = true;
     setLeaving(true);
@@ -91,11 +114,25 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
       setLeaving(false);
       setGreeted(false);
       onAsleepRef.current();
+      afterAsleep?.();
     };
     const controller = controllerRef.current;
     if (controller) void controller.close().then(finish);
     else finish();
   }, []);
+
+  // Tik op het mandje: Maatje gaat terug, dommelt in en dan pas zie je je lijst.
+  const router = useRouter();
+  const goToList = useCallback(() => {
+    close(() => window.setTimeout(() => router.push("/lijst"), DOZE_BEFORE_LIST_MS));
+  }, [close, router]);
+  const goToListRef = useRef(goToList);
+  useLayoutEffect(() => {
+    goToListRef.current = goToList;
+  });
+  useEffect(() => {
+    if (awake) router.prefetch("/lijst");
+  }, [awake, router]);
 
   // De scène wordt één keer opgebouwd, rustig nadat Home getekend is.
   useEffect(() => {
@@ -124,6 +161,8 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
         onRelease: hapticTick,
         onHoldStart: () => talkRef.current.holdStart(),
         onHoldEnd: cancelled => void talkRef.current.holdEnd(cancelled),
+        cart: () => cartRect(targetRect()),
+        onCartTap: () => goToListRef.current(),
       }))
       .then(controller => {
         if (cancelled) {
@@ -211,6 +250,39 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
     controllerRef.current?.setMood(talk.mood);
   }, [talk.mood]);
 
+  useEffect(() => {
+    controllerRef.current?.setCartFill(cartCount);
+  }, [cartCount, loaded]);
+
+  // Tik op een keuze: Maatje knipt met zijn vingers, het product verschijnt in
+  // zijn hand en hij legt het in zijn mandje. Elke tik krijgt zijn eigen product.
+  const conjure = useCallback((product: Product, amount: number, cents: number) => {
+    const controller = controllerRef.current;
+    if (!controller) return;
+    controller.conjure();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      controller.drop();
+      return;
+    }
+    flyKey.current += 1;
+    const key = flyKey.current;
+    setFlying(current => [...current, { key, product, amount, cents }]);
+  }, []);
+  const landed = useCallback((key: number) => {
+    controllerRef.current?.drop();
+    setFlying(current => current.filter(item => item.key !== key));
+  }, []);
+  const panelTalk = {
+    ...talk,
+    choose: (itemIndex: number, product: Product, priceCents: number | null) => {
+      const item = talk.items[itemIndex];
+      // Zelfde regel als bij het toevoegen: eerste tik = genoemd aantal, daarna +1.
+      const amount = (talk.chosen[itemIndex]?.[product.id] ?? 0) === 0 ? item?.quantity ?? 1 : 1;
+      if (shoppingList.status === "ready") conjure(product, amount, (priceCents ?? 0) * amount);
+      return talk.choose(itemIndex, product, priceCents);
+    },
+  };
+
   // Tekst verschijnt letter voor letter terwijl Maatje "praat".
   useEffect(() => {
     if (!bubbleVisible || instantLine) return;
@@ -232,6 +304,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
   }, [line, speechKey, bubbleVisible]);
 
   const bubbleTop = target.top + target.width * 0.06;
+  const cart = cartRect(target);
   return createPortal(<div className="maatje-live" role={awake ? "dialog" : undefined} aria-modal={awake || undefined} aria-label={awake ? "Maatje" : undefined} aria-hidden={!awake || undefined} data-awake={awake} data-leaving={leaving}>
     <div ref={stageRef} className="maatje-live-stage" />
     <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} data-mood={talk.mood} style={{ top: bubbleTop }}>
@@ -245,8 +318,15 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
       {talk.mood === "thinking" ? <span className="maatje-live-dots" aria-hidden="true"><i /><i /><i /></span> : null}
       <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
-    {awake && greeted && !leaving ? <MaatjeTalkPanel talk={talk} top={target.top + target.height + 8} /> : null}
+    {awake && greeted && !leaving ? <MaatjeTalkPanel talk={panelTalk} top={target.top + target.height + 8} /> : null}
+    <button type="button" className="maatje-cart-badge" data-visible={bubbleVisible} tabIndex={bubbleVisible ? 0 : -1} onClick={goToList} style={{ left: cart.left + cart.width * 0.5, top: cart.top + cart.height * 0.02 }}>
+      <strong key={cartCount}>{cartCount}</strong>
+      <span>{formatCents(cartCents)}</span>
+      <span className="maatje-live-sr-only">{`${cartCount} producten op je lijst, samen ${formatCents(cartCents)}. Naar je lijst`}</span>
+    </button>
+    <p className="maatje-live-sr-only" aria-live="polite">{bubbleVisible ? `${cartCount} producten op je lijst` : ""}</p>
+    {flying.map(item => <MaatjeFlyingProduct key={item.key} product={item.product} from={() => controllerRef.current?.handPoint() ?? null} to={cart} onLanded={() => landed(item.key)} />)}
     {/* Alleen voor toetsenbord en VoiceOver; op het scherm tik je naast Maatje. */}
-    {awake ? <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button> : null}
+    {awake ? <button type="button" className="maatje-live-close" onClick={() => close()}>Laat Maatje teruggaan</button> : null}
   </div>, document.body);
 }
