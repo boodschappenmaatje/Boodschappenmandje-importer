@@ -36,7 +36,11 @@ interface MaatjeLiveProps {
   onClose: () => void;
 }
 
-/** Maatje komt op Home zelf tot leven: hij stapt naar voren en wordt groter. */
+/**
+ * Maatje komt op Home zelf tot leven: hij stapt naar voren en wordt groter.
+ * Er komt geen laag of waas over de app; alleen Maatje beweegt. Tik naast
+ * hem en hij gaat terug naar zijn plek.
+ */
 export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MaatjeSceneController | null>(null);
@@ -142,14 +146,12 @@ export function MaatjeLive({ anchor, onAnchorHidden, onClose }: MaatjeLiveProps)
 
   const bubbleBottom = window.innerHeight - (target.top + target.width * 0.06);
   return <div className="maatje-live" role="dialog" aria-modal="true" aria-label="Maatje" data-leaving={leaving}>
-    <div className="maatje-live-veil" aria-hidden="true" />
     <div ref={stageRef} className="maatje-live-stage" />
     <p className="maatje-live-bubble" aria-live="polite" data-visible={ready && !leaving} style={{ bottom: bubbleBottom }}>
       <span aria-hidden="true">{line.slice(0, speech.shown) || " "}</span>
       <span className="maatje-live-sr-only">{line}</span>
     </p>
-    <button type="button" className="maatje-live-close" onClick={close} aria-label="Laat Maatje teruggaan">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-    </button>
+    {/* Alleen voor toetsenbord en VoiceOver; op het scherm tik je naast Maatje. */}
+    <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button>
   </div>;
 }

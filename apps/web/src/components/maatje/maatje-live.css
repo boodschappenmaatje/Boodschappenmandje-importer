@@ -1,13 +1,4 @@
 .maatje-live { position: fixed; inset: 0; z-index: 100; touch-action: none; overscroll-behavior: contain; }
-.maatje-live-veil {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.7), rgba(239, 247, 254, 0.5) 60%, rgba(98, 191, 252, 0.35));
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
-  animation: maatje-live-fade 450ms ease-out both;
-}
-.maatje-live[data-leaving="true"] .maatje-live-veil { animation: maatje-live-unfade 500ms ease-in both; }
 .maatje-live-stage { position: absolute; inset: 0; }
 .maatje-live-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .maatje-live-bubble {
@@ -42,27 +33,9 @@
   transform: translateX(-50%) rotate(45deg);
   border-radius: 3px;
 }
-.maatje-live-close {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 12px);
-  right: 16px;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  background: white;
-  color: var(--brand-ink);
-  box-shadow: var(--shadow-small);
-  animation: maatje-live-fade 450ms ease-out both;
-}
-.maatje-live[data-leaving="true"] .maatje-live-close { animation: maatje-live-unfade 300ms ease-in both; }
-.maatje-live-close:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.maatje-live-close { position: absolute; top: 0; left: 0; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.maatje-live-close:focus-visible { width: auto; height: auto; clip: auto; top: calc(env(safe-area-inset-top) + 12px); left: 16px; padding: 10px 14px; border-radius: 12px; background: white; color: var(--brand-ink); outline: 3px solid var(--color-focus); }
 .maatje-live-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-@keyframes maatje-live-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes maatje-live-unfade { from { opacity: 1; } to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .maatje-live-veil, .maatje-live-close { animation-duration: 1ms !important; }
   .maatje-live-bubble { transition: none; }
 }

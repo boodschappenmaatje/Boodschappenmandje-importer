@@ -3,6 +3,10 @@
 Gebruik: python3 scripts/maatje-3d/build.py
 Vereist: numpy, opencv-python-headless, pillow. Alleen nodig als het
 Home-plaatje verandert; de uitvoer staat in de repo.
+
+Bron: assets/branding/maatje-home-c-hd.webp, het Home-plaatje (640 px)
+4x vergroot met OpenCV dnn_superres (EDSR x4) en verkleind naar 2048 px,
+zodat Maatje ook groot in beeld scherp blijft.
 """
 import json
 from pathlib import Path
@@ -10,7 +14,7 @@ import numpy as np, cv2
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
-SRC = ROOT / "public/branding/maatje-home-c.webp"
+SRC = ROOT / "assets/branding/maatje-home-c-hd.webp"
 OUT_DIR = ROOT / "public/branding/maatje-3d"
 OUT_JSON = ROOT / "src/components/maatje/maatje-model.json"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -18,6 +22,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 im = np.array(Image.open(SRC).convert("RGBA"))
 H, W = im.shape[:2]
 S = W / 512
+K = W / 640  # pixelmaten hieronder zijn afgesteld op 640 px
 r, g, b, a = [im[..., i].astype(int) for i in range(4)]
 A = a > 128
 navy = A & (b > r + 25) & (r < 90) & (g < 110)
@@ -34,7 +39,7 @@ def fill(mask):
     return out
 
 def disk(px):
-    k = int(round(px)) * 2 + 1
+    k = int(round(px * K)) * 2 + 1
     return cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
 
 body = fill(comp(260, 330))
@@ -70,7 +75,7 @@ body = cv2.morphologyEx(body, cv2.MORPH_CLOSE, disk(3))
 def outer(mask, grow):
     return cv2.dilate(mask, disk(grow))
 
-def contour(mask, eps=0.7):
+def contour(mask, eps=0.3):
     cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     c = max(cnts, key=cv2.contourArea)
     c = cv2.approxPolyDP(c, eps * S, True)[:, 0, :].astype(float)
@@ -78,8 +83,19 @@ def contour(mask, eps=0.7):
     pts = [[round((x + .5) / W * 2 - 1, 4), round(1 - (y + .5) / H * 2, 4)] for x, y in c]
     return pts
 
-body_outer = outer(body, rim)
-hand_outer = [outer(h, rim) for h in hands]
+body_outer = outer(body, rim / K)
+# Handjes: de hand plus zijn eigen blauwe rand. Blauwe pixels tussen hand en
+# papier horen bij wat het dichtstbij ligt, anders krijgt het handje een
+# stukje van de rand van het lijf mee.
+visible_paper = fill(comp(260, 330))
+paper_distance = cv2.distanceTransform((visible_paper == 0).astype(np.uint8), cv2.DIST_L2, 5)
+def own_outline(hand):
+    hand_distance = cv2.distanceTransform((hand == 0).astype(np.uint8), cv2.DIST_L2, 5)
+    grown = (A & (hand_distance <= rim) & (hand_distance <= paper_distance)).astype(np.uint8)
+    n, parts = cv2.connectedComponents(grown)
+    biggest = max(range(1, n), key=lambda i: (parts == i).sum())
+    return cv2.morphologyEx((parts == biggest).astype(np.uint8), cv2.MORPH_OPEN, disk(7))
+hand_outer = [own_outline(h) for h in hands]
 spark_outer = [outer(s, 1.5) for s in sparks]
 
 # Gezichtsdelen: donkerblauwe vlakken binnen het lijf.
@@ -88,7 +104,7 @@ n, hl = cv2.connectedComponents(holes.astype(np.uint8))
 blobs = []
 for i in range(1, n):
     m = (hl == i).astype(np.uint8)
-    if m.sum() < 300: continue
+    if m.sum() < 300 * K * K: continue
     ys, xs = np.where(m)
     blobs.append((xs.mean(), ys.mean(), m))
 blobs.sort(key=lambda t: t[2].sum(), reverse=True)
@@ -104,7 +120,7 @@ erase = np.zeros((H, W), np.uint8)
 meta = {}
 for name, (_, _, m) in parts.items():
     pm = cv2.dilate(fill(m), disk(2.5))
-    alpha = cv2.GaussianBlur(pm.astype(np.float32), (0, 0), 0.8)
+    alpha = cv2.GaussianBlur(pm.astype(np.float32), (0, 0), 0.8 * K)
     parts_rgba[..., :3] = np.where(pm[..., None] > 0, im[..., :3], parts_rgba[..., :3])
     parts_rgba[..., 3] = np.maximum(parts_rgba[..., 3], (alpha * 255).astype(np.uint8))
     erase |= cv2.dilate(pm, disk(3))
@@ -115,7 +131,7 @@ for name, (_, _, m) in parts.items():
     meta[name] = {"min": [x0, y0], "max": [x1, y1], "contour": contour(pm, 0.5)}
 
 front = im.copy()
-front[..., :3] = cv2.inpaint(np.ascontiguousarray(im[..., :3]), erase, 6, cv2.INPAINT_TELEA)
+front[..., :3] = cv2.inpaint(np.ascontiguousarray(im[..., :3]), erase, int(6 * K), cv2.INPAINT_TELEA)
 
 # Achter de handjes: papier binnen het lijf, blauwe rand erbuiten. De
 # handjes zelf gebruiken het originele plaatje als textuur.
@@ -131,7 +147,7 @@ back = front.copy()
 inner = cv2.erode(body, disk(1))
 back[..., :3] = np.where(inner[..., None] > 0, paper, back[..., :3])
 
-for name, arr in {"front": front, "back": back, "parts": parts_rgba}.items():
+for name, arr in {"front": front, "back": back, "parts": parts_rgba, "original": im}.items():
     Image.fromarray(arr).save(OUT_DIR / f"{name}.webp", lossless=False, quality=92, method=6)
 
 model = {

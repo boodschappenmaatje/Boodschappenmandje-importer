@@ -66,7 +66,7 @@ function shapeOf(points: Point[], origin: Point = [0, 0]): THREE.Shape {
 }
 
 /** Dik, afgerond gemaakt silhouet met de textuur recht van voren geprojecteerd. */
-function puffy(points: Point[], depth: number, bevel: number, origin: Point = [0, 0], segments = 5): THREE.BufferGeometry {
+function puffy(points: Point[], depth: number, bevel: number, origin: Point = [0, 0], segments = 5, bevelSize = bevel * 0.7): THREE.BufferGeometry {
   const uv = {
     generateTopUV: (g: THREE.ExtrudeGeometry, v: number[], a: number, b: number, c: number) =>
       projectUv.generateTopUV(g, v.map((n, i) => i % 3 === 0 ? n + origin[0] : i % 3 === 1 ? n + origin[1] : n), a, b, c),
@@ -74,24 +74,34 @@ function puffy(points: Point[], depth: number, bevel: number, origin: Point = [0
       projectUv.generateSideWallUV(g, v.map((n, i) => i % 3 === 0 ? n + origin[0] : i % 3 === 1 ? n + origin[1] : n), a, b, c, d),
   };
   const geometry = new THREE.ExtrudeGeometry(shapeOf(points, origin), {
-    depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.7, bevelOffset: -bevel * 0.7,
+    depth, bevelEnabled: true, bevelThickness: bevel, bevelSize, bevelOffset: -bevelSize,
     bevelSegments: segments, curveSegments: 1, UVGenerator: uv,
   });
   geometry.translate(0, 0, -depth / 2);
   return geometry;
 }
 
-/** Verdeelt driehoeken in voorkant (groep 0) en achterkant (groep 1). */
-function splitFrontBack(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+/**
+ * Verdeelt driehoeken in voorkant (groep 0), achterkant (groep 1) en de
+ * afgeronde zijkant (groep 2), zodat de zijkant een eigen effen kleur krijgt.
+ */
+function splitFaces(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const source = geometry.index ? geometry.toNonIndexed() : geometry;
   const position = source.attributes.position;
-  const front: number[] = [];
-  const back: number[] = [];
-  for (let i = 0; i < position.count; i += 3) {
-    const z = (position.getZ(i) + position.getZ(i + 1) + position.getZ(i + 2)) / 3;
-    (z >= 0 ? front : back).push(i);
+  let maxZ = -Infinity;
+  let minZ = Infinity;
+  for (let i = 0; i < position.count; i++) {
+    maxZ = Math.max(maxZ, position.getZ(i));
+    minZ = Math.min(minZ, position.getZ(i));
   }
-  const order = [...front, ...back];
+  const groups: number[][] = [[], [], []];
+  const eps = 1e-5;
+  for (let i = 0; i < position.count; i += 3) {
+    const zs = [position.getZ(i), position.getZ(i + 1), position.getZ(i + 2)];
+    const group = zs.every(z => z > maxZ - eps) ? 0 : zs.every(z => z < minZ + eps) ? 1 : 2;
+    groups[group].push(i);
+  }
+  const order = groups.flat();
   const result = new THREE.BufferGeometry();
   for (const name of Object.keys(source.attributes)) {
     const attribute = source.attributes[name] as THREE.BufferAttribute;
@@ -105,8 +115,11 @@ function splitFrontBack(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
     });
     result.setAttribute(name, new THREE.BufferAttribute(array, attribute.itemSize));
   }
-  result.addGroup(0, front.length * 3, 0);
-  result.addGroup(front.length * 3, back.length * 3, 1);
+  let offset = 0;
+  groups.forEach((list, index) => {
+    result.addGroup(offset, list.length * 3, index);
+    offset += list.length * 3;
+  });
   return result;
 }
 
@@ -140,16 +153,20 @@ function loadTexture(loader: THREE.TextureLoader, url: string): Promise<THREE.Te
 export async function createMaatjeScene(container: HTMLElement, options: MaatjeSceneOptions): Promise<MaatjeSceneController> {
   const loader = new THREE.TextureLoader();
   const [original, frontMap, backMap, partsMap] = await Promise.all([
-    loadTexture(loader, "/branding/maatje-home-c.webp"),
+    loadTexture(loader, "/branding/maatje-3d/original.webp"),
     loadTexture(loader, "/branding/maatje-3d/front.webp"),
     loadTexture(loader, "/branding/maatje-3d/back.webp"),
     loadTexture(loader, "/branding/maatje-3d/parts.webp"),
   ]);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 3));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
+  const anisotropy = renderer.capabilities.getMaxAnisotropy();
+  [original, frontMap, backMap, partsMap].forEach(texture => {
+    texture.anisotropy = anisotropy;
+  });
   const canvas = renderer.domElement;
   canvas.className = "maatje-live-canvas";
   container.appendChild(canvas);
@@ -173,17 +190,24 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     map, emissiveMap: map, emissive: 0xffffff, emissiveIntensity: 0.56, roughness: 0.5, metalness: 0,
     clearcoat: 0.55, clearcoatRoughness: 0.25, ...extra,
   });
-  const materials = [vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04 })];
-  const [frontMaterial, backMaterial, originalMaterial, partsMaterial] = materials;
+  // De afgeronde zijkanten zijn effen donkerblauw (rand) of wit (streepjes).
+  const solid = (color: number) => new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.18,
+  });
+  const materials = [
+    vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04 }),
+    solid(0x123a8c), solid(0xf4f8fd),
+  ];
+  const [frontMaterial, backMaterial, originalMaterial, partsMaterial, rimMaterial, whiteMaterial] = materials;
 
   const root = new THREE.Group();
   const figure = new THREE.Group();
   root.add(figure);
   scene.add(root);
 
-  const bodyGeometry = splitFrontBack(puffy(MODEL.body, BODY_DEPTH, BODY_BEVEL, [0, 0], 6));
+  const bodyGeometry = splitFaces(puffy(MODEL.body, BODY_DEPTH, BODY_BEVEL, [0, 0], 10));
   curlGeometry(bodyGeometry);
-  const body = new THREE.Mesh(bodyGeometry, [frontMaterial, backMaterial]);
+  const body = new THREE.Mesh(bodyGeometry, [frontMaterial, backMaterial, rimMaterial]);
   figure.add(body);
 
   const frontZ = (x: number) => BODY_FRONT + curl(x);
@@ -210,7 +234,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     const [cx] = centerOf(points);
     const bottom = Math.min(...points.map(p => p[1]));
     const pivot: Point = [cx, bottom + 0.08];
-    const mesh = new THREE.Mesh(puffy(points, 0.16, 0.1, pivot, 6), originalMaterial);
+    const mesh = new THREE.Mesh(splitFaces(puffy(points, 0.16, 0.09, pivot, 10, 0.028)), [originalMaterial, originalMaterial, rimMaterial]);
     const group = new THREE.Group();
     group.position.set(pivot[0], pivot[1], BODY_FRONT + 0.06);
     group.add(mesh);
@@ -221,11 +245,26 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
   const sparks = MODEL.sparks.map(points => {
     const center = centerOf(points);
-    const mesh = new THREE.Mesh(puffy(points, 0.02, 0.025, center, 3), originalMaterial);
+    const mesh = new THREE.Mesh(splitFaces(puffy(points, 0.02, 0.025, center, 6)), [originalMaterial, originalMaterial, whiteMaterial]);
     mesh.position.set(center[0], center[1], 0.05);
     figure.add(mesh);
     return mesh;
   });
+
+  // Zachte schaduw onder Maatje, zodat hij boven de app lijkt te zweven.
+  const shadowCanvas = document.createElement("canvas");
+  shadowCanvas.width = shadowCanvas.height = 128;
+  const shadowContext = shadowCanvas.getContext("2d")!;
+  const shadowGradient = shadowContext.createRadialGradient(64, 64, 2, 64, 64, 62);
+  shadowGradient.addColorStop(0, "rgba(3, 40, 110, 0.32)");
+  shadowGradient.addColorStop(1, "rgba(3, 40, 110, 0)");
+  shadowContext.fillStyle = shadowGradient;
+  shadowContext.fillRect(0, 0, 128, 128);
+  const shadowTexture = new THREE.CanvasTexture(shadowCanvas);
+  const shadowMaterial = new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, depthWrite: false, opacity: 0 });
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.32), shadowMaterial);
+  shadow.renderOrder = -1;
+  scene.add(shadow);
 
   // ----- Plaatsing in schermcoördinaten -----
   let viewport = { width: 1, height: 1 };
@@ -412,6 +451,10 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     pitch = -lookSmooth.y * 0.12 * live;
     root.rotation.set(pitch, yaw + sway + dragYaw + lookSmooth.x * 0.3 * live, roll);
     figure.scale.set(1 / Math.sqrt(squash), squash, 1);
+    const hover = (lift + bob) * scale;
+    shadow.position.set(x, y - 0.98 * scale, -0.5 * scale);
+    shadow.scale.setScalar(scale * (1 - Math.min(0.4, hover / scale)));
+    shadowMaterial.opacity = live * (1 - Math.min(0.6, (hover / scale) * 1.5));
 
     hands.forEach((hand, i) => {
       hand.position.y = handHome[i] + handLift[i];
@@ -492,7 +535,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
       materials.forEach(material => material.dispose());
-      [original, frontMap, backMap, partsMap, environment].forEach(texture => texture.dispose());
+      [original, frontMap, backMap, partsMap, environment, shadowTexture].forEach(texture => texture.dispose());
+      shadowMaterial.dispose();
       pmrem.dispose();
       renderer.dispose();
       canvas.remove();
