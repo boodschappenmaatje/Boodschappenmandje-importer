@@ -24,6 +24,10 @@ const MODEL = model as unknown as {
   parts: Record<PartName, PartData>;
 };
 
+// Huisstijl (DESIGN.md): primair blauw en de lichtblauwe gloed.
+const GLOW_CORE = 0x1d87f7;
+const GLOW_LIGHT = 0x62bffc;
+
 const BODY_DEPTH = 0.1;
 const BODY_BEVEL = 0.075;
 const BODY_FRONT = BODY_DEPTH / 2 + BODY_BEVEL;
@@ -239,9 +243,14 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   const solid = (color: number) => new THREE.MeshPhysicalMaterial({
     color, roughness: 0.32, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.18,
   });
+  // De donkere belijning is mat: glanzende randen gaven dunne witte lijnen
+  // langs zijn omtrek. Als hij wakker is gloeit de rand zacht blauw op.
+  const matte = (color: number) => new THREE.MeshPhysicalMaterial({
+    color, roughness: 0.62, metalness: 0, envMapIntensity: 0.35, emissive: GLOW_CORE, emissiveIntensity: 0,
+  });
   const materials = [
     vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04 }),
-    solid(0x123a8c), solid(0xf4f8fd), solid(0x0a1f52),
+    matte(0x123a8c), solid(0xf4f8fd), matte(0x0a1f52),
   ];
   const [frontMaterial, backMaterial, originalMaterial, partsMaterial, rimMaterial, whiteMaterial, partDarkMaterial] = materials;
 
@@ -313,9 +322,93 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
   // ----- Plaatsing in schermcoördinaten -----
   let viewport = { width: 1, height: 1 };
+  // ----- Blauwe gloed als Maatje wakker is -----
+  // Zijn silhouet wordt klein en wit getekend, vervaagd en in huisstijlblauw
+  // achter hem gezet; zo gloeit er een zachte rand om zijn hele omtrek.
+  const GLOW_SCALE = 0.25;
+  const glowTargets = [0, 1, 2].map(() => new THREE.WebGLRenderTarget(1, 1));
+  const maskMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const quadGeometry = new THREE.PlaneGeometry(2, 2);
+  const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const fullscreen = "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
+  const blurMaterial = new THREE.ShaderMaterial({
+    uniforms: { source: { value: null }, step: { value: new THREE.Vector2() } },
+    vertexShader: fullscreen,
+    fragmentShader: `
+      uniform sampler2D source; uniform vec2 step; varying vec2 vUv;
+      void main() {
+        float w[5]; w[0] = 0.227; w[1] = 0.195; w[2] = 0.122; w[3] = 0.054; w[4] = 0.016;
+        float a = texture2D(source, vUv).r * w[0];
+        for (int i = 1; i < 5; i++) {
+          a += texture2D(source, vUv + step * float(i)).r * w[i];
+          a += texture2D(source, vUv - step * float(i)).r * w[i];
+        }
+        gl_FragColor = vec4(a, a, a, 1.0);
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const srgb = (hex: number) => new THREE.Vector3(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
+  const glowMaterial = new THREE.ShaderMaterial({
+    uniforms: { source: { value: null }, strength: { value: 0 }, core: { value: srgb(GLOW_CORE) }, light: { value: srgb(GLOW_LIGHT) } },
+    vertexShader: fullscreen,
+    fragmentShader: `
+      uniform sampler2D source; uniform float strength; uniform vec3 core; uniform vec3 light; varying vec2 vUv;
+      void main() {
+        float a = clamp(texture2D(source, vUv).r * 1.8, 0.0, 1.0);
+        gl_FragColor = vec4(mix(light, core, a), a * strength);
+      }`,
+    transparent: true, depthTest: false, depthWrite: false,
+  });
+  const quad = new THREE.Mesh(quadGeometry, blurMaterial);
+  const quadScene = new THREE.Scene();
+  quadScene.add(quad);
+
+  function pass(material: THREE.ShaderMaterial, target: THREE.WebGLRenderTarget | null) {
+    quad.material = material;
+    renderer.setRenderTarget(target);
+    renderer.render(quadScene, quadCamera);
+  }
+
+  function draw(glow: number) {
+    if (glow < 0.005) {
+      renderer.render(scene, camera);
+      return;
+    }
+    const [mask, blurA, blurB] = glowTargets;
+    shadow.visible = false;
+    scene.overrideMaterial = maskMaterial;
+    renderer.setClearColor(0x000000, 1);
+    renderer.setRenderTarget(mask);
+    renderer.render(scene, camera);
+    scene.overrideMaterial = null;
+    shadow.visible = true;
+    renderer.setClearColor(0x000000, 0);
+    let source = mask.texture;
+    for (const spread of [1.5, 3.2]) {
+      blurMaterial.uniforms.source.value = source;
+      blurMaterial.uniforms.step.value.set(spread / mask.width, 0);
+      pass(blurMaterial, blurA);
+      blurMaterial.uniforms.source.value = blurA.texture;
+      blurMaterial.uniforms.step.value.set(0, spread / mask.height);
+      pass(blurMaterial, blurB);
+      source = blurB.texture;
+    }
+    glowMaterial.uniforms.source.value = source;
+    glowMaterial.uniforms.strength.value = glow;
+    renderer.setRenderTarget(null);
+    renderer.clear();
+    renderer.autoClear = false;
+    pass(glowMaterial, null);
+    renderer.clearDepth();
+    renderer.render(scene, camera);
+    renderer.autoClear = true;
+  }
+
   function resize() {
     viewport = { width: container.clientWidth || window.innerWidth, height: container.clientHeight || window.innerHeight };
     renderer.setSize(viewport.width, viewport.height, false);
+    const ratio = renderer.getPixelRatio() * GLOW_SCALE;
+    glowTargets.forEach(target => target.setSize(Math.max(1, Math.round(viewport.width * ratio)), Math.max(1, Math.round(viewport.height * ratio))));
     camera.aspect = viewport.width / viewport.height;
     camera.updateProjectionMatrix();
   }
@@ -407,6 +500,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   let disposed = false;
   let readySent = false;
   let lastRender = 0;
+  let glowAmount = 0;
   let wasVisible = true;
   const lookSmooth = { x: 0, y: 0 };
 
@@ -600,7 +694,11 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     mouthOpen = THREE.MathUtils.lerp(mouthOpen, targetMouth, 0.3);
     mouth.scale.set(1 - sleep * 0.3, mouthOpen, 1);
 
-    renderer.render(scene, camera);
+    // Gloed: gaat aan zodra je tikt en pulseert zacht zolang hij wakker is.
+    glowAmount = THREE.MathUtils.lerp(glowAmount, phase === "waking" || phase === "live" ? 1 : 0, 0.12);
+    const pulse = glowAmount * (0.78 + 0.22 * Math.sin(now * 2.6) * motion);
+    rimMaterial.emissiveIntensity = pulse * 0.3;
+    draw(pulse);
     if (!readySent) {
       readySent = true;
       options.onReady?.();
@@ -659,6 +757,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
         if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
       materials.forEach(material => material.dispose());
+      glowTargets.forEach(target => target.dispose());
+      [maskMaterial, blurMaterial, glowMaterial].forEach(material => material.dispose());
+      quadGeometry.dispose();
       [original, frontMap, backMap, partsMap, environment, shadowTexture].forEach(texture => texture.dispose());
       shadowMaterial.dispose();
       pmrem.dispose();

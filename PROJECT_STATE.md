@@ -10,7 +10,11 @@
 - Ronde 6 is gebaseerd op een nieuwe opname van Dennis:
   - De witte lijnen over Maatje waren glansnaden. Elke driehoek van het model had een eigen vlakke normaal. Het model heeft nu gladde normalen en voor- en achterkant volgen exact de bolling.
   - Slapend scrollt Maatje mee met de pagina, in plaats van erachteraan te lopen. Het canvas hangt bovenaan de pagina en staat pas vast in beeld als hij wakker is.
-- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 6 staat open.
+- Ronde 7, na feedback van Dennis:
+  - Het dag-en-nachtidee is op zijn verzoek geschrapt. Maatje slaapt altijd op Home en wordt wakker als je op hem tikt.
+  - De donkere belijning is nu mat. Glanzende randen gaven dunne witte lijnen langs zijn omtrek.
+  - Zodra je tikt, verschijnt een pulserende blauwe gloed in huisstijlkleuren (#1D87F7 en #62BFFC) rond zijn omtrek. De gloed blijft zolang hij wakker is en dooft als hij weer gaat slapen.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 7 staat open.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 
