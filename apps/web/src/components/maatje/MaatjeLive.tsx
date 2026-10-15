@@ -242,6 +242,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
         <span className="maatje-live-line-full">{line || " "}</span>
         <span>{line.slice(0, speech.shown)}</span>
       </span>
+      {talk.mood === "thinking" ? <span className="maatje-live-dots" aria-hidden="true"><i /><i /><i /></span> : null}
       <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
     {awake && greeted && !leaving ? <MaatjeTalkPanel talk={talk} top={target.top + target.height + 8} /> : null}

@@ -75,7 +75,7 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string, instant?
     requestRef.current = controller;
     setMood("thinking");
     if (message.text) setHeard(message.text);
-    latest.current.say("Even denken…", true);
+    latest.current.say("Even denken", true);
     const context = buildAssistantContext({
       list: list.list,
       preparation: weekState.preparation,

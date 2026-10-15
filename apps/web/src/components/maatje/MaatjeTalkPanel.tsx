@@ -2,6 +2,7 @@
 import { useState, type FormEvent } from "react";
 import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
 import { formatCents } from "@/services/budget/budget-engine";
+import { splitChoiceNames } from "./maatje-names";
 import type { useMaatjeTalk } from "./useMaatjeTalk";
 
 interface MaatjeTalkPanelProps {
@@ -18,12 +19,13 @@ export function MaatjeTalkPanel({ talk, top }: MaatjeTalkPanelProps) {
     talk.sendText(text);
     setText("");
   };
-  return <div className="maatje-talk" style={{ top }} data-has-items={talk.items.length > 0}>
+  return <div className="maatje-talk" style={{ top }} data-has-items={talk.items.length > 0} data-mood={talk.mood}>
     {talk.items.length ? <div className="maatje-talk-items">
       {talk.items.map((item, itemIndex) => <section key={`${itemIndex}-${item.label}`} className="maatje-talk-item" aria-label={item.label}>
         <h3>{item.quantity > 1 ? `${item.quantity}× ` : ""}{item.label}</h3>
         {item.choices.length ? <ul className="maatje-talk-choices">
-          {item.choices.map(choice => {
+          {item.choices.map((choice, choiceIndex) => {
+            const name = splitChoiceNames(item.choices.map(option => option.product))[choiceIndex];
             const count = talk.chosen[itemIndex]?.[choice.product.id] ?? 0;
             const picked = count > 0;
             return <li key={choice.product.id}>
@@ -35,7 +37,8 @@ export function MaatjeTalkPanel({ talk, top }: MaatjeTalkPanelProps) {
                 onClick={() => void talk.choose(itemIndex, choice.product, choice.priceCents)}
               >
                 <ProductThumbnail className="maatje-talk-thumb" imageUrl={choice.product.imageUrl} name={choice.product.name} />
-                <strong>{choice.product.name}</strong>
+                {name.top ? <span className="maatje-talk-brand">{name.top}</span> : null}
+                <strong>{name.main}</strong>
                 {choice.product.packageText ? <small>{choice.product.packageText}</small> : null}
                 <span className="maatje-talk-price">{choice.priceCents === null ? "Prijs onbekend" : formatCents(choice.priceCents)}</span>
                 {picked ? <span className="maatje-talk-check">{count}× op je lijst</span> : null}
