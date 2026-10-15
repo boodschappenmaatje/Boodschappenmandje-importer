@@ -72,7 +72,7 @@ export function HomeDashboard() {
         <span className="home-c-snore" aria-hidden="true"><span>z</span><span>Z</span><span>z</span></span>
       </button>
     </section>
-    <MaatjeLive anchor={mascotRef} awake={maatjeAwake} onReady={() => setMaatje3d(true)} onAsleep={() => setMaatjeAwake(false)} onUnsupported={() => setMaatjeFlat(true)} />
+    <MaatjeLive anchor={mascotRef} awake={maatjeAwake} onReady={() => setMaatje3d(true)} onAsleep={() => setMaatjeAwake(false)} onUnsupported={() => setMaatjeFlat(true)} budget={{ budgetCents, plannedCents, missingPrices: budget.result.unpricedItemCount }} />
     {unavailable ? <p role="alert">Je gegevens konden niet worden geopend. Probeer opnieuw via Menu of Lijst.</p> : null}
     <Link className="home-c-budget" href="/budget" aria-label="Bekijk je weekbudget">
       <span className="home-c-budget-chevron"><Chevron /></span>

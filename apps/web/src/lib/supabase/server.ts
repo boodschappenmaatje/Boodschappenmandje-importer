@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { getPublicSupabaseConfig } from "@/lib/supabase/config";
+
 export type SupabaseServerFailureReason =
   | "supabase-url-missing"
   | "supabase-secret-missing"
@@ -86,4 +88,21 @@ export function getSupabaseServerClientResult(): ServerClientResult {
     }
   }
   return serverClientResult;
+}
+
+let publicServerClient: SupabaseClient | null | undefined;
+
+/**
+ * Leest openbare data (de catalogus) met de publishable sleutel, net als de app
+ * zelf. Heeft geen geheime sleutel nodig, dus werkt ook op elke Preview.
+ */
+export function getSupabasePublicServerClient(): SupabaseClient | null {
+  if (publicServerClient !== undefined) return publicServerClient;
+  const config = getPublicSupabaseConfig();
+  publicServerClient = config.configured
+    ? createClient(config.value.url, config.value.publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    })
+    : null;
+  return publicServerClient;
 }
