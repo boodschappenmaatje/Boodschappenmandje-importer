@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useActiveShoppingList } from "@/features/shopping-list/ActiveShoppingListProvider";
 import { formatCents } from "@/services/budget/budget-engine";
@@ -20,12 +21,20 @@ const TAP_LINES = [
   "Ik hou je budget goed in de gaten!",
 ];
 
-/** Waar Maatje naartoe komt: boven in beeld, met onder hem ruimte voor keuzes. */
+/**
+ * Waar Maatje naartoe komt: boven in beeld, met onder hem ruimte voor keuzes.
+ * Op een smal scherm staat hij iets links van het midden, zodat zijn
+ * tovenaarshand niet door het mandje rechts van hem gaat.
+ */
 function targetRect(): DOMRect {
   const width = Math.min(window.innerWidth * 0.62, window.innerHeight * 0.34, 320);
+  const centerX = window.innerWidth < 520 ? window.innerWidth * 0.45 : window.innerWidth / 2;
   const centerY = window.innerHeight * 0.36;
-  return new DOMRect(window.innerWidth / 2 - width / 2, centerY - width / 2, width, width);
+  return new DOMRect(centerX - width / 2, centerY - width / 2, width, width);
 }
+
+/** Na het teruggaan dommelt Maatje eerst even in, pas daarna gaan we naar de lijst. */
+const DOZE_BEFORE_LIST_MS = 900;
 
 function supportsWebGl(): boolean {
   try {
@@ -95,7 +104,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
     onAsleepRef.current = onAsleep;
   });
 
-  const close = useCallback(() => {
+  const close = useCallback((afterAsleep?: () => void) => {
     if (closingRef.current) return;
     closingRef.current = true;
     setLeaving(true);
@@ -105,11 +114,25 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
       setLeaving(false);
       setGreeted(false);
       onAsleepRef.current();
+      afterAsleep?.();
     };
     const controller = controllerRef.current;
     if (controller) void controller.close().then(finish);
     else finish();
   }, []);
+
+  // Tik op het mandje: Maatje gaat terug, dommelt in en dan pas zie je je lijst.
+  const router = useRouter();
+  const goToList = useCallback(() => {
+    close(() => window.setTimeout(() => router.push("/lijst"), DOZE_BEFORE_LIST_MS));
+  }, [close, router]);
+  const goToListRef = useRef(goToList);
+  useLayoutEffect(() => {
+    goToListRef.current = goToList;
+  });
+  useEffect(() => {
+    if (awake) router.prefetch("/lijst");
+  }, [awake, router]);
 
   // De scène wordt één keer opgebouwd, rustig nadat Home getekend is.
   useEffect(() => {
@@ -139,6 +162,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
         onHoldStart: () => talkRef.current.holdStart(),
         onHoldEnd: cancelled => void talkRef.current.holdEnd(cancelled),
         cart: () => cartRect(targetRect()),
+        onCartTap: () => goToListRef.current(),
       }))
       .then(controller => {
         if (cancelled) {
@@ -295,13 +319,14 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
       <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
     {awake && greeted && !leaving ? <MaatjeTalkPanel talk={panelTalk} top={target.top + target.height + 8} /> : null}
-    <p className="maatje-cart-badge" data-visible={bubbleVisible} style={{ left: cart.left + cart.width * 0.5, top: cart.top + cart.height * 0.02 }} aria-live="polite">
+    <button type="button" className="maatje-cart-badge" data-visible={bubbleVisible} tabIndex={bubbleVisible ? 0 : -1} onClick={goToList} style={{ left: cart.left + cart.width * 0.5, top: cart.top + cart.height * 0.02 }}>
       <strong key={cartCount}>{cartCount}</strong>
       <span>{formatCents(cartCents)}</span>
-      <span className="maatje-live-sr-only">{`${cartCount} producten op je lijst, samen ${formatCents(cartCents)}`}</span>
-    </p>
+      <span className="maatje-live-sr-only">{`${cartCount} producten op je lijst, samen ${formatCents(cartCents)}. Naar je lijst`}</span>
+    </button>
+    <p className="maatje-live-sr-only" aria-live="polite">{bubbleVisible ? `${cartCount} producten op je lijst` : ""}</p>
     {flying.map(item => <MaatjeFlyingProduct key={item.key} product={item.product} from={() => controllerRef.current?.handPoint() ?? null} to={cart} onLanded={() => landed(item.key)} />)}
     {/* Alleen voor toetsenbord en VoiceOver; op het scherm tik je naast Maatje. */}
-    {awake ? <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button> : null}
+    {awake ? <button type="button" className="maatje-live-close" onClick={() => close()}>Laat Maatje teruggaan</button> : null}
   </div>, document.body);
 }
