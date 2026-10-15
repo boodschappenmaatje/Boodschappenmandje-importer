@@ -84,7 +84,7 @@
 .maatje-talk[data-has-items="true"] .maatje-talk-form { margin: 0; padding: 10px 16px calc(env(safe-area-inset-bottom) + 14px); border-radius: 0; box-shadow: none; background: white; }
 .maatje-talk-item h3 { margin: 0 16px 8px; color: var(--brand-ink); font-size: 1rem; font-weight: 800; }
 .maatje-talk-choices { display: flex; gap: 10px; margin: 0; padding: 0 16px 4px; list-style: none; overflow-x: auto; scroll-snap-type: x proximity; touch-action: pan-x pan-y; }
-.maatje-talk-choices li { flex: 0 0 auto; scroll-snap-align: start; }
+.maatje-talk-choices li { position: relative; flex: 0 0 auto; scroll-snap-align: start; }
 .maatje-talk-choice {
   position: relative;
   display: flex;
@@ -109,6 +109,8 @@
 .maatje-talk-choice small { font-size: .76rem; color: #5B6B85; }
 .maatje-talk-price { margin-top: auto; font-weight: 800; color: var(--brand-ink); }
 .maatje-talk-check { position: absolute; top: 6px; right: 6px; padding: 2px 8px; border-radius: 999px; background: var(--brand-blue); color: white; font-size: .7rem; font-weight: 800; }
+.maatje-talk-minus { position: absolute; bottom: 8px; right: 8px; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 2px solid var(--brand-blue); border-radius: 999px; background: white; color: var(--brand-blue); font: 800 1.3rem/1 inherit; }
+.maatje-talk-minus:active { transform: scale(.92); }
 .maatje-talk-empty { margin: 0 16px; color: #5B6B85; font-weight: 700; }
 .maatje-talk-hint {
   align-self: center;

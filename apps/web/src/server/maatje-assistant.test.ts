@@ -72,9 +72,9 @@ describe("parseGeminiPlan", () => {
   });
 
   it("caps items and quantities", () => {
-    const items = Array.from({ length: 8 }, (_, index) => ({ label: `ding ${index}`, quantity: 99, terms: ["a"] }));
+    const items = Array.from({ length: 12 }, (_, index) => ({ label: `ding ${index}`, quantity: 99, terms: ["a"] }));
     const plan = parseGeminiPlan({ candidates: [{ content: { parts: [{ text: JSON.stringify({ heard: "x", reply: "y", items }) }] } }] });
-    expect(plan?.items).toHaveLength(5);
+    expect(plan?.items).toHaveLength(10);
     expect(plan?.items[0].quantity).toBe(20);
   });
 });
@@ -118,6 +118,20 @@ describe("runMaatjeAssistant", () => {
     );
     expect(result.items[0].choices).toEqual([]);
     expect(result.reply).toContain("draak niet vinden");
+  });
+
+  it("helps with a recipe: all ingredients as real choices", async () => {
+    const result = await runMaatjeAssistant(
+      parseAssistantRequest({ text: "ik maak lasagne" })!,
+      gemini({ heard: "Ik maak lasagne", reply: "x", recipe: "lasagne", items: [
+        { label: "lasagnebladen", quantity: 1, terms: ["lasagnebladen"] },
+        { label: "rundergehakt", quantity: 1, terms: ["rundergehakt"] },
+      ] }),
+      catalogWith({ lasagnebladen: [product("1", "Lasagnebladen"), product("2", "Verse lasagne")], rundergehakt: [product("3", "Rundergehakt"), product("4", "Biologisch rundergehakt")] }),
+      NOW,
+    );
+    expect(result.items.map(item => item.label)).toEqual(["lasagnebladen", "rundergehakt"]);
+    expect(result.reply).toBe("Voor lasagne heb je dit nodig. Tik aan wat je nog niet in huis hebt!");
   });
 
   it("keeps Gemini's answer for questions without products", async () => {

@@ -40,6 +40,12 @@ export function MaatjeTalkPanel({ talk, top }: MaatjeTalkPanelProps) {
                 <span className="maatje-talk-price">{choice.priceCents === null ? "Prijs onbekend" : formatCents(choice.priceCents)}</span>
                 {picked ? <span className="maatje-talk-check">{count}× op je lijst</span> : null}
               </button>
+              {picked ? <button
+                type="button"
+                className="maatje-talk-minus"
+                aria-label={`Eén ${choice.product.name} van je lijst halen`}
+                onClick={() => void talk.takeBack(itemIndex, choice.product)}
+              >−</button> : null}
             </li>;
           })}
         </ul> : <p className="maatje-talk-empty">Niet gevonden bij Hoogvliet.</p>}

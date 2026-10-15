@@ -12,6 +12,7 @@ import {
   buildAssistantContext,
   type AssistantTurn,
 } from "./maatje-assistant-client";
+import { rememberChoice, sortByFavorites } from "./maatje-favorites";
 import { hapticTick } from "./maatje-haptic";
 import { blobToBase64, startVoiceRecording, VoiceError, voiceSupported, type VoiceRecording } from "./maatje-voice";
 
@@ -91,7 +92,7 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
       historyRef.current = [...historyRef.current, ...(userText ? [{ role: "user" as const, text: userText }] : []), { role: "maatje" as const, text: response.reply }].slice(-8);
       setHeard(userText || null);
       if (response.items.length) {
-        setItems(response.items);
+        setItems(sortByFavorites(response.items, list.list?.items.map(item => item.productId) ?? []));
         setChosen({});
       }
       setMood("idle");
@@ -189,6 +190,7 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
       latest.current.say("Dat lukte niet. Probeer het nog eens?");
       return;
     }
+    rememberChoice(product.id);
     const total = before + adding;
     // De lijst in latest is nog van vóór deze tik: tel het nieuwe er zelf bij.
     const plannedAfter = money.plannedCents + (priceCents ?? 0) * adding;
@@ -197,5 +199,26 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
       : addedMessage(product.name, total, money.budgetCents, plannedAfter));
   }, []);
 
-  return { mood, heard, items, chosen, typing, setTyping, holdStart, holdEnd, sendText, choose, reset };
+  /** Het min-knopje: haalt er één af van wat je via Maatje op je lijst zette. */
+  const takeBack = useCallback(async (itemIndex: number, product: Product) => {
+    const { shoppingList: list, chosen: picked } = latest.current;
+    const before = picked[itemIndex]?.[product.id] ?? 0;
+    if (!before || list.status !== "ready") return;
+    setChosen(current => {
+      const row = { ...current[itemIndex] };
+      if (before > 1) row[product.id] = before - 1;
+      else delete row[product.id];
+      return { ...current, [itemIndex]: row };
+    });
+    try {
+      await list.adjustIndependent(product.id, -1);
+    } catch {
+      setChosen(current => ({ ...current, [itemIndex]: { ...current[itemIndex], [product.id]: before } }));
+      latest.current.say("Dat lukte niet. Probeer het nog eens?");
+      return;
+    }
+    latest.current.say(before > 1 ? `Eentje eraf. Nog ${before - 1}× ${product.name} op je lijst.` : `${product.name} staat niet meer op je lijst.`);
+  }, []);
+
+  return { mood, heard, items, chosen, typing, setTyping, holdStart, holdEnd, sendText, choose, takeBack, reset };
 }

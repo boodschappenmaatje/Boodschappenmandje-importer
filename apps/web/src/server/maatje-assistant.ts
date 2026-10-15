@@ -11,7 +11,8 @@ import type { Product } from "@/types/catalog";
 
 export const MAX_AUDIO_BYTES = 2_000_000;
 export const MAX_TEXT_LENGTH = 400;
-export const MAX_ITEMS = 5;
+/** Losse boodschappen tot vijf, een recept mag tot tien ingrediënten hebben. */
+export const MAX_ITEMS = 10;
 export const MAX_CHOICES = 5;
 const MAX_HISTORY = 8;
 const MAX_LIST_ITEMS = 80;
@@ -58,6 +59,8 @@ export interface AssistantResponse {
 interface GeminiPlan {
   heard: string;
   reply: string;
+  /** Naam van het gerecht als de gebruiker wil koken; anders leeg. */
+  recipe: string;
   items: { label: string; quantity: number; terms: string[] }[];
 }
 
@@ -135,8 +138,9 @@ const SYSTEM_PROMPT = `Je bent Maatje, de vrolijke boodschappenmaatje in de app 
 De gebruiker praat of typt tegen je. Je taken:
 1. Schrijf in "heard" precies op wat de gebruiker zei of typte, netjes geschreven.
 2. Wil de gebruiker iets kopen of op de lijst zetten, maak dan per product een item: "label" is wat de gebruiker wil (bijv. "halfvolle melk"), "quantity" het aantal (standaard 1), en "terms" één tot drie korte Nederlandse zoektermen voor de Hoogvliet-catalogus, van precies naar algemeen (bijv. ["halfvolle melk", "melk"]). Maximaal vijf items.
-3. Verfijnt de gebruiker een eerdere keuze ("nee, de halfvolle", "liever een grotere"), maak dan een nieuw item met verfijnde zoektermen. De vorige keuzes staan in de context onder lastChoices.
-4. Stelt de gebruiker een vraag over de boodschappenlijst, het budget of het weekmenu, beantwoord die in "reply" en gebruik daarvoor uitsluitend de context. Bedragen in de context zijn in centen; schrijf ze als euro's, bijvoorbeeld € 12,50. Staat iets niet in de context, zeg dan eerlijk dat je het niet weet.
+3. Wil de gebruiker een gerecht maken ("ik maak lasagne", "wat heb ik nodig voor pannenkoeken"), zet dan de naam van het gerecht in "recipe" en maak per ingrediënt een item, maximaal tien. Sla basisdingen over die bijna iedereen in huis heeft (zout, peper, water, olie, suiker). Gebruik "quantity" 1 tenzij het gerecht duidelijk meer nodig heeft. Noemt de gebruiker een aantal personen, houd daar rekening mee.
+4. Verfijnt de gebruiker een eerdere keuze ("nee, de halfvolle", "liever een grotere"), maak dan een nieuw item met verfijnde zoektermen. De vorige keuzes staan in de context onder lastChoices.
+5. Stelt de gebruiker een vraag over de boodschappenlijst, het budget of het weekmenu, beantwoord die in "reply" en gebruik daarvoor uitsluitend de context. Bedragen in de context zijn in centen; schrijf ze als euro's, bijvoorbeeld € 12,50. Staat iets niet in de context, zeg dan eerlijk dat je het niet weet.
 
 Strenge regels:
 - Noem in "reply" nooit zelf productnamen, merken, pakgroottes of prijzen van producten die niet in de context staan. De app zoekt de echte producten erbij en laat ze als kaartjes zien.
@@ -149,6 +153,7 @@ const RESPONSE_SCHEMA = {
   properties: {
     heard: { type: "STRING" },
     reply: { type: "STRING" },
+    recipe: { type: "STRING" },
     items: {
       type: "ARRAY",
       items: {
@@ -206,6 +211,7 @@ export function parseGeminiPlan(response: unknown): GeminiPlan | null {
   return {
     heard: cleanText(parsed.heard, MAX_TEXT_LENGTH) ?? "",
     reply: cleanText(parsed.reply, 300) ?? "",
+    recipe: cleanText(parsed.recipe, 60) ?? "",
     items,
   };
 }
@@ -247,6 +253,7 @@ export async function runMaatjeAssistant(
     const found = items.length - missing.length;
     if (!found) reply = `Ik kon ${missing.join(" en ")} niet vinden bij Hoogvliet. Zeg het eens anders?`;
     else if (missing.length) reply = `Tik aan wat je wilt. ${missing.join(" en ")} kon ik niet vinden bij Hoogvliet.`;
+    else if (plan.recipe) reply = `Voor ${plan.recipe} heb je dit nodig. Tik aan wat je nog niet in huis hebt!`;
     else reply = items.length === 1 ? "Ik heb een paar keuzes voor je. Tik aan wat je wilt!" : "Hier zijn je keuzes. Tik per product aan wat je wilt!";
   }
   return { heard: plan.heard || request.text || "", reply, items };
