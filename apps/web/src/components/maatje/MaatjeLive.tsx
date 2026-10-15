@@ -38,6 +38,8 @@ interface MaatjeLiveProps {
   onReady: () => void;
   /** Maatje is terug op zijn plek en slaapt weer. */
   onAsleep: () => void;
+  /** Dit toestel kan geen 3D tonen; Maatje blijft een plaatje. */
+  onUnsupported?: () => void;
 }
 
 /**
@@ -45,7 +47,7 @@ interface MaatjeLiveProps {
  * dezelfde plek wakker, stapt naar voren en wordt groter. Er komt geen laag
  * of waas over de app. Tik naast hem en hij gaat terug en dommelt weer in.
  */
-export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps) {
+export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: MaatjeLiveProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MaatjeSceneController | null>(null);
   const closingRef = useRef(false);
@@ -75,7 +77,11 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
   // De scène wordt één keer opgebouwd, rustig nadat Home getekend is.
   useEffect(() => {
     const element = stageRef.current;
-    if (!element || !supportsWebGl()) return;
+    if (!element) return;
+    if (!supportsWebGl()) {
+      onUnsupported?.();
+      return;
+    }
     let cancelled = false;
     let lastLine = -1;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
