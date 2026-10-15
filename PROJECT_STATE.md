@@ -7,7 +7,10 @@
   - Ronddraaien heeft een zachte rem tot ongeveer 50°, omdat Maatje van opzij een dun vel is, en hij draait minder ver bij het binnenkomen.
   - De pagina en de Safari-adresbalk schuiven niet meer mee tijdens het slepen, en de tekstballon verdwijnt sneller bij het teruggaan.
 - Ronde 5 (idee van Dennis): Maatje slaapt al in 3D op Home. Kort na het openen laadt de scène, de 3D-Maatje legt zich precies over het plaatje en dommelt in: ogen dicht, rustig ademen en een zZz boven zijn hoofd. Tikken wisselt dus geen plaatje meer om, wat de oorzaak van het witte vlak was; het platte plaatje blijft alleen als reserve zonder WebGL. Het wakker worden is vloeiender gemaakt: ogen gaan langzaam open met één slaperige knipper, hij rekt zich uit met een kleine geeuw, komt naar voren, de glinsters springen tevoorschijn en hij zwaait. Bij teruggaan vliegt hij terug en dommelt weer in. Slapend tekent hij 30 beelden per seconde en buiten beeld niets.
-- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 5 staat open.
+- Ronde 6 is gebaseerd op een nieuwe opname van Dennis:
+  - De witte lijnen over Maatje waren glansnaden. Elke driehoek van het model had een eigen vlakke normaal. Het model heeft nu gladde normalen en voor- en achterkant volgen exact de bolling.
+  - Slapend scrollt Maatje mee met de pagina, in plaats van erachteraan te lopen. Het canvas hangt bovenaan de pagina en staat pas vast in beeld als hij wakker is.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 6 staat open.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 

@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import type { MaatjeSceneController } from "./maatje-scene";
 import "./maatje-live.css";
 
@@ -113,6 +114,13 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Slapend scrollt het canvas met de pagina mee; wakker staat het vast in
+  // beeld. Direct na die wissel tekenen we opnieuw, vóór het scherm ververst,
+  // zodat Maatje geen beeldje verspringt.
+  useLayoutEffect(() => {
+    controllerRef.current?.redraw();
+  }, [awake]);
+
   // Wakker worden: hij komt naar voren, daarna verschijnt zijn groet.
   useEffect(() => {
     if (!awake || !loaded) return;
@@ -162,14 +170,14 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
     };
   }, [line, bubbleVisible]);
 
-  const bubbleBottom = typeof window === "undefined" ? 0 : window.innerHeight - (target.top + target.width * 0.06);
-  return <div className="maatje-live" role={awake ? "dialog" : undefined} aria-modal={awake || undefined} aria-label={awake ? "Maatje" : undefined} aria-hidden={!awake || undefined} data-awake={awake} data-leaving={leaving}>
+  const bubbleTop = target.top + target.width * 0.06;
+  return createPortal(<div className="maatje-live" role={awake ? "dialog" : undefined} aria-modal={awake || undefined} aria-label={awake ? "Maatje" : undefined} aria-hidden={!awake || undefined} data-awake={awake} data-leaving={leaving}>
     <div ref={stageRef} className="maatje-live-stage" />
-    <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} style={{ bottom: bubbleBottom }}>
+    <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} style={{ top: bubbleTop }}>
       <span aria-hidden="true">{line.slice(0, speech.shown) || " "}</span>
       <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
     {/* Alleen voor toetsenbord en VoiceOver; op het scherm tik je naast Maatje. */}
     {awake ? <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button> : null}
-  </div>;
+  </div>, document.body);
 }

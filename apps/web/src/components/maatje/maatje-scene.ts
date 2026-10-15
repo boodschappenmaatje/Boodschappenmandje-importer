@@ -45,6 +45,8 @@ export interface MaatjeSceneOptions {
 }
 
 export interface MaatjeSceneController {
+  /** Direct opnieuw tekenen, bijvoorbeeld nadat het canvas verplaatst is. */
+  redraw(): void;
   /** Maatje wordt wakker en komt naar voren. */
   wake(): void;
   react(kind?: MaatjeReaction): void;
@@ -122,7 +124,43 @@ function splitFaces(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
     result.addGroup(offset, list.length * 3, index);
     offset += list.length * 3;
   });
+  smoothNormals(result);
   return result;
+}
+
+/**
+ * Gladde normalen. ExtrudeGeometry geeft elke driehoek een eigen, vlakke
+ * normaal; op glanzend vinyl zie je dan dunne witte lijnen langs de
+ * driehoeksranden. Voor- en achterkant krijgen hun exacte (gebolde) normaal,
+ * de zijkanten het gemiddelde van de aangrenzende vlakken.
+ */
+function smoothNormals(geometry: THREE.BufferGeometry, curlAmount = 0, offsetX = 0) {
+  const position = geometry.attributes.position;
+  const normals = new Float32Array(position.count * 3);
+  const sums = new Map<string, THREE.Vector3>();
+  const keyOf = (i: number) => `${Math.round(position.getX(i) * 1e4)},${Math.round(position.getY(i) * 1e4)},${Math.round(position.getZ(i) * 1e4)}`;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i < position.count; i += 3) {
+    a.fromBufferAttribute(position, i);
+    b.fromBufferAttribute(position, i + 1);
+    c.fromBufferAttribute(position, i + 2);
+    const face = new THREE.Vector3().subVectors(c, b).cross(new THREE.Vector3().subVectors(a, b));
+    for (let k = 0; k < 3; k++) {
+      const key = keyOf(i + k);
+      const sum = sums.get(key) ?? new THREE.Vector3();
+      sums.set(key, sum.add(face));
+    }
+  }
+  const [front, back] = geometry.groups;
+  const normal = new THREE.Vector3();
+  for (let i = 0; i < position.count; i++) {
+    if (front && i >= front.start && i < front.start + front.count) normal.set(2 * curlAmount * (position.getX(i) + offsetX), 0, 1);
+    else if (back && i >= back.start && i < back.start + back.count) normal.set(-2 * curlAmount * (position.getX(i) + offsetX), 0, -1);
+    else normal.copy(sums.get(keyOf(i)) ?? normal.set(0, 0, 1));
+    normal.normalize();
+    normals.set([normal.x, normal.y, normal.z], i * 3);
+  }
+  geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
 }
 
 /** Het papier krult licht naar achteren; ook gezichtsdelen volgen die bolling. */
@@ -132,7 +170,7 @@ function curlGeometry(geometry: THREE.BufferGeometry, offsetX = 0) {
   const position = geometry.attributes.position;
   for (let i = 0; i < position.count; i++) position.setZ(i, position.getZ(i) + curl(position.getX(i) + offsetX));
   position.needsUpdate = true;
-  geometry.computeVertexNormals();
+  smoothNormals(geometry, CURL, offsetX);
 }
 
 function centerOf(points: Point[]): Point {
@@ -375,6 +413,10 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   function tick() {
     if (disposed) return;
     frame = requestAnimationFrame(tick);
+    update(false);
+  }
+
+  function update(force: boolean) {
     const now = performance.now() / 1000;
     const t = now - phaseStart;
     const anchorRect = options.anchor();
@@ -383,8 +425,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
     // Slapend is er weinig beweging: 30 beelden per seconde is genoeg, en
     // buiten beeld tekenen we niets.
-    if (phase === "sleeping" && readySent) {
-      const visible = anchorRect.bottom > -40 && anchorRect.top < viewport.height + 40;
+    if (phase === "sleeping" && readySent && !force) {
+      const visible = anchorRect.bottom > -40 && anchorRect.top < window.innerHeight + 40;
       if (!visible && !wasVisible) return;
       wasVisible = visible;
       if (now - lastRender < 1 / 30) return;
@@ -573,6 +615,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   document.addEventListener("visibilitychange", onVisibility);
 
   const controller: MaatjeSceneController = {
+    redraw() {
+      if (!disposed) update(true);
+    },
     wake() {
       if (phase !== "sleeping") return;
       phase = "waking";
