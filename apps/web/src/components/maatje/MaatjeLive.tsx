@@ -1,22 +1,24 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { MaatjeTalkPanel } from "./MaatjeTalkPanel";
 import type { MaatjeSceneController } from "./maatje-scene";
+import { useMaatjeTalk, type MaatjeBudget } from "./useMaatjeTalk";
 import "./maatje-live.css";
 
-const GREETING = "Hoi! Ik ben wakker! Tik op me of draai me rond.";
+const GREETING = "Hoi! Houd me vast en vertel wat je nodig hebt.";
 const TAP_LINES = [
   "Hihi, dat kietelt!",
-  "Samen slim boodschappen doen?",
+  "Houd me vast en zeg wat je nodig hebt!",
   "Wiehoe! Nog een keer?",
-  "Binnenkort kun je met me praten.",
+  "Vraag me maar iets over je lijst of je budget.",
   "Ik hou je budget goed in de gaten!",
 ];
 
-/** Waar Maatje naartoe komt: midden in beeld, flink groter. */
+/** Waar Maatje naartoe komt: boven in beeld, met onder hem ruimte voor keuzes. */
 function targetRect(): DOMRect {
-  const width = Math.min(window.innerWidth * 0.84, 400);
-  const centerY = window.innerHeight * 0.5;
+  const width = Math.min(window.innerWidth * 0.62, window.innerHeight * 0.34, 320);
+  const centerY = window.innerHeight * 0.36;
   return new DOMRect(window.innerWidth / 2 - width / 2, centerY - width / 2, width, width);
 }
 
@@ -40,6 +42,8 @@ interface MaatjeLiveProps {
   onAsleep: () => void;
   /** Dit toestel kan geen 3D tonen; Maatje blijft een plaatje. */
   onUnsupported?: () => void;
+  /** Budget zoals Home het toont, voor vragen en de budgetcheck. */
+  budget: MaatjeBudget;
 }
 
 /**
@@ -47,32 +51,47 @@ interface MaatjeLiveProps {
  * dezelfde plek wakker, stapt naar voren en wordt groter. Er komt geen laag
  * of waas over de app. Tik naast hem en hij gaat terug en dommelt weer in.
  */
-export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: MaatjeLiveProps) {
+export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, budget }: MaatjeLiveProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MaatjeSceneController | null>(null);
   const closingRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
   const [greeted, setGreeted] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const [speech, setSpeech] = useState({ line: GREETING, shown: 0 });
+  const [speech, setSpeech] = useState({ line: GREETING, shown: 0, key: 0 });
   const [target, setTarget] = useState(targetRect);
-  const { line } = speech;
+  const { line, key: speechKey } = speech;
   const bubbleVisible = awake && greeted && !leaving;
+  const say = useCallback((next: string) => {
+    setGreeted(true);
+    setSpeech(current => ({ line: next, shown: 0, key: current.key + 1 }));
+  }, []);
+  const talk = useMaatjeTalk(budget, say);
+  const talkRef = useRef(talk);
+  useLayoutEffect(() => {
+    talkRef.current = talk;
+  });
+
+  const onAsleepRef = useRef(onAsleep);
+  useLayoutEffect(() => {
+    onAsleepRef.current = onAsleep;
+  });
 
   const close = useCallback(() => {
     if (closingRef.current) return;
     closingRef.current = true;
     setLeaving(true);
+    talkRef.current.reset();
     const finish = () => {
       closingRef.current = false;
       setLeaving(false);
       setGreeted(false);
-      onAsleep();
+      onAsleepRef.current();
     };
     const controller = controllerRef.current;
     if (controller) void controller.close().then(finish);
     else finish();
-  }, [onAsleep]);
+  }, []);
 
   // De scène wordt één keer opgebouwd, rustig nadat Home getekend is.
   useEffect(() => {
@@ -95,9 +114,11 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: 
           let next = Math.floor(Math.random() * TAP_LINES.length);
           if (next === lastLine) next = (next + 1) % TAP_LINES.length;
           lastLine = next;
-          setSpeech({ line: TAP_LINES[next], shown: 0 });
+          say(TAP_LINES[next]);
         },
         onTapOutside: () => close(),
+        onHoldStart: () => talkRef.current.holdStart(),
+        onHoldEnd: cancelled => void talkRef.current.holdEnd(cancelled),
       }))
       .then(controller => {
         if (cancelled) {
@@ -155,16 +176,18 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: 
     controllerRef.current?.wake();
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(() => {
-      setSpeech({ line: GREETING, shown: 0 });
-      setGreeted(true);
+      say(GREETING);
     }, reducedMotion ? 200 : 2800);
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
     };
     const onResize = () => setTarget(targetRect());
-    // Safari schuift anders de adresbalk en de pagina mee als je Maatje ronddraait.
+    // Safari schuift anders de adresbalk en de pagina mee als je Maatje vasthoudt.
+    // De keuzes eronder mogen wel scrollen.
     const stage = stageRef.current?.parentElement;
-    const onTouchMove = (event: TouchEvent) => event.preventDefault();
+    const onTouchMove = (event: TouchEvent) => {
+      if (!(event.target instanceof Element && event.target.closest(".maatje-talk"))) event.preventDefault();
+    };
     document.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize);
     stage?.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -177,7 +200,11 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: 
       stage?.removeEventListener("touchmove", onTouchMove);
       document.body.style.overflow = overflow;
     };
-  }, [awake, loaded, close]);
+  }, [awake, loaded, close, say]);
+
+  useEffect(() => {
+    controllerRef.current?.setMood(talk.mood);
+  }, [talk.mood]);
 
   // Tekst verschijnt letter voor letter terwijl Maatje "praat".
   useEffect(() => {
@@ -186,7 +213,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: 
     controllerRef.current?.setTalking(true);
     const timer = window.setInterval(() => {
       index += 1;
-      setSpeech(current => current.line === line ? { line, shown: index } : current);
+      setSpeech(current => current.key === speechKey ? { ...current, shown: index } : current);
       if (index >= line.length) {
         window.clearInterval(timer);
         controllerRef.current?.setTalking(false);
@@ -196,15 +223,17 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: 
       window.clearInterval(timer);
       controllerRef.current?.setTalking(false);
     };
-  }, [line, bubbleVisible]);
+  }, [line, speechKey, bubbleVisible]);
 
   const bubbleTop = target.top + target.width * 0.06;
   return createPortal(<div className="maatje-live" role={awake ? "dialog" : undefined} aria-modal={awake || undefined} aria-label={awake ? "Maatje" : undefined} aria-hidden={!awake || undefined} data-awake={awake} data-leaving={leaving}>
     <div ref={stageRef} className="maatje-live-stage" />
-    <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} style={{ top: bubbleTop }}>
+    <p className="maatje-live-bubble" aria-live="polite" data-visible={bubbleVisible} data-mood={talk.mood} style={{ top: bubbleTop }}>
+      {talk.heard ? <span className="maatje-live-heard">Jij: “{talk.heard}”</span> : null}
       <span aria-hidden="true">{line.slice(0, speech.shown) || " "}</span>
       <span className="maatje-live-sr-only">{bubbleVisible ? line : ""}</span>
     </p>
+    {awake && greeted && !leaving ? <MaatjeTalkPanel talk={talk} top={target.top + target.height + 8} /> : null}
     {/* Alleen voor toetsenbord en VoiceOver; op het scherm tik je naast Maatje. */}
     {awake ? <button type="button" className="maatje-live-close" onClick={close}>Laat Maatje teruggaan</button> : null}
   </div>, document.body);

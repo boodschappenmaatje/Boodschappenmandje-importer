@@ -46,6 +46,10 @@ export interface MaatjeSceneOptions {
   onReady?: () => void;
   onTap?: () => void;
   onTapOutside?: () => void;
+  /** Je houdt Maatje vast: hij luistert. */
+  onHoldStart?: () => void;
+  /** Je laat Maatje los (cancelled: de vinger ging eraf zonder los te laten). */
+  onHoldEnd?: (cancelled: boolean) => void;
 }
 
 export interface MaatjeSceneController {
@@ -55,6 +59,8 @@ export interface MaatjeSceneController {
   wake(): void;
   react(kind?: MaatjeReaction): void;
   setTalking(talking: boolean): void;
+  /** Maatje luistert (je houdt hem vast) of denkt na over je vraag. */
+  setMood(mood: "idle" | "listening" | "thinking"): void;
   /** Laat Maatje terugvliegen naar zijn plek op Home, waar hij weer indommelt. */
   close(): Promise<void>;
   dispose(): void;
@@ -451,10 +457,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   const look = { x: 0, y: 0 };
-  let drag: { x: number; startX: number; startY: number; moved: boolean } | null = null;
-  let dragYaw = 0;
-  const MAX_TURN = 0.85;
-  let dragVelocity = 0;
+  // Kort tikken laat hem reageren; vasthouden betekent praten.
+  const HOLD_DELAY = 250;
+  let press: { startX: number; startY: number; moved: boolean; holding: boolean; timer: number } | null = null;
 
   function setPointer(event: PointerEvent) {
     const box = canvas.getBoundingClientRect();
@@ -469,25 +474,33 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   };
   const onDown = (event: PointerEvent) => {
     setPointer(event);
-    drag = { x: event.clientX, startX: event.clientX, startY: event.clientY, moved: false };
+    if (press) window.clearTimeout(press.timer);
+    const current = { startX: event.clientX, startY: event.clientY, moved: false, holding: false, timer: 0 };
+    if (phase === "live" && hits()) {
+      current.timer = window.setTimeout(() => {
+        if (press !== current || current.moved) return;
+        current.holding = true;
+        options.onHoldStart?.();
+      }, HOLD_DELAY);
+    }
+    press = current;
     canvas.setPointerCapture?.(event.pointerId);
   };
   const onMove = (event: PointerEvent) => {
     setPointer(event);
-    if (!drag) return;
-    const dx = event.clientX - drag.x;
-    drag.x = event.clientX;
-    if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 8) drag.moved = true;
-    if (drag.moved && phase === "live") {
-      dragYaw = THREE.MathUtils.clamp(dragYaw + dx * 0.013, -2 * MAX_TURN, 2 * MAX_TURN);
-      dragVelocity = dx * 0.013;
-    }
+    if (press && !press.holding && Math.hypot(event.clientX - press.startX, event.clientY - press.startY) > 12) press.moved = true;
   };
   const onUp = (event: PointerEvent) => {
     setPointer(event);
-    const tap = drag && !drag.moved;
-    drag = null;
-    if (!tap || phase !== "live") return;
+    const current = press;
+    press = null;
+    if (!current) return;
+    window.clearTimeout(current.timer);
+    if (current.holding) {
+      options.onHoldEnd?.(event.type === "pointercancel");
+      return;
+    }
+    if (current.moved || phase !== "live" || event.type === "pointercancel") return;
     if (hits()) {
       controller.react();
       options.onTap?.();
@@ -518,6 +531,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   let nextBlink = performance.now() / 1000 + 2.2;
   let blinkStart = -1;
   let happy = 0;
+  let mood: "idle" | "listening" | "thinking" = "idle";
+  let listenAmount = 0;
+  let thinkAmount = 0;
   let frame = 0;
   let disposed = false;
   let readySent = false;
@@ -673,20 +689,22 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       }
     }
 
-    if (!drag) {
-      dragYaw += dragVelocity;
-      dragVelocity *= 0.86;
-      dragYaw *= 0.92;
-    }
-    // Zachte rem: van opzij is Maatje een dun vel, dus hij draait hooguit ~50°.
-    const turned = MAX_TURN * Math.tanh(dragYaw / MAX_TURN);
-    lookSmooth.x = THREE.MathUtils.lerp(lookSmooth.x, phase === "live" ? look.x : 0, 0.1);
-    lookSmooth.y = THREE.MathUtils.lerp(lookSmooth.y, phase === "live" ? look.y : 0, 0.1);
+    // Luisteren: hij buigt naar je toe en wordt iets groter. Nadenken: hij
+    // kijkt omhoog en wiegt zijn hoofd.
+    listenAmount = THREE.MathUtils.lerp(listenAmount, phase === "live" && mood === "listening" ? 1 : 0, 0.15);
+    thinkAmount = THREE.MathUtils.lerp(thinkAmount, phase === "live" && mood === "thinking" ? 1 : 0, 0.08);
+    scale *= 1 + listenAmount * 0.05;
+    pitch += listenAmount * 0.1;
+    roll += thinkAmount * Math.sin(now * 2.2) * 0.06 * motion;
+    const lookX = thinkAmount > 0.01 ? THREE.MathUtils.lerp(look.x, 0.55, thinkAmount) : look.x;
+    const lookY = thinkAmount > 0.01 ? THREE.MathUtils.lerp(look.y, 0.7, thinkAmount) : look.y;
+    lookSmooth.x = THREE.MathUtils.lerp(lookSmooth.x, phase === "live" ? lookX : 0, 0.1);
+    lookSmooth.y = THREE.MathUtils.lerp(lookSmooth.y, phase === "live" ? lookY : 0, 0.1);
 
     root.position.set(x, y + (lift + bob) * scale, 0);
     root.scale.setScalar(scale);
     pitch += -lookSmooth.y * 0.12 * live;
-    root.rotation.set(pitch, yaw + sway + turned + lookSmooth.x * 0.3 * live, roll);
+    root.rotation.set(pitch, yaw + sway + lookSmooth.x * 0.3 * live, roll);
     figure.scale.set(1 / Math.sqrt(squash), squash, 1);
     const hover = (lift + bob) * scale;
     shadow.position.set(x, y - 0.98 * scale, -0.5 * scale);
@@ -732,7 +750,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
     // Gloed: gaat aan zodra je tikt en pulseert zacht zolang hij wakker is.
     glowAmount = THREE.MathUtils.lerp(glowAmount, phase === "waking" || phase === "live" ? 1 : 0, 0.12);
-    const pulse = glowAmount * (0.85 + 0.15 * Math.sin(now * 2.6) * motion);
+    const pulse = glowAmount * (0.85 + 0.15 * Math.sin(now * (2.6 + listenAmount * 3.4)) * motion) * (1 + listenAmount * 0.5);
     rimMaterial.emissiveIntensity = pulse * 0.4;
     draw(pulse);
     if (!readySent) {
@@ -765,6 +783,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     setTalking(value) {
       talking = value;
     },
+    setMood(value) {
+      mood = value;
+    },
     close() {
       if (phase === "sleeping") return Promise.resolve();
       if (phase === "leaving") return new Promise<void>(resolve => {
@@ -776,13 +797,13 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
       phaseStart = performance.now() / 1000;
       reaction = null;
       talking = false;
-      dragVelocity = 0;
-      dragYaw = 0;
+      mood = "idle";
       return new Promise<void>(resolve => { resolveClose = resolve; });
     },
     dispose() {
       disposed = true;
       cancelAnimationFrame(frame);
+      if (press) window.clearTimeout(press.timer);
       resizeObserver.disconnect();
       document.removeEventListener("visibilitychange", onVisibility);
       canvas.removeEventListener("pointerdown", onDown);

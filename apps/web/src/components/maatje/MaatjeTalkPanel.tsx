@@ -1,0 +1,64 @@
+"use client";
+import { useState, type FormEvent } from "react";
+import { ProductThumbnail } from "@/components/ui/ProductThumbnail";
+import { formatCents } from "@/services/budget/budget-engine";
+import type { useMaatjeTalk } from "./useMaatjeTalk";
+
+interface MaatjeTalkPanelProps {
+  talk: ReturnType<typeof useMaatjeTalk>;
+  /** Waar het paneel begint: net onder Maatje. */
+  top: number;
+}
+
+/** Onder Maatje: een hint, de productkeuzes en (indien nodig) typen. */
+export function MaatjeTalkPanel({ talk, top }: MaatjeTalkPanelProps) {
+  const [text, setText] = useState("");
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    talk.sendText(text);
+    setText("");
+  };
+  return <div className="maatje-talk" style={{ top }} data-has-items={talk.items.length > 0}>
+    {talk.items.length ? <div className="maatje-talk-items">
+      {talk.items.map((item, itemIndex) => <section key={`${itemIndex}-${item.label}`} className="maatje-talk-item" aria-label={item.label}>
+        <h3>{item.quantity > 1 ? `${item.quantity}× ` : ""}{item.label}</h3>
+        {item.choices.length ? <ul className="maatje-talk-choices">
+          {item.choices.map(choice => {
+            const picked = talk.chosen[itemIndex] === choice.product.id;
+            return <li key={choice.product.id}>
+              <button
+                type="button"
+                className="maatje-talk-choice"
+                data-picked={picked}
+                disabled={Boolean(talk.chosen[itemIndex])}
+                onClick={() => void talk.choose(itemIndex, choice.product, choice.priceCents)}
+              >
+                <ProductThumbnail className="maatje-talk-thumb" imageUrl={choice.product.imageUrl} name={choice.product.name} />
+                <strong>{choice.product.name}</strong>
+                {choice.product.packageText ? <small>{choice.product.packageText}</small> : null}
+                <span className="maatje-talk-price">{choice.priceCents === null ? "Prijs onbekend" : formatCents(choice.priceCents)}</span>
+                {picked ? <span className="maatje-talk-check">Op je lijst ✓</span> : null}
+              </button>
+            </li>;
+          })}
+        </ul> : <p className="maatje-talk-empty">Niet gevonden bij Hoogvliet.</p>}
+      </section>)}
+    </div> : null}
+    {talk.typing ? <form className="maatje-talk-form" onSubmit={submit}>
+      <input
+        type="text"
+        value={text}
+        onChange={event => setText(event.target.value)}
+        placeholder="Bijv. melk en brood"
+        aria-label="Vraag het Maatje"
+        maxLength={400}
+        enterKeyHint="send"
+        disabled={talk.mood === "thinking"}
+      />
+      <button type="submit" disabled={!text.trim() || talk.mood === "thinking"}>Vraag</button>
+    </form> : <p className="maatje-talk-hint">
+      {talk.mood === "listening" ? "Laat los als je klaar bent" : talk.mood === "thinking" ? "Maatje denkt na…" : "Houd Maatje vast om te praten"}
+      {talk.mood === "idle" ? <> · <button type="button" className="maatje-talk-link" onClick={() => talk.setTyping(true)}>typen</button></> : null}
+    </p>}
+  </div>;
+}
