@@ -216,12 +216,47 @@ export function parseGeminiPlan(response: unknown): GeminiPlan | null {
   };
 }
 
-async function findChoices(catalog: CatalogRepository, terms: string[], now: Date): Promise<AssistantChoice[]> {
-  // Alle zoektermen tegelijk; daarna in volgorde (precies → breed) samenvoegen.
-  const results = await Promise.all(terms.map(term => catalog.query({ term, page: 1, pageSize: 12 }).catch(() => null)));
+/**
+ * Hoeveel catalogus-zoekopdrachten tegelijk lopen. De database stopt een
+ * zoekopdracht van de app na 3 seconden; te veel tegelijk en ze lopen
+ * allemaal vast, dan vindt Maatje niets.
+ */
+const CATALOG_CONCURRENCY = 3;
+
+function limiter(max: number) {
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    if (active >= max) await new Promise<void>(resolve => waiting.push(resolve));
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      active -= 1;
+      waiting.shift()?.();
+    }
+  };
+}
+
+type Limit = ReturnType<typeof limiter>;
+
+async function searchTerm(catalog: CatalogRepository, term: string, limit: Limit) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await limit(() => catalog.query({ term, page: 1, pageSize: 12 }));
+    } catch (error) {
+      console.warn("maatje-praten", `zoeken naar "${term}" mislukt`, error instanceof Error ? error.message : "onbekend");
+    }
+  }
+  return null;
+}
+
+async function findChoices(catalog: CatalogRepository, terms: string[], now: Date, limit: Limit): Promise<AssistantChoice[]> {
   const seen = new Set<string>();
   const choices: AssistantChoice[] = [];
-  for (const result of results) {
+  // Precies → breed: pas verbreden als de preciezere term te weinig gaf.
+  for (const term of terms) {
+    const result = await searchTerm(catalog, term, limit);
     for (const product of result?.products ?? []) {
       if (product.isAvailable === false || seen.has(product.id)) continue;
       seen.add(product.id);
@@ -229,7 +264,6 @@ async function findChoices(catalog: CatalogRepository, terms: string[], now: Dat
       choices.push({ product, priceCents: price ? Math.round(price.amount * 100) : null });
       if (choices.length >= MAX_CHOICES) return choices;
     }
-    // Genoeg keuzes met de preciezere term: niet verbreden.
     if (choices.length >= 2) return choices;
   }
   return choices;
@@ -243,9 +277,10 @@ export async function runMaatjeAssistant(
 ): Promise<AssistantResponse> {
   const plan = parseGeminiPlan(await callGemini(buildGeminiBody(request)));
   if (!plan) throw new Error("gemini-invalid-response");
-  // Alle producten tegelijk opzoeken in plaats van na elkaar.
+  // Producten naast elkaar opzoeken, maar nooit te veel tegelijk.
+  const limit = limiter(CATALOG_CONCURRENCY);
   const items: AssistantItem[] = await Promise.all(plan.items.map(async item => (
-    { label: item.label, quantity: item.quantity, choices: await findChoices(catalog, item.terms, now) }
+    { label: item.label, quantity: item.quantity, choices: await findChoices(catalog, item.terms, now, limit) }
   )));
   let reply = plan.reply || "Wat kan ik voor je doen?";
   if (items.length) {

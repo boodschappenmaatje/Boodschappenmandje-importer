@@ -109,6 +109,35 @@ describe("runMaatjeAssistant", () => {
     expect(result.items[0].choices.map(choice => choice.product.id)).toEqual(["1", "2"]);
   });
 
+  it("never runs more than three catalog searches at once and retries a failed one", async () => {
+    let active = 0;
+    let peak = 0;
+    let failedOnce = false;
+    const catalog = {
+      query: vi.fn(async ({ term }: { term: string }) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        active -= 1;
+        if (term === "kaas" && !failedOnce) {
+          failedOnce = true;
+          throw new Error("timeout");
+        }
+        return { products: [product(`${term}-1`, term), product(`${term}-2`, term)] };
+      }),
+    } as unknown as CatalogRepository;
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const labels = ["melk", "kaas", "brood", "eieren", "boter", "appels"];
+    const result = await runMaatjeAssistant(
+      parseAssistantRequest(baseRequest)!,
+      gemini({ heard: "x", reply: "y", items: labels.map(label => ({ label, quantity: 1, terms: [label] })) }),
+      catalog,
+      NOW,
+    );
+    expect(peak).toBeLessThanOrEqual(3);
+    expect(result.items.every(item => item.choices.length === 2)).toBe(true);
+  });
+
   it("says honestly when nothing was found", async () => {
     const result = await runMaatjeAssistant(
       parseAssistantRequest(baseRequest)!,
