@@ -13,7 +13,6 @@ import {
   type AssistantTurn,
 } from "./maatje-assistant-client";
 import { rememberChoice, sortByFavorites } from "./maatje-favorites";
-import { hapticTick } from "./maatje-haptic";
 import { blobToBase64, startVoiceRecording, VoiceError, voiceSupported, type VoiceRecording } from "./maatje-voice";
 
 export type TalkMood = "idle" | "listening" | "thinking";
@@ -138,8 +137,6 @@ export function useMaatjeTalk(budget: MaatjeBudget, say: (line: string) => void)
       return;
     }
     requestRef.current?.abort();
-    // Eén licht tikje: je voelt dat Maatje nu luistert.
-    hapticTick();
     setMood("listening");
     latest.current.say("Ik luister…");
     const recording = startVoiceRecording();

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { createPortal } from "react-dom";
 import { MaatjeTalkPanel } from "./MaatjeTalkPanel";
 import type { MaatjeSceneController } from "./maatje-scene";
+import { hapticTick } from "./maatje-haptic";
 import { useMaatjeTalk, type MaatjeBudget } from "./useMaatjeTalk";
 import "./maatje-live.css";
 
@@ -117,6 +118,7 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported, bu
           say(TAP_LINES[next]);
         },
         onTapOutside: () => close(),
+        onPress: hapticTick,
         onHoldStart: () => talkRef.current.holdStart(),
         onHoldEnd: cancelled => void talkRef.current.holdEnd(cancelled),
       }))
