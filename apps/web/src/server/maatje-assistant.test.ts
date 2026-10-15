@@ -155,12 +155,23 @@ describe("Gemini model", () => {
     expect(withQuickThinking("gemini-2.5-flash", body)).toEqual({ generationConfig: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } } });
   });
 
+  it("tries another model when Google is too busy", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("gemini-3.8-flash:")) return new Response("overloaded", { status: 503 });
+      if (url.endsWith("/models?pageSize=200")) return Response.json(models);
+      return Response.json({ model: url.includes("gemini-3.5-flash:") ? "3.5" : "?" });
+    });
+    const call = geminiCaller("sleutel", "gemini-3.8-flash", fetchImpl as unknown as typeof fetch);
+    await expect(call({})).resolves.toEqual({ model: "3.5" });
+  });
+
   it("switches to an existing model when the configured one is gone", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes("oud-model")) return new Response("", { status: 404 });
       if (url.endsWith("/models?pageSize=200")) return Response.json(models);
-      return Response.json({ ok: url.includes("gemini-3.8-flash:generateContent") });
+      return Response.json({ ok: url.includes(":generateContent") });
     });
     const call = geminiCaller("sleutel", "oud-model", fetchImpl as unknown as typeof fetch);
     await expect(call({})).resolves.toEqual({ ok: true });

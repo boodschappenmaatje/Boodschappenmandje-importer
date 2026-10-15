@@ -256,17 +256,24 @@ const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
 /** Een Gemini-model dat het werkt, onthouden zodat we niet steeds hoeven te zoeken. */
 let workingModel: string | null = null;
 
-/** Kiest het nieuwste gewone "flash"-model (geen live, spraak, beeld of preview). */
-export function pickFlashModel(models: unknown): string | null {
+/**
+ * Gewone "flash"-modellen, nieuwste eerst; de lichtere "flash-lite" als laatste
+ * redmiddel. Geen live-, spraak-, beeld- of previewmodellen.
+ */
+export function flashModels(models: unknown): string[] {
   const list = (models as { models?: { name?: unknown; supportedGenerationMethods?: unknown }[] })?.models;
-  if (!Array.isArray(list)) return null;
+  if (!Array.isArray(list)) return [];
   const names = list
     .filter(model => Array.isArray(model.supportedGenerationMethods) && model.supportedGenerationMethods.includes("generateContent"))
     .map(model => (typeof model.name === "string" ? model.name.replace(/^models\//, "") : ""))
-    .filter(name => /^gemini-[\d.]+-flash$/.test(name) || name === "gemini-flash-latest");
+    .filter(name => /^gemini-[\d.]+-flash(-lite)?$/.test(name) || name === "gemini-flash-latest");
   const version = (name: string) => Number(name.match(/^gemini-([\d.]+)/)?.[1]?.split(".").slice(0, 2).join(".") ?? 0);
-  names.sort((a, b) => version(b) - version(a));
-  return names[0] ?? null;
+  const rank = (name: string) => (name.endsWith("-lite") ? 1 : 0);
+  return names.sort((a, b) => rank(a) - rank(b) || version(b) - version(a));
+}
+
+export function pickFlashModel(models: unknown): string | null {
+  return flashModels(models)[0] ?? null;
 }
 
 /**
@@ -298,18 +305,28 @@ export function geminiCaller(apiKey: string, model: string, fetchImpl: typeof fe
       signal: AbortSignal.timeout(45_000),
     });
   };
+  /** Modellen die Google even niet kan of wil bedienen: dan een ander proberen. */
+  const tryNext = (status: number) => status === 404 || status === 429 || status >= 500;
   return async body => {
-    let response = await generate(workingModel ?? model, body);
-    if (response.status === 404) {
-      // Google hernoemt of stopt modellen; zoek dan zelf het nieuwste flash-model.
+    const first = workingModel ?? model;
+    let response = await generate(first, body);
+    if (!response.ok && tryNext(response.status)) {
       const list = await fetchImpl(`${GEMINI_API}/models?pageSize=200`, { headers, signal: AbortSignal.timeout(10_000) });
-      const fallback = list.ok ? pickFlashModel(await list.json()) : null;
-      if (!fallback) throw new Error("gemini-model-not-found");
-      console.warn("maatje-praten", `model ${workingModel ?? model} niet gevonden, gebruik ${fallback}`);
-      workingModel = fallback;
-      response = await generate(fallback, body);
+      const others = (list.ok ? flashModels(await list.json()) : []).filter(name => name !== first).slice(0, 3);
+      for (const other of others) {
+        console.warn("maatje-praten", `model ${first} gaf ${response.status}, probeer ${other}`);
+        response = await generate(other, body);
+        if (response.ok) {
+          workingModel = other;
+          break;
+        }
+        if (!tryNext(response.status)) break;
+      }
     }
-    if (!response.ok) throw new Error(`gemini-http-${response.status}`);
+    if (!response.ok) {
+      const detail = (await response.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
+      throw new Error(`gemini-http-${response.status} ${detail}`.trim());
+    }
     return response.json();
   };
 }
