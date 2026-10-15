@@ -507,7 +507,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   const leaveDuration = options.reducedMotion ? 0.2 : 0.75;
   const DOZE = 1.4;
   let phase: "sleeping" | "waking" | "live" | "leaving" = "sleeping";
-  let phaseStart = performance.now() / 1000;
+  // Bij het openen ligt hij meteen al te slapen, net als het plaatje op Home.
+  let phaseStart = performance.now() / 1000 - DOZE;
   let leaveFrom = { x: 0, y: 0, scale: 1, yaw: 0 };
   let resolveClose: (() => void) | null = null;
   let reaction: { kind: MaatjeReaction; start: number } | null = null;

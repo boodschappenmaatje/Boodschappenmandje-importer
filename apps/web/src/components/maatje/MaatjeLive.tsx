@@ -38,6 +38,8 @@ interface MaatjeLiveProps {
   onReady: () => void;
   /** Maatje is terug op zijn plek en slaapt weer. */
   onAsleep: () => void;
+  /** Dit toestel kan geen 3D tonen; Maatje blijft een plaatje. */
+  onUnsupported?: () => void;
 }
 
 /**
@@ -45,7 +47,7 @@ interface MaatjeLiveProps {
  * dezelfde plek wakker, stapt naar voren en wordt groter. Er komt geen laag
  * of waas over de app. Tik naast hem en hij gaat terug en dommelt weer in.
  */
-export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps) {
+export function MaatjeLive({ anchor, awake, onReady, onAsleep, onUnsupported }: MaatjeLiveProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<MaatjeSceneController | null>(null);
   const closingRef = useRef(false);
@@ -75,7 +77,11 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
   // De scène wordt één keer opgebouwd, rustig nadat Home getekend is.
   useEffect(() => {
     const element = stageRef.current;
-    if (!element || !supportsWebGl()) return;
+    if (!element) return;
+    if (!supportsWebGl()) {
+      onUnsupported?.();
+      return;
+    }
     let cancelled = false;
     let lastLine = -1;
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -102,10 +108,32 @@ export function MaatjeLive({ anchor, awake, onReady, onAsleep }: MaatjeLiveProps
         setLoaded(true);
       })
       .catch(() => undefined);
-    const idle = window.requestIdleCallback?.(start, { timeout: 1200 });
-    const timer = idle === undefined ? window.setTimeout(start, 300) : undefined;
+    let idle: number | undefined;
+    let timer: number | undefined;
+    const schedule = () => {
+      if (cancelled || idle !== undefined || timer !== undefined) return;
+      idle = window.requestIdleCallback?.(start, { timeout: 1200 });
+      if (idle === undefined) timer = window.setTimeout(start, 300);
+    };
+    // Het opbouwen van de scène houdt de telefoon even bezig. Tijdens de
+    // opstartintro zou die daardoor haperen, dus we wachten tot die klaar is.
+    const root = document.documentElement;
+    const introDone = () => root.dataset.maatjeIntro === "done";
+    const observer = new MutationObserver(() => {
+      if (!introDone()) return;
+      observer.disconnect();
+      schedule();
+    });
+    let fallback: number | undefined;
+    if (introDone()) schedule();
+    else {
+      observer.observe(root, { attributes: true, attributeFilter: ["data-maatje-intro"] });
+      fallback = window.setTimeout(schedule, 8000);
+    }
     return () => {
       cancelled = true;
+      observer.disconnect();
+      if (fallback !== undefined) window.clearTimeout(fallback);
       if (idle !== undefined) window.cancelIdleCallback(idle);
       if (timer !== undefined) window.clearTimeout(timer);
       controllerRef.current?.dispose();
