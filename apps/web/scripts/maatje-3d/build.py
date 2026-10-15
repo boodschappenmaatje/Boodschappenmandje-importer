@@ -119,11 +119,13 @@ parts_rgba = np.zeros_like(im)
 erase = np.zeros((H, W), np.uint8)
 meta = {}
 for name, (_, _, m) in parts.items():
-    pm = cv2.dilate(fill(m), disk(2.5))
-    alpha = cv2.GaussianBlur(pm.astype(np.float32), (0, 0), 0.8 * K)
+    # Strak langs de donkere rand knippen: geen wit papier mee, anders krijgen
+    # ogen en mond een witte rand zodra Maatje draait.
+    pm = cv2.dilate(fill(m), disk(0.6))
+    alpha = cv2.GaussianBlur(pm.astype(np.float32), (0, 0), 0.6 * K)
     parts_rgba[..., :3] = np.where(pm[..., None] > 0, im[..., :3], parts_rgba[..., :3])
     parts_rgba[..., 3] = np.maximum(parts_rgba[..., 3], (alpha * 255).astype(np.uint8))
-    erase |= cv2.dilate(pm, disk(3))
+    erase |= cv2.dilate(pm, disk(4))
     ys, xs = np.where(pm)
     to = lambda x, y: [round((x + .5) / W * 2 - 1, 4), round(1 - (y + .5) / H * 2, 4)]
     x0, y0 = to(xs.min(), ys.max())

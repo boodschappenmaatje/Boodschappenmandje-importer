@@ -16,7 +16,8 @@ body:has(.home-c) { background: var(--home-c-background); }
 .home-c-hero h1 > span { display: block; }
 .home-c-hero .home-c-hello { font-family: "Maatje Home", ui-rounded, system-ui, sans-serif; font-weight: 900; font-size: clamp(1.38rem, 6cqi, 1.9rem); line-height: 1.06; letter-spacing: -.035em; white-space: nowrap; margin-bottom: 2px; }
 .home-c-character { position: relative; align-self: stretch; min-width: 0; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.home-c-character:focus-visible { outline: 3px solid white; outline-offset: 4px; border-radius: 24px; }
+.home-c-character:focus { outline: none; }
+.home-c-character:focus-visible { outline: 3px solid var(--brand-glow); outline-offset: 2px; border-radius: 24px; }
 .home-c-character:active .home-c-mascot { transform: scale(.94) rotate(-3deg); }
 .home-c-character .home-c-mascot { transition: transform 160ms ease; }
 .home-c-mascot[data-live="true"] { visibility: hidden; }

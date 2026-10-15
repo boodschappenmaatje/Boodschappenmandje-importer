@@ -196,9 +196,9 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
   });
   const materials = [
     vinyl(frontMap), vinyl(backMap), vinyl(original), vinyl(partsMap, { transparent: true, alphaTest: 0.04 }),
-    solid(0x123a8c), solid(0xf4f8fd),
+    solid(0x123a8c), solid(0xf4f8fd), solid(0x0a1f52),
   ];
-  const [frontMaterial, backMaterial, originalMaterial, partsMaterial, rimMaterial, whiteMaterial] = materials;
+  const [frontMaterial, backMaterial, originalMaterial, partsMaterial, rimMaterial, whiteMaterial, partDarkMaterial] = materials;
 
   const root = new THREE.Group();
   const figure = new THREE.Group();
@@ -216,8 +216,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     const data = MODEL.parts[name];
     const [cx, cy] = centerOf(data.contour);
     const origin: Point = [cx, pivot === "top" ? data.max[1] : cy];
-    const geometry = puffy(data.contour, 0.001, depth, origin, 4);
-    const mesh = new THREE.Mesh(geometry, partsMaterial);
+    const geometry = splitFaces(puffy(data.contour, 0.001, depth, origin, 6, depth * 0.5));
+    const mesh = new THREE.Mesh(geometry, [partsMaterial, partsMaterial, partDarkMaterial]);
     mesh.position.set(origin[0], origin[1], frontZ(cx) + depth * 0.4);
     mesh.rotation.y = Math.atan(2 * CURL * cx);
     figure.add(mesh);
