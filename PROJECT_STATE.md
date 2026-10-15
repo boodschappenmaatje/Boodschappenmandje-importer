@@ -14,7 +14,8 @@
   - Het dag-en-nachtidee is op zijn verzoek geschrapt. Maatje slaapt altijd op Home en wordt wakker als je op hem tikt.
   - De donkere belijning is nu mat. Glanzende randen gaven dunne witte lijnen langs zijn omtrek.
   - Zodra je tikt, verschijnt een pulserende blauwe gloed in huisstijlkleuren (#1D87F7 en #62BFFC) rond zijn omtrek. De gloed blijft zolang hij wakker is en dooft als hij weer gaat slapen.
-- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 7 staat open.
+- Ronde 8: het witte kader bij het aantikken is gevonden. Dat was de algemene knopstijl voor ingedrukte knoppen (`.page-content button:active`, een lichte binnenrand van 2px) en de hover-ring daarvan. Beide zijn uitgezet voor de Maatje-knop. De blauwe gloed is iets breder en duidelijker gemaakt.
+- Geen data-, API-, migratie- of Production-wijziging. Web lint, typecheck, build en 894/894 tests groen. Fysieke iPhone-test van ronde 8 staat open.
 
 # Checkpoint — Shanghai shared-scope read-only runner voorbereid — 13 oktober 2026
 

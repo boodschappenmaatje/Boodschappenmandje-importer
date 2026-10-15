@@ -354,7 +354,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     fragmentShader: `
       uniform sampler2D source; uniform float strength; uniform vec3 core; uniform vec3 light; varying vec2 vUv;
       void main() {
-        float a = clamp(texture2D(source, vUv).r * 1.8, 0.0, 1.0);
+        float a = clamp(texture2D(source, vUv).r * 2.4, 0.0, 1.0);
         gl_FragColor = vec4(mix(light, core, a), a * strength);
       }`,
     transparent: true, depthTest: false, depthWrite: false,
@@ -384,7 +384,7 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
     shadow.visible = true;
     renderer.setClearColor(0x000000, 0);
     let source = mask.texture;
-    for (const spread of [1.5, 3.2]) {
+    for (const spread of [1.8, 3.8]) {
       blurMaterial.uniforms.source.value = source;
       blurMaterial.uniforms.step.value.set(spread / mask.width, 0);
       pass(blurMaterial, blurA);
@@ -696,8 +696,8 @@ export async function createMaatjeScene(container: HTMLElement, options: MaatjeS
 
     // Gloed: gaat aan zodra je tikt en pulseert zacht zolang hij wakker is.
     glowAmount = THREE.MathUtils.lerp(glowAmount, phase === "waking" || phase === "live" ? 1 : 0, 0.12);
-    const pulse = glowAmount * (0.78 + 0.22 * Math.sin(now * 2.6) * motion);
-    rimMaterial.emissiveIntensity = pulse * 0.3;
+    const pulse = glowAmount * (0.85 + 0.15 * Math.sin(now * 2.6) * motion);
+    rimMaterial.emissiveIntensity = pulse * 0.4;
     draw(pulse);
     if (!readySent) {
       readySent = true;
